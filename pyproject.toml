@@ -10,6 +10,16 @@ packages = [{ include = "iatb", from = "src" }]
 python = "^3.12"
 pydantic = "^2.0.0"
 pydantic-settings = "^2.0.0"
+yfinance = "^0.2.65"
+jugaad-data = "^0.33.1"
+ccxt = "^4.5.17"
+openalgo = "^1.0.0"
+duckdb = "^1.4.0"
+sqlalchemy = "^2.0.40"
+pyarrow = "^18.1.0"
+pandas = "^2.2.3"
+pandas-ta-classic = "^0.4.47"
+hmmlearn = "^0.3.3"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.0"
