@@ -17,6 +17,7 @@ class SEBIComplianceConfig:
     audit_db_path: Path
     static_ips: tuple[str, ...]
     auto_logout_ist: time = time(3, 0)
+    require_oauth_2fa: bool = True
 
 
 class SEBIComplianceManager:
@@ -41,10 +42,21 @@ class SEBIComplianceManager:
         return merged
 
     def append_audit_record(self, record: TradeAuditRecord) -> None:
+        self._assert_algo_id(record)
         self._store.append_trade(record)
 
     def is_static_ip_allowed(self, source_ip: str) -> bool:
         return source_ip in self._config.static_ips
+
+    def assert_oauth_2fa_verified(
+        self, oauth_authenticated: bool, two_factor_verified: bool
+    ) -> None:
+        if not self._config.require_oauth_2fa:
+            return
+        if oauth_authenticated and two_factor_verified:
+            return
+        msg = "OAuth 2FA verification is required before broker API access"
+        raise ConfigError(msg)
 
     def should_auto_logout(self, now_utc: datetime) -> bool:
         if now_utc.tzinfo != UTC:
@@ -59,4 +71,13 @@ class SEBIComplianceManager:
             raise ConfigError(msg)
         if self.should_auto_logout(now_utc):
             msg = "live session must be logged out after configured IST cutoff"
+            raise ConfigError(msg)
+
+    def _assert_algo_id(self, record: TradeAuditRecord) -> None:
+        algo_id = record.metadata.get("algo_id", "").strip()
+        if not algo_id:
+            msg = "audit record metadata must include non-empty algo_id"
+            raise ConfigError(msg)
+        if algo_id != self._config.algo_id:
+            msg = "audit record algo_id does not match configured algo_id"
             raise ConfigError(msg)
