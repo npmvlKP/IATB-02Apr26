@@ -2,6 +2,11 @@ param(
     [string]$ConfigPath = ".\\config\\settings.toml"
 )
 
-Write-Host "Starting IATB in PAPER mode..." -ForegroundColor Cyan
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$env:IATB_CONFIG_PATH = $ConfigPath
 $env:IATB_MODE = "paper"
-poetry run python -m iatb.core.engine
+$env:LIVE_TRADING_ENABLED = "false"
+
+poetry run python -m iatb.core.runtime

@@ -23,13 +23,14 @@ WORKDIR /app
 
 COPY --from=builder /wheels /wheels
 COPY --from=builder /app/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels /app/requirements.txt
 
 COPY src/ /app/src/
 COPY config/ /app/config/
 COPY .env.example /app/.env.example
+ENV PYTHONPATH=/app/src
 
 USER iatb
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import iatb" || exit 1
-CMD ["python", "-m", "iatb.core.engine"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "from urllib.request import urlopen; import sys; sys.exit(0) if urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else sys.exit(1)"
+CMD ["python", "-m", "iatb.core.runtime"]

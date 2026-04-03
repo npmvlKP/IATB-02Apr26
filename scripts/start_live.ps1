@@ -3,11 +3,16 @@ param(
     [string]$ConfigPath = ".\\config\\settings.toml"
 )
 
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
 if (-not $Confirm) {
-    Write-Error "Live trading launch blocked. Re-run with --Confirm to proceed."
+    Write-Error "Live trading launch blocked. Re-run with --confirm to proceed."
     exit 1
 }
 
-Write-Host "Starting IATB in LIVE mode..." -ForegroundColor Red
+$env:IATB_CONFIG_PATH = $ConfigPath
 $env:IATB_MODE = "live"
-poetry run python -m iatb.core.engine
+$env:LIVE_TRADING_ENABLED = "true"
+
+poetry run python -m iatb.core.runtime
