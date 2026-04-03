@@ -60,6 +60,14 @@ class TestMarketTickEvent:
                 symbol="RELIANCE",
             )
 
+    def test_naive_timestamp_rejected(self) -> None:
+        """Test fail-closed rejection of naive timestamp."""
+        with pytest.raises(ValidationError, match="Invalid event timestamp"):
+            MarketTickEvent(
+                timestamp=datetime(2026, 1, 1, 9, 15, 0),  # noqa: DTZ001
+                symbol="RELIANCE",
+            )
+
     def test_bid_ask_domain_validation(self) -> None:
         """Test bid/ask domain validation."""
         with pytest.raises(ValidationError, match="bid_price cannot be greater than ask_price"):

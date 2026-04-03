@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from iatb.core.enums import Exchange, OrderSide, OrderStatus, OrderType
 from iatb.core.event_validation import validate_event
+from iatb.core.exceptions import ValidationError
 from iatb.core.types import (
     Price,
     Quantity,
@@ -25,6 +26,15 @@ from iatb.core.types import (
 def _utc_now_timestamp() -> Timestamp:
     """Create a strict UTC timestamp for event defaults."""
     return create_timestamp(datetime.now(UTC))
+
+
+def _enforce_utc_timestamp(timestamp: Timestamp) -> Timestamp:
+    """Fail-closed enforcement of strict UTC timestamps at event creation."""
+    try:
+        return create_timestamp(timestamp)
+    except ValueError as exc:
+        msg = f"Invalid event timestamp: {exc}"
+        raise ValidationError(msg) from exc
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,7 @@ class MarketTickEvent:
 
     def __post_init__(self) -> None:
         """Validate event at creation-time (fail-closed)."""
+        object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
         validate_event(self)
 
 
@@ -65,6 +76,7 @@ class OrderUpdateEvent:
 
     def __post_init__(self) -> None:
         """Validate event at creation-time (fail-closed)."""
+        object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
         validate_event(self)
 
 
@@ -84,6 +96,7 @@ class SignalEvent:
 
     def __post_init__(self) -> None:
         """Validate event at creation-time (fail-closed)."""
+        object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
         validate_event(self)
 
 
@@ -100,4 +113,5 @@ class RegimeChangeEvent:
 
     def __post_init__(self) -> None:
         """Validate event at creation-time (fail-closed)."""
+        object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
         validate_event(self)
