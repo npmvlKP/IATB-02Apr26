@@ -11,6 +11,7 @@ from iatb.core.exceptions import ConfigError
 from iatb.execution.base import ExecutionResult, Executor, OrderRequest
 
 _LIVE_GATE_ENV = "LIVE_TRADING_ENABLED"
+_OAUTH_2FA_GATE_ENV = "BROKER_OAUTH_2FA_VERIFIED"
 
 
 class CCXTExecutor(Executor):
@@ -39,9 +40,13 @@ def _assert_live_enabled() -> None:
     if os.getenv(_LIVE_GATE_ENV, "").strip().lower() != "true":
         msg = "live execution blocked: set LIVE_TRADING_ENABLED=true to proceed"
         raise ConfigError(msg)
+    if os.getenv(_OAUTH_2FA_GATE_ENV, "").strip().lower() != "true":
+        msg = "broker access blocked: set BROKER_OAUTH_2FA_VERIFIED=true after OAuth 2FA"
+        raise ConfigError(msg)
 
 
 def _request_payload(request: OrderRequest) -> dict[str, str]:
+    _require_algo_id(request.metadata)
     payload = {
         "exchange": request.exchange.value,
         "symbol": request.symbol,
@@ -53,6 +58,13 @@ def _request_payload(request: OrderRequest) -> dict[str, str]:
         payload["price"] = str(request.price)
     payload.update(request.metadata)
     return payload
+
+
+def _require_algo_id(metadata: Mapping[str, str]) -> None:
+    algo_id = metadata.get("algo_id", "").strip()
+    if not algo_id:
+        msg = "live execution blocked: algo_id metadata is required for SEBI compliance"
+        raise ConfigError(msg)
 
 
 def _parse_response(response: Mapping[str, object]) -> ExecutionResult:
