@@ -91,3 +91,74 @@ class TestOHLCVNormalizer:
                 exchange=Exchange.NSE,
                 source="unit-test",
             )
+
+    def test_normalize_record_rejects_boolean_numeric_field(self) -> None:
+        payload = _raw_ohlcv("2026-01-01T09:15:00+00:00")
+        payload["open"] = True
+        with pytest.raises(ValidationError, match="open cannot be boolean"):
+            normalize_ohlcv_record(
+                payload,
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_rejects_invalid_numeric_type(self) -> None:
+        payload = _raw_ohlcv("2026-01-01T09:15:00+00:00")
+        payload["open"] = object()
+        with pytest.raises(ValidationError, match="open must be Decimal, int, float, or str"):
+            normalize_ohlcv_record(
+                payload,
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_rejects_non_finite_numeric(self) -> None:
+        payload = _raw_ohlcv("2026-01-01T09:15:00+00:00")
+        payload["open"] = "NaN"
+        with pytest.raises(ValidationError, match="open must be finite"):
+            normalize_ohlcv_record(
+                payload,
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_rejects_empty_timestamp_string(self) -> None:
+        with pytest.raises(ValidationError, match="timestamp cannot be empty"):
+            normalize_ohlcv_record(
+                _raw_ohlcv(" "),
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_rejects_timezone_free_iso_string(self) -> None:
+        with pytest.raises(ValidationError, match="must include timezone information"):
+            normalize_ohlcv_record(
+                _raw_ohlcv("2026-01-01T09:15:00"),
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_rejects_unsupported_timestamp_type(self) -> None:
+        with pytest.raises(ValidationError, match="Unsupported timestamp type"):
+            normalize_ohlcv_record(
+                _raw_ohlcv(object()),
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_batch_wraps_invalid_record_with_index(self) -> None:
+        invalid = _raw_ohlcv("2026-01-02T09:16:00+00:00")
+        invalid.pop("open")
+        with pytest.raises(ValidationError, match="index 1"):
+            normalize_ohlcv_batch(
+                [_raw_ohlcv("2026-01-02T09:15:00+00:00"), invalid],
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )

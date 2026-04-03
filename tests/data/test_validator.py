@@ -2,7 +2,9 @@
 Tests for normalized market-data validation.
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from iatb.core.enums import Exchange
@@ -84,3 +86,49 @@ class TestDataValidator:
     def test_validate_ticker_snapshot_rejects_last_outside_spread(self) -> None:
         with pytest.raises(ValidationError, match="within bid/ask spread"):
             validate_ticker_snapshot(_make_ticker(bid="99", ask="101", last="103"))
+
+    def test_validate_ohlcv_bar_rejects_empty_symbol(self) -> None:
+        invalid = replace(_make_bar(0), symbol=" ")
+        with pytest.raises(ValidationError, match="symbol cannot be empty"):
+            validate_ohlcv_bar(invalid)
+
+    def test_validate_ohlcv_bar_rejects_future_timestamp(self) -> None:
+        invalid = replace(
+            _make_bar(0),
+            timestamp=create_timestamp(datetime.now(UTC) + timedelta(minutes=5)),
+        )
+        with pytest.raises(ValidationError, match="cannot be in the future"):
+            validate_ohlcv_bar(invalid)
+
+    def test_validate_ohlcv_bar_rejects_negative_open(self) -> None:
+        invalid = replace(_make_bar(0), open=Decimal("-1"))
+        with pytest.raises(ValidationError, match="open cannot be negative"):
+            validate_ohlcv_bar(invalid)
+
+    def test_validate_ohlcv_bar_rejects_invalid_low_boundary(self) -> None:
+        invalid = replace(_make_bar(0), low=create_price("102"))
+        with pytest.raises(ValidationError, match="low price cannot be greater"):
+            validate_ohlcv_bar(invalid)
+
+    def test_validate_ohlcv_series_rejects_exchange_mismatch(self) -> None:
+        other_exchange_bar = replace(_make_bar(1), exchange=Exchange.BSE)
+        with pytest.raises(ValidationError, match="only one exchange"):
+            validate_ohlcv_series([_make_bar(0), other_exchange_bar])
+
+    def test_validate_ticker_snapshot_rejects_empty_source(self) -> None:
+        invalid = replace(_make_ticker(), source=" ")
+        with pytest.raises(ValidationError, match="source cannot be empty"):
+            validate_ticker_snapshot(invalid)
+
+    def test_validate_ticker_snapshot_rejects_negative_bid(self) -> None:
+        invalid = replace(_make_ticker(), bid=Decimal("-1"))
+        with pytest.raises(ValidationError, match="bid cannot be negative"):
+            validate_ticker_snapshot(invalid)
+
+    def test_validate_ticker_snapshot_rejects_future_timestamp(self) -> None:
+        invalid = replace(
+            _make_ticker(),
+            timestamp=create_timestamp(datetime.now(UTC) + timedelta(minutes=5)),
+        )
+        with pytest.raises(ValidationError, match="cannot be in the future"):
+            validate_ticker_snapshot(invalid)
