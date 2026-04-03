@@ -16,6 +16,7 @@ repos:
       - id: mypy
         name: mypy strict
         args: [--strict, src/]
+        pass_filenames: false
         additional_dependencies:
           - pydantic>=2.0.0
           - pydantic-settings>=2.0.0
@@ -27,11 +28,14 @@ repos:
       - id: bandit
         name: bandit security check
         args: [-r, src/, -q]
+        pass_filenames: false
         additional_dependencies: ["bandit[toml]"]
 
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.2
+  - repo: local
     hooks:
-      - id: gitleaks
+      - id: gitleaks-system
         name: gitleaks detect
-        args: [detect, --source, ., --verbose]
+        entry: gitleaks detect --source . --no-banner
+        language: system
+        pass_filenames: false
+        always_run: true
