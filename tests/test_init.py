@@ -1,9 +1,8 @@
 """
 Test suite for IATB package initialization
 """
-import pytest
 
-from iatb import __version__, __author__
+from iatb import __author__, __version__
 
 
 def test_version_exists() -> None:
