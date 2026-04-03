@@ -24,6 +24,8 @@ transformers = "^4.57.3"
 aion-sentiment = "^0.1.0"
 vadersentiment = "^3.3.2"
 newspaper3k = "^0.2.8"
+quantstats = "^0.0.62"
+optuna = "^4.5.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.0"
