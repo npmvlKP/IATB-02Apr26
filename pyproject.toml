@@ -26,6 +26,9 @@ vadersentiment = "^3.3.2"
 newspaper3k = "^0.2.8"
 quantstats = "^0.0.62"
 optuna = "^4.5.0"
+stable-baselines3 = "^2.7.0"
+gymnasium = "^1.2.1"
+tensorboard = "^2.20.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.0"
