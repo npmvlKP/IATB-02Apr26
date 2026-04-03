@@ -41,6 +41,7 @@ iatb020426/
 
 # Testing
 .pytest_cache/
+.pre-commit-cache/
 .coverage
 htmlcov/
 .tox/

@@ -2,7 +2,7 @@ name: CI/CD Quality Gates
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, production]
   pull_request:
     branches: [main, develop]
 

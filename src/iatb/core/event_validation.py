@@ -7,7 +7,7 @@ All checks are fail-closed and raise ValidationError on first violation.
 from decimal import Decimal
 from typing import Any
 
-from iatb.core.enums import Exchange, OrderStatus
+from iatb.core.enums import Exchange, OrderSide, OrderStatus, OrderType
 from iatb.core.exceptions import ValidationError
 from iatb.core.types import create_timestamp
 
@@ -56,7 +56,7 @@ def _validate_timestamp(event: object) -> None:
         raise ValidationError(msg)
     try:
         create_timestamp(timestamp)
-    except ValueError as exc:
+    except Exception as exc:
         msg = f"Invalid event timestamp: {exc}"
         raise ValidationError(msg) from exc
 
@@ -66,6 +66,21 @@ def _validate_exchange(event: object) -> None:
     exchange = _get_attr(event, "exchange")
     if not isinstance(exchange, Exchange):
         msg = f"Invalid exchange type: {type(exchange).__name__}"
+        raise ValidationError(msg)
+
+def _validate_order_side(event: object) -> None:
+    """Validate event order side domain."""
+    side = _get_attr(event, "side")
+    if not isinstance(side, OrderSide):
+        msg = f"Invalid order side type: {type(side).__name__}"
+        raise ValidationError(msg)
+
+
+def _validate_order_type(event: object) -> None:
+    """Validate event order type domain."""
+    order_type = _get_attr(event, "order_type")
+    if not isinstance(order_type, OrderType):
+        msg = f"Invalid order type: {type(order_type).__name__}"
         raise ValidationError(msg)
 
 
@@ -102,6 +117,8 @@ def _validate_market_tick_event(event: object) -> None:
 
 def _validate_order_update_event(event: object) -> None:
     _validate_exchange(event)
+    _validate_order_side(event)
+    _validate_order_type(event)
     _validate_non_empty_text(_get_attr(event, "order_id"), "order_id", MAX_IDENTIFIER_LENGTH)
     _validate_non_empty_text(_get_attr(event, "symbol"), "symbol", MAX_SYMBOL_LENGTH)
 
@@ -135,6 +152,7 @@ def _validate_order_update_event(event: object) -> None:
 
 def _validate_signal_event(event: object) -> None:
     _validate_exchange(event)
+    _validate_order_side(event)
     _validate_non_empty_text(_get_attr(event, "strategy_id"), "strategy_id", MAX_IDENTIFIER_LENGTH)
     _validate_non_empty_text(_get_attr(event, "symbol"), "symbol", MAX_SYMBOL_LENGTH)
     quantity = _as_decimal(_get_attr(event, "quantity"), "quantity")
