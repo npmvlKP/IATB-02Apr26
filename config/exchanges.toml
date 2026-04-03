@@ -1,0 +1,27 @@
+[NSE]
+timezone = "Asia/Kolkata"
+session_open = "09:15"
+session_close = "15:30"
+fee_bps = "2.00"
+lot_size = "1"
+
+[BSE]
+timezone = "Asia/Kolkata"
+session_open = "09:15"
+session_close = "15:30"
+fee_bps = "2.00"
+lot_size = "1"
+
+[MCX]
+timezone = "Asia/Kolkata"
+session_open = "09:00"
+session_close = "23:30"
+fee_bps = "3.00"
+lot_size = "1"
+
+[BINANCE]
+timezone = "UTC"
+session_open = "00:00"
+session_close = "23:59"
+fee_bps = "10.00"
+lot_size = "0.0001"

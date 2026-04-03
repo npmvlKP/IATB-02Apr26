@@ -1,0 +1,10 @@
+mode = "paper"
+default_exchange = "NSE"
+default_market_type = "SPOT"
+timezone = "UTC"
+paper_trade_enforced = true
+
+[engine]
+event_bus_max_queue_size = 1000
+event_bus_batch_size = 100
+max_tasks = 100
