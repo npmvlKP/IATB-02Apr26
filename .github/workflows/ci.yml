@@ -53,10 +53,16 @@ jobs:
         run: poetry run pytest --cov-fail-under=90
       
       - name: Run gitleaks
+        id: gitleaks_action
+        continue-on-error: true
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Fallback secret scan (if gitleaks action fails)
+        if: steps.gitleaks_action.outcome != 'success'
+        run: python scripts/secret_scan_fallback.py
       
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4

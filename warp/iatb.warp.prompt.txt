@@ -1,0 +1,29 @@
+Prompt name: iatb
+
+Prompt text:
+Activate IATB strict mode for repository G:\IATB-02Apr26\IATB.
+Apply:
+- IMPLEMENT → REVIEW → DEBUG/FIX → RE-VERIFY (max 3 fix cycles)
+- Evidence-only decisions; no assumptions
+- Fail-closed safety behavior
+- Decimal-only financial math
+- UTC-aware datetime only
+- Mandatory quality gates:
+  - poetry run ruff check src/ tests/
+  - poetry run ruff format --check src/ tests/
+  - poetry run mypy src/ --strict
+  - poetry run bandit -r src/ -q
+  - gitleaks detect --source . --no-banner
+  - poetry run pytest --cov=src/iatb --cov-fail-under=90 -x
+  - No float in financial paths
+  - No naive datetime.now()
+  - No print() in src/iatb/
+  - Functions <= 50 LOC
+- Token-efficient output sections:
+  1) Verdict
+  2) Change Summary
+  3) Gate Status
+  4) Test/Evidence
+  5) Blockers/Next Step
+- If any mandatory gate fails, output AUTO-FAIL with failed items, evidence, and required next input/fix.
+For non-project prompts, respond normally and concisely.
