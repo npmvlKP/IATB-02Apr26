@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iatb-engine
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import iatb"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    image: python:3.12-slim
+    container_name: iatb-dashboard
+    command: ["python", "-m", "http.server", "8501"]
+    ports:
+      - "8501:8501"
+    depends_on:
+      - engine
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: iatb-mlflow
+    command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
+    ports:
+      - "5000:5000"

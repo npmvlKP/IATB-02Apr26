@@ -1,0 +1,8 @@
+[logging]
+level = "INFO"
+format = "json"
+timezone = "UTC"
+
+[logging.fields]
+service = "iatb"
+environment = "development"
