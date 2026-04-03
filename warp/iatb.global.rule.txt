@@ -1,0 +1,29 @@
+Name: IATB Strict Contract
+Apply when:
+- Prompt is project-scoped to G:\IATB-02Apr26\IATB
+- OR user invokes /iatb
+
+Rule text:
+- Enforce IMPLEMENT → REVIEW → DEBUG/FIX → RE-VERIFY
+- Max debug/fix cycles = 3
+- Evidence-only decisions; no assumptions
+- No placeholders/TODO stubs
+- Fail-closed for safety/risk behavior
+- Financial math uses Decimal only
+- Datetime must be UTC-aware
+- Mandatory gates (all pass):
+  - poetry run ruff check src/ tests/
+  - poetry run ruff format --check src/ tests/
+  - poetry run mypy src/ --strict
+  - poetry run bandit -r src/ -q
+  - gitleaks detect --source . --no-banner
+  - poetry run pytest --cov=src/iatb --cov-fail-under=90 -x
+  - No float usage in financial paths
+  - No naive datetime.now()
+  - No print() in src/iatb/
+  - All functions <= 50 LOC
+- Token output policy:
+  - Keep responses concise and non-repetitive
+  - Use sections: Verdict, Change Summary, Gate Status, Test/Evidence, Blockers/Next Step
+- Failure contract:
+  - If any mandatory gate fails, output AUTO-FAIL with failed items, evidence, and required next input/fix
