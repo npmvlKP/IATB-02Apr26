@@ -258,3 +258,164 @@ def test_main_returns_login_required_when_auto_capture_times_out(
     monkeypatch.setattr(module, "_auto_acquire_request_token", lambda *args, **kwargs: None)
     exit_code = module.main(["--env-file", str(env_path), "--auto-login"])
     assert exit_code == 2
+
+
+def test_main_reconnects_and_succeeds_after_transient_access_token_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_script_module()
+    _seed_required_env(monkeypatch)
+    today = datetime.now(UTC).date().isoformat()
+    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN", "token-today")
+    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN_DATE_UTC", today)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            (
+                "ZERODHA_API_KEY=kite-key",
+                "ZERODHA_API_SECRET=kite-secret",
+                "ZERODHA_ACCESS_TOKEN=token-today",
+                f"ZERODHA_ACCESS_TOKEN_DATE_UTC={today}",
+            ),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str | None, str | None]] = []
+    sleep_calls: list[float] = []
+    session = _session("token-recovered")
+
+    class FakeConnection:
+        @classmethod
+        def from_env(cls) -> FakeConnection:
+            return cls()
+
+        def login_url(self) -> str:
+            return "https://kite.zerodha.com/connect/login?api_key=kite-key"
+
+        def establish_session(
+            self,
+            *,
+            request_token: str | None = None,
+            access_token: str | None = None,
+        ) -> ZerodhaSession:
+            calls.append((request_token, access_token))
+            if len(calls) < 3:
+                msg = (
+                    "Zerodha API request failed for /user/profile: "
+                    "HTTP Error 503: Service Unavailable"
+                )
+                raise ConfigError(msg)
+            return session
+
+    monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    exit_code = module.main(
+        [
+            "--env-file",
+            str(env_path),
+            "--no-auto-login",
+            "--max-reconnect-attempts",
+            "3",
+            "--reconnect-delay-seconds",
+            "1",
+        ],
+    )
+    assert exit_code == 0
+    assert calls == [
+        (None, "token-today"),
+        (None, "token-today"),
+        (None, "token-today"),
+    ]
+    assert sleep_calls == [1.0, 2.0]
+
+
+def test_main_returns_blocked_when_transient_errors_exhaust_reconnect_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_script_module()
+    _seed_required_env(monkeypatch)
+    today = datetime.now(UTC).date().isoformat()
+    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN", "token-today")
+    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN_DATE_UTC", today)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            (
+                "ZERODHA_API_KEY=kite-key",
+                "ZERODHA_API_SECRET=kite-secret",
+                "ZERODHA_ACCESS_TOKEN=token-today",
+                f"ZERODHA_ACCESS_TOKEN_DATE_UTC={today}",
+            ),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str | None, str | None]] = []
+    sleep_calls: list[float] = []
+
+    class FakeConnection:
+        @classmethod
+        def from_env(cls) -> FakeConnection:
+            return cls()
+
+        def login_url(self) -> str:
+            return "https://kite.zerodha.com/connect/login?api_key=kite-key"
+
+        def establish_session(
+            self,
+            *,
+            request_token: str | None = None,
+            access_token: str | None = None,
+        ) -> ZerodhaSession:
+            calls.append((request_token, access_token))
+            msg = (
+                "Zerodha API request failed for /user/profile: "
+                "HTTP Error 503: Service Unavailable"
+            )
+            raise ConfigError(msg)
+
+    monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    exit_code = module.main(
+        [
+            "--env-file",
+            str(env_path),
+            "--no-auto-login",
+            "--max-reconnect-attempts",
+            "2",
+            "--reconnect-delay-seconds",
+            "0",
+        ],
+    )
+    assert exit_code == 1
+    assert calls == [
+        (None, "token-today"),
+        (None, "token-today"),
+    ]
+    assert sleep_calls == []
+
+
+def test_main_rejects_invalid_reconnect_attempt_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_script_module()
+    _seed_required_env(monkeypatch)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "ZERODHA_API_KEY=kite-key\nZERODHA_API_SECRET=kite-secret\n",
+        encoding="utf-8",
+    )
+    exit_code = module.main(
+        [
+            "--env-file",
+            str(env_path),
+            "--no-auto-login",
+            "--max-reconnect-attempts",
+            "0",
+        ],
+    )
+    assert exit_code == 1

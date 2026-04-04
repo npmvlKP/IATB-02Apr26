@@ -32,6 +32,8 @@ _LOCAL_LOOPBACK = ".".join(("127", "0", "0", "1"))
 _ANY_BIND = ".".join(("0", "0", "0", "0"))
 _DEFAULT_REDIRECT_URL = f"http://{_LOCAL_LOOPBACK}:5000/callback"
 _DEFAULT_LOGIN_TIMEOUT_SECONDS = 180
+_DEFAULT_MAX_RECONNECT_ATTEMPTS = 3
+_DEFAULT_RECONNECT_DELAY_SECONDS = 2.0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -53,6 +55,18 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=_DEFAULT_LOGIN_TIMEOUT_SECONDS,
         help="Max seconds to wait for callback token capture after opening login page.",
+    )
+    parser.add_argument(
+        "--max-reconnect-attempts",
+        type=int,
+        default=_DEFAULT_MAX_RECONNECT_ATTEMPTS,
+        help="Max reconnect attempts for transient API/network failures.",
+    )
+    parser.add_argument(
+        "--reconnect-delay-seconds",
+        type=float,
+        default=_DEFAULT_RECONNECT_DELAY_SECONDS,
+        help="Base reconnect delay in seconds; multiplied by attempt index.",
     )
     auto_group = parser.add_mutually_exclusive_group()
     auto_group.add_argument("--auto-login", dest="auto_login", action="store_true", default=True)
@@ -99,6 +113,65 @@ def _resolve_request_token(request_token: str, redirect_url: str) -> str | None:
 def _looks_like_stale_token_error(message: str) -> bool:
     lowered = message.lower()
     return "403" in lowered or "401" in lowered or "invalid token" in lowered
+
+
+def _looks_like_transient_api_error(message: str) -> bool:
+    lowered = message.lower()
+    markers = (
+        "http error 429",
+        "http error 500",
+        "http error 502",
+        "http error 503",
+        "http error 504",
+        "timed out",
+        "temporary failure",
+        "connection reset",
+        "connection aborted",
+        "connection refused",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "name resolution",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def _validate_reconnect_settings(*, max_attempts: int, delay_seconds: float) -> None:
+    if max_attempts <= 0:
+        msg = "max-reconnect-attempts must be positive"
+        raise ConfigError(msg)
+    if delay_seconds < 0:
+        msg = "reconnect-delay-seconds cannot be negative"
+        raise ConfigError(msg)
+
+
+def _establish_session_with_reconnect(
+    connection: ZerodhaConnection,
+    *,
+    request_token: str | None,
+    access_token: str | None,
+    max_attempts: int,
+    delay_seconds: float,
+) -> ZerodhaSession:
+    attempt = 1
+    while attempt <= max_attempts:
+        try:
+            return connection.establish_session(
+                request_token=request_token,
+                access_token=access_token,
+            )
+        except ConfigError as exc:
+            if not _looks_like_transient_api_error(str(exc)) or attempt >= max_attempts:
+                raise
+            retry_attempt = attempt + 1
+            _emit(f"ZERODHA_RECONNECT_ATTEMPT={retry_attempt}")
+            _emit(f"ZERODHA_RECONNECT_REASON={exc}")
+            wait_seconds = delay_seconds * attempt
+            if wait_seconds > 0:
+                time.sleep(wait_seconds)
+            attempt = retry_attempt
+    msg = "Session reconnect attempts exhausted"
+    raise ConfigError(msg)
 
 
 def _print_login_required(connection: ZerodhaConnection) -> None:
@@ -204,6 +277,14 @@ def _auto_acquire_request_token(
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    try:
+        _validate_reconnect_settings(
+            max_attempts=args.max_reconnect_attempts,
+            delay_seconds=args.reconnect_delay_seconds,
+        )
+    except ConfigError as exc:
+        _emit(f"ZERODHA_STATUS=BLOCKED reason={exc}")
+        return 1
     env_path = Path(args.env_file)
     env_values = load_env_file(env_path)
     apply_env_defaults(env_values)
@@ -215,7 +296,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         saved_access_token = token_manager.resolve_saved_access_token()
         if saved_access_token:
-            session = connection.establish_session(access_token=saved_access_token)
+            session = _establish_session_with_reconnect(
+                connection,
+                request_token=None,
+                access_token=saved_access_token,
+                max_attempts=args.max_reconnect_attempts,
+                delay_seconds=args.reconnect_delay_seconds,
+            )
             _emit_connected(session)
             if args.save_access_token:
                 persisted_path = token_manager.persist_session_tokens(
@@ -242,7 +329,13 @@ def main(argv: list[str] | None = None) -> int:
         if request_token is None:
             _print_login_required(connection)
             return 2
-        session = connection.establish_session(request_token=request_token)
+        session = _establish_session_with_reconnect(
+            connection,
+            request_token=request_token,
+            access_token=None,
+            max_attempts=args.max_reconnect_attempts,
+            delay_seconds=args.reconnect_delay_seconds,
+        )
     except ConfigError as exc:
         _emit(f"ZERODHA_STATUS=BLOCKED reason={exc}")
         return 1
