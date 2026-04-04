@@ -419,3 +419,121 @@ def test_main_rejects_invalid_reconnect_attempt_count(
         ],
     )
     assert exit_code == 1
+
+
+def test_main_writes_structured_logs_to_file_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_script_module()
+    _seed_required_env(monkeypatch)
+    today = datetime.now(UTC).date().isoformat()
+    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN", "token-today")
+    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN_DATE_UTC", today)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "ZERODHA_API_KEY=kite-key\nZERODHA_API_SECRET=kite-secret\n",
+        encoding="utf-8",
+    )
+    log_path = tmp_path / "zerodha_connect.log"
+    session = _session("token-today")
+
+    class FakeConnection:
+        @classmethod
+        def from_env(cls) -> FakeConnection:
+            return cls()
+
+        def login_url(self) -> str:
+            return "https://kite.zerodha.com/connect/login?api_key=kite-key"
+
+        def establish_session(
+            self,
+            *,
+            request_token: str | None = None,
+            access_token: str | None = None,
+        ) -> ZerodhaSession:
+            _ = request_token, access_token
+            return session
+
+    monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
+    exit_code = module.main(
+        [
+            "--env-file",
+            str(env_path),
+            "--no-auto-login",
+            "--log-file",
+            str(log_path),
+        ],
+    )
+    assert exit_code == 0
+    log_text = log_path.read_text(encoding="utf-8")
+    assert "zerodha bootstrap started" in log_text
+    assert "session established using saved access token" in log_text
+    assert "zerodha bootstrap finished status=CONNECTED" in log_text
+
+
+def test_main_returns_blocked_on_unexpected_access_token_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_script_module()
+    _seed_required_env(monkeypatch)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "ZERODHA_API_KEY=kite-key\nZERODHA_API_SECRET=kite-secret\n",
+        encoding="utf-8",
+    )
+    log_path = tmp_path / "zerodha_connect.log"
+
+    class FakeTokenManager:
+        def __init__(self, *, env_path: Path, env_values: dict[str, str]) -> None:
+            _ = env_path, env_values
+
+        def resolve_saved_access_token(self) -> str | None:
+            msg = "unhandled token manager failure"
+            raise RuntimeError(msg)
+
+        def resolve_saved_request_token(self) -> str | None:
+            return None
+
+        def persist_session_tokens(
+            self,
+            *,
+            access_token: str,
+            request_token: str | None,
+        ) -> Path:
+            _ = access_token, request_token
+            return Path(".env")
+
+    class FakeConnection:
+        @classmethod
+        def from_env(cls) -> FakeConnection:
+            return cls()
+
+        def login_url(self) -> str:
+            return "https://kite.zerodha.com/connect/login?api_key=kite-key"
+
+        def establish_session(
+            self,
+            *,
+            request_token: str | None = None,
+            access_token: str | None = None,
+        ) -> ZerodhaSession:
+            _ = request_token, access_token
+            msg = "should not be called"
+            raise AssertionError(msg)
+
+    monkeypatch.setattr(module, "ZerodhaTokenManager", FakeTokenManager)
+    monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
+    exit_code = module.main(
+        [
+            "--env-file",
+            str(env_path),
+            "--no-auto-login",
+            "--log-file",
+            str(log_path),
+        ],
+    )
+    assert exit_code == 1
+    log_text = log_path.read_text(encoding="utf-8")
+    assert "unexpected failure during access-token bootstrap" in log_text
