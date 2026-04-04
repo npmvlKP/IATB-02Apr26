@@ -127,11 +127,11 @@ class ZerodhaTokenManager:
         env_value = os.getenv(key, "").strip()
         if env_value:
             return env_value
+        if self._token_store_path != self._env_path:
+            return self._token_store_values.get(key, "").strip()
         primary_value = self._env_values.get(key, "").strip()
         if primary_value:
             return primary_value
-        if self._token_store_path != self._env_path:
-            return self._token_store_values.get(key, "").strip()
         return ""
 
     def _is_today(self, date_text: str) -> bool:

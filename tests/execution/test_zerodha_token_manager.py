@@ -79,6 +79,29 @@ def test_resolve_saved_request_token_reads_dotenv_store_for_example_file(tmp_pat
     assert manager.resolve_saved_request_token() == "req-fresh"
 
 
+def test_resolve_saved_request_token_ignores_example_file_token_values(tmp_path: Path) -> None:
+    today = datetime.now(UTC).date()
+    env_example_path = tmp_path / ".env.example"
+    env_example_path.write_text(
+        "\n".join(
+            (
+                "ZERODHA_API_KEY=kite-key",
+                "ZERODHA_API_SECRET=kite-secret",
+                "ZERODHA_REQUEST_TOKEN=req-stale-example",
+                f"ZERODHA_REQUEST_TOKEN_DATE_UTC={today.isoformat()}",
+            ),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manager = ZerodhaTokenManager(
+        env_path=env_example_path,
+        env_values=load_env_file(env_example_path),
+        today_utc=today,
+    )
+    assert manager.resolve_saved_request_token() is None
+
+
 def test_persist_session_tokens_writes_to_dotenv_when_env_file_is_example(tmp_path: Path) -> None:
     today = datetime.now(UTC).date()
     env_example_path = tmp_path / ".env.example"
