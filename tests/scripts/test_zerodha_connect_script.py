@@ -71,14 +71,55 @@ def test_resolve_request_token_rejects_split_status_only_url() -> None:
         module._resolve_request_token("", "https://localhost/callback?status=success")
 
 
-def test_saved_access_token_is_rejected_when_date_is_stale(
+def test_main_persists_to_dotenv_when_env_file_is_example(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     module = _load_script_module()
-    stale_date = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
-    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN", "token-old")
-    monkeypatch.setenv("ZERODHA_ACCESS_TOKEN_DATE_UTC", stale_date)
-    assert module._resolve_saved_access_token() is None
+    _seed_required_env(monkeypatch)
+    env_example_path = tmp_path / ".env.example"
+    env_example_path.write_text(
+        "ZERODHA_API_KEY=kite-key\nZERODHA_API_SECRET=kite-secret\n",
+        encoding="utf-8",
+    )
+    session = _session("token-persisted")
+
+    class FakeConnection:
+        @classmethod
+        def from_env(cls) -> FakeConnection:
+            return cls()
+
+        def login_url(self) -> str:
+            return "https://kite.zerodha.com/connect/login?api_key=kite-key"
+
+        def establish_session(
+            self,
+            *,
+            request_token: str | None = None,
+            access_token: str | None = None,
+        ) -> ZerodhaSession:
+            _ = access_token
+            assert request_token == "req-fresh"  # noqa: S105
+            return session
+
+    monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
+    exit_code = module.main(
+        [
+            "--env-file",
+            str(env_example_path),
+            "--save-access-token",
+            "--request-token",
+            "req-fresh",
+            "--no-auto-login",
+        ],
+    )
+    assert exit_code == 0
+    persisted_path = tmp_path / ".env"
+    persisted = persisted_path.read_text(encoding="utf-8")
+    assert "ZERODHA_ACCESS_TOKEN=token-persisted" in persisted
+    assert "ZERODHA_REQUEST_TOKEN=req-fresh" in persisted
+    assert "BROKER_OAUTH_2FA_VERIFIED=true" in persisted
+    assert "token-persisted" not in env_example_path.read_text(encoding="utf-8")
 
 
 def test_main_uses_valid_same_day_access_token(
