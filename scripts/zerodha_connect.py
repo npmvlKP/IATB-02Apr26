@@ -5,6 +5,7 @@ Automated Zerodha login bootstrap with day-scoped token lifecycle.
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import socket
 import sys
@@ -34,6 +35,9 @@ _DEFAULT_REDIRECT_URL = f"http://{_LOCAL_LOOPBACK}:5000/callback"
 _DEFAULT_LOGIN_TIMEOUT_SECONDS = 180
 _DEFAULT_MAX_RECONNECT_ATTEMPTS = 3
 _DEFAULT_RECONNECT_DELAY_SECONDS = 2.0
+_DEFAULT_LOG_FILE = "logs/zerodha_connect.log"
+_LOGGER_NAME = "iatb.scripts.zerodha_connect"
+_UNEXPECTED_INTERNAL_ERROR = "unexpected internal error"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -68,6 +72,17 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_RECONNECT_DELAY_SECONDS,
         help="Base reconnect delay in seconds; multiplied by attempt index.",
     )
+    parser.add_argument(
+        "--log-file",
+        default=_DEFAULT_LOG_FILE,
+        help="Path to bootstrap log file.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+        help="Logging verbosity.",
+    )
     auto_group = parser.add_mutually_exclusive_group()
     auto_group.add_argument("--auto-login", dest="auto_login", action="store_true", default=True)
     auto_group.add_argument("--no-auto-login", dest="auto_login", action="store_false")
@@ -76,6 +91,35 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _emit(line: str) -> None:
     sys.stdout.write(f"{line}\n")
+
+
+class _UtcFormatter(logging.Formatter):
+    converter = time.gmtime
+
+
+def _configure_logger(log_file: Path, level_name: str) -> logging.Logger:
+    logger = logging.getLogger(_LOGGER_NAME)
+    for handler in tuple(logger.handlers):
+        logger.removeHandler(handler)
+        handler.close()
+    logger.setLevel(getattr(logging, level_name))
+    logger.propagate = False
+    formatter = _UtcFormatter(
+        fmt="%(asctime)sZ | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    )
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    except OSError as exc:
+        logger.warning("file logging disabled path=%s reason=%s", log_file, exc)
+        return logger
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    return logger
 
 
 def _read_env_text(name: str) -> str:
@@ -152,18 +196,40 @@ def _establish_session_with_reconnect(
     access_token: str | None,
     max_attempts: int,
     delay_seconds: float,
+    logger: logging.Logger,
 ) -> ZerodhaSession:
     attempt = 1
     while attempt <= max_attempts:
         try:
+            logger.debug(
+                "session establish attempt=%s/%s request_token=%s access_token=%s",
+                attempt,
+                max_attempts,
+                bool(request_token),
+                bool(access_token),
+            )
             return connection.establish_session(
                 request_token=request_token,
                 access_token=access_token,
             )
         except ConfigError as exc:
-            if not _looks_like_transient_api_error(str(exc)) or attempt >= max_attempts:
+            is_transient = _looks_like_transient_api_error(str(exc))
+            if not is_transient or attempt >= max_attempts:
+                logger.error(
+                    "session establish failed attempt=%s/%s transient=%s reason=%s",
+                    attempt,
+                    max_attempts,
+                    is_transient,
+                    exc,
+                )
                 raise
             retry_attempt = attempt + 1
+            logger.warning(
+                "transient API failure, reconnect attempt=%s/%s reason=%s",
+                retry_attempt,
+                max_attempts,
+                exc,
+            )
             _emit(f"ZERODHA_RECONNECT_ATTEMPT={retry_attempt}")
             _emit(f"ZERODHA_RECONNECT_REASON={exc}")
             wait_seconds = delay_seconds * attempt
@@ -277,24 +343,46 @@ def _auto_acquire_request_token(
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    logger = _configure_logger(Path(args.log_file), args.log_level)
+    logger.info(
+        "zerodha bootstrap started env_file=%s auto_login=%s save_access_token=%s",
+        args.env_file,
+        args.auto_login,
+        args.save_access_token,
+    )
     try:
         _validate_reconnect_settings(
             max_attempts=args.max_reconnect_attempts,
             delay_seconds=args.reconnect_delay_seconds,
         )
     except ConfigError as exc:
+        logger.error("invalid reconnect settings: %s", exc)
         _emit(f"ZERODHA_STATUS=BLOCKED reason={exc}")
         return 1
-    env_path = Path(args.env_file)
-    env_values = load_env_file(env_path)
-    apply_env_defaults(env_values)
-    token_manager = ZerodhaTokenManager(
-        env_path=env_path,
-        env_values=env_values,
-    )
-    connection = ZerodhaConnection.from_env()
+    except Exception:
+        logger.exception("unexpected failure while validating reconnect settings")
+        _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
+        return 1
+    try:
+        env_path = Path(args.env_file)
+        env_values = load_env_file(env_path)
+        apply_env_defaults(env_values)
+        token_manager = ZerodhaTokenManager(
+            env_path=env_path,
+            env_values=env_values,
+        )
+        connection = ZerodhaConnection.from_env()
+    except (ConfigError, OSError) as exc:
+        logger.error("bootstrap initialization failed: %s", exc)
+        _emit(f"ZERODHA_STATUS=BLOCKED reason={exc}")
+        return 1
+    except Exception:
+        logger.exception("unexpected failure during bootstrap initialization")
+        _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
+        return 1
     try:
         saved_access_token = token_manager.resolve_saved_access_token()
+        logger.info("saved access token available=%s", bool(saved_access_token))
         if saved_access_token:
             session = _establish_session_with_reconnect(
                 connection,
@@ -302,31 +390,44 @@ def main(argv: list[str] | None = None) -> int:
                 access_token=saved_access_token,
                 max_attempts=args.max_reconnect_attempts,
                 delay_seconds=args.reconnect_delay_seconds,
+                logger=logger,
             )
             _emit_connected(session)
+            logger.info("session established using saved access token user_id=%s", session.user_id)
             if args.save_access_token:
                 persisted_path = token_manager.persist_session_tokens(
                     access_token=session.access_token,
                     request_token=None,
                 )
                 _emit(f"ZERODHA_TOKEN_SAVED={persisted_path}")
+                logger.info("session token metadata persisted path=%s", persisted_path)
+            logger.info("zerodha bootstrap finished status=CONNECTED")
             return 0
     except ConfigError as exc:
         if not _looks_like_stale_token_error(str(exc)):
+            logger.error("access-token bootstrap failed: %s", exc)
             _emit(f"ZERODHA_STATUS=BLOCKED reason={exc}")
             return 1
+        logger.warning("saved access token rejected; switching to request-token path: %s", exc)
+    except Exception:
+        logger.exception("unexpected failure during access-token bootstrap")
+        _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
+        return 1
     try:
         redirect_url = _resolve_redirect_url(args.redirect_url)
         request_token = _resolve_request_token(args.request_token, args.redirect_url)
         if request_token is None:
             request_token = token_manager.resolve_saved_request_token()
+        logger.info("request token available=%s", bool(request_token))
         if request_token is None and args.auto_login:
+            logger.info("starting auto-login callback capture")
             request_token = _auto_acquire_request_token(
                 connection,
                 redirect_url=redirect_url,
                 timeout_seconds=args.login_timeout_seconds,
             )
         if request_token is None:
+            logger.warning("login required because request token is unavailable")
             _print_login_required(connection)
             return 2
         session = _establish_session_with_reconnect(
@@ -335,17 +436,26 @@ def main(argv: list[str] | None = None) -> int:
             access_token=None,
             max_attempts=args.max_reconnect_attempts,
             delay_seconds=args.reconnect_delay_seconds,
+            logger=logger,
         )
     except ConfigError as exc:
+        logger.error("request-token bootstrap failed: %s", exc)
         _emit(f"ZERODHA_STATUS=BLOCKED reason={exc}")
         return 1
+    except Exception:
+        logger.exception("unexpected failure during request-token bootstrap")
+        _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
+        return 1
     _emit_connected(session)
+    logger.info("session established user_id=%s", session.user_id)
     if args.save_access_token:
         persisted_path = token_manager.persist_session_tokens(
             access_token=session.access_token,
             request_token=request_token,
         )
         _emit(f"ZERODHA_TOKEN_SAVED={persisted_path}")
+        logger.info("session token metadata persisted path=%s", persisted_path)
+    logger.info("zerodha bootstrap finished status=CONNECTED")
     return 0
 
 
