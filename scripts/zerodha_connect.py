@@ -10,7 +10,6 @@ import socket
 import sys
 import time
 import webbrowser
-from datetime import UTC, date, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from queue import Empty, Full, Queue
@@ -22,13 +21,13 @@ from iatb.execution.zerodha_connection import (
     ZerodhaSession,
     extract_request_token_from_text,
 )
+from iatb.execution.zerodha_token_manager import (
+    ZerodhaTokenManager,
+    apply_env_defaults,
+    load_env_file,
+)
 
-_ACCESS_TOKEN_ENV = "ZERODHA_ACCESS_TOKEN"  # noqa: S105
-_ACCESS_TOKEN_DATE_ENV = "ZERODHA_ACCESS_TOKEN_DATE_UTC"  # noqa: S105
-_REQUEST_TOKEN_ENV = "ZERODHA_REQUEST_TOKEN"  # noqa: S105
-_REQUEST_TOKEN_DATE_ENV = "ZERODHA_REQUEST_TOKEN_DATE_UTC"  # noqa: S105
 _REDIRECT_URL_ENV = "ZERODHA_REDIRECT_URL"
-_BROKER_VERIFIED_ENV = "BROKER_OAUTH_2FA_VERIFIED"
 _LOCAL_LOOPBACK = ".".join(("127", "0", "0", "1"))
 _ANY_BIND = ".".join(("0", "0", "0", "0"))
 _DEFAULT_REDIRECT_URL = f"http://{_LOCAL_LOOPBACK}:5000/callback"
@@ -65,81 +64,8 @@ def _emit(line: str) -> None:
     sys.stdout.write(f"{line}\n")
 
 
-def _parse_env_file(env_path: Path) -> dict[str, str]:
-    if not env_path.exists():
-        return {}
-    values: dict[str, str] = {}
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, value = stripped.split("=", maxsplit=1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
-    return values
-
-
-def _apply_env_defaults(values: dict[str, str]) -> None:
-    for key, value in values.items():
-        if value and key not in os.environ:
-            os.environ[key] = value
-
-
-def _persist_env_updates(env_path: Path, updates: dict[str, str]) -> None:
-    original_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
-    rewritten: list[str] = []
-    touched_keys: set[str] = set()
-    for line in original_lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            key, _ = line.split("=", maxsplit=1)
-            normalized_key = key.strip()
-            if normalized_key in updates:
-                rewritten.append(f"{normalized_key}={updates[normalized_key]}")
-                touched_keys.add(normalized_key)
-                continue
-        rewritten.append(line)
-    for key, value in updates.items():
-        if key not in touched_keys:
-            rewritten.append(f"{key}={value}")
-    env_path.write_text("\n".join(rewritten).rstrip() + "\n", encoding="utf-8")
-
-
-def _utc_today() -> date:
-    return datetime.now(UTC).date()
-
-
-def _is_today(date_text: str) -> bool:
-    normalized = date_text.strip()
-    if not normalized:
-        return False
-    try:
-        return date.fromisoformat(normalized) == _utc_today()
-    except ValueError:
-        return False
-
-
 def _read_env_text(name: str) -> str:
     return os.getenv(name, "").strip()
-
-
-def _resolve_saved_access_token() -> str | None:
-    access_token = _read_env_text(_ACCESS_TOKEN_ENV)
-    if not access_token:
-        return None
-    access_date = _read_env_text(_ACCESS_TOKEN_DATE_ENV)
-    if access_date and not _is_today(access_date):
-        return None
-    return access_token
-
-
-def _resolve_saved_request_token() -> str | None:
-    request_token = _read_env_text(_REQUEST_TOKEN_ENV)
-    if not request_token:
-        return None
-    request_date = _read_env_text(_REQUEST_TOKEN_DATE_ENV)
-    if request_date and not _is_today(request_date):
-        return None
-    return request_token
 
 
 def _resolve_redirect_url(cli_redirect_url: str) -> str:
@@ -276,34 +202,27 @@ def _auto_acquire_request_token(
         return _wait_for_callback_token(server, token_queue, timeout_seconds)
 
 
-def _persist_session_state(
-    env_path: Path, session: ZerodhaSession, request_token: str | None
-) -> None:
-    today = _utc_today().isoformat()
-    updates = {
-        _ACCESS_TOKEN_ENV: session.access_token,
-        _ACCESS_TOKEN_DATE_ENV: today,
-        _BROKER_VERIFIED_ENV: "true",
-    }
-    if request_token:
-        updates[_REQUEST_TOKEN_ENV] = request_token
-        updates[_REQUEST_TOKEN_DATE_ENV] = today
-    _persist_env_updates(env_path, updates)
-    _emit(f"ZERODHA_TOKEN_SAVED={env_path}")
-
-
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     env_path = Path(args.env_file)
-    _apply_env_defaults(_parse_env_file(env_path))
+    env_values = load_env_file(env_path)
+    apply_env_defaults(env_values)
+    token_manager = ZerodhaTokenManager(
+        env_path=env_path,
+        env_values=env_values,
+    )
     connection = ZerodhaConnection.from_env()
     try:
-        saved_access_token = _resolve_saved_access_token()
+        saved_access_token = token_manager.resolve_saved_access_token()
         if saved_access_token:
             session = connection.establish_session(access_token=saved_access_token)
             _emit_connected(session)
             if args.save_access_token:
-                _persist_session_state(env_path, session, request_token=None)
+                persisted_path = token_manager.persist_session_tokens(
+                    access_token=session.access_token,
+                    request_token=None,
+                )
+                _emit(f"ZERODHA_TOKEN_SAVED={persisted_path}")
             return 0
     except ConfigError as exc:
         if not _looks_like_stale_token_error(str(exc)):
@@ -313,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         redirect_url = _resolve_redirect_url(args.redirect_url)
         request_token = _resolve_request_token(args.request_token, args.redirect_url)
         if request_token is None:
-            request_token = _resolve_saved_request_token()
+            request_token = token_manager.resolve_saved_request_token()
         if request_token is None and args.auto_login:
             request_token = _auto_acquire_request_token(
                 connection,
@@ -329,7 +248,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     _emit_connected(session)
     if args.save_access_token:
-        _persist_session_state(env_path, session, request_token=request_token)
+        persisted_path = token_manager.persist_session_tokens(
+            access_token=session.access_token,
+            request_token=request_token,
+        )
+        _emit(f"ZERODHA_TOKEN_SAVED={persisted_path}")
     return 0
 
 

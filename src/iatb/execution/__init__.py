@@ -9,6 +9,7 @@ from iatb.execution.order_manager import OrderManager
 from iatb.execution.paper_executor import PaperExecutor
 from iatb.execution.transaction_costs import estimate_round_trip_cost, estimate_single_side_cost
 from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
+from iatb.execution.zerodha_token_manager import ZerodhaTokenManager
 
 __all__ = [
     "CCXTExecutor",
@@ -22,4 +23,5 @@ __all__ = [
     "estimate_single_side_cost",
     "ZerodhaConnection",
     "ZerodhaSession",
+    "ZerodhaTokenManager",
 ]
