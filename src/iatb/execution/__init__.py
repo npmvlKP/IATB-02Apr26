@@ -8,6 +8,7 @@ from iatb.execution.openalgo_executor import OpenAlgoExecutor
 from iatb.execution.order_manager import OrderManager
 from iatb.execution.paper_executor import PaperExecutor
 from iatb.execution.transaction_costs import estimate_round_trip_cost, estimate_single_side_cost
+from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
 
 __all__ = [
     "CCXTExecutor",
@@ -19,4 +20,6 @@ __all__ = [
     "PaperExecutor",
     "estimate_round_trip_cost",
     "estimate_single_side_cost",
+    "ZerodhaConnection",
+    "ZerodhaSession",
 ]
