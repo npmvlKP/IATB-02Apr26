@@ -13,10 +13,12 @@ from iatb.core.exceptions import ConfigError
 from iatb.execution.base import ExecutionResult, Executor, OrderRequest
 
 if TYPE_CHECKING:
+    from iatb.execution.order_throttle import OrderThrottle
     from iatb.execution.pre_trade_validator import PreTradeConfig
     from iatb.execution.trade_audit import TradeAuditLogger
     from iatb.risk.daily_loss_guard import DailyLossGuard
     from iatb.risk.kill_switch import KillSwitch
+
 
 class OrderManager:
     """Tracks order lifecycle with kill switch, validation, and audit."""
@@ -29,6 +31,8 @@ class OrderManager:
         pre_trade_config: PreTradeConfig | None = None,
         daily_loss_guard: DailyLossGuard | None = None,
         audit_logger: TradeAuditLogger | None = None,
+        order_throttle: OrderThrottle | None = None,
+        algo_id: str = "",
     ) -> None:
         if heartbeat_timeout_seconds <= 0:
             msg = "heartbeat_timeout_seconds must be positive"
@@ -41,6 +45,8 @@ class OrderManager:
         self._pre_trade_config = pre_trade_config
         self._daily_loss_guard = daily_loss_guard
         self._audit_logger = audit_logger
+        self._order_throttle = order_throttle
+        self._algo_id = algo_id
         self._last_prices: dict[str, Decimal] = {}
         self._positions: dict[str, Decimal] = {}
         self._total_exposure = Decimal("0")
@@ -68,19 +74,28 @@ class OrderManager:
         strategy_id: str = "",
         algo_id: str = "",
     ) -> ExecutionResult:
-        """6-step safety pipeline: kill→validate→execute→loss→audit→return."""
+        """7-step safety pipeline: kill→throttle→validate→execute→loss→audit→return."""
         self._gate_kill_switch()
+        self._gate_throttle()
         self._gate_pre_trade(request)
         result = self._executor.execute_order(request)
         self._order_status[result.order_id] = result.status
         self._record_pnl(request, result)
-        self._audit(request, result, strategy_id, algo_id)
+        effective_algo_id = algo_id or self._algo_id
+        self._audit(request, result, strategy_id, effective_algo_id)
         return result
 
     def _gate_kill_switch(self) -> None:
         if self._kill_switch and not self._kill_switch.check_order_allowed():
             msg = "order rejected: kill switch engaged"
             raise ConfigError(msg)
+
+    def _gate_throttle(self) -> None:
+        if self._order_throttle:
+            now = datetime.now(UTC)
+            if not self._order_throttle.check_and_record(now):
+                msg = "order rejected: OPS throttle exceeded"
+                raise ConfigError(msg)
 
     def _gate_pre_trade(self, request: OrderRequest) -> None:
         if self._pre_trade_config:
