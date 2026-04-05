@@ -20,6 +20,8 @@ class StrategyContext:
     symbol: str
     side: OrderSide
     strength_inputs: StrengthInputs
+    composite_score: Decimal | None = None
+    selection_rank: int | None = None
 
 
 @dataclass(frozen=True)
@@ -65,7 +67,11 @@ class StrategyBase:
     def can_emit_signal(self, context: StrategyContext) -> bool:
         if not context.symbol.strip():
             return False
-        return self.is_tradable(context.exchange, context.strength_inputs)
+        if not self.is_tradable(context.exchange, context.strength_inputs):
+            return False
+        if context.selection_rank is not None and context.selection_rank < 1:
+            return False
+        return True
 
     def on_tick(self, context: StrategyContext, tick: MarketTickEvent) -> SignalEvent | None:
         _ = (context, tick)

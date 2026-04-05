@@ -1,0 +1,191 @@
+"""
+Walk-forward weight optimization for composite scoring.
+
+Uses Optuna TPE to search regime-specific weight vectors,
+validated via Information Coefficient on out-of-sample data.
+"""
+
+import importlib
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
+from decimal import Decimal
+
+from iatb.core.exceptions import ConfigError
+from iatb.market_strength.regime_detector import MarketRegime
+from iatb.selection._util import clamp_01
+from iatb.selection.composite_score import RegimeWeights
+from iatb.selection.ic_monitor import compute_information_coefficient
+
+logger = logging.getLogger(__name__)
+
+_IC_THRESHOLD = Decimal("0.03")
+
+
+@dataclass(frozen=True)
+class OptimizationResult:
+    regime: MarketRegime
+    best_weights: RegimeWeights
+    best_ic: Decimal
+    trials: int
+    improved: bool
+
+
+def optimize_weights_for_regime(
+    regime: MarketRegime,
+    signal_history: list[dict[str, Decimal]],
+    forward_returns: Sequence[Decimal],
+    n_trials: int = 50,
+    seed: int = 42,
+) -> OptimizationResult:
+    """Find optimal regime weights via Optuna TPE search.
+
+    signal_history: list of dicts with keys
+        'sentiment', 'strength', 'volume_profile', 'drl'
+        each value ∈ [0, 1].
+    forward_returns: realised returns aligned with signal_history.
+    """
+    _validate_inputs(signal_history, forward_returns, n_trials)
+    optuna = _load_optuna()
+    sampler = _build_sampler(optuna, seed)
+    study = _create_study(optuna, sampler)
+
+    def objective(trial: object) -> float:
+        weights = _suggest_weights(trial)
+        composites = _compute_composites(signal_history, weights)
+        ic_result = compute_information_coefficient(composites, list(forward_returns))
+        # Optuna maximizes; float at API boundary.
+        return float(ic_result.ic)
+
+    _run_study(study, objective, n_trials)
+    best_weights = _extract_best_weights(study)
+    best_ic = Decimal(str(_best_value(study)))
+    improved = best_ic >= _IC_THRESHOLD
+    if improved:
+        logger.info(
+            "Weight optimization for %s: IC=%.4f (improved)",
+            regime.value,
+            best_ic,
+        )
+    else:
+        logger.warning(
+            "Weight optimization for %s: IC=%.4f (below threshold)",
+            regime.value,
+            best_ic,
+        )
+    return OptimizationResult(
+        regime=regime,
+        best_weights=best_weights,
+        best_ic=best_ic,
+        trials=n_trials,
+        improved=improved,
+    )
+
+
+def _compute_composites(
+    history: list[dict[str, Decimal]],
+    weights: RegimeWeights,
+) -> list[Decimal]:
+    result: list[Decimal] = []
+    for row in history:
+        composite = (
+            weights.sentiment * row.get("sentiment", Decimal("0"))
+            + weights.strength * row.get("strength", Decimal("0"))
+            + weights.volume_profile * row.get("volume_profile", Decimal("0"))
+            + weights.drl * row.get("drl", Decimal("0"))
+        )
+        result.append(clamp_01(composite))
+    return result
+
+
+def _suggest_weights(trial: object) -> RegimeWeights:
+    suggest = getattr(trial, "suggest_int", None)
+    if not callable(suggest):
+        msg = "trial does not provide suggest_int()"
+        raise ConfigError(msg)
+    s = suggest("sentiment", 5, 50)
+    st = suggest("strength", 5, 50)
+    vp = suggest("volume_profile", 5, 50)
+    d = suggest("drl", 5, 50)
+    total = s + st + vp + d
+    return RegimeWeights(
+        sentiment=Decimal(s) / Decimal(total),
+        strength=Decimal(st) / Decimal(total),
+        volume_profile=Decimal(vp) / Decimal(total),
+        drl=Decimal(d) / Decimal(total),
+    )
+
+
+def _validate_inputs(
+    history: list[dict[str, Decimal]],
+    returns: Sequence[Decimal],
+    n_trials: int,
+) -> None:
+    if len(history) != len(returns):
+        msg = "signal_history and forward_returns must have equal length"
+        raise ConfigError(msg)
+    if len(history) < 10:
+        msg = "at least 10 observations required for weight optimization"
+        raise ConfigError(msg)
+    if n_trials <= 0:
+        msg = "n_trials must be positive"
+        raise ConfigError(msg)
+
+
+def _load_optuna() -> object:
+    try:
+        return importlib.import_module("optuna")
+    except ModuleNotFoundError as exc:
+        msg = "optuna dependency required for weight optimization"
+        raise ConfigError(msg) from exc
+
+
+def _build_sampler(optuna: object, seed: int) -> object:
+    samplers = getattr(optuna, "samplers", None)
+    cls = getattr(samplers, "TPESampler", None)
+    if not callable(cls):
+        msg = "optuna.samplers.TPESampler unavailable"
+        raise ConfigError(msg)
+    return cls(seed=seed)
+
+
+def _create_study(optuna: object, sampler: object) -> object:
+    create = getattr(optuna, "create_study", None)
+    if not callable(create):
+        msg = "optuna.create_study unavailable"
+        raise ConfigError(msg)
+    return create(direction="maximize", sampler=sampler)
+
+
+def _run_study(study: object, objective: object, n_trials: int) -> None:
+    optimize = getattr(study, "optimize", None)
+    if not callable(optimize):
+        msg = "study.optimize unavailable"
+        raise ConfigError(msg)
+    optimize(objective, n_trials=n_trials)
+
+
+def _extract_best_weights(study: object) -> RegimeWeights:
+    params = getattr(study, "best_params", None)
+    if not isinstance(params, dict):
+        msg = "study.best_params unavailable"
+        raise ConfigError(msg)
+    s = int(params.get("sentiment", 25))
+    st = int(params.get("strength", 25))
+    vp = int(params.get("volume_profile", 25))
+    d = int(params.get("drl", 25))
+    total = s + st + vp + d
+    return RegimeWeights(
+        sentiment=Decimal(s) / Decimal(total),
+        strength=Decimal(st) / Decimal(total),
+        volume_profile=Decimal(vp) / Decimal(total),
+        drl=Decimal(d) / Decimal(total),
+    )
+
+
+def _best_value(study: object) -> float:
+    value = getattr(study, "best_value", None)
+    if not isinstance(value, float | int):
+        msg = "study.best_value unavailable"
+        raise ConfigError(msg)
+    return float(value)

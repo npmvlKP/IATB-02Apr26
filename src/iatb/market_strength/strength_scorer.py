@@ -35,7 +35,7 @@ class StrengthScorer:
     def score(self, exchange: Exchange, inputs: StrengthInputs) -> Decimal:
         self._validate(exchange, inputs)
         breadth_score = self._normalize(inputs.breadth_ratio, cap=Decimal("2.0"))
-        trend_score = self._normalize(inputs.adx, cap=Decimal("40"))
+        trend_score = self._normalize_concave(inputs.adx, cap=Decimal("40"))
         volume_score = self._normalize(inputs.volume_ratio, cap=Decimal("2.0"))
         regime_score = self._regime_score(inputs.regime)
         penalty = self._volatility_penalty(inputs.volatility_atr_pct)
@@ -81,6 +81,13 @@ class StrengthScorer:
     def _normalize(value: Decimal, *, cap: Decimal) -> Decimal:
         normalized = value / cap if cap > Decimal("0") else Decimal("0")
         return max(Decimal("0"), min(Decimal("1"), normalized))
+
+    @staticmethod
+    def _normalize_concave(value: Decimal, *, cap: Decimal) -> Decimal:
+        """Concave (sqrt) normalization: emphasizes early growth."""
+        linear = value / cap if cap > Decimal("0") else Decimal("0")
+        clamped = max(Decimal("0"), min(Decimal("1"), linear))
+        return clamped.sqrt()
 
     @staticmethod
     def _regime_score(regime: MarketRegime) -> Decimal:
