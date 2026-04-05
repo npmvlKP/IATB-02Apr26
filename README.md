@@ -126,36 +126,37 @@ between composite selection scores and realised forward returns.
 signalling that the selector's predictive power has degraded and weight
 recalibration is needed.
 
+### Weight Optimization
+
+`weight_optimizer.py` uses Optuna TPE search to find optimal regime-specific
+weight vectors. The objective maximizes Spearman IC between composite scores
+and realized forward returns. Call `optimize_weights_for_regime()` per regime
+to replace static presets with data-driven weights.
+
 ### Engine Integration
 
 ```python
 from iatb.core.engine import Engine
 from iatb.market_strength.regime_detector import MarketRegime
-from iatb.selection.correlation_matrix import compute_pairwise_correlations
 
 engine = Engine()  # InstrumentScorer created automatically
 await engine.start()
 
-# Build correlations from price data
-correlations = compute_pairwise_correlations(price_series_by_symbol)
+# One-call pipeline: score → select → build StrategyContext list
+# strength_map auto-extracted from InstrumentSignals.strength_inputs
+contexts = engine.run_selection_cycle(signals, MarketRegime.BULL)
 
-# Run selection
-result = engine.select_instruments(signals, MarketRegime.BULL, correlations)
+# Async variant for live data feeds (runs in executor)
+contexts = await engine.run_selection_cycle_async(signals, MarketRegime.BULL)
 
-# Feed into strategy context
-for ranked in result.selected:
-    context = StrategyContext(
-        exchange=ranked.exchange,
-        symbol=ranked.symbol,
-        side=OrderSide.BUY,
-        strength_inputs=...,
-        composite_score=ranked.composite_score,
-        selection_rank=ranked.rank,
-    )
+# Each context carries composite_score and selection_rank
+for ctx in contexts:
+    strategy.on_tick(ctx, tick)
 ```
 
 `StrategyBase.can_emit_signal()` checks `selection_rank` — instruments with
 rank < 1 (not selected) are blocked from signal emission.
+`scale_quantity_by_rank()` provides rank-proportional position sizing.
 
 ### Upstream Integration Points
 
@@ -168,10 +169,12 @@ rank < 1 (not selected) are blocked from signal emission.
 
 ### Downstream Integration Points
 
-- **`Engine.select_instruments()`** — single entry point for the strategy loop
+- **`Engine.run_selection_cycle()`** — one-call score → select → StrategyContext pipeline
+- **`Engine.run_selection_cycle_async()`** — non-blocking variant for live data feeds
 - **`StrategyContext.composite_score` / `.selection_rank`** — carried into all strategy methods
 - **`StrategyBase.can_emit_signal()`** — blocks unselected instruments
 - **`check_alpha_decay()`** — monitors selector predictive quality over time
+- **`optimize_weights_for_regime()`** — Optuna-based weight retraining when IC decays
 
 ### Files
 
@@ -188,21 +191,22 @@ selection/
 ├── ranking.py                  # Threshold → top-N → correlation filter
 ├── correlation_matrix.py       # Pairwise Pearson return correlation from prices
 ├── ic_monitor.py               # Information Coefficient / alpha decay monitoring
+├── selection_bridge.py         # SelectionResult → StrategyContext + rank sizing
+├── weight_optimizer.py         # Optuna TPE weight search with IC objective
 └── instrument_scorer.py        # InstrumentScorer: orchestrator + rank normalization
 ```
 
 Modified upstream files:
 - `rl/agent.py` — `predict_with_confidence()` for live DRL confidence
 - `market_strength/strength_scorer.py` — `_normalize_concave()` for sqrt ADX
-- `core/engine.py` — `select_instruments()` + `InstrumentScorer` wiring
+- `core/engine.py` — `run_selection_cycle()`, async variant, auto strength_map
 - `strategies/base.py` — `composite_score` / `selection_rank` in `StrategyContext`
 
 ### Verification
 
-69 tests covering all modules, passing all quality gates:
-
 ```powershell
-poetry run pytest tests/selection/ -v --no-cov    # 69 passed
+poetry run pytest tests/selection/ -v --no-cov    # 77 passed
+poetry run pytest tests/ -q --no-cov              # 662 passed (system-wide)
 poetry run ruff check src/iatb/selection/          # 0 errors
 poetry run mypy src/iatb/selection/ --strict        # 0 errors
 poetry run bandit -r src/iatb/selection/ -q         # 0 issues
