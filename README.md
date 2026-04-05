@@ -212,6 +212,99 @@ poetry run mypy src/iatb/selection/ --strict        # 0 errors
 poetry run bandit -r src/iatb/selection/ -q         # 0 issues
 ```
 
+## Safety Infrastructure
+
+The execution layer implements a 6-step safety pipeline per FIA, SEBI, and PRA standards.
+
+### Order Execution Safety Chain
+
+```
+OrderManager.place_order(request)
+  1. kill_switch.check_order_allowed()     → REJECT if engaged
+  2. validate_order(5 gates)               → REJECT if any fails
+  3. executor.execute_order(request)        → ExecutionResult
+  4. daily_loss_guard.record_trade(pnl)     → AUTO-ENGAGE kill switch if breached
+  5. audit_logger.log_order(...)            → SQLite persistence
+  6. return result
+```
+
+### Kill Switch (`risk/kill_switch.py`)
+
+Immediate trading halt. Cancels all open orders, blocks all new orders,
+fires alert callback (e.g., Telegram). Manual-reset only via `disengage()`.
+Accessible via `Engine.engage_kill_switch(reason)` and
+`Engine.disengage_kill_switch()`.
+
+### Daily Loss Guard (`risk/daily_loss_guard.py`)
+
+Tracks cumulative intraday PnL. Auto-engages kill switch when loss exceeds
+configurable threshold (default 2% NAV). Resets at market open.
+
+### Pre-Trade Validator (`execution/pre_trade_validator.py`)
+
+5 gates before any order reaches the executor:
+1. Fat-finger quantity limit
+2. Max notional value
+3. Price deviation tolerance vs last known price
+4. Position limit per instrument
+5. Portfolio exposure cap
+
+### Trade Audit Logger (`execution/trade_audit.py`)
+
+SQLite persistence for every order + result: timestamp, symbol, side, quantity,
+price, status, strategy_id, algo_id. Queryable by date for reconciliation.
+
+### Pre-Flight Checks (`core/preflight.py`)
+
+Runs before engine start. Fail-closed — engine does not start if any fails:
+1. System clock drift < 2s
+2. Executor connectivity
+3. Kill switch disengaged
+4. Data directory exists
+5. Audit database writable
+
+## Operational Guidelines
+
+### Paper-Trade Deployment
+
+```powershell
+# 1. Run pre-flight + start engine
+poetry run python -m iatb.core.runtime
+
+# 2. Verify health endpoint
+curl http://localhost:8000/health
+
+# 3. Monitor logs for kill switch, daily loss, or pre-trade rejections
+# 4. Run for 5+ sessions with selection logging enabled
+# 5. Compare selection outputs against manual instrument picks
+```
+
+### Daily Operations
+
+1. **Pre-market**: Engine startup runs pre-flight checks automatically
+2. **Market open**: `daily_loss_guard.reset(current_nav)` clears intraday PnL
+3. **During session**: Every order passes the 6-step safety pipeline
+4. **Post-session**: `audit_logger.query_daily_trades(date)` for reconciliation
+5. **Weekly**: `check_alpha_decay(scores, returns)` for selector validation
+6. **Quarterly**: `optimize_weights_for_regime()` for weight recalibration
+
+### Emergency Procedures
+
+```python
+# Immediate halt from code
+engine.engage_kill_switch("manual emergency stop")
+
+# Resume after investigation
+engine.disengage_kill_switch()
+```
+
+### Graduation Criteria (Paper → Live)
+
+- 30 clean paper days (0 errors, daily drawdown < configured limit)
+- Kill switch tested (at least 2 drills with successful recovery)
+- Paper PnL tracking within ±0.3% of model expectations
+- IC above 0.03 for composite score vs 5-day forward returns
+
 ## Setup
 
 ### Prerequisites
@@ -250,6 +343,14 @@ Run quality gates:
 .\scripts\quality_gate.ps1
 ```
 
+Full system verification:
+```powershell
+poetry run pytest tests/ -q --no-cov    # 684 passed
+poetry run ruff check src/              # 0 errors
+poetry run mypy src/ --strict            # 0 errors
+poetry run bandit -r src/ -q             # 0 issues
+```
+
 ## Development Guidelines
 
 - All functions must be ≤ 50 LOC
@@ -257,6 +358,8 @@ Run quality gates:
 - Use UTC-aware datetime only
 - Use structured logging (no print statements)
 - Follow PEP 8 style guide (enforced by Ruff)
+- Frozen dataclasses for all data models
+- Fail-closed validation in every public function
 
 ## Git & GitHub Setup
 
