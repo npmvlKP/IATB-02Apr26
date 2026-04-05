@@ -64,6 +64,18 @@ class RLAgent:
         )
         return _normalize_action(action)
 
+    def predict_with_confidence(
+        self,
+        observation: list[Decimal],
+    ) -> tuple[int, Decimal]:
+        """Predict action and extract policy confidence as Decimal."""
+        model = _require_model(self._model)
+        # API boundary: SB3 float arrays + policy distribution.
+        obs_float = [float(value) for value in observation]
+        action = self.predict(observation, deterministic=True)
+        confidence = _extract_action_confidence(model, obs_float, action)
+        return action, confidence
+
     def save(self, model_dir: str, git_hash: str, timestamp_utc: datetime) -> str:
         model = _require_model(self._model)
         save_method = getattr(model, "save", None)
@@ -83,6 +95,36 @@ class RLAgent:
             msg = "selected SB3 algorithm does not provide load()"
             raise ConfigError(msg)
         self._model = load_method(model_path)
+
+
+def _extract_action_confidence(
+    model: object,
+    obs_float: list[float],
+    action: int,
+) -> Decimal:
+    """Extract softmax probability for the chosen action."""
+    try:
+        import numpy as np  # noqa: I001  # float API boundary
+
+        policy = getattr(model, "policy", None)
+        if policy is None:
+            return Decimal("0.5")
+        get_dist = getattr(policy, "get_distribution", None)
+        if not callable(get_dist):
+            return Decimal("0.5")
+        obs_tensor = getattr(policy, "obs_to_tensor", None)
+        if not callable(obs_tensor):
+            return Decimal("0.5")
+        tensor_obs, _ = obs_tensor(np.array([obs_float]))
+        dist = get_dist(tensor_obs)
+        probs_attr = getattr(getattr(dist, "distribution", None), "probs", None)
+        if probs_attr is None:
+            return Decimal("0.5")
+        # float required: torch tensor → float → Decimal
+        prob = float(probs_attr[0][action].item())
+        return max(Decimal("0"), min(Decimal("1"), Decimal(str(prob))))
+    except (ImportError, IndexError, TypeError, AttributeError):
+        return Decimal("0.5")
 
 
 def _validate_algorithm(algorithm: str) -> None:

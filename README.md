@@ -17,15 +17,195 @@ A Python-based algorithmic trading system with support for multiple brokerage pl
 ```
 IATB/
 ├── src/
-│   └── iatb/           # Main application code
-├── tests/              # Test suite (90%+ coverage required)
-├── scripts/            # Utility scripts
-│   ├── setup.ps1       # Project setup
-│   ├── quality_gate.ps1 # Quality checks
-│   └── git_sync.ps1    # Git and GitHub setup
-├── .github/workflows/  # CI/CD pipelines
-├── .env.example        # Environment variable template
-└── pyproject.toml      # Project configuration
+│   └── iatb/
+│       ├── backtesting/       # Event-driven, vectorized, walk-forward, Monte Carlo
+│       ├── core/              # Engine, event bus, clock, enums, types, exceptions
+│       ├── data/              # Instrument model, instrument master, data providers
+│       ├── execution/         # Order management, paper/live executors, Zerodha
+│       ├── market_strength/   # Regime detector, strength scorer, volume profile, indicators
+│       ├── ml/                # Feature engine, LSTM/GNN/HMM/Transformer, ensemble predictor
+│       ├── risk/              # Position sizing, stop loss, circuit breaker, SEBI compliance
+│       ├── rl/                # PPO/A2C/SAC agent, trading environment, Optuna optimizer
+│       ├── selection/         # Multi-factor instrument auto-selection (see below)
+│       ├── sentiment/         # FinBERT + AION + VADER ensemble, volume filter
+│       ├── storage/           # DuckDB, SQLite, Parquet, Git sync
+│       ├── strategies/        # Momentum, breakout, mean-reversion, sentiment, ensemble
+│       └── visualization/     # Dashboard, charts, alerts, breakout scanner
+├── tests/                     # Test suite (90%+ coverage target)
+├── scripts/                   # Setup, quality gates, git sync
+├── .github/workflows/         # CI/CD pipelines
+├── .env.example               # Environment variable template
+└── pyproject.toml             # Project configuration
+```
+
+## Instrument Auto-Selection Module
+
+The `selection/` package fuses four signal sources into a regime-aware composite
+score per instrument, then ranks and selects the top candidates for trade execution.
+Built with industry-standard practices from multi-factor scoring (FinClaw, CAFPO),
+volume profile analysis (AVPT/CME), and sentiment-regime switching (arXiv 2402.01441).
+
+### Data Flow
+
+```
+  DATA LAYER                     SELECTION LAYER                    STRATEGY LAYER
+  ───────────                    ───────────────                    ──────────────
+  SentimentAggregator ──→ sentiment_signal ──┐
+  StrengthScorer      ──→ strength_signal  ──┤                     Engine.select_instruments()
+  VolumeProfile       ──→ vp_signal        ──┼→ rank_normalize →       │
+  BacktestConclusion  ──→ drl_signal       ──┘   composite_score →     ▼
+                              ↑                    ranking →       StrategyContext
+                         decay (per-signal)          │             .composite_score
+                         _util (shared)              │             .selection_rank
+                         correlation_matrix ──────→──┘                  │
+                         ic_monitor ─────────── (alpha decay alert)    ▼
+                                                                  StrategyBase
+                                                                  .can_emit_signal()
+```
+
+### Signal Sources
+
+**Sentiment** (`sentiment_signal.py`) — FinBERT+AION+VADER ensemble composite
+normalized from [-1, 1] → [0, 1]. Direction-aware: inverts for SHORT intent
+so strongly bearish sentiment scores high when evaluating short candidates.
+Decay λ=0.25 (half-life ~2.8h, configurable via overrides).
+
+**Market Strength** (`strength_signal.py`) — Promotes `StrengthScorer.score()`
+from a binary `is_tradable()` gate to a continuous [0, 1] selection input,
+weighted by HMM regime confidence. ADX uses concave (sqrt) normalization
+to emphasize early trend emergence (ADX 15→25). Decay λ=0.10 (half-life ~6.9h).
+
+**Volume Profile** (`volume_profile_signal.py`) — Three sub-metrics from
+POC/VAH/VAL structure:
+- POC proximity (weight 0.40): regime-dependent — near-POC in SIDEWAYS, far-from-POC in BULL/BEAR
+- Value area width ratio (weight 0.35): narrower VA = stronger trend signal
+- Profile shape (weight 0.25): P=0.80, D=0.50, b=0.20 (inverted for SHORT)
+
+Decay λ=0.15 (half-life ~4.6h).
+
+**DRL Backtesting** (`drl_signal.py`) — `BacktestConclusion` aggregates outputs
+from the walk-forward, Monte Carlo, and event-driven backtesting suites.
+`build_conclusion()` factory automates construction from upstream results.
+Score = sigmoid(Sharpe) × robustness × drawdown_factor ± graduated_overfit_penalty.
+Drawdown ≥20% zeroes the signal. Overfit penalty scales continuously from
+-0.05 at ratio 2.5 to -0.50 at ratio 7+. Decay λ=0.05 (half-life ~13.9h).
+
+`RLAgent.predict_with_confidence()` extracts the PPO/A2C/SAC policy
+network's softmax action probability as a live inference confidence signal.
+
+### Composite Scoring
+
+Each signal's contribution = `weight × score × confidence_ramp(confidence)`.
+The soft ramp is zero below 0.20, then linearly scales to 1.0 at confidence 1.0.
+Scores are zero-indexed rank-percentile normalized across the instrument universe
+before fusion (lowest → 0.0, highest → 1.0).
+
+Weights shift by market regime:
+
+- **BULL**: DRL 0.40, Strength 0.25, Sentiment 0.20, Volume Profile 0.15
+- **SIDEWAYS**: Volume Profile 0.35, DRL 0.30, Strength 0.20, Sentiment 0.15
+- **BEAR**: Sentiment 0.30, Strength 0.30, DRL 0.30, Volume Profile 0.10
+
+Custom per-regime weight overrides via `InstrumentScorer(custom_weights={...})`.
+
+### Ranking & Selection
+
+1. Threshold filter: composite ≥ 0.20 (configurable)
+2. Descending sort by composite score
+3. Top-N selection (default 5)
+4. Correlation diversification filter (|ρ| > 0.80 drops lower-scored instrument)
+
+Correlation data is computed by `correlation_matrix.py` from Decimal close-price
+sequences using Pearson return correlation.
+
+### Alpha Decay Monitoring
+
+`ic_monitor.py` measures the Spearman rank-correlation (Information Coefficient)
+between composite selection scores and realised forward returns.
+`check_alpha_decay()` returns True and logs a warning when IC drops below 0.03,
+signalling that the selector's predictive power has degraded and weight
+recalibration is needed.
+
+### Engine Integration
+
+```python
+from iatb.core.engine import Engine
+from iatb.market_strength.regime_detector import MarketRegime
+from iatb.selection.correlation_matrix import compute_pairwise_correlations
+
+engine = Engine()  # InstrumentScorer created automatically
+await engine.start()
+
+# Build correlations from price data
+correlations = compute_pairwise_correlations(price_series_by_symbol)
+
+# Run selection
+result = engine.select_instruments(signals, MarketRegime.BULL, correlations)
+
+# Feed into strategy context
+for ranked in result.selected:
+    context = StrategyContext(
+        exchange=ranked.exchange,
+        symbol=ranked.symbol,
+        side=OrderSide.BUY,
+        strength_inputs=...,
+        composite_score=ranked.composite_score,
+        selection_rank=ranked.rank,
+    )
+```
+
+`StrategyBase.can_emit_signal()` checks `selection_rank` — instruments with
+rank < 1 (not selected) are blocked from signal emission.
+
+### Upstream Integration Points
+
+- **`SentimentAggregator.evaluate_instrument()`** → sentiment_signal
+- **`StrengthScorer.score()` + `RegimeDetector.detect()`** → strength_signal (sqrt ADX)
+- **`build_volume_profile()`** → volume_profile_signal (regime-dependent POC)
+- **`WalkForwardOptimizer` + `MonteCarloAnalyzer` + `EventDrivenBacktester`** → `build_conclusion()` → drl_signal
+- **`RLAgent.predict_with_confidence()`** → live DRL inference confidence
+- **OHLCV close prices** → `compute_pairwise_correlations()` → ranking correlation filter
+
+### Downstream Integration Points
+
+- **`Engine.select_instruments()`** — single entry point for the strategy loop
+- **`StrategyContext.composite_score` / `.selection_rank`** — carried into all strategy methods
+- **`StrategyBase.can_emit_signal()`** — blocks unselected instruments
+- **`check_alpha_decay()`** — monitors selector predictive quality over time
+
+### Files
+
+```
+selection/
+├── __init__.py                 # Package docstring
+├── _util.py                    # DirectionalIntent, clamp_01, confidence_ramp, rank_percentile
+├── decay.py                    # Temporal decay: exp(-λ × hours), configurable overrides
+├── sentiment_signal.py         # SentimentAggregator → [0, 1], direction-aware
+├── strength_signal.py          # StrengthScorer → [0, 1], regime-confidence weighted
+├── volume_profile_signal.py    # POC/VAH/VAL → shape + proximity + width, regime-dependent
+├── drl_signal.py               # BacktestConclusion + build_conclusion() factory
+├── composite_score.py          # Regime-aware weighted fusion with soft confidence ramp
+├── ranking.py                  # Threshold → top-N → correlation filter
+├── correlation_matrix.py       # Pairwise Pearson return correlation from prices
+├── ic_monitor.py               # Information Coefficient / alpha decay monitoring
+└── instrument_scorer.py        # InstrumentScorer: orchestrator + rank normalization
+```
+
+Modified upstream files:
+- `rl/agent.py` — `predict_with_confidence()` for live DRL confidence
+- `market_strength/strength_scorer.py` — `_normalize_concave()` for sqrt ADX
+- `core/engine.py` — `select_instruments()` + `InstrumentScorer` wiring
+- `strategies/base.py` — `composite_score` / `selection_rank` in `StrategyContext`
+
+### Verification
+
+69 tests covering all modules, passing all quality gates:
+
+```powershell
+poetry run pytest tests/selection/ -v --no-cov    # 69 passed
+poetry run ruff check src/iatb/selection/          # 0 errors
+poetry run mypy src/iatb/selection/ --strict        # 0 errors
+poetry run bandit -r src/iatb/selection/ -q         # 0 issues
 ```
 
 ## Setup
