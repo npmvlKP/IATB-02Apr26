@@ -14,6 +14,7 @@ from iatb.core.event_bus import EventBus
 from iatb.core.exceptions import EngineError
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs
+from iatb.risk.kill_switch import KillSwitch
 from iatb.selection.instrument_scorer import (
     InstrumentScorer,
     InstrumentSignals,
@@ -34,10 +35,12 @@ class Engine:
     def __init__(
         self,
         instrument_scorer: InstrumentScorer | None = None,
+        kill_switch: KillSwitch | None = None,
     ) -> None:
         """Initialize the engine."""
         self._event_bus = EventBus()
         self._scorer = instrument_scorer or InstrumentScorer()
+        self._kill_switch = kill_switch
         self._running = False
         self._tasks: set[asyncio.Task[None]] = set()
         self._lock = asyncio.Lock()
@@ -134,6 +137,28 @@ class Engine:
             side,
             correlations,
         )
+
+    def engage_kill_switch(self, reason: str) -> None:
+        """Engage kill switch from engine level."""
+        if self._kill_switch is None:
+            msg = "no kill switch configured"
+            raise EngineError(msg)
+        from datetime import UTC, datetime
+
+        self._kill_switch.engage(reason, datetime.now(UTC))
+
+    def disengage_kill_switch(self) -> None:
+        """Disengage kill switch from engine level."""
+        if self._kill_switch is None:
+            msg = "no kill switch configured"
+            raise EngineError(msg)
+        from datetime import UTC, datetime
+
+        self._kill_switch.disengage(datetime.now(UTC))
+
+    @property
+    def kill_switch(self) -> KillSwitch | None:
+        return self._kill_switch
 
     @property
     def instrument_scorer(self) -> InstrumentScorer:
