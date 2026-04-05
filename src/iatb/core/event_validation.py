@@ -68,6 +68,7 @@ def _validate_exchange(event: object) -> None:
         msg = f"Invalid exchange type: {type(exchange).__name__}"
         raise ValidationError(msg)
 
+
 def _validate_order_side(event: object) -> None:
     """Validate event order side domain."""
     side = _get_attr(event, "side")
