@@ -27,9 +27,13 @@ def run_preflight_checks(
     all_passed = True
     all_passed = _run_check("clock_drift", _check_clock_drift, all_passed)
     all_passed = _run_check("executor_ready", lambda: _check_executor(executor), all_passed)
-    all_passed = _run_check("kill_switch_clear", lambda: _check_kill_switch(kill_switch), all_passed)
+    all_passed = _run_check(
+        "kill_switch_clear", lambda: _check_kill_switch(kill_switch), all_passed
+    )
     all_passed = _run_check("data_dir_exists", lambda: _check_path_exists(data_dir), all_passed)
-    all_passed = _run_check("audit_db_writable", lambda: _check_path_writable(audit_db_path), all_passed)
+    all_passed = _run_check(
+        "audit_db_writable", lambda: _check_path_writable(audit_db_path), all_passed
+    )
     return all_passed
 
 
