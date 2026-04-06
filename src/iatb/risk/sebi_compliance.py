@@ -1,7 +1,11 @@
 """
 SEBI compliance utilities for execution controls and audit guarantees.
+
+Includes static IP validation for broker API access per SEBI guidelines.
 """
 
+import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
 from pathlib import Path
@@ -9,6 +13,14 @@ from pathlib import Path
 from iatb.core.clock import Clock
 from iatb.core.exceptions import ConfigError
 from iatb.storage.sqlite_store import SQLiteStore, TradeAuditRecord
+
+_LOGGER = logging.getLogger(__name__)
+
+# IPv4 pattern for validation
+_IPV4_PATTERN = re.compile(
+    r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}"
+    r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+)
 
 
 @dataclass(frozen=True)
@@ -81,3 +93,60 @@ class SEBIComplianceManager:
         if algo_id != self._config.algo_id:
             msg = "audit record algo_id does not match configured algo_id"
             raise ConfigError(msg)
+
+
+def validate_static_ip_format(ip_address: str) -> bool:
+    """Validate that an IP address is a valid IPv4 format."""
+    return bool(_IPV4_PATTERN.match(ip_address.strip()))
+
+
+def validate_static_ips_config(static_ips: tuple[str, ...]) -> None:
+    """Validate all configured static IPs have valid IPv4 format.
+
+    Raises ConfigError if any IP is invalid.
+    """
+    invalid_ips: list[str] = []
+    for ip_address in static_ips:
+        if not validate_static_ip_format(ip_address):
+            invalid_ips.append(ip_address)
+    if invalid_ips:
+        msg = f"invalid static IP addresses: {', '.join(invalid_ips)}"
+        raise ConfigError(msg)
+    _LOGGER.info(
+        "Static IP validation passed",
+        extra={"ip_count": len(static_ips), "timestamp_utc": datetime.now(UTC).isoformat()},
+    )
+
+
+def assert_static_ip_allowed(
+    source_ip: str,
+    allowed_ips: tuple[str, ...],
+    *,
+    broker: str = "zerodha",
+) -> None:
+    """Assert source IP is in allowed static IP list for broker API access.
+
+    SEBI requires algo trading to originate from registered static IPs.
+    """
+    normalized_source = source_ip.strip()
+    if not normalized_source:
+        msg = "source IP address cannot be empty"
+        raise ConfigError(msg)
+    if not validate_static_ip_format(normalized_source):
+        msg = f"source IP address has invalid format: {source_ip}"
+        raise ConfigError(msg)
+    if normalized_source not in allowed_ips:
+        _LOGGER.warning(
+            "Static IP validation failed",
+            extra={
+                "source_ip": normalized_source,
+                "broker": broker,
+                "timestamp_utc": datetime.now(UTC).isoformat(),
+            },
+        )
+        msg = f"source IP {source_ip} not in allowed static IPs for {broker}"
+        raise ConfigError(msg)
+    _LOGGER.info(
+        "Static IP validation passed",
+        extra={"source_ip": normalized_source, "broker": broker},
+    )

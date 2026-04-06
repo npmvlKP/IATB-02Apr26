@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{ include = "iatb", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.14"
+python = "^3.12"
 pydantic = "^2.0.0"
 pydantic-settings = "^2.0.0"
 yfinance = "^0.2.65"

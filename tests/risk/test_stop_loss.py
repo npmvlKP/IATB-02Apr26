@@ -28,3 +28,20 @@ def test_time_exit_and_validations() -> None:
         atr_stop_price(Decimal("0"), Decimal("1"), OrderSide.BUY)
     with pytest.raises(ConfigError, match="timezone-aware UTC"):
         should_time_exit(start.replace(tzinfo=None), start, 30)  # noqa: DTZ007
+
+
+def test_trailing_stop_price_validation_errors() -> None:
+    with pytest.raises(ConfigError, match="must be positive"):
+        trailing_stop_price(Decimal("0"), Decimal("100"), OrderSide.BUY)
+    with pytest.raises(ConfigError, match="must be between 0 and 1"):
+        trailing_stop_price(Decimal("95"), Decimal("100"), OrderSide.BUY, Decimal("0"))
+    with pytest.raises(ConfigError, match="must be between 0 and 1"):
+        trailing_stop_price(Decimal("95"), Decimal("100"), OrderSide.BUY, Decimal("1"))
+
+
+def test_should_time_exit_validation_errors() -> None:
+    start = datetime(2026, 1, 5, 4, 0, tzinfo=UTC)
+    with pytest.raises(ConfigError, match="timezone-aware UTC"):
+        should_time_exit(start, start.replace(tzinfo=None), 30)  # noqa: DTZ007
+    with pytest.raises(ConfigError, match="must be positive"):
+        should_time_exit(start, start, 0)

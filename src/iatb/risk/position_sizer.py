@@ -17,7 +17,44 @@ class PositionSizingInput:
     realized_volatility: Decimal
 
 
-def fixed_fractional_size(data: PositionSizingInput) -> Decimal:
+def lot_rounded_size(raw_quantity: Decimal, lot_size: Decimal) -> Decimal:
+    """Round quantity down to the nearest lot-size multiple."""
+    if lot_size <= Decimal("0"):
+        msg = "lot_size must be positive"
+        raise ConfigError(msg)
+    if raw_quantity < lot_size:
+        return Decimal("0")
+    lots = int(raw_quantity / lot_size)
+    return Decimal(lots) * lot_size
+
+
+def freeze_limit_slices(
+    quantity: Decimal, lot_size: Decimal, freeze_limit: Decimal
+) -> list[Decimal]:
+    """Split quantity into slices each ≤ freeze_limit and a multiple of lot_size."""
+    if lot_size <= Decimal("0"):
+        msg = "lot_size must be positive"
+        raise ConfigError(msg)
+    if freeze_limit <= Decimal("0"):
+        msg = "freeze_limit must be positive"
+        raise ConfigError(msg)
+    rounded = lot_rounded_size(quantity, lot_size)
+    if rounded == Decimal("0"):
+        return []
+    max_per_slice = lot_rounded_size(freeze_limit, lot_size)
+    if max_per_slice == Decimal("0"):
+        msg = "freeze_limit is smaller than lot_size"
+        raise ConfigError(msg)
+    slices: list[Decimal] = []
+    remaining = rounded
+    while remaining > Decimal("0"):
+        chunk = min(remaining, max_per_slice)
+        slices.append(chunk)
+        remaining -= chunk
+    return slices
+
+
+def fixed_fractional_size(data: PositionSizingInput, *, lot_size: Decimal | None = None) -> Decimal:
     _validate_inputs(data)
     risk_amount = data.equity * data.risk_fraction
     stop_distance = abs(data.entry_price - data.stop_price)
@@ -25,7 +62,10 @@ def fixed_fractional_size(data: PositionSizingInput) -> Decimal:
         msg = "stop distance cannot be zero"
         raise ConfigError(msg)
     quantity = risk_amount / stop_distance
-    return max(Decimal("0"), quantity)
+    quantity = max(Decimal("0"), quantity)
+    if lot_size is not None:
+        return lot_rounded_size(quantity, lot_size)
+    return quantity
 
 
 def kelly_fraction(
@@ -53,6 +93,8 @@ def volatility_adjusted_size(
     target_risk_fraction: Decimal,
     realized_volatility: Decimal,
     base_volatility: Decimal = Decimal("0.02"),
+    *,
+    lot_size: Decimal | None = None,
 ) -> Decimal:
     if equity <= Decimal("0"):
         msg = "equity must be positive"
@@ -65,7 +107,10 @@ def volatility_adjusted_size(
         raise ConfigError(msg)
     adjusted_fraction = target_risk_fraction * (base_volatility / realized_volatility)
     capped_fraction = min(Decimal("0.5"), max(Decimal("0.01"), adjusted_fraction))
-    return equity * capped_fraction
+    quantity = equity * capped_fraction
+    if lot_size is not None:
+        return lot_rounded_size(quantity, lot_size)
+    return quantity
 
 
 def _validate_inputs(data: PositionSizingInput) -> None:

@@ -2,10 +2,12 @@
 Clock utilities for IATB.
 
 Provides UTC clock and Indian trading session helpers for different exchanges.
+Includes MIS (intraday) session enforcement for NSE/CDS/MCX exchanges.
 """
 
 import logging
 from datetime import UTC, date, datetime, time, timedelta
+from enum import StrEnum
 from typing import Literal
 
 from iatb.core.enums import Exchange
@@ -21,6 +23,28 @@ logger = logging.getLogger(__name__)
 
 # IST timezone offset (UTC+5:30)
 IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+class ProductType(StrEnum):
+    """Trading product types for Indian exchanges."""
+
+    MIS = "MIS"  # Intraday - auto square-off
+    CNC = "CNC"  # Cash and Carry - delivery for equities
+    NRML = "NRML"  # Normal - delivery for F&O
+
+
+# Exchanges that support MIS (intraday) trading
+MIS_SUPPORTED_EXCHANGES: frozenset[Exchange] = frozenset(
+    {Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS}
+)
+
+# MIS session close times by exchange (IST) - when square-off occurs
+MIS_CLOSE_TIMES: dict[Exchange, time] = {
+    Exchange.NSE: time(15, 20),  # 10 min before close
+    Exchange.BSE: time(15, 20),
+    Exchange.MCX: time(23, 0),  # 30 min before close
+    Exchange.CDS: time(16, 30),  # 30 min before close
+}
 
 
 class Clock:
@@ -145,3 +169,59 @@ class TradingSessions:
 
         msg = f"Unable to resolve next open time for exchange: {exchange.value}"
         raise ClockError(msg)
+
+    @staticmethod
+    def is_mis_session_active(utc_dt: datetime, exchange: Exchange) -> bool:
+        """Check if MIS (intraday) trading is active at given UTC time."""
+        TradingSessions._require_utc(utc_dt)
+        if exchange not in MIS_SUPPORTED_EXCHANGES:
+            logger.debug("MIS not supported on exchange", extra={"exchange": exchange.value})
+            return False
+
+        ist_dt = Clock.to_ist(utc_dt)
+        session = TradingSessions.calendar.session_for(exchange, ist_dt.date())
+        if session is None:
+            return False
+
+        mis_close = MIS_CLOSE_TIMES.get(exchange, session.close_time)
+        return session.open_time <= ist_dt.time() < mis_close
+
+    @staticmethod
+    def validate_product_type(
+        product_type: str, exchange: Exchange, utc_dt: datetime
+    ) -> ProductType:
+        """Validate and return ProductType, blocking DELIVERY for MIS-only exchanges."""
+        TradingSessions._require_utc(utc_dt)
+
+        try:
+            pt = ProductType(product_type.upper())
+        except ValueError:
+            valid = [p.value for p in ProductType]
+            msg = f"Invalid product_type: {product_type}. Valid: {valid}"
+            raise ClockError(msg) from None
+
+        if exchange in MIS_SUPPORTED_EXCHANGES:
+            if pt == ProductType.CNC:
+                msg = f"DELIVERY (CNC) blocked on {exchange.value}: MIS-only mode"
+                logger.warning(
+                    "DELIVERY trade blocked",
+                    extra={"exchange": exchange.value, "product_type": product_type},
+                )
+                raise ClockError(msg)
+            if not TradingSessions.is_mis_session_active(utc_dt, exchange):
+                msg = f"MIS session not active on {exchange.value} at {utc_dt.isoformat()}"
+                raise ClockError(msg)
+
+        return pt
+
+    @staticmethod
+    def get_mis_square_off_time(exchange: Exchange, trading_date: date) -> time | None:
+        """Get MIS square-off time for exchange on given date."""
+        if exchange not in MIS_SUPPORTED_EXCHANGES:
+            return None
+
+        session = TradingSessions.calendar.session_for(exchange, trading_date)
+        if session is None:
+            return None
+
+        return MIS_CLOSE_TIMES.get(exchange, session.close_time)

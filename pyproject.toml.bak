@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{ include = "iatb", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.14"
+python = "^3.12"
 pydantic = "^2.0.0"
 pydantic-settings = "^2.0.0"
 yfinance = "^0.2.65"
@@ -21,7 +21,7 @@ pandas = "^2.2.3"
 pandas-ta-classic = "^0.4.47"
 hmmlearn = "^0.3.3"
 transformers = "^4.57.3"
-aion-sentiment = "*"
+aion-sentiment = "^0.1.0"
 vadersentiment = "^3.3.2"
 newspaper3k = "^0.2.8"
 quantstats = "^0.0.62"
