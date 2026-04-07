@@ -1,0 +1,28 @@
+from datetime import UTC, datetime
+
+import pytest
+from iatb.backtesting.session_masks import filter_timestamps_in_session, is_in_session
+from iatb.core.enums import Exchange
+from iatb.core.exceptions import ConfigError
+
+
+def test_is_in_session_detects_nse_open_window() -> None:
+    open_time = datetime(2026, 4, 3, 4, 0, tzinfo=UTC)
+    closed_time = datetime(2026, 4, 3, 2, 0, tzinfo=UTC)
+    assert is_in_session(open_time, Exchange.NSE)
+    assert not is_in_session(closed_time, Exchange.NSE)
+
+
+def test_filter_timestamps_in_session_keeps_only_active_timestamps() -> None:
+    timestamps = [
+        datetime(2026, 4, 3, 3, 50, tzinfo=UTC),
+        datetime(2026, 4, 3, 2, 10, tzinfo=UTC),
+        datetime(2026, 4, 3, 9, 0, tzinfo=UTC),
+    ]
+    filtered = filter_timestamps_in_session(timestamps, Exchange.NSE)
+    assert filtered == [timestamps[0], timestamps[2]]
+
+
+def test_session_masks_reject_unsupported_exchange() -> None:
+    with pytest.raises(ConfigError, match=r"Unsupported session exchange"):
+        is_in_session(datetime(2026, 4, 3, 4, 0, tzinfo=UTC), Exchange.BINANCE)

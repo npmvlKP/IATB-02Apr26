@@ -1,0 +1,54 @@
+[NSE]
+timezone = "Asia/Kolkata"
+session_open = "09:15"
+session_close = "15:30"
+fee_bps = "2.00"
+lot_size = "1"
+
+[BSE]
+timezone = "Asia/Kolkata"
+session_open = "09:15"
+session_close = "15:30"
+fee_bps = "2.00"
+lot_size = "1"
+
+[MCX]
+timezone = "Asia/Kolkata"
+session_open = "09:00"
+session_close = "23:30"
+fee_bps = "3.00"
+lot_size = "1"
+
+[BINANCE]
+timezone = "UTC"
+session_open = "00:00"
+session_close = "23:59"
+fee_bps = "10.00"
+lot_size = "0.0001"
+
+# ===========================================
+# OpenAlgo Broker Configuration
+# Reference: marketcalls/openalgo (AGPL-3.0)
+# ===========================================
+
+[OPENALGO]
+# Default broker configuration for OpenAlgo integration
+broker = "zerodha"
+api_base_url = "http://localhost:5000"  # OpenAlgo server endpoint
+timeout_seconds = 30
+max_retries = 3
+
+[OPENALGO.zerodha]
+# Zerodha-specific configuration via OpenAlgo adapter
+broker = "zerodha"
+api_key_env = "ZERODHA_API_KEY"
+api_secret_env = "ZERODHA_API_SECRET"
+access_token_env = "ZERODHA_ACCESS_TOKEN"
+# Supported products: MIS (intraday), CNC (delivery), NRML (futures)
+default_product = "MIS"
+# Supported exchanges: NSE, BSE, MCX, CDS
+supported_exchanges = ["NSE", "BSE", "MCX", "CDS"]
+# Order validity: DAY, IOC, GTT
+default_validity = "DAY"
+# SEBI-mandated static IP validation
+require_static_ip = true

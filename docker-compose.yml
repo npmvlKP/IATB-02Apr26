@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  trading-engine:
+    image: ${IATB_IMAGE:-iatb-trading-engine:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iatb-trading-engine
+    command: ["python", "-m", "iatb.core.runtime"]
+    env_file:
+      - .env
+    environment:
+      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0) if urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    image: ${IATB_IMAGE:-iatb-trading-engine:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iatb-dashboard
+    command: ["streamlit", "run", "src/iatb/visualization/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    depends_on:
+      - trading-engine
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: iatb-mlflow
+    command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
+    ports:
+      - "5000:5000"

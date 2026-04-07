@@ -1,0 +1,13 @@
+[momentum]
+fast_ma = 20
+slow_ma = 50
+rsi_period = 14
+adx_period = 14
+
+[mean_reversion]
+bollinger_period = 20
+bollinger_std = "2.0"
+
+[breakout]
+donchian_period = 20
+volume_confirmation_ratio = "1.50"

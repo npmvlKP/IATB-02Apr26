@@ -46,3 +46,9 @@ class EngineError(IATBError):
     """Exception raised for engine/lifecycle errors."""
 
     pass
+
+
+class InstrumentResolutionError(IATBError):
+    """Exception raised when instrument resolution fails."""
+
+    pass
