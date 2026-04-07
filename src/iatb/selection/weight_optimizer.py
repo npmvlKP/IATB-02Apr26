@@ -50,11 +50,12 @@ def optimize_weights_for_regime(
     sampler = _build_sampler(optuna, seed)
     study = _create_study(optuna, sampler)
 
+    # API boundary: Optuna objective callback requires float return type.
     def objective(trial: object) -> float:
         weights = _suggest_weights(trial)
         composites = _compute_composites(signal_history, weights)
         ic_result = compute_information_coefficient(composites, list(forward_returns))
-        # Optuna maximizes; float at API boundary.
+        # API boundary: Optuna requires float return.
         return float(ic_result.ic)
 
     _run_study(study, objective, n_trials)
@@ -183,9 +184,11 @@ def _extract_best_weights(study: object) -> RegimeWeights:
     )
 
 
+# API boundary: Optuna study.best_value returns float or int; convert to float.
 def _best_value(study: object) -> float:
     value = getattr(study, "best_value", None)
-    if not isinstance(value, float | int):
+    # API boundary: Optuna returns float or int.
+    if not isinstance(value, float | int):  # API boundary
         msg = "study.best_value unavailable"
         raise ConfigError(msg)
-    return float(value)
+    return float(value)  # API boundary

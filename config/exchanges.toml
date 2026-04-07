@@ -19,6 +19,13 @@ session_close = "23:30"
 fee_bps = "3.00"
 lot_size = "1"
 
+[CDS]
+timezone = "Asia/Kolkata"
+session_open = "09:00"
+session_close = "17:00"
+fee_bps = "2.00"
+lot_size = "1"
+
 [BINANCE]
 timezone = "UTC"
 session_open = "00:00"

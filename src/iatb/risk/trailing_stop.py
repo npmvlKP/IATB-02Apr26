@@ -157,6 +157,7 @@ class TimeDecayTrailingStop:
         self._previous_stop: Decimal | None = None
 
     def compute_stop(self, state: PositionState) -> Decimal:
+        # API boundary: math.exp requires float; result immediately converted to Decimal.
         decay_factor = Decimal(str(math.exp(-float(self._decay) * state.bars_held)))
         multiplier = max(self._min, self._initial * decay_factor)
         distance = state.current_atr * multiplier

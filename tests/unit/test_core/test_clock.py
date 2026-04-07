@@ -379,3 +379,119 @@ class TestTimezonePrecision:
         """Test that time calculations don't use float/Decimal."""
         # IST_OFFSET should be timedelta, not Decimal
         assert isinstance(IST_OFFSET, timedelta)
+
+
+# =============================================================================
+# Config Loading Tests
+# =============================================================================
+
+
+class TestConfigLoading:
+    """Tests for config loading functionality in exchange_calendar."""
+
+    def test_load_session_times_from_config(self):
+        """Test loading session times from config file."""
+        from iatb.core.exchange_calendar import _load_session_times_from_config
+
+        sessions = _load_session_times_from_config()
+        assert Exchange.NSE in sessions
+        assert Exchange.BSE in sessions
+        assert Exchange.MCX in sessions
+        assert Exchange.CDS in sessions
+
+    def test_load_session_times_nse_values(self):
+        """Test NSE session times match config."""
+        from iatb.core.exchange_calendar import _load_session_times_from_config
+
+        sessions = _load_session_times_from_config()
+        nse_session = sessions[Exchange.NSE]
+        assert nse_session.open_time == time(9, 15)
+        assert nse_session.close_time == time(15, 30)
+
+    def test_load_session_times_mcx_values(self):
+        """Test MCX session times match config."""
+        from iatb.core.exchange_calendar import _load_session_times_from_config
+
+        sessions = _load_session_times_from_config()
+        mcx_session = sessions[Exchange.MCX]
+        assert mcx_session.open_time == time(9, 0)
+        assert mcx_session.close_time == time(23, 30)
+
+    def test_load_holidays_from_config(self):
+        """Test loading holidays from config file."""
+        from iatb.core.exchange_calendar import _load_holidays_from_config
+
+        holidays = _load_holidays_from_config()
+        assert Exchange.NSE in holidays
+        assert Exchange.BSE in holidays
+        assert Exchange.MCX in holidays
+        assert Exchange.CDS in holidays
+
+    def test_load_holidays_includes_republic_day(self):
+        """Test Republic Day is loaded as holiday."""
+        from iatb.core.exchange_calendar import _load_holidays_from_config
+
+        holidays = _load_holidays_from_config()
+        republic_day = date(2026, 1, 26)
+        assert republic_day in holidays[Exchange.NSE]
+        assert republic_day in holidays[Exchange.MCX]
+
+    def test_load_holidays_includes_independence_day(self):
+        """Test Independence Day is loaded as holiday."""
+        from iatb.core.exchange_calendar import _load_holidays_from_config
+
+        holidays = _load_holidays_from_config()
+        independence_day = date(2026, 8, 15)
+        assert independence_day in holidays[Exchange.NSE]
+        assert independence_day in holidays[Exchange.CDS]
+
+    def test_load_holidays_maharashtra_day_nse_only(self):
+        """Test Maharashtra Day is NSE-only holiday."""
+        from iatb.core.exchange_calendar import _load_holidays_from_config
+
+        holidays = _load_holidays_from_config()
+        maharashtra_day = date(2026, 5, 1)
+        assert maharashtra_day in holidays[Exchange.NSE]
+        # CDS should NOT have Maharashtra Day
+        assert maharashtra_day not in holidays[Exchange.CDS]
+
+    def test_default_calendar_uses_config(self):
+        """Test DEFAULT_EXCHANGE_CALENDAR uses loaded config."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        # Verify calendar has sessions from config
+        nse_session = DEFAULT_EXCHANGE_CALENDAR.get_regular_session(Exchange.NSE)
+        assert nse_session is not None
+        assert nse_session.open_time == time(9, 15)
+        assert nse_session.close_time == time(15, 30)
+
+    def test_calendar_holiday_check(self):
+        """Test calendar correctly identifies holidays."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        republic_day = date(2026, 1, 26)
+        assert DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.NSE, republic_day)
+        assert DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.MCX, republic_day)
+
+    def test_calendar_trading_day_check(self):
+        """Test calendar correctly identifies trading days."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        regular_day = date(2026, 1, 5)  # Monday
+        assert DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, regular_day)
+
+    def test_calendar_holiday_not_trading_day(self):
+        """Test holidays are not trading days."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        republic_day = date(2026, 1, 26)
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, republic_day)
+
+    def test_calendar_weekend_not_trading_day(self):
+        """Test weekends are not trading days."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        saturday = date(2026, 1, 3)
+        sunday = date(2026, 1, 4)
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, saturday)
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, sunday)
