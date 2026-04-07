@@ -240,6 +240,69 @@ def _build_summary_chart(go: Any, inst: InstrumentHealthMatrix) -> object:
     return fig
 
 
+def _render_scanner_metrics(st: object, scanner_result: ScannerHealthResult) -> None:
+    """Render scanner metrics (total, approved, approval rate)."""
+    metric_fn = getattr(st, "metric", None)
+    if not callable(metric_fn):
+        return
+
+    col1_fn = getattr(st, "columns", None)
+    if not callable(col1_fn):
+        return
+
+    cols = col1_fn(3)
+    if len(cols) < 3:
+        return
+
+    metric1 = getattr(cols[0], "metric", None)
+    metric2 = getattr(cols[1], "metric", None)
+    metric3 = getattr(cols[2], "metric", None)
+
+    if callable(metric1):
+        metric1("Total Scanned", scanner_result.total_scanned)
+    if callable(metric2):
+        metric2("Approved", scanner_result.approved_count)
+    if callable(metric3):
+        approval_rate = (
+            scanner_result.approved_count / scanner_result.total_scanned * 100
+            if scanner_result.total_scanned > 0
+            else 0
+        )
+        metric3("Approval Rate", f"{approval_rate:.1f}%")
+
+
+def _render_scanner_content(
+    st: object,
+    go: object,
+    scanner_result: ScannerHealthResult,
+    chart_data: dict[str, list[dict[str, object]]] | None,
+) -> tuple[list[str], list[str]]:
+    """Render scanner content (health matrix and charts).
+
+    Returns tuple of (table_symbols, chart_symbols).
+    """
+    subheader_fn = getattr(st, "subheader", None)
+    divider_fn = getattr(st, "divider", None)
+
+    if callable(divider_fn):
+        divider_fn()
+
+    if callable(subheader_fn):
+        subheader_fn("Health Matrix")
+
+    table_symbols = render_health_matrix_table(scanner_result.instruments, st)
+
+    if callable(divider_fn):
+        divider_fn()
+
+    if callable(subheader_fn):
+        subheader_fn("Approved Instruments Charts")
+
+    chart_symbols = render_approved_charts(scanner_result.instruments, chart_data, st, go)
+
+    return table_symbols, chart_symbols
+
+
 def render_instrument_scanner_tab(
     scanner_result: ScannerHealthResult | None = None,
     chart_data: dict[str, list[dict[str, object]]] | None = None,
@@ -261,10 +324,6 @@ def render_instrument_scanner_tab(
     }
 
     header_fn = getattr(st, "header", None)
-    subheader_fn = getattr(st, "subheader", None)
-    metric_fn = getattr(st, "metric", None)
-    divider_fn = getattr(st, "divider", None)
-
     if callable(header_fn):
         header_fn("🔍 Instrument Scanner")
 
@@ -274,46 +333,12 @@ def render_instrument_scanner_tab(
             info_fn("No scanner result available. Run scanner to see instruments.")
         return result
 
-    instruments = scanner_result.instruments
-    result["total_count"] = len(instruments)
+    result["total_count"] = len(scanner_result.instruments)
     result["approved_count"] = scanner_result.approved_count
 
-    if callable(metric_fn):
-        col1_fn = getattr(st, "columns", None)
-        if callable(col1_fn):
-            cols = col1_fn(3)
-            if len(cols) >= 3:
-                metric1 = getattr(cols[0], "metric", None)
-                metric2 = getattr(cols[1], "metric", None)
-                metric3 = getattr(cols[2], "metric", None)
-                if callable(metric1):
-                    metric1("Total Scanned", scanner_result.total_scanned)
-                if callable(metric2):
-                    metric2("Approved", scanner_result.approved_count)
-                if callable(metric3):
-                    approval_rate = (
-                        scanner_result.approved_count / scanner_result.total_scanned * 100
-                        if scanner_result.total_scanned > 0
-                        else 0
-                    )
-                    metric3("Approval Rate", f"{approval_rate:.1f}%")
-
-    if callable(divider_fn):
-        divider_fn()
-
-    if callable(subheader_fn):
-        subheader_fn("Health Matrix")
-
-    table_symbols = render_health_matrix_table(instruments, st)
+    _render_scanner_metrics(st, scanner_result)
+    table_symbols, chart_symbols = _render_scanner_content(st, go, scanner_result, chart_data)
     result["table_symbols"] = table_symbols
-
-    if callable(divider_fn):
-        divider_fn()
-
-    if callable(subheader_fn):
-        subheader_fn("Approved Instruments Charts")
-
-    chart_symbols = render_approved_charts(instruments, chart_data, st, go)
     result["chart_symbols"] = chart_symbols
 
     return result
