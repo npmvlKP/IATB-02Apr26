@@ -1,0 +1,403 @@
+# NSE/CDS/MCX Trading Holidays 2026-2027
+# Based on NSE official holiday calendar and MCX trading schedule
+
+[2026]
+
+# NSE and CDS Holidays (Equity & Currency Derivatives)
+[[2026.nse_cds]]
+date = "2026-01-26"
+name = "Republic Day"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-03-14"
+name = "Holi"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-03-25"
+name = "Ram Navami"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-04-02"
+name = "Mahavir Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-04-14"
+name = "Dr. B.R. Ambedkar Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-05-01"
+name = "Maharashtra Day"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+# CDS remains open on Maharashtra Day
+
+[[2026.nse_cds]]
+date = "2026-08-15"
+name = "Independence Day"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-08-20"
+name = "Raksha Bandhan"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2026.nse_cds]]
+date = "2026-09-02"
+name = "Ganesh Chaturthi"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-10-02"
+name = "Mahatma Gandhi Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-10-21"
+name = "Dussehra"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-10-24"
+name = "Diwali (Laxmi Pujan)"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-10-25"
+name = "Diwali (Balipratipada)"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2026.nse_cds]]
+date = "2026-11-05"
+name = "Bhai Dooj"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2026.nse_cds]]
+date = "2026-11-15"
+name = "Guru Nanak Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2026.nse_cds]]
+date = "2026-12-25"
+name = "Christmas"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+# MCX Holidays (Commodities)
+[[2026.mcx]]
+date = "2026-01-26"
+name = "Republic Day"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-03-14"
+name = "Holi"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-03-25"
+name = "Ram Navami"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-04-02"
+name = "Mahavir Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-04-14"
+name = "Dr. B.R. Ambedkar Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-05-01"
+name = "Maharashtra Day"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-08-15"
+name = "Independence Day"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-08-20"
+name = "Raksha Bandhan"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-09-02"
+name = "Ganesh Chaturthi"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-10-02"
+name = "Mahatma Gandhi Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-10-21"
+name = "Dussehra"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-10-24"
+name = "Diwali (Laxmi Pujan)"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-10-25"
+name = "Diwali (Balipratipada)"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-11-05"
+name = "Bhai Dooj"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-11-15"
+name = "Guru Nanak Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2026.mcx]]
+date = "2026-12-25"
+name = "Christmas"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[2027]
+
+# NSE and CDS Holidays (Equity & Currency Derivatives)
+[[2027.nse_cds]]
+date = "2027-01-26"
+name = "Republic Day"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-03-04"
+name = "Holi"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-03-14"
+name = "Ram Navami"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-04-02"
+name = "Mahavir Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-04-14"
+name = "Dr. B.R. Ambedkar Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-05-01"
+name = "Maharashtra Day"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2027.nse_cds]]
+date = "2027-08-15"
+name = "Independence Day"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-08-10"
+name = "Raksha Bandhan"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2027.nse_cds]]
+date = "2027-08-22"
+name = "Ganesh Chaturthi"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-10-02"
+name = "Mahatma Gandhi Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-10-11"
+name = "Dussehra"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-10-14"
+name = "Diwali (Laxmi Pujan)"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-10-15"
+name = "Diwali (Balipratipada)"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2027.nse_cds]]
+date = "2027-10-26"
+name = "Bhai Dooj"
+exchanges = ["NSE"]
+segments = ["Equity", "F&O"]
+
+[[2027.nse_cds]]
+date = "2027-11-04"
+name = "Guru Nanak Jayanti"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+[[2027.nse_cds]]
+date = "2027-12-25"
+name = "Christmas"
+exchanges = ["NSE", "CDS"]
+segments = ["Equity", "F&O", "Currency"]
+
+# MCX Holidays (Commodities)
+[[2027.mcx]]
+date = "2027-01-26"
+name = "Republic Day"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-03-04"
+name = "Holi"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-03-14"
+name = "Ram Navami"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-04-02"
+name = "Mahavir Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-04-14"
+name = "Dr. B.R. Ambedkar Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-05-01"
+name = "Maharashtra Day"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-08-15"
+name = "Independence Day"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-08-10"
+name = "Raksha Bandhan"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-08-22"
+name = "Ganesh Chaturthi"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-10-02"
+name = "Mahatma Gandhi Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-10-11"
+name = "Dussehra"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-10-14"
+name = "Diwali (Laxmi Pujan)"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-10-15"
+name = "Diwali (Balipratipada)"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-10-26"
+name = "Bhai Dooj"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-11-04"
+name = "Guru Nanak Jayanti"
+exchanges = ["MCX"]
+segments = ["All"]
+
+[[2027.mcx]]
+date = "2027-12-25"
+name = "Christmas"
+exchanges = ["MCX"]
+segments = ["All"]
+
+# Additional Notes:
+# 1. Trading hours on Muhurat Trading (Diwali) will be announced separately
+# 2. Saturdays and Sundays are non-trading days for all exchanges
+# 3. CDS (Currency Derivatives) may have different holiday schedule than NSE Equity
+# 4. MCX (Commodities) follows its own holiday calendar
+# 5. Verify holiday dates with official exchange announcements before deployment
+# 6. Some regional holidays may not affect all exchanges/segments

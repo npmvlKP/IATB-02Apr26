@@ -1,16 +1,17 @@
-# IATB - Interactive Algorithmic Trading Bot
+# IATB - Indian Algorithmic Trading Bot
 
-A Python-based algorithmic trading system with support for multiple brokerage platforms and comprehensive quality gates.
+A Python-based algorithmic trading system specifically designed for the Indian market with Zerodha Kite Connect integration, supporting NSE/CDS/MCX exchanges and SEBI-compliant intraday MIS trading.
 
 ## Features
 
-- Multi-broker support (Interactive Brokers, Alpaca, TD Ameritrade, Binance, Coinbase, Kraken)
-- Comprehensive data provider integrations (Alpha Vantage, Polygon.io, Quandl, IEX Cloud, Finnhub)
-- Structured logging with UTC-aware timestamps
-- Decimal precision for all financial calculations
-- Notification services (Slack, Telegram, Email)
-- Risk management and position sizing
-- Quality gates with 90% code coverage requirement
+- **Zerodha Integration**: Full support for Zerodha Kite Connect API
+- **Multi-Exchange Support**: NSE (Equity), CDS (Currency), MCX (Commodities)
+- **OpenAlgo Protocol**: Standardized algorithmic trading execution
+- **Intraday MIS Only**: Focused on margin intraday square-off (MIS) trading
+- **SEBI Compliance**: Built-in SEBI regulatory compliance and risk management
+- **Structured Logging**: UTC-aware timestamps with comprehensive audit trails
+- **Decimal Precision**: All financial calculations use Decimal type for accuracy
+- **Quality Gates**: 90%+ code coverage with strict linting and security checks
 
 ## Project Structure
 
@@ -26,41 +27,67 @@ IATB/
 │       ├── ml/                # Feature engine, LSTM/GNN/HMM/Transformer, ensemble predictor
 │       ├── risk/              # Position sizing, stop loss, circuit breaker, SEBI compliance
 │       ├── rl/                # PPO/A2C/SAC agent, trading environment, Optuna optimizer
-│       ├── selection/         # Multi-factor instrument auto-selection (see below)
+│       ├── selection/         # Multi-factor instrument auto-selection
 │       ├── sentiment/         # FinBERT + AION + VADER ensemble, volume filter
 │       ├── storage/           # DuckDB, SQLite, Parquet, Git sync
 │       ├── strategies/        # Momentum, breakout, mean-reversion, sentiment, ensemble
 │       └── visualization/     # Dashboard, charts, alerts, breakout scanner
 ├── tests/                     # Test suite (90%+ coverage target)
-├── scripts/                   # Setup, quality gates, git sync
-├── .github/workflows/         # CI/CD pipelines
+├── scripts/                   # Setup, quality gates, git sync, verification
+├── config/                    # Configuration files (settings, exchanges, holidays)
 ├── .env.example               # Environment variable template
 └── pyproject.toml             # Project configuration
 ```
+
+## Indian Market Configuration
+
+### Supported Exchanges
+
+| Exchange | Segment | Products | Trading Hours (IST) |
+|----------|---------|----------|---------------------|
+| **NSE** | Equity (Cash & F&O) | MIS Intraday | 09:15 - 15:30 |
+| **CDS** | Currency Derivatives | MIS Intraday | 09:00 - 17:00 |
+| **MCX** | Commodities | MIS Intraday | 09:00 - 23:30 |
+
+### Product Types
+
+- **MIS (Margin Intraday Square-off)**: Only supported product type
+  - Auto square-off at 3:15 PM for NSE Equity
+  - Auto square-off at 3:25 PM for NSE F&O
+  - Higher leverage compared to NRML
+  - Must square off positions intraday
+
+### Broker Integration
+
+**Zerodha Kite Connect**:
+- API-based order placement and execution
+- Real-time market data via WebSockets
+- Historical data fetch for backtesting
+- Margin and position tracking
+- Order book and trade book updates
 
 ## Instrument Auto-Selection Module
 
 The `selection/` package fuses four signal sources into a regime-aware composite
 score per instrument, then ranks and selects the top candidates for trade execution.
-Built with industry-standard practices from multi-factor scoring (FinClaw, CAFPO),
-volume profile analysis (AVPT/CME), and sentiment-regime switching (arXiv 2402.01441).
+Optimized for Indian market volatility and SEBI compliance.
 
 ### Data Flow
 
 ```
   DATA LAYER                     SELECTION LAYER                    STRATEGY LAYER
   ───────────                    ───────────────                    ──────────────
-  SentimentAggregator ──→ sentiment_signal ──┐
-  StrengthScorer      ──→ strength_signal  ──┤                     Engine.select_instruments()
-  VolumeProfile       ──→ vp_signal        ──┼→ rank_normalize →       │
-  BacktestConclusion  ──→ drl_signal       ──┘   composite_score →     ▼
-                              ↑                    ranking →       StrategyContext
-                         decay (per-signal)          │             .composite_score
-                         _util (shared)              │             .selection_rank
-                         correlation_matrix ──────→──┘                  │
-                         ic_monitor ─────────── (alpha decay alert)    ▼
-                                                                  StrategyBase
-                                                                  .can_emit_signal()
+   SentimentAggregator ──→ sentiment_signal ──┐
+   StrengthScorer      ──→ strength_signal  ──┤                     Engine.select_instruments()
+   VolumeProfile       ──→ vp_signal        ──┼→ rank_normalize →       │
+   BacktestConclusion  ──→ drl_signal       ──┘   composite_score →     ▼
+                               ↑                    ranking →       StrategyContext
+                          decay (per-signal)          │             .composite_score
+                          _util (shared)              │             .selection_rank
+                          correlation_matrix ──────→──┘                  │
+                          ic_monitor ─────────── (alpha decay alert)    ▼
+                                                                   StrategyBase
+                                                                   .can_emit_signal()
 ```
 
 ### Signal Sources
@@ -158,60 +185,6 @@ for ctx in contexts:
 rank < 1 (not selected) are blocked from signal emission.
 `scale_quantity_by_rank()` provides rank-proportional position sizing.
 
-### Upstream Integration Points
-
-- **`SentimentAggregator.evaluate_instrument()`** → sentiment_signal
-- **`StrengthScorer.score()` + `RegimeDetector.detect()`** → strength_signal (sqrt ADX)
-- **`build_volume_profile()`** → volume_profile_signal (regime-dependent POC)
-- **`WalkForwardOptimizer` + `MonteCarloAnalyzer` + `EventDrivenBacktester`** → `build_conclusion()` → drl_signal
-- **`RLAgent.predict_with_confidence()`** → live DRL inference confidence
-- **OHLCV close prices** → `compute_pairwise_correlations()` → ranking correlation filter
-
-### Downstream Integration Points
-
-- **`Engine.run_selection_cycle()`** — one-call score → select → StrategyContext pipeline
-- **`Engine.run_selection_cycle_async()`** — non-blocking variant for live data feeds
-- **`StrategyContext.composite_score` / `.selection_rank`** — carried into all strategy methods
-- **`StrategyBase.can_emit_signal()`** — blocks unselected instruments
-- **`check_alpha_decay()`** — monitors selector predictive quality over time
-- **`optimize_weights_for_regime()`** — Optuna-based weight retraining when IC decays
-
-### Files
-
-```
-selection/
-├── __init__.py                 # Package docstring
-├── _util.py                    # DirectionalIntent, clamp_01, confidence_ramp, rank_percentile
-├── decay.py                    # Temporal decay: exp(-λ × hours), configurable overrides
-├── sentiment_signal.py         # SentimentAggregator → [0, 1], direction-aware
-├── strength_signal.py          # StrengthScorer → [0, 1], regime-confidence weighted
-├── volume_profile_signal.py    # POC/VAH/VAL → shape + proximity + width, regime-dependent
-├── drl_signal.py               # BacktestConclusion + build_conclusion() factory
-├── composite_score.py          # Regime-aware weighted fusion with soft confidence ramp
-├── ranking.py                  # Threshold → top-N → correlation filter
-├── correlation_matrix.py       # Pairwise Pearson return correlation from prices
-├── ic_monitor.py               # Information Coefficient / alpha decay monitoring
-├── selection_bridge.py         # SelectionResult → StrategyContext + rank sizing
-├── weight_optimizer.py         # Optuna TPE weight search with IC objective
-└── instrument_scorer.py        # InstrumentScorer: orchestrator + rank normalization
-```
-
-Modified upstream files:
-- `rl/agent.py` — `predict_with_confidence()` for live DRL confidence
-- `market_strength/strength_scorer.py` — `_normalize_concave()` for sqrt ADX
-- `core/engine.py` — `run_selection_cycle()`, async variant, auto strength_map
-- `strategies/base.py` — `composite_score` / `selection_rank` in `StrategyContext`
-
-### Verification
-
-```powershell
-poetry run pytest tests/selection/ -v --no-cov    # 77 passed
-poetry run pytest tests/ -q --no-cov              # 662 passed (system-wide)
-poetry run ruff check src/iatb/selection/          # 0 errors
-poetry run mypy src/iatb/selection/ --strict        # 0 errors
-poetry run bandit -r src/iatb/selection/ -q         # 0 issues
-```
-
 ## Safety Infrastructure
 
 The execution layer implements a 6-step safety pipeline per FIA, SEBI, and PRA standards.
@@ -263,6 +236,18 @@ Runs before engine start. Fail-closed — engine does not start if any fails:
 4. Data directory exists
 5. Audit database writable
 
+## SEBI Compliance
+
+This system implements SEBI-mandated safety features:
+
+1. **Pre-Trade Risk Checks**: All orders validated before execution
+2. **Position Limits**: Per-instrument and portfolio-level caps
+3. **Intraday Square-Off**: Automatic MIS position closure at market close
+4. **Audit Trail**: Complete order and trade history persistence
+5. **Circuit Breaker Protection**: Automatic halt on excessive losses
+6. **Kill Switch**: Immediate trading halt capability
+7. **Real-time Monitoring**: Continuous PnL and exposure tracking
+
 ## Operational Guidelines
 
 ### Paper-Trade Deployment
@@ -279,14 +264,15 @@ curl http://localhost:8000/health
 # 5. Compare selection outputs against manual instrument picks
 ```
 
-### Daily Operations
+### Daily Operations (Indian Market)
 
-1. **Pre-market**: Engine startup runs pre-flight checks automatically
-2. **Market open**: `daily_loss_guard.reset(current_nav)` clears intraday PnL
-3. **During session**: Every order passes the 6-step safety pipeline
-4. **Post-session**: `audit_logger.query_daily_trades(date)` for reconciliation
-5. **Weekly**: `check_alpha_decay(scores, returns)` for selector validation
-6. **Quarterly**: `optimize_weights_for_regime()` for weight recalibration
+1. **Pre-market (08:30-09:00 IST)**: Engine startup runs pre-flight checks automatically
+2. **Market open (09:00-09:15 IST)**: `daily_loss_guard.reset(current_nav)` clears intraday PnL
+3. **Trading session (09:15-15:30 IST)**: Every order passes the 6-step safety pipeline
+4. **Pre-close (15:15-15:30 IST)**: Automatic MIS square-off for Equity positions
+5. **Post-session**: `audit_logger.query_daily_trades(date)` for reconciliation
+6. **Weekly**: `check_alpha_decay(scores, returns)` for selector validation
+7. **Quarterly**: `optimize_weights_for_regime()` for weight recalibration
 
 ### Emergency Procedures
 
@@ -304,6 +290,8 @@ engine.disengage_kill_switch()
 - Kill switch tested (at least 2 drills with successful recovery)
 - Paper PnL tracking within ±0.3% of model expectations
 - IC above 0.03 for composite score vs 5-day forward returns
+- SEBI compliance validation passed
+- Zerodha API rate limits tested and validated
 
 ## Setup
 
@@ -313,6 +301,7 @@ engine.disengage_kill_switch()
 - Poetry
 - Git
 - GitHub CLI (optional, for GitHub integration)
+- Zerodha Kite Connect API credentials
 
 ### Installation
 
@@ -322,11 +311,26 @@ engine.disengage_kill_switch()
    .\scripts\setup.ps1
    ```
 
-3. Copy `.env.example` to `.env` and fill in your API keys:
+3. Copy `.env.example` to `.env` and fill in your Zerodha API keys:
    ```powershell
    Copy-Item .env.example .env
    # Edit .env with your credentials
    ```
+
+### Configuration
+
+Edit `config/settings.toml`:
+```toml
+[broker]
+name = "zerodha"
+live_trading_enabled = false  # Set to true only after paper trading validation
+
+[network]
+static_ip = "your.static.ip.address"  # Required for Zerodha API whitelisting
+
+[algorithm]
+algo_id = "your-unique-algo-id"  # Unique identifier for your trading algorithm
+```
 
 ## Quality Gates
 
@@ -351,19 +355,51 @@ poetry run mypy src/ --strict            # 0 errors
 poetry run bandit -r src/ -q             # 0 issues
 ```
 
+## Verification Scripts
+
+### Core Architecture Verification
+
+```powershell
+# Verify core module structure and imports
+poetry run python scripts/verify_core_architecture.py
+```
+
+### Zerodha Connection Test
+
+```powershell
+# Test Zerodha API connectivity
+poetry run python scripts/zerodha_connect.py
+```
+
+### Usage Examples
+
+```powershell
+# Run usage examples and demonstrations
+poetry run python scripts/usage_examples.py
+```
+
+### Dashboard
+
+```powershell
+# Launch visualization dashboard
+poetry run python scripts/dashboard.py
+```
+
 ## Development Guidelines
 
 - All functions must be ≤ 50 LOC
 - Use `Decimal` for all financial data
-- Use UTC-aware datetime only
+- Use UTC-aware datetime only (convert to IST for display)
 - Use structured logging (no print statements)
 - Follow PEP 8 style guide (enforced by Ruff)
 - Frozen dataclasses for all data models
 - Fail-closed validation in every public function
+- SEBI compliance in all trading logic
+- Zerodha API rate limit handling
 
 ## Git & GitHub Setup
 
-Initialize Git and create a private GitHub repository:
+Initialize Git and sync to remote repository:
 ```powershell
 .\scripts\git_sync.ps1
 ```
@@ -375,6 +411,47 @@ Run tests with coverage:
 poetry run pytest
 ```
 
+Run specific test suites:
+```powershell
+# Selection module tests
+poetry run pytest tests/selection/ -v --no-cov
+
+# Core engine tests
+poetry run pytest tests/core/ -v --no-cov
+
+# Risk management tests
+poetry run pytest tests/risk/ -v --no-cov
+```
+
+## Trading Hours & Holidays
+
+### NSE Trading Schedule
+
+| Segment | Trading Hours (IST) | Square-Off Time |
+|---------|---------------------|-----------------|
+| Equity (Cash) | 09:15 - 15:30 | 15:15 |
+| Equity (F&O) | 09:15 - 15:30 | 15:25 |
+| Currency (CDS) | 09:00 - 17:00 | 16:45 |
+
+### MCX Trading Schedule
+
+| Segment | Trading Hours (IST) | Square-Off Time |
+|---------|---------------------|-----------------|
+| Commodity | 09:00 - 23:30 | 23:15 |
+
+### Holiday Calendar
+
+NSE/CDS/MCX holidays are defined in `config/nse_holidays.toml` for 2026-2027.
+The system automatically checks for trading holidays and prevents order placement
+on non-trading days.
+
 ## License
 
 Private Project - All rights reserved
+
+## Disclaimer
+
+This software is for educational and research purposes only. Algorithmic trading
+involves significant risk of loss. Ensure you understand the risks and have
+appropriate risk management in place before trading with real capital. All
+trading activities must comply with SEBI regulations and Zerodha's terms of service.

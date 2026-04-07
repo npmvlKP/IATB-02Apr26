@@ -4,6 +4,16 @@ default_market_type = "SPOT"
 timezone = "UTC"
 paper_trade_enforced = true
 
+[broker]
+name = "zerodha"
+live_trading_enabled = false
+
+[network]
+static_ip = "your.static.ip.address"
+
+[algorithm]
+algo_id = "iatb-algo-001"
+
 [engine]
 event_bus_max_queue_size = 1000
 event_bus_batch_size = 100
