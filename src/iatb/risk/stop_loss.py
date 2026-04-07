@@ -601,6 +601,7 @@ def calculate_composite_exit_signal(
         side,
     )
     if hit:
-        return True, reason
+        # When hit is True, reason is guaranteed to be a string
+        return True, reason if reason is not None else "unknown_reason"
     _LOGGER.debug("No exit signal triggered")
     return False, "no_exit"
