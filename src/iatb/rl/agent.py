@@ -104,7 +104,7 @@ def _extract_action_confidence(
 ) -> Decimal:
     """Extract softmax probability for the chosen action."""
     try:
-        import numpy as np  # noqa: I001  # float API boundary
+        import numpy as np  # type: ignore[import-not-found]  # noqa: I001  # float API boundary
 
         policy = getattr(model, "policy", None)
         if policy is None:

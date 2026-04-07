@@ -6,11 +6,9 @@ All external calls are mocked.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from iatb.core.clock import (
     IST_OFFSET,
     MIS_CLOSE_TIMES,
@@ -22,7 +20,6 @@ from iatb.core.clock import (
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ClockError
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -33,13 +30,9 @@ def mock_calendar():
     """Mock ExchangeCalendar for testing."""
     calendar = MagicMock()
     calendar.get_regular_session.return_value = MagicMock(
-        open_time=time(9, 15),
-        close_time=time(15, 30)
+        open_time=time(9, 15), close_time=time(15, 30)
     )
-    calendar.session_for.return_value = MagicMock(
-        open_time=time(9, 15),
-        close_time=time(15, 30)
-    )
+    calendar.session_for.return_value = MagicMock(open_time=time(9, 15), close_time=time(15, 30))
     calendar.is_trading_day.return_value = True
     return calendar
 
@@ -112,7 +105,7 @@ class TestClock:
 
     def test_to_utc_from_naive(self):
         """Test converting naive datetime to UTC."""
-        naive_dt = datetime(2026, 1, 5, 10, 0, 0)
+        naive_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001
         result = Clock.to_utc(naive_dt)
         assert result.tzinfo == UTC
 
@@ -132,13 +125,13 @@ class TestClock:
 
     def test_to_ist_requires_timezone_aware(self):
         """Test to_ist raises on naive datetime."""
-        naive_dt = datetime(2026, 1, 5, 10, 0, 0)
+        naive_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001
         with pytest.raises(ClockError, match="timezone-aware"):
             Clock.to_ist(naive_dt)
 
     def test_ist_to_utc_conversion(self):
         """Test IST to UTC conversion."""
-        ist_dt = datetime(2026, 1, 5, 10, 0, 0)  # Naive IST
+        ist_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001  # Naive IST
         result = Clock.ist_to_utc(ist_dt)
         # 10:00 IST - 5:30 = 04:30 UTC
         assert result.hour == 4
@@ -162,7 +155,7 @@ class TestTradingSessions:
 
     def test_is_market_open_during_session(self, mock_calendar, utc_trading_time):
         """Test is_market_open returns True during trading hours."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.is_market_open(utc_trading_time, Exchange.NSE)
             assert result is True
 
@@ -173,25 +166,26 @@ class TestTradingSessions:
 
     def test_is_market_open_requires_utc(self):
         """Test is_market_open raises on naive datetime."""
-        naive_dt = datetime(2026, 1, 5, 10, 0, 0)
+        naive_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001
         with pytest.raises(ClockError, match="timezone-aware"):
             TradingSessions.is_market_open(naive_dt, Exchange.NSE)
 
     def test_is_trading_day_weekday(self, mock_calendar, utc_trading_time):
         """Test is_trading_day returns True for weekday."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.is_trading_day(utc_trading_time, Exchange.NSE)
             assert result is True
 
     def test_require_utc_rejects_naive(self):
         """Test _require_utc rejects naive datetime."""
-        naive_dt = datetime(2026, 1, 5, 10, 0, 0)
+        naive_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001
         with pytest.raises(ClockError):
             TradingSessions._require_utc(naive_dt)
 
     def test_require_utc_rejects_non_utc(self):
         """Test _require_utc rejects non-UTC timezone."""
         from datetime import timezone
+
         est = timezone(timedelta(hours=-5))
         non_utc_dt = datetime(2026, 1, 5, 10, 0, 0, tzinfo=est)
         with pytest.raises(ClockError, match="UTC"):
@@ -228,7 +222,7 @@ class TestMISSession:
 
     def test_is_mis_session_active_during_hours(self, mock_calendar, utc_trading_time):
         """Test is_mis_session_active returns True during MIS hours."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.is_mis_session_active(utc_trading_time, Exchange.NSE)
             assert result is True
 
@@ -239,7 +233,7 @@ class TestMISSession:
 
     def test_is_mis_session_active_requires_utc(self):
         """Test is_mis_session_active raises on naive datetime."""
-        naive_dt = datetime(2026, 1, 5, 10, 0, 0)
+        naive_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001
         with pytest.raises(ClockError):
             TradingSessions.is_mis_session_active(naive_dt, Exchange.NSE)
 
@@ -254,37 +248,37 @@ class TestValidateProductType:
 
     def test_validate_mis_product_type(self, mock_calendar, utc_trading_time):
         """Test validating MIS product type succeeds."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.validate_product_type("MIS", Exchange.NSE, utc_trading_time)
             assert result == ProductType.MIS
 
     def test_validate_nrml_product_type(self, mock_calendar, utc_trading_time):
         """Test validating NRML product type succeeds."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.validate_product_type("NRML", Exchange.NSE, utc_trading_time)
             assert result == ProductType.NRML
 
     def test_validate_cnc_blocked_on_nse(self, mock_calendar, utc_trading_time):
         """Test CNC (DELIVERY) is blocked on NSE."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             with pytest.raises(ClockError, match="DELIVERY.*blocked"):
                 TradingSessions.validate_product_type("CNC", Exchange.NSE, utc_trading_time)
 
     def test_validate_invalid_product_type(self, mock_calendar, utc_trading_time):
         """Test invalid product type raises error."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             with pytest.raises(ClockError, match="Invalid product_type"):
                 TradingSessions.validate_product_type("INVALID", Exchange.NSE, utc_trading_time)
 
     def test_validate_product_type_case_insensitive(self, mock_calendar, utc_trading_time):
         """Test product type validation is case-insensitive."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.validate_product_type("mis", Exchange.NSE, utc_trading_time)
             assert result == ProductType.MIS
 
     def test_validate_product_type_requires_utc(self):
         """Test validate_product_type raises on naive datetime."""
-        naive_dt = datetime(2026, 1, 5, 10, 0, 0)
+        naive_dt = datetime(2026, 1, 5, 10, 0, 0)  # noqa: DTZ001
         with pytest.raises(ClockError):
             TradingSessions.validate_product_type("MIS", Exchange.NSE, naive_dt)
 
@@ -299,13 +293,13 @@ class TestGetMISSquareOffTime:
 
     def test_get_mis_square_off_time_nse(self, mock_calendar):
         """Test getting MIS square-off time for NSE."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.get_mis_square_off_time(Exchange.NSE, date(2026, 1, 5))
             assert result == time(15, 20)
 
     def test_get_mis_square_off_time_mcx(self, mock_calendar):
         """Test getting MIS square-off time for MCX."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.get_mis_square_off_time(Exchange.MCX, date(2026, 1, 5))
             assert result == time(23, 0)
 
@@ -317,7 +311,7 @@ class TestGetMISSquareOffTime:
     def test_get_mis_square_off_time_holiday(self, mock_calendar):
         """Test returns None for holiday."""
         mock_calendar.session_for.return_value = None
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             result = TradingSessions.get_mis_square_off_time(Exchange.NSE, date(2026, 1, 26))
             assert result is None
 
@@ -346,7 +340,7 @@ class TestEdgeCases:
     def test_clock_ist_to_utc_day_rollback(self):
         """Test IST to UTC handles day rollback correctly."""
         # 02:00 IST = 20:30 UTC (previous day)
-        ist_dt = datetime(2026, 1, 6, 2, 0, 0)
+        ist_dt = datetime(2026, 1, 6, 2, 0, 0)  # noqa: DTZ001
         result = Clock.ist_to_utc(ist_dt)
         assert result.day == 5
         assert result.hour == 20
@@ -354,7 +348,7 @@ class TestEdgeCases:
 
     def test_mis_session_after_square_off(self, mock_calendar, utc_after_hours_time):
         """Test MIS session is inactive after square-off time."""
-        with patch.object(TradingSessions, 'calendar', mock_calendar):
+        with patch.object(TradingSessions, "calendar", mock_calendar):
             # Configure to return session but time check should fail
             result = TradingSessions.is_mis_session_active(utc_after_hours_time, Exchange.NSE)
             # Result depends on mock setup - this tests the path
