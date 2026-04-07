@@ -162,3 +162,65 @@ class TestOHLCVNormalizer:
                 exchange=Exchange.NSE,
                 source="unit-test",
             )
+
+    def test_normalize_record_invalid_decimal_string(self) -> None:
+        """Test _to_decimal with invalid string (lines 37-39)."""
+        payload = _raw_ohlcv("2026-01-01T09:15:00+00:00")
+        payload["open"] = "not_a_number"
+        with pytest.raises(ValidationError, match="open is not Decimal-compatible"):
+            normalize_ohlcv_record(
+                payload,
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_invalid_unix_timestamp(self) -> None:
+        """Test _parse_timestamp with invalid unix timestamp (lines 56-58)."""
+        # Use an invalid timestamp that will cause fromtimestamp to fail
+        payload = _raw_ohlcv(99999999999999999)  # Way too large
+        with pytest.raises(ValidationError, match="invalid unix timestamp"):
+            normalize_ohlcv_record(
+                payload,
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_record_z_suffix_timestamp(self) -> None:
+        """Test _parse_timestamp with Z suffix (line 65)."""
+        payload = _raw_ohlcv("2026-01-01T09:15:00Z")
+        bar = normalize_ohlcv_record(
+            payload,
+            symbol="NIFTY",
+            exchange=Exchange.NSE,
+            source="unit-test",
+        )
+        assert bar.timestamp.tzinfo == UTC
+
+    def test_normalize_record_invalid_iso_timestamp(self) -> None:
+        """Test _parse_timestamp with invalid ISO string (lines 68-70)."""
+        with pytest.raises(ValidationError, match="invalid ISO timestamp string"):
+            normalize_ohlcv_record(
+                _raw_ohlcv("not-a-valid-timestamp"),
+                symbol="NIFTY",
+                exchange=Exchange.NSE,
+                source="unit-test",
+            )
+
+    def test_normalize_batch_skip_series_validation(self) -> None:
+        """Test batch with validate_series=False (line 134)."""
+        # Create non-monotonic timestamps which would fail validation
+        records = [
+            _raw_ohlcv("2026-01-02T09:16:00+00:00"),
+            _raw_ohlcv("2026-01-02T09:15:00+00:00"),
+        ]
+        # Should not raise when validate_series=False
+        bars = normalize_ohlcv_batch(
+            records,
+            symbol="NIFTY",
+            exchange=Exchange.NSE,
+            source="unit-test",
+            validate_series=False,
+        )
+        assert len(bars) == 2

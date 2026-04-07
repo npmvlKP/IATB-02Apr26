@@ -18,3 +18,13 @@ def test_monte_carlo_analyzer_rejects_invalid_inputs() -> None:
     analyzer = MonteCarloAnalyzer(permutations=5)
     with pytest.raises(ConfigError, match="at least two points"):
         analyzer.run([Decimal("0.01")])
+
+
+def test_monte_carlo_zero_dispersion_returns_zero_sharpe() -> None:
+    """Test that zero dispersion (constant returns) returns zero Sharpe (line 58)."""
+    analyzer = MonteCarloAnalyzer(permutations=5, seed=42)
+    # All returns are the same, so dispersion = 0
+    constant_returns = [Decimal("0.01"), Decimal("0.01"), Decimal("0.01")]
+    result = analyzer.run(constant_returns)
+    # When dispersion is 0, should return 0
+    assert result.base_sharpe == Decimal("0")

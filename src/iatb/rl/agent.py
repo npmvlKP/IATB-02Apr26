@@ -104,7 +104,7 @@ def _extract_action_confidence(
 ) -> Decimal:
     """Extract softmax probability for the chosen action."""
     try:
-        import numpy as np  # type: ignore[import-not-found]  # noqa: I001  # float API boundary
+        import numpy as np  # noqa: I001  # float API boundary
 
         policy = getattr(model, "policy", None)
         if policy is None:
@@ -120,7 +120,7 @@ def _extract_action_confidence(
         probs_attr = getattr(getattr(dist, "distribution", None), "probs", None)
         if probs_attr is None:
             return Decimal("0.5")
-        # float required: torch tensor → float → Decimal
+        # float required: torch tensor â†’ float â†’ Decimal
         prob = float(probs_attr[0][action].item())
         return max(Decimal("0"), min(Decimal("1"), Decimal(str(prob))))
     except (ImportError, IndexError, TypeError, AttributeError):

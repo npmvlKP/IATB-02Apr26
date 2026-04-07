@@ -13,6 +13,7 @@ from iatb.selection._util import DirectionalIntent, confidence_ramp, rank_percen
 from iatb.selection.composite_score import (
     RegimeWeights,
     SignalScores,
+    _weights_for_regime,
     compute_composite_score,
 )
 from iatb.selection.decay import temporal_decay
@@ -77,6 +78,11 @@ class TestTemporalDecay:
         naive = datetime(2026, 1, 1, 0, 0, 0, tzinfo=None)  # noqa: DTZ001
         with pytest.raises(ConfigError, match="must be UTC"):
             temporal_decay(naive, _NOW, "sentiment")
+
+    def test_current_timestamp_non_utc_raises(self) -> None:
+        naive_current = datetime(2026, 1, 1, 0, 0, 0, tzinfo=None)  # noqa: DTZ001
+        with pytest.raises(ConfigError, match="current_timestamp must be UTC"):
+            temporal_decay(_NOW, naive_current, "sentiment")
 
 
 # ── volume_profile_signal.py ──
@@ -161,6 +167,110 @@ class TestVolumeProfileSignal:
         long_result = compute_volume_profile_signal(inputs, _NOW, DirectionalIntent.LONG)
         short_result = compute_volume_profile_signal(inputs, _NOW, DirectionalIntent.SHORT)
         assert short_result.score > long_result.score
+
+    def test_poc_proximity_zero_va_range_at_poc(self) -> None:
+        """Test _poc_proximity when va_range is 0 and price equals POC."""
+        from iatb.selection.volume_profile_signal import _poc_proximity
+
+        profile = VolumeProfile(
+            poc=Decimal("100"),
+            vah=Decimal("100"),
+            val=Decimal("100"),
+            total_volume=Decimal("100000"),
+        )
+        result = _poc_proximity(Decimal("100"), profile)
+        assert result == Decimal("1")
+
+    def test_poc_proximity_zero_va_range_not_at_poc(self) -> None:
+        """Test _poc_proximity when va_range is 0 and price != POC."""
+        from iatb.selection.volume_profile_signal import _poc_proximity
+
+        profile = VolumeProfile(
+            poc=Decimal("100"),
+            vah=Decimal("100"),
+            val=Decimal("100"),
+            total_volume=Decimal("100000"),
+        )
+        result = _poc_proximity(Decimal("105"), profile)
+        assert result == Decimal("0")
+
+    def test_va_width_ratio_zero_price_returns_zero(self) -> None:
+        """Test _va_width_ratio when price is 0."""
+        from iatb.selection.volume_profile_signal import _va_width_ratio
+
+        profile = _sample_profile("100", "110", "90")
+        result = _va_width_ratio(Decimal("0"), profile)
+        assert result == Decimal("0")
+
+    def test_poc_distance_pct_zero_price_returns_zero(self) -> None:
+        """Test _poc_distance_pct when price is 0."""
+        from iatb.selection.volume_profile_signal import _poc_distance_pct
+
+        profile = _sample_profile("100", "110", "90")
+        result = _poc_distance_pct(Decimal("0"), profile)
+        assert result == Decimal("0")
+
+    def test_va_width_pct_zero_price_returns_zero(self) -> None:
+        """Test _va_width_pct when price is 0."""
+        from iatb.selection.volume_profile_signal import _va_width_pct
+
+        profile = _sample_profile("100", "110", "90")
+        result = _va_width_pct(Decimal("0"), profile)
+        assert result == Decimal("0")
+
+    def test_validate_input_non_utc_timestamp_raises(self) -> None:
+        """Test _validate_input raises for non-UTC timestamp (lines 158-159)."""
+        from datetime import timezone
+
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalInput, _validate_input
+
+        profile = _sample_profile("100", "110", "90")
+        # Non-UTC timestamp
+        inputs = VolumeProfileSignalInput(
+            profile=profile,
+            current_price=Decimal("100"),
+            instrument_symbol="NIFTY",
+            timestamp_utc=datetime(2026, 4, 7, 10, 0, 0, tzinfo=timezone(timedelta(hours=1))),
+        )
+        current = datetime(2026, 4, 7, 10, 30, 0, tzinfo=UTC)
+
+        with pytest.raises(ConfigError, match="timestamp_utc must be UTC"):
+            _validate_input(inputs, current)
+
+    def test_validate_input_non_utc_current_raises(self) -> None:
+        """Test _validate_input raises for non-UTC current (lines 161-162)."""
+        from datetime import timezone
+
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalInput, _validate_input
+
+        profile = _sample_profile("100", "110", "90")
+        inputs = VolumeProfileSignalInput(
+            profile=profile,
+            current_price=Decimal("100"),
+            instrument_symbol="NIFTY",
+            timestamp_utc=datetime(2026, 4, 7, 10, 0, 0, tzinfo=UTC),
+        )
+        # Non-UTC current time
+        current = datetime(2026, 4, 7, 10, 30, 0, tzinfo=timezone(timedelta(hours=1)))
+
+        with pytest.raises(ConfigError, match="current_utc must be UTC"):
+            _validate_input(inputs, current)
+
+    def test_validate_input_empty_symbol_raises(self) -> None:
+        """Test _validate_input raises for empty instrument_symbol (lines 164-165)."""
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalInput, _validate_input
+
+        profile = _sample_profile("100", "110", "90")
+        inputs = VolumeProfileSignalInput(
+            profile=profile,
+            current_price=Decimal("100"),
+            instrument_symbol="  ",  # Whitespace only
+            timestamp_utc=datetime(2026, 4, 7, 10, 0, 0, tzinfo=UTC),
+        )
+        current = datetime(2026, 4, 7, 10, 30, 0, tzinfo=UTC)
+
+        with pytest.raises(ConfigError, match="instrument_symbol cannot be empty"):
+            _validate_input(inputs, current)
 
 
 # ── drl_signal.py ──
@@ -264,6 +374,34 @@ class TestDRLSignal:
 
 
 class TestRankPercentile:
+    def test_clamp_01_below_zero(self) -> None:
+        """Test clamp_01 with value below 0."""
+        from iatb.selection._util import clamp_01
+
+        result = clamp_01(Decimal("-0.5"))
+        assert result == Decimal("0")
+
+    def test_clamp_01_above_one(self) -> None:
+        """Test clamp_01 with value above 1."""
+        from iatb.selection._util import clamp_01
+
+        result = clamp_01(Decimal("1.5"))
+        assert result == Decimal("1")
+
+    def test_clamp_01_within_range(self) -> None:
+        """Test clamp_01 with value within [0, 1]."""
+        from iatb.selection._util import clamp_01
+
+        result = clamp_01(Decimal("0.5"))
+        assert result == Decimal("0.5")
+
+    def test_clamp_01_at_boundaries(self) -> None:
+        """Test clamp_01 at 0 and 1."""
+        from iatb.selection._util import clamp_01
+
+        assert clamp_01(Decimal("0")) == Decimal("0")
+        assert clamp_01(Decimal("1")) == Decimal("1")
+
     def test_ascending_values_zero_indexed(self) -> None:
         result = rank_percentile(
             [Decimal("0.1"), Decimal("0.5"), Decimal("0.9")],
@@ -412,6 +550,20 @@ class TestCompositeScore:
         mid = confidence_ramp(Decimal("0.60"))
         assert Decimal("0") < mid < Decimal("1")
 
+    def test_confidence_ramp_threshold_ge_one(self) -> None:
+        """Test confidence_ramp with threshold >= 1 when confidence >= threshold."""
+        # When threshold is 1.0, ceiling becomes 0, so function returns 1 if confidence >= threshold
+        result = confidence_ramp(Decimal("1.0"), threshold=Decimal("1.0"))
+        assert result == Decimal("1")
+
+        # Same with threshold > 1, if confidence >= threshold
+        result = confidence_ramp(Decimal("1.5"), threshold=Decimal("1.5"))
+        assert result == Decimal("1")
+
+        # When confidence < threshold, returns 0
+        result = confidence_ramp(Decimal("0.9"), threshold=Decimal("1.0"))
+        assert result == Decimal("0")
+
     def test_all_zero_signals_yield_zero(self) -> None:
         zeros = SignalScores(
             sentiment_score=Decimal("0"),
@@ -433,6 +585,30 @@ class TestCompositeScore:
                 MarketRegime.BULL,
             )
 
+    def test_invalid_score_upper_bound_raises(self) -> None:
+        """Test that score > 1 raises ConfigError."""
+        with pytest.raises(ConfigError, match="must be in"):
+            compute_composite_score(
+                _sample_signals(strength_score=Decimal("1.1")),
+                MarketRegime.BULL,
+            )
+
+    def test_invalid_confidence_raises(self) -> None:
+        """Test that confidence > 1 raises ConfigError."""
+        with pytest.raises(ConfigError, match="must be in"):
+            compute_composite_score(
+                _sample_signals(sentiment_confidence=Decimal("1.5")),
+                MarketRegime.BULL,
+            )
+
+    def test_bear_regime_weights_sentiment_highest(self) -> None:
+        """Test BEAR regime weights sentiment highest."""
+        result = compute_composite_score(_sample_signals(), MarketRegime.BEAR)
+        assert result.regime == MarketRegime.BEAR
+        sent = result.component_contributions["sentiment"]
+        vp = result.component_contributions["volume_profile"]
+        assert sent > vp
+
     def test_custom_weights_override(self) -> None:
         custom = RegimeWeights(
             sentiment=Decimal("0.50"),
@@ -451,6 +627,23 @@ class TestCompositeScore:
                 volume_profile=Decimal("0.50"),
                 drl=Decimal("0.50"),
             )
+
+    def test_negative_weight_raises(self) -> None:
+        """Test that negative weights raise ConfigError."""
+        with pytest.raises(ConfigError, match="weight sentiment cannot be negative"):
+            RegimeWeights(
+                sentiment=Decimal("-0.10"),
+                strength=Decimal("0.60"),
+                volume_profile=Decimal("0.30"),
+                drl=Decimal("0.20"),
+            )
+
+    def test_unknown_regime_raises(self) -> None:
+        """Test that unknown regime raises ConfigError."""
+        # Create a fake regime not in presets
+        fake_regime = "UNKNOWN_REGIME"  # type: ignore
+        with pytest.raises(ConfigError, match="no weight preset for regime"):
+            _weights_for_regime(fake_regime)  # type: ignore
 
 
 # ── ranking.py ──
@@ -510,6 +703,10 @@ class TestRanking:
             RankingConfig(top_n=0)
         with pytest.raises(ConfigError, match="min_score must be in"):
             RankingConfig(min_score=Decimal("1.5"))
+        with pytest.raises(ConfigError, match="correlation_limit must be in"):
+            RankingConfig(correlation_limit=Decimal("1.5"))
+        with pytest.raises(ConfigError, match="correlation_limit must be in"):
+            RankingConfig(correlation_limit=Decimal("-0.1"))
 
 
 # ── instrument_scorer.py (integration) ──
@@ -705,6 +902,43 @@ class TestCorrelationMatrix:
         result = compute_pairwise_correlations({"A": a_prices, "B": b_prices})
         assert result[("A", "B")] < Decimal("-0.5")
 
+    def test_prices_must_have_at_least_2_points(self) -> None:
+        """Test that price series with less than 2 points raises ConfigError."""
+        from iatb.selection.correlation_matrix import compute_pairwise_correlations
+
+        with pytest.raises(ConfigError, match="must have at least 2 points"):
+            compute_pairwise_correlations({"A": [Decimal("100")], "B": [Decimal("100")]})
+
+    def test_single_price_returns_empty_correlations(self) -> None:
+        """Test that single instrument returns empty dict."""
+        from iatb.selection.correlation_matrix import compute_pairwise_correlations
+
+        result = compute_pairwise_correlations(
+            {"A": [Decimal("100"), Decimal("101")]},
+        )
+        assert result == {}
+
+    def test_zero_denominator_returns_zero_correlation(self) -> None:
+        """Test that zero denominator returns zero correlation (line 67)."""
+        from iatb.selection.correlation_matrix import compute_pairwise_correlations
+
+        # When variance is zero (constant prices), denom will be 0
+        result = compute_pairwise_correlations(
+            {
+                "A": [Decimal("100"), Decimal("100"), Decimal("100")],
+                "B": [Decimal("200"), Decimal("200"), Decimal("200")],
+            }
+        )
+        # Both have zero variance, so denom = 0, should return 0
+        assert result[("A", "B")] == Decimal("0")
+
+    def test_mean_empty_list_returns_zero(self) -> None:
+        """Test _mean returns Decimal("0") for empty list (line 74)."""
+        from iatb.selection.correlation_matrix import _mean
+
+        result = _mean([])
+        assert result == Decimal("0")
+
 
 # ── decay overrides ──
 
@@ -776,6 +1010,35 @@ class TestICMonitor:
                 [Decimal("1")] * 5,
                 [Decimal("1")] * 3,
             )
+
+    def test_assign_ranks_handles_ties(self) -> None:
+        """Test _assign_ranks handles tied values correctly (lines 92-105)."""
+        from iatb.selection.ic_monitor import _assign_ranks
+
+        # Three values: 1, 1, 2 - the two 1's should share rank 1.5
+        ranks = _assign_ranks([Decimal("1"), Decimal("1"), Decimal("2")])
+        # Sorted: [0:1, 1:1, 2:2]
+        # Ranks: [1.5, 1.5, 3] (average of 1+2=3/2=1.5 for the two 1's)
+        assert ranks[0] == Decimal("1.5")
+        assert ranks[1] == Decimal("1.5")
+        assert ranks[2] == Decimal("3")
+
+    def test_assign_ranks_all_same_returns_same_rank(self) -> None:
+        """Test _assign_ranks when all values are the same."""
+        from iatb.selection.ic_monitor import _assign_ranks
+
+        ranks = _assign_ranks([Decimal("5"), Decimal("5"), Decimal("5"), Decimal("5")])
+        # All should get the same average rank
+        assert ranks[0] == ranks[1] == ranks[2] == ranks[3]
+        assert ranks[0] == Decimal("2.5")  # (1+2+3+4)/4 = 2.5
+
+    def test_spearman_zero_denominator_returns_zero(self) -> None:
+        """Test _spearman_rank_correlation with n=1 returns 0 (line 87)."""
+        from iatb.selection.ic_monitor import _spearman_rank_correlation
+
+        # When n=1, denom = 1 * (1 - 1) = 0, should return 0
+        result = _spearman_rank_correlation([Decimal("5")], [Decimal("10")])
+        assert result == Decimal("0")
 
 
 # ── ADX sqrt normalization ──
@@ -943,6 +1206,57 @@ class TestSelectionBridge:
         ]
         with pytest.raises(ConfigError, match="no strength_inputs"):
             extract_strength_map(signals)
+
+    def test_extract_strength_map_missing_symbol_raises(self) -> None:
+        """Test extract_strength_map raises when signal lacks symbol."""
+        from iatb.selection.selection_bridge import extract_strength_map
+
+        class FakeSignal:
+            def __init__(self) -> None:
+                self.strength_inputs = StrengthInputs(
+                    breadth_ratio=Decimal("1.5"),
+                    regime=MarketRegime.BULL,
+                    adx=Decimal("30"),
+                    volume_ratio=Decimal("1.5"),
+                    volatility_atr_pct=Decimal("0.02"),
+                )
+
+        signals = [FakeSignal()]
+        with pytest.raises(ConfigError, match="signal missing symbol"):
+            extract_strength_map(signals)
+
+    def test_scale_quantity_total_selected_zero_raises(self) -> None:
+        """Test scale_quantity_by_rank raises for zero total_selected."""
+        from iatb.selection.selection_bridge import scale_quantity_by_rank
+
+        with pytest.raises(ConfigError, match="total_selected must be positive"):
+            scale_quantity_by_rank(Decimal("100"), rank=1, total_selected=0)
+
+    def test_scale_quantity_rank_out_of_range_raises(self) -> None:
+        """Test scale_quantity_by_rank raises for invalid rank."""
+        from iatb.selection.selection_bridge import scale_quantity_by_rank
+
+        # Rank < 1
+        with pytest.raises(ConfigError, match="rank 0 out of range"):
+            scale_quantity_by_rank(Decimal("100"), rank=0, total_selected=3)
+
+        # Rank > total_selected
+        with pytest.raises(ConfigError, match="rank 4 out of range"):
+            scale_quantity_by_rank(Decimal("100"), rank=4, total_selected=3)
+
+    def test_scale_quantity_zero_base_raises(self) -> None:
+        """Test scale_quantity_by_rank raises for zero base_quantity."""
+        from iatb.selection.selection_bridge import scale_quantity_by_rank
+
+        with pytest.raises(ConfigError, match="base_quantity must be positive"):
+            scale_quantity_by_rank(Decimal("0"), rank=1, total_selected=3)
+
+    def test_scale_quantity_negative_base_raises(self) -> None:
+        """Test scale_quantity_by_rank raises for negative base_quantity."""
+        from iatb.selection.selection_bridge import scale_quantity_by_rank
+
+        with pytest.raises(ConfigError, match="base_quantity must be positive"):
+            scale_quantity_by_rank(Decimal("-100"), rank=1, total_selected=3)
 
 
 def _make_signals_with_strength(

@@ -35,3 +35,21 @@ def test_build_volume_profile_negative_volume_fails() -> None:
 def test_build_value_area_empty_bins_returns_empty_set() -> None:
     selected = _build_value_area([], Decimal("0"), Decimal("0.7"))
     assert selected == set()
+
+
+def test_build_volume_profile_empty_prices_raises() -> None:
+    """Test that empty prices raises ConfigError."""
+    with pytest.raises(ConfigError, match="cannot be empty"):
+        build_volume_profile(
+            prices=[],
+            volumes=[Decimal("10")],
+        )
+
+
+def test_build_volume_profile_unequal_length_raises() -> None:
+    """Test that unequal length raises ConfigError."""
+    with pytest.raises(ConfigError, match="must have equal length"):
+        build_volume_profile(
+            prices=[Decimal("100"), Decimal("101")],
+            volumes=[Decimal("10")],
+        )

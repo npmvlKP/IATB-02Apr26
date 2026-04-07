@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+﻿from datetime import UTC, datetime
 
 import pytest
 from iatb.backtesting.session_masks import filter_timestamps_in_session, is_in_session

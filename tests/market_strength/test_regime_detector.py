@@ -94,3 +94,32 @@ def test_regime_detector_rejects_empty_predicted_states() -> None:
                 [Decimal("0.3"), Decimal("0.3")],
             ]
         )
+
+
+def test_regime_detector_no_transition_on_same_regime() -> None:
+    """Test that no transition event is emitted when regime stays the same."""
+    detector = RegimeDetector(model_factory=lambda: _FakeHmm())
+    features = [
+        [Decimal("0.01"), Decimal("0.1")],
+        [Decimal("0.02"), Decimal("0.2")],
+        [Decimal("0.03"), Decimal("0.3")],
+        [Decimal("0.04"), Decimal("0.4")],
+    ]
+    detector.detect(features)
+    result2 = detector.detect(features)
+    assert result2.transition_event is None
+
+
+def test_estimate_confidence_clamps_to_zero_one() -> None:
+    """Test _estimate_confidence clamps between 0 and 1 (line 121)."""
+    # Test with all same state - should be 1.0
+    result = RegimeDetector._estimate_confidence([0, 0, 0, 0])
+    assert result == Decimal("1")
+
+    # Test with mixed states - should be between 0 and 1
+    result = RegimeDetector._estimate_confidence([0, 1, 0, 1])
+    assert result == Decimal("0.5")
+
+    # Test with all different states - should be > 0 but < 1
+    result = RegimeDetector._estimate_confidence([0, 1, 2, 3])
+    assert Decimal("0") < result < Decimal("1")

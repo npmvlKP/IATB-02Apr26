@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.breadth import (
+    _ema,
     advance_decline_ratio,
     mcclellan_oscillator,
     up_down_volume_ratio,
@@ -46,6 +47,12 @@ def test_up_down_volume_ratio_invalid_inputs_fail() -> None:
         up_down_volume_ratio(Decimal("1"), Decimal("0"))
 
 
+def test_up_down_volume_ratio_zero_up_volume() -> None:
+    """Test up_down_volume_ratio when up_volume is zero."""
+    result = up_down_volume_ratio(Decimal("0"), Decimal("100"))
+    assert result == Decimal("0")
+
+
 @pytest.mark.parametrize(
     ("advances", "declines", "message"),
     [
@@ -61,3 +68,9 @@ def test_mcclellan_oscillator_validation_failures(
 ) -> None:
     with pytest.raises(ConfigError, match=message):
         mcclellan_oscillator(advances, declines, short_period=39, long_period=19)
+
+
+def test_ema_empty_values_raises() -> None:
+    """Test _ema raises ConfigError for empty values (lines 56-57)."""
+    with pytest.raises(ConfigError, match="values cannot be empty"):
+        _ema([], period=5)

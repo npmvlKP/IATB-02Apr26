@@ -174,6 +174,26 @@ def test_default_article_extractor_returns_parsed_text(
     )
 
 
+def test_default_fetcher_handles_string_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test _default_fetcher handles non-bytes payload (line 51)."""
+
+    class _StringResponse:
+        def __enter__(self) -> "_StringResponse":
+            return self
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+            _ = (exc_type, exc, tb)
+
+        def read(self) -> str:
+            return "<rss/>"
+
+    monkeypatch.setattr(
+        "iatb.sentiment.news_scraper.urllib.request.urlopen",
+        lambda request, timeout: _StringResponse(),
+    )
+    assert _default_fetcher("https://example.com/feed.xml") == "<rss/>"
+
+
 def test_news_scraper_parses_atom_entry_link_href() -> None:
     scraper = NewsScraper(
         rss_feeds={"moneycontrol": "atom"},

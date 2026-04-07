@@ -114,3 +114,20 @@ class TestGitSyncService:
         service = GitSyncService(tmp_path)
         with pytest.raises(ConfigError, match="commit_message cannot be empty"):
             service.commit_and_push(commit_message="   ")
+
+    def test_commit_and_push_commit_failure_raises(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test that commit failure (not 'nothing to commit') raises error (line 77)."""
+        responses = [
+            _result(["gitleaks"]),
+            _result(["git", "add"]),
+            _result(["git", "commit"], returncode=1, stderr="merge conflict"),
+        ]
+        runner = _Runner(responses)
+        monkeypatch.setattr("iatb.storage.git_sync.subprocess.run", runner)
+        service = GitSyncService(tmp_path)
+        with pytest.raises(ConfigError, match="git commit failed"):
+            service.commit_and_push(commit_message="feat: storage")
