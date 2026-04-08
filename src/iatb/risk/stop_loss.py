@@ -613,9 +613,7 @@ def calculate_composite_exit_signal(
     exit_prob_threshold: Decimal = _DEFAULT_EXIT_PROB_THRESHOLD,
     side: OrderSide = OrderSide.BUY,
 ) -> tuple[bool, str]:
-    """Calculate composite exit signal combining multiple risk controls.
-
-    Checks stop loss hit, time-based exit, auto-squareoff, and DRL prediction.
+    """Calculate composite exit signal combining stop loss, time exit, auto-squareoff, and DRL.
 
     Args:
         current_price: Current market price.

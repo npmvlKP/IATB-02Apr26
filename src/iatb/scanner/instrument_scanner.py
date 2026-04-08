@@ -321,9 +321,12 @@ class InstrumentScanner:
                 latest_row = None
                 for row in _iter_dataframe_rows(frame):
                     row_dict = dict(row)
-                    if latest_row is None or _coerce_datetime(
+                    row_timestamp = _coerce_datetime(
                         _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
-                    ) > cast("datetime", latest_row["timestamp"]):
+                    )
+                    if latest_row is None or row_timestamp > cast(
+                        "datetime", latest_row["timestamp"]
+                    ):
                         latest_row = {
                             "timestamp": _coerce_datetime(
                                 _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
