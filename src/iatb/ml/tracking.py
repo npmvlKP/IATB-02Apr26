@@ -11,8 +11,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-import mlflow  # type: ignore[import-not-found]
-import optuna  # type: ignore[import-not-found]
+import mlflow
+import optuna
 from pydantic import BaseModel, Field
 
 from iatb.core.exceptions import ConfigError
@@ -21,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Optional PyTorch support for MLflow
 try:
-    import mlflow.pytorch  # type: ignore[import-not-found]  # noqa: F401
+    import mlflow.pytorch  # noqa: F401
 
     _PYTORCH_AVAILABLE = True
 except (ImportError, OSError):
@@ -521,7 +521,7 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return self.study.best_params  # type: ignore[no-any-return]
+        return self.study.best_params
 
     def get_best_value(self) -> float:
         """Get best objective value from the study.
@@ -542,7 +542,7 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return self.study.best_value  # type: ignore[no-any-return]
+        return self.study.best_value
 
 
 def create_default_tracking(
