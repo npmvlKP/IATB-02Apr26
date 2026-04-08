@@ -549,6 +549,60 @@ def _perform_exit_checks(
     return _handle_drl_exit(exit_probability, exit_prob_threshold)
 
 
+def _validate_and_log_composite(
+    current_price: Decimal,
+    stop_price: Decimal,
+    entry_time_utc: datetime,
+    now_utc: datetime,
+    max_hold_minutes: int,
+    exit_probability: Decimal | None,
+    exit_prob_threshold: Decimal,
+    side: OrderSide,
+) -> None:
+    """Validate inputs and log composite signal context.
+
+    Args:
+        current_price: Current market price.
+        stop_price: Stop loss price.
+        entry_time_utc: Position entry time (UTC).
+        now_utc: Current time (UTC).
+        max_hold_minutes: Maximum holding time in minutes.
+        exit_probability: DRL-predicted exit probability.
+        exit_prob_threshold: DRL exit probability threshold.
+        side: Order side.
+
+    Raises:
+        ConfigError: If datetimes are not UTC-aware.
+    """
+    _validate_composite_inputs(entry_time_utc, now_utc)
+    _log_composite_signal_context(
+        current_price,
+        stop_price,
+        entry_time_utc,
+        now_utc,
+        max_hold_minutes,
+        exit_probability,
+        exit_prob_threshold,
+        side,
+    )
+
+
+def _format_exit_result(hit: bool, reason: str | None) -> tuple[bool, str]:
+    """Format the final exit result.
+
+    Args:
+        hit: Whether an exit was triggered.
+        reason: The exit reason (if any).
+
+    Returns:
+        Tuple of (should_exit, reason).
+    """
+    if hit:
+        return True, reason if reason is not None else "unknown_reason"
+    _LOGGER.debug("No exit signal triggered")
+    return False, "no_exit"
+
+
 def calculate_composite_exit_signal(
     current_price: Decimal,
     stop_price: Decimal,
@@ -579,8 +633,7 @@ def calculate_composite_exit_signal(
     Raises:
         ConfigError: If any input is invalid.
     """
-    _validate_composite_inputs(entry_time_utc, now_utc)
-    _log_composite_signal_context(
+    _validate_and_log_composite(
         current_price,
         stop_price,
         entry_time_utc,
@@ -600,8 +653,4 @@ def calculate_composite_exit_signal(
         exit_prob_threshold,
         side,
     )
-    if hit:
-        # When hit is True, reason is guaranteed to be a string
-        return True, reason if reason is not None else "unknown_reason"
-    _LOGGER.debug("No exit signal triggered")
-    return False, "no_exit"
+    return _format_exit_result(hit, reason)
