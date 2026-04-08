@@ -62,6 +62,7 @@ ignore = []
 "tests/**/*.py" = ["S101"]  # Allow assert in tests
 "src/iatb/data/base.py" = ["A003"]  # Preserve canonical OHLC field names (open/high/low/close)
 "src/iatb/storage/git_sync.py" = ["S603"]  # subprocess used with explicit argv and shell disabled
+"tests/conftest_optimized.py" = ["DTZ001"]  # Mock datetime fixture ensures UTC timezone
 
 [tool.mypy]
 python_version = "3.12"
