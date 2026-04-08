@@ -26,16 +26,16 @@ from iatb.backtesting.session_masks import create_mis_session_mask
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 
+logger = logging.getLogger(__name__)
+
 # Optional MLflow tracking integration
 try:
-    from iatb.ml.tracking import ExperimentTracker, ExperimentMetrics
+    from iatb.ml.tracking import ExperimentMetrics, ExperimentTracker  # noqa: F401
+
     _MLFLOW_AVAILABLE = True
 except ImportError:
     _MLFLOW_AVAILABLE = False
-    logger = logging.getLogger(__name__)
     logger.debug("MLflow tracking not available for vectorbt backtesting")
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

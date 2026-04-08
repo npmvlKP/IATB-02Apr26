@@ -12,13 +12,21 @@ from pathlib import Path
 from typing import Any
 
 import mlflow
-import mlflow.pytorch
 import optuna
 from pydantic import BaseModel, Field
 
 from iatb.core.exceptions import ConfigError
 
 _LOGGER = logging.getLogger(__name__)
+
+# Optional PyTorch support for MLflow
+try:
+    import mlflow.pytorch  # noqa: F401
+
+    _PYTORCH_AVAILABLE = True
+except (ImportError, OSError):
+    _PYTORCH_AVAILABLE = False
+    _LOGGER.debug("PyTorch not available for MLflow PyTorch model logging")
 
 
 class MLflowConfig(BaseModel):
@@ -326,6 +334,10 @@ class ExperimentTracker:
             input_example: Optional example input for the model.
         """
         if not self.config.enable_tracking or self.active_run is None:
+            return
+
+        if not _PYTORCH_AVAILABLE:
+            _LOGGER.warning("PyTorch not available, skipping PyTorch model logging")
             return
 
         try:
