@@ -4,7 +4,7 @@ Add # noqa: S112 to suppress try-except-continue warnings where appropriate.
 """
 
 # Read the file
-with open("src/iatb/scanner/instrument_scanner.py", "r", encoding="utf-8") as f:
+with open("src/iatb/scanner/instrument_scanner.py", encoding="utf-8") as f:
     lines = f.readlines()
 
 # Find lines with except Exception that have nosec comment
@@ -15,7 +15,7 @@ for line in lines:
         # Add noqa: S112 to suppress the S112 rule
         line = line.replace(
             "# nosec - B112: scanner continues on individual failures",
-            "# nosec - B112: scanner continues on individual failures  # noqa: S112"
+            "# nosec - B112: scanner continues on individual failures  # noqa: S112",
         )
     new_lines.append(line)
 

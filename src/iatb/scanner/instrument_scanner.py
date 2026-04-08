@@ -269,18 +269,23 @@ class InstrumentScanner:
     def scan(
         self,
         direction: SortDirection = SortDirection.GAINERS,
+        custom_data: Iterable[MarketData] | None = None,
     ) -> ScannerResult:
         """
         Scan instruments using jugaad-data + pandas-ta.
 
         Args:
             direction: Sort by gainers or losers
+            custom_data: Optional custom market data for testing (bypasses jugaad-data fetch)
 
         Returns:
             ScannerResult with ranked gainers/losers
         """
         scan_timestamp = datetime.now(UTC)
-        all_candidates = self._fetch_market_data()
+        if custom_data is not None:
+            all_candidates = list(custom_data)
+        else:
+            all_candidates = self._fetch_market_data()
         scored = self._score_candidates(all_candidates)
         filtered = self._apply_filters(scored)
         gainers, losers = self._rank_and_split(filtered)

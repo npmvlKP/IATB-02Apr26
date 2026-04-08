@@ -48,41 +48,27 @@ def main():
     print("=" * 60)
 
     # Step 1: Check git status
-    success, output = run_command(
-        ["git", "status", "--short"],
-        "Check Git Status",
-        check=False
-    )
-    
+    success, output = run_command(["git", "status", "--short"], "Check Git Status", check=False)
+
     if not output.strip():
         print("\n[INFO] No changes to commit")
         return 0
 
     # Step 2: Stage all changes
-    success, output = run_command(
-        ["git", "add", "."],
-        "Stage All Changes",
-        check=True
-    )
+    success, output = run_command(["git", "add", "."], "Stage All Changes", check=True)
     if not success:
         print("\n[ERROR] Failed to stage changes")
         return 1
 
     # Step 3: Check git status after staging
-    success, output = run_command(
-        ["git", "status"],
-        "Check Staged Changes",
-        check=True
-    )
+    success, output = run_command(["git", "status"], "Check Staged Changes", check=True)
     if not success:
         print("\n[ERROR] Failed to check status")
         return 1
 
     # Step 4: Get current branch
     success, output = run_command(
-        ["git", "branch", "--show-current"],
-        "Get Current Branch",
-        check=True
+        ["git", "branch", "--show-current"], "Get Current Branch", check=True
     )
     if not success:
         print("\n[ERROR] Failed to get branch")
@@ -91,9 +77,7 @@ def main():
 
     # Step 5: Get latest commit hash
     success, output = run_command(
-        ["git", "rev-parse", "HEAD"],
-        "Get Latest Commit Hash",
-        check=True
+        ["git", "rev-parse", "HEAD"], "Get Latest Commit Hash", check=True
     )
     if not success:
         print("\n[ERROR] Failed to get commit hash")
@@ -103,13 +87,11 @@ def main():
     # Step 6: Commit changes
     commit_msg = "fix(scanner): suppress S112 linting warnings with noqa"
     print(f"\n[INFO] Committing with message: {commit_msg}")
-    
+
     success, output = run_command(
-        ["git", "commit", "-m", commit_msg],
-        "Commit Changes",
-        check=False
+        ["git", "commit", "-m", commit_msg], "Commit Changes", check=False
     )
-    
+
     if not success and "nothing to commit" not in output.lower():
         print("\n[ERROR] Failed to commit changes")
         return 1
@@ -120,11 +102,9 @@ def main():
     # Step 7: Push to remote
     print(f"\n[INFO] Pushing to origin/{current_branch}")
     success, output = run_command(
-        ["git", "push", "origin", current_branch],
-        "Push to Remote",
-        check=False
+        ["git", "push", "origin", current_branch], "Push to Remote", check=False
     )
-    
+
     if not success:
         print("\n[ERROR] Failed to push to remote")
         print("\n[INFO] You may need to resolve conflicts or authenticate")
