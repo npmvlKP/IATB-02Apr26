@@ -400,7 +400,6 @@ class InstrumentScanner:
             ),
             breadth_ratio=Decimal("1.5"),
         )
-  +++++++ REPLACE
 
     def _calculate_indicators(self, frame: Any) -> "IndicatorSnapshot":
         """Calculate technical indicators using pandas-ta."""
