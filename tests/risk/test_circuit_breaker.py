@@ -1,8 +1,16 @@
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.risk.circuit_breaker import evaluate_circuit_breaker
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_circuit_breaker_levels() -> None:

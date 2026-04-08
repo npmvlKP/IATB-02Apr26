@@ -3,12 +3,20 @@ Tests for event bus implementation.
 """
 
 import asyncio
+import random
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.event_bus import EventBus
 from iatb.core.events import MarketTickEvent, OrderUpdateEvent
 from iatb.core.exceptions import EventBusError
 from iatb.core.types import create_price
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 @pytest.fixture

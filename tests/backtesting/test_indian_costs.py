@@ -1,8 +1,16 @@
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.backtesting.indian_costs import calculate_indian_costs
 from iatb.core.exceptions import ConfigError
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_calculate_indian_costs_equity_delivery() -> None:

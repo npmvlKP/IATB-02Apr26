@@ -6,15 +6,23 @@ and external API mocking.
 """
 
 import os
+import random
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange, OrderSide, OrderStatus, OrderType
 from iatb.core.exceptions import ConfigError
 from iatb.execution.base import OrderRequest
 from iatb.execution.openalgo_executor import OpenAlgoExecutor
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class TestOpenAlgoExecutor:

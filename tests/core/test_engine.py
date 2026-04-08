@@ -3,11 +3,19 @@ Tests for engine orchestrator.
 """
 
 import asyncio
+import random
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.engine import Engine
 from iatb.core.event_bus import EventBus
 from iatb.core.exceptions import EngineError
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class TestEngineLifecycle:

@@ -2,13 +2,21 @@
 Tests for runtime event validation layer.
 """
 
+import random
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange, OrderSide, OrderType
 from iatb.core.event_validation import validate_event
 from iatb.core.exceptions import ValidationError
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _event_stub(event_type_name: str, **attrs: object) -> object:

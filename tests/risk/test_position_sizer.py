@@ -1,6 +1,9 @@
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.risk.position_sizer import (
     PositionSizingInput,
@@ -8,6 +11,11 @@ from iatb.risk.position_sizer import (
     kelly_fraction,
     volatility_adjusted_size,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_fixed_fractional_size_computes_expected_quantity() -> None:

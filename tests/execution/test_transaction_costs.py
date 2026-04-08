@@ -1,8 +1,16 @@
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.execution.transaction_costs import estimate_round_trip_cost, estimate_single_side_cost
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_transaction_cost_calculation_accuracy() -> None:

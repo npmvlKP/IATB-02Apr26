@@ -3,6 +3,10 @@ Tests for core enum definitions.
 """
 
 
+import random
+
+import numpy as np
+import torch
 from iatb.core.enums import (
     Exchange,
     MarketType,
@@ -10,6 +14,11 @@ from iatb.core.enums import (
     OrderStatus,
     OrderType,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class TestExchange:

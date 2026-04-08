@@ -2,14 +2,22 @@
 Tests for SQLite trade audit storage.
 """
 
+import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_quantity, create_timestamp
 from iatb.storage.sqlite_store import SQLiteStore, TradeAuditRecord
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _record(trade_id: str, timestamp: datetime) -> TradeAuditRecord:

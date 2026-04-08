@@ -1,10 +1,18 @@
+import random
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.rl.environment import EnvironmentConfig, TradingEnvironment
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_environment_step_is_deterministic_with_fixed_seed() -> None:

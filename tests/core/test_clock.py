@@ -2,13 +2,21 @@
 Tests for clock utilities.
 """
 
+import random
 from datetime import UTC, date, datetime, time, timedelta, timezone
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.clock import Clock, TradingSessions
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ClockError
 from iatb.core.exchange_calendar import ExchangeCalendar, SessionWindow
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class TestClock:

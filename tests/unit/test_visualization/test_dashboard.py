@@ -6,11 +6,14 @@ precision handling, timezone handling.
 All external calls are mocked (streamlit, plotly, scanner).
 """
 
+import random
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.scanner.instrument_scanner import (
@@ -44,6 +47,11 @@ from iatb.visualization.dashboard import (
     render_health_matrix_table,
     render_instrument_scanner_tab,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 # =============================================================================
 # Fixtures

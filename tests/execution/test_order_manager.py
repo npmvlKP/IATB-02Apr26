@@ -1,11 +1,19 @@
+import random
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
 from iatb.execution.base import ExecutionResult, Executor, OrderRequest
 from iatb.execution.order_manager import OrderManager
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class _StubExecutor(Executor):

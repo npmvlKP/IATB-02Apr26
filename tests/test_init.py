@@ -2,7 +2,16 @@
 Test suite for IATB package initialization
 """
 
+import random
+
+import numpy as np
+import torch
 from iatb import __author__, __version__
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_version_exists() -> None:

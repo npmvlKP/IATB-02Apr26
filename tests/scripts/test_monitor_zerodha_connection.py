@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import importlib.util
+import random
 import sys
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.execution.zerodha_connection import ZerodhaSession
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "monitor_zerodha_connection.py"
 _RELEVANT_ENV_VARS = (
