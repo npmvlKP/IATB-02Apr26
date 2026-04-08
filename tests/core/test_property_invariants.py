@@ -1,5 +1,6 @@
 """
 Deterministic property tests for core event and clock invariants.
+Optimized with fast/medium/slow settings for better performance.
 """
 
 import asyncio
@@ -9,13 +10,18 @@ from decimal import Decimal
 
 import numpy as np
 import torch
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 from iatb.core.clock import Clock, TradingSessions
 from iatb.core.enums import Exchange
 from iatb.core.event_bus import EventBus
 from iatb.core.events import MarketTickEvent
 from iatb.core.types import create_price, create_quantity
+
+from tests.conftest_optimized import (
+    HYPOTHESIS_FAST_SETTINGS,
+    HYPOTHESIS_MEDIUM_SETTINGS,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -42,7 +48,7 @@ def _build_tick(index: int, price: Decimal) -> MarketTickEvent:
     )
 
 
-@settings(max_examples=25, deadline=None, derandomize=True)
+@HYPOTHESIS_FAST_SETTINGS
 @given(prices=st.lists(PRICE_STRATEGY, min_size=1, max_size=20))
 def test_property_event_ordering_preserved(prices: list[Decimal]) -> None:
     """Publishing batches preserves order for each subscriber queue."""
@@ -60,7 +66,7 @@ def test_property_event_ordering_preserved(prices: list[Decimal]) -> None:
     asyncio.run(_run())
 
 
-@settings(max_examples=20, deadline=None, derandomize=True)
+@HYPOTHESIS_FAST_SETTINGS
 @given(
     subscriber_count=st.integers(min_value=1, max_value=4),
     event_count=st.integers(min_value=1, max_value=12),
@@ -97,7 +103,7 @@ def _next_session_date(exchange: Exchange, start_date: date) -> date:
     raise AssertionError(msg)
 
 
-@settings(max_examples=30, deadline=None, derandomize=True)
+@HYPOTHESIS_MEDIUM_SETTINGS
 @given(
     exchange=st.sampled_from(SESSION_EXCHANGES),
     day_offset=st.integers(min_value=0, max_value=30),

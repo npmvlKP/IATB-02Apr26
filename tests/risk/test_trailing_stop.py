@@ -1,4 +1,6 @@
-"""Tests for adaptive trailing stop strategies."""
+"""Tests for adaptive trailing stop strategies.
+Optimized with fast/medium/slow settings for better performance.
+"""
 
 import random
 from decimal import Decimal
@@ -6,7 +8,7 @@ from decimal import Decimal
 import numpy as np
 import pytest
 import torch
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 from iatb.core.enums import OrderSide
 from iatb.core.exceptions import ConfigError
@@ -18,6 +20,10 @@ from iatb.risk.trailing_stop import (
     PositionState,
     RegimeAdaptiveTrailingStop,
     TimeDecayTrailingStop,
+)
+
+from tests.conftest_optimized import (
+    HYPOTHESIS_FAST_SETTINGS,
 )
 
 # Set deterministic seeds for reproducibility
@@ -277,7 +283,7 @@ _atr_decimal = st.decimals(
 
 
 @given(price=_positive_decimal, atr=_atr_decimal)
-@settings(max_examples=50)
+@HYPOTHESIS_FAST_SETTINGS
 def test_atr_trailing_buy_stop_positive(price: Decimal, atr: Decimal) -> None:
     ts = ATRTrailingStop(atr_multiplier=Decimal("2.0"))
     ts.reset()

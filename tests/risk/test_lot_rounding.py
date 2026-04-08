@@ -1,4 +1,6 @@
-"""Tests for lot_rounded_size and freeze_limit_slices."""
+"""Tests for lot_rounded_size and freeze_limit_slices.
+Optimized with fast/medium/slow settings for better performance.
+"""
 
 import random
 from decimal import Decimal
@@ -6,10 +8,14 @@ from decimal import Decimal
 import numpy as np
 import pytest
 import torch
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 from iatb.core.exceptions import ConfigError
 from iatb.risk.position_sizer import freeze_limit_slices, lot_rounded_size
+
+from tests.conftest_optimized import (
+    HYPOTHESIS_FAST_SETTINGS,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -74,7 +80,7 @@ _lot = st.decimals(
 
 
 @given(raw=_qty, lot=_lot)
-@settings(max_examples=100)
+@HYPOTHESIS_FAST_SETTINGS
 def test_lot_rounded_invariants(raw: Decimal, lot: Decimal) -> None:
     result = lot_rounded_size(raw, lot)
     assert result >= Decimal("0")
@@ -92,7 +98,7 @@ def test_lot_rounded_invariants(raw: Decimal, lot: Decimal) -> None:
         allow_infinity=False,
     ),
 )
-@settings(max_examples=50)
+@HYPOTHESIS_FAST_SETTINGS
 def test_freeze_slices_sum_equals_rounded(qty: Decimal) -> None:
     lot = Decimal("75")
     freeze = Decimal("1800")

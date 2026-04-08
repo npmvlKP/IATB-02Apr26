@@ -303,79 +303,104 @@ class InstrumentScanner:
             return []
 
         all_data: list[MarketData] = []
-        end_date = datetime.now(UTC).date()
-        start_date = (datetime.now(UTC) - timedelta(days=self._config.lookback_days)).date()
+        start_date, end_date = self._get_date_range()
 
         for symbol in self._symbols:
             try:
-                frame = self._jugaad_nse(
-                    symbol=symbol,
-                    from_date=start_date,
-                    to_date=end_date,
-                )
-
-                if frame is None or len(frame) == 0:  # type: ignore[arg-type]
-                    continue
-
-                indicators = self._calculate_indicators(frame)
-                latest_row = None
-                for row in _iter_dataframe_rows(frame):
-                    row_dict = dict(row)
-                    row_timestamp = _coerce_datetime(
-                        _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
-                    )
-                    if latest_row is None or row_timestamp > cast(
-                        "datetime", latest_row["timestamp"]
-                    ):
-                        latest_row = {
-                            "timestamp": _coerce_datetime(
-                                _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
-                            ),
-                            "open": _to_decimal(_extract_value(row_dict, ("open", "OPEN")), "open"),
-                            "high": _to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"),
-                            "low": _to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"),
-                            "close": _to_decimal(
-                                _extract_value(row_dict, ("close", "CLOSE")), "close"
-                            ),
-                            "volume": _to_decimal(
-                                (
-                                    _extract_value(
-                                        row_dict,
-                                        ("volume", "VOLUME", "TOTTRDQTY", "TTL_TRD_QNT"),
-                                    ),
-                                ),
-                                "volume",
-                            ),
-                        }
-
-                if latest_row is None:
-                    continue
-
-                avg_volume = self._calculate_average_volume(frame)
-                market_data = MarketData(
-                    symbol=symbol,
-                    exchange=Exchange.NSE,
-                    category=self._determine_category(symbol),
-                    close_price=latest_row["close"],  # type: ignore[arg-type]
-                    prev_close_price=self._get_previous_close(frame),
-                    volume=latest_row["volume"],  # type: ignore[arg-type]
-                    avg_volume=avg_volume,
-                    timestamp_utc=latest_row["timestamp"],  # type: ignore[arg-type]
-                    high_price=latest_row["high"],  # type: ignore[arg-type]
-                    low_price=latest_row["low"],  # type: ignore[arg-type]
-                    adx=indicators.adx,
-                    atr_pct=(
-                        indicators.atr / latest_row["close"]  # type: ignore[operator]
-                        if latest_row["close"] > Decimal("0")  # type: ignore[operator]
-                        else Decimal("0")
-                    ),
-                    breadth_ratio=Decimal("1.5"),
-                )
-                all_data.append(market_data)
+                market_data = self._fetch_single_symbol(symbol, start_date, end_date)
+                if market_data is not None:
+                    all_data.append(market_data)
             except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
                 continue
 
         return all_data
+
+    def _get_date_range(self) -> tuple["date", "date"]:
+        """Get start and end dates for data fetch."""
+        end_date = datetime.now(UTC).date()
+        start_date = (datetime.now(UTC) - timedelta(days=self._config.lookback_days)).date()
+        return start_date, end_date
+
+    def _fetch_single_symbol(
+        self, symbol: str, start_date: "date", end_date: "date"
+    ) -> MarketData | None:
+        """Fetch and process data for a single symbol."""
+        frame = self._jugaad_nse(
+            symbol=symbol,
+            from_date=start_date,
+            to_date=end_date,
+        )
+
+        if frame is None or len(frame) == 0:  # type: ignore[arg-type]
+            return None
+
+        indicators = self._calculate_indicators(frame)
+        latest_row = self._get_latest_row(frame)
+        if latest_row is None:
+            return None
+
+        return self._build_market_data(symbol, frame, indicators, latest_row)
+
+    def _get_latest_row(self, frame: Any) -> dict[str, object] | None:
+        """Extract the latest (most recent) row from frame."""
+        latest_row = None
+        latest_timestamp = None
+
+        for row in _iter_dataframe_rows(frame):
+            row_dict = dict(row)
+            row_timestamp = _coerce_datetime(
+                _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
+            )
+            if latest_timestamp is None or row_timestamp > latest_timestamp:
+                latest_timestamp = row_timestamp
+                latest_row = {
+                    "timestamp": row_timestamp,
+                    "open": _to_decimal(_extract_value(row_dict, ("open", "OPEN")), "open"),
+                    "high": _to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"),
+                    "low": _to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"),
+                    "close": _to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close"),
+                    "volume": _to_decimal(
+                        _extract_value(
+                            row_dict,
+                            ("volume", "VOLUME", "TOTTRDQTY", "TTL_TRD_QNT"),
+                        ),
+                        "volume",
+                    ),
+                }
+
+        return latest_row
+
+    def _build_market_data(
+        self,
+        symbol: str,
+        frame: Any,
+        indicators: "IndicatorSnapshot",
+        latest_row: dict[str, object],
+    ) -> MarketData:
+        """Build MarketData object from components."""
+        avg_volume = self._calculate_average_volume(frame)
+        close_price = latest_row["close"]  # type: ignore[arg-type]
+
+        return MarketData(
+            symbol=symbol,
+            exchange=Exchange.NSE,
+            category=self._determine_category(symbol),
+            close_price=close_price,
+            prev_close_price=self._get_previous_close(frame),
+            volume=latest_row["volume"],  # type: ignore[arg-type]
+            avg_volume=avg_volume,
+            timestamp_utc=latest_row["timestamp"],  # type: ignore[arg-type]
+            high_price=latest_row["high"],  # type: ignore[arg-type]
+            low_price=latest_row["low"],  # type: ignore[arg-type]
+            adx=indicators.adx,
+            atr_pct=(
+                indicators.atr / close_price  # type: ignore[operator]
+                if close_price > Decimal("0")  # type: ignore[operator]
+                else Decimal("0")
+            ),
+            breadth_ratio=Decimal("1.5"),
+        )
+  +++++++ REPLACE
 
     def _calculate_indicators(self, frame: Any) -> "IndicatorSnapshot":
         """Calculate technical indicators using pandas-ta."""

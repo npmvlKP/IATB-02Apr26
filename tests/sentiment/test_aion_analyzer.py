@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 import torch
 from iatb.core.exceptions import ConfigError
-from iatb.sentiment.aion_analyzer import AionAnalyzer, _resolve_predict_fn
+from iatb.sentiment.aion_analyzer import AionAnalyzer
+from iatb.sentiment.helpers import resolve_aion_predictor
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -42,11 +43,11 @@ def test_aion_analyzer_rejects_negative_confidence() -> None:
 
 def test_aion_predictor_missing_dependency_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "iatb.sentiment.aion_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: (_ for _ in ()).throw(ModuleNotFoundError),
     )
     with pytest.raises(ConfigError, match="aion-sentiment dependency"):
-        _resolve_predict_fn()
+        resolve_aion_predictor()
 
 
 def test_aion_analyzer_rejects_empty_text() -> None:
@@ -65,10 +66,10 @@ def test_aion_analyzer_handles_neutral_string_prediction() -> None:
 def test_aion_resolve_predict_fn_from_module_callable(monkeypatch: pytest.MonkeyPatch) -> None:
     module = SimpleNamespace(predict=lambda text: {"label": "positive", "score": 0.8})
     monkeypatch.setattr(
-        "iatb.sentiment.aion_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: module,
     )
-    predict_fn = _resolve_predict_fn()
+    predict_fn = resolve_aion_predictor()
     assert predict_fn("Rupee remains stable.") == {"label": "positive", "score": 0.8}
 
 
@@ -80,10 +81,10 @@ def test_aion_resolve_predict_fn_from_model_instance(monkeypatch: pytest.MonkeyP
 
     module = SimpleNamespace(AionSentiment=lambda: _Model())
     monkeypatch.setattr(
-        "iatb.sentiment.aion_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: module,
     )
-    predict_fn = _resolve_predict_fn()
+    predict_fn = resolve_aion_predictor()
     assert predict_fn("IT index weakens intraday.") == {"label": "bearish", "score": 0.7}
 
 
@@ -91,8 +92,8 @@ def test_aion_resolve_predict_fn_without_interface_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "iatb.sentiment.aion_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: SimpleNamespace(),
     )
     with pytest.raises(ConfigError, match="usable prediction interface"):
-        _resolve_predict_fn()
+        resolve_aion_predictor()

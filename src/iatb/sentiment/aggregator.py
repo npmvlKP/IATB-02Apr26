@@ -9,6 +9,7 @@ from iatb.core.exceptions import ConfigError
 from iatb.sentiment.aion_analyzer import AionAnalyzer
 from iatb.sentiment.base import SentimentAnalyzer, SentimentScore, sentiment_label_from_score
 from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
+from iatb.sentiment.helpers import compute_weighted_ensemble
 from iatb.sentiment.vader_analyzer import VaderAnalyzer
 from iatb.sentiment.volume_filter import has_volume_confirmation
 
@@ -48,20 +49,8 @@ class SentimentAggregator:
         component_scores = {
             name: analyzer.analyze(text) for name, (analyzer, _) in self._analyzers.items()
         }
-        total_weight = sum((weight for _, weight in self._analyzers.values()), Decimal("0"))
-        weighted_score = sum(
-            (score.score * self._analyzers[name][1] for name, score in component_scores.items()),
-            Decimal("0"),
-        )
-        weighted_confidence = sum(
-            (
-                score.confidence * self._analyzers[name][1]
-                for name, score in component_scores.items()
-            ),
-            Decimal("0"),
-        )
-        composite_score = weighted_score / total_weight
-        composite_confidence = min(Decimal("1"), weighted_confidence / total_weight)
+        weights = {name: weight for name, (_, weight) in self._analyzers.items()}
+        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
         composite = SentimentScore(
             source="ensemble",
             score=composite_score,

@@ -563,34 +563,55 @@ class VectorBTEngine:
 
         # Cost breakdown
         total_costs = sum(t["entry_cost"] + t["exit_cost"] for t in trades)
-        stt_total = Decimal(
-            "0"
-        ) + sum(
-            calculate_indian_costs(t["entry_price"], self._config.segment).stt for t in trades
-        ) + sum(calculate_indian_costs(t["exit_price"], self._config.segment).stt for t in trades)
-
-        sebi_total = Decimal("0") + sum(
-            calculate_indian_costs(t["entry_price"], self._config.segment).sebi for t in trades
-        ) + sum(calculate_indian_costs(t["exit_price"], self._config.segment).sebi for t in trades)
-
-        exchange_txn_total = Decimal("0") + sum(
-            calculate_indian_costs(t["entry_price"], self._config.segment).exchange_txn
-            for t in trades
-        ) + sum(
-            calculate_indian_costs(t["exit_price"], self._config.segment).exchange_txn
-            for t in trades
+        stt_total = (
+            Decimal("0")
+            + sum(
+                calculate_indian_costs(t["entry_price"], self._config.segment).stt for t in trades
+            )
+            + sum(calculate_indian_costs(t["exit_price"], self._config.segment).stt for t in trades)
         )
 
-        stamp_duty_total = Decimal("0") + sum(
-            calculate_indian_costs(t["entry_price"], self._config.segment).stamp_duty
-            for t in trades
-        ) + sum(
-            calculate_indian_costs(t["exit_price"], self._config.segment).stamp_duty for t in trades
+        sebi_total = (
+            Decimal("0")
+            + sum(
+                calculate_indian_costs(t["entry_price"], self._config.segment).sebi for t in trades
+            )
+            + sum(
+                calculate_indian_costs(t["exit_price"], self._config.segment).sebi for t in trades
+            )
         )
 
-        gst_total = Decimal("0") + sum(
-            calculate_indian_costs(t["entry_price"], self._config.segment).gst for t in trades
-        ) + sum(calculate_indian_costs(t["exit_price"], self._config.segment).gst for t in trades)
+        exchange_txn_total = (
+            Decimal("0")
+            + sum(
+                calculate_indian_costs(t["entry_price"], self._config.segment).exchange_txn
+                for t in trades
+            )
+            + sum(
+                calculate_indian_costs(t["exit_price"], self._config.segment).exchange_txn
+                for t in trades
+            )
+        )
+
+        stamp_duty_total = (
+            Decimal("0")
+            + sum(
+                calculate_indian_costs(t["entry_price"], self._config.segment).stamp_duty
+                for t in trades
+            )
+            + sum(
+                calculate_indian_costs(t["exit_price"], self._config.segment).stamp_duty
+                for t in trades
+            )
+        )
+
+        gst_total = (
+            Decimal("0")
+            + sum(
+                calculate_indian_costs(t["entry_price"], self._config.segment).gst for t in trades
+            )
+            + sum(calculate_indian_costs(t["exit_price"], self._config.segment).gst for t in trades)
+        )
 
         # Timing
         start_date = (

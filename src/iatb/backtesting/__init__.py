@@ -10,9 +10,13 @@ from iatb.backtesting.report import QuantStatsReporter
 from iatb.backtesting.session_masks import filter_timestamps_in_session, is_in_session
 from iatb.backtesting.vectorbt_engine import (
     BacktestResult,
-    MonteCarloResult as VectorBTMonteCarloResult,
     VectorBTConfig,
     VectorBTEngine,
+)
+from iatb.backtesting.vectorbt_engine import (
+    MonteCarloResult as VectorBTMonteCarloResult,
+)
+from iatb.backtesting.vectorbt_engine import (
     WalkForwardResult as VectorBTWalkForwardResult,
 )
 from iatb.backtesting.vectorized import VectorizedBacktester, VectorizedSweepResult
