@@ -11,6 +11,7 @@ Provides Numba-accelerated, vectorized backtesting with:
 - DRL exit probability integration
 - QuantStats reports
 - TA-Lib indicators via pandas-ta-classic
+- MLflow experiment tracking integration
 """
 
 import importlib
@@ -24,6 +25,15 @@ from iatb.backtesting.indian_costs import calculate_indian_costs
 from iatb.backtesting.session_masks import create_mis_session_mask
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
+
+# Optional MLflow tracking integration
+try:
+    from iatb.ml.tracking import ExperimentTracker, ExperimentMetrics
+    _MLFLOW_AVAILABLE = True
+except ImportError:
+    _MLFLOW_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.debug("MLflow tracking not available for vectorbt backtesting")
 
 logger = logging.getLogger(__name__)
 

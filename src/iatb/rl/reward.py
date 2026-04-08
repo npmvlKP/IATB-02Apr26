@@ -8,6 +8,14 @@ from decimal import Decimal
 
 from iatb.core.exceptions import ConfigError
 
+# Optional MLflow tracking integration
+try:
+    from iatb.ml.tracking import ExperimentTracker, ExperimentMetrics
+    _MLFLOW_AVAILABLE = True
+except ImportError:
+    _MLFLOW_AVAILABLE = False
+    _LOGGER.debug("MLflow tracking not available for RL rewards")
+
 _LOGGER = logging.getLogger(__name__)
 
 _SQRT_252 = Decimal("15.8745078664")
