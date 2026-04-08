@@ -17,8 +17,6 @@ Open:  http://localhost:8080
 
 import json
 import sqlite3
-import threading
-import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -67,6 +65,27 @@ def _check_health() -> str:
         return '{"status":"unreachable"}'
 
 
+def _check_sentiment_health() -> dict[str, str]:
+    """Check sentiment analysis health status."""
+    try:
+        from iatb.sentiment.aggregator import SentimentAggregator
+        from iatb.sentiment.aion_analyzer import AionAnalyzer
+        from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
+        return {
+            "finbert": "available",
+            "aion": "available",
+            "aggregator": "available",
+            "ensemble_status": "operational",
+        }
+    except Exception as exc:
+        return {
+            "finbert": "unavailable",
+            "aion": "unavailable",
+            "aggregator": "unavailable",
+            "ensemble_status": f"error: {exc}",
+        }
+
+
 def _compute_pnl(trades: list[dict[str, str]]) -> dict[str, str]:
     total = Decimal("0")
     buy_count = 0
@@ -93,10 +112,12 @@ def _build_status() -> dict[str, object]:
     trades = _read_trades()
     pnl = _compute_pnl(trades)
     health = _check_health()
+    sentiment_health = _check_sentiment_health()
     log_tail = _read_log_tail(30)
     return {
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "engine_health": health,
+        "sentiment_health": sentiment_health,
         "trades_today": len(trades),
         "pnl_summary": pnl,
         "recent_trades": trades[:20],
@@ -124,11 +145,14 @@ _HTML = """<!DOCTYPE html>
   .metric {{ font-size: 1.8em; font-weight: bold; color: #58a6ff; }}
   .metric-label {{ font-size: 0.8em; color: #8b949e; }}
   .grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }}
+  .grid-2 {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }}
   pre {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px;
          font-size: 0.8em; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }}
   .badge {{ display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; }}
   .badge-filled {{ background: #238636; color: white; }}
   .badge-rejected {{ background: #da3633; color: white; }}
+  .status-ok {{ color: #3fb950; font-weight: bold; }}
+  .status-err {{ color: #f85149; font-weight: bold; }}
 </style>
 </head><body>
 <h1>iATB Deployment Dashboard</h1>
@@ -150,6 +174,35 @@ _HTML = """<!DOCTYPE html>
   <div class="card">
     <div class="metric-label">Buy / Sell</div>
     <div class="metric">{buy_count} / {sell_count}</div>
+  </div>
+</div>
+
+<h2>Sentiment Analysis Health</h2>
+<div class="grid-2">
+  <div class="card">
+    <table>
+      <tr><th>Component</th><th>Status</th></tr>
+      <tr>
+        <td>FinBERT (ProsusAI)</td>
+        <td class="{finbert_class}">{finbert_status}</td>
+      </tr>
+      <tr>
+        <td>AION-IN-v3</td>
+        <td class="{aion_class}">{aion_status}</td>
+      </tr>
+      <tr>
+        <td>Ensemble Aggregator</td>
+        <td class="{aggregator_class}">{aggregator_status}</td>
+      </tr>
+    </table>
+  </div>
+  <div class="card">
+    <div class="metric-label">Ensemble Status</div>
+    <div class="metric {ensemble_class}">{ensemble_status_display}</div>
+    <p style="color:#8b949e; margin-top:10px; font-size:0.85em;">
+      VERY_STRONG threshold: |score| ≥ 0.75<br>
+      Volume confirmation: ratio ≥ 1.5
+    </p>
   </div>
 </div>
 
@@ -197,6 +250,13 @@ def _render_html(status: dict[str, object]) -> str:
     pnl = status.get("pnl_summary", {})
     trades = status.get("recent_trades", [])
     log_lines = status.get("log_tail", [])
+    sentiment_health = status.get("sentiment_health", {})
+    
+    finbert_ok = sentiment_health.get("finbert", "") == "available"
+    aion_ok = sentiment_health.get("aion", "") == "available"
+    aggregator_ok = sentiment_health.get("aggregator", "") == "available"
+    ensemble_ok = sentiment_health.get("ensemble_status", "") == "operational"
+    
     return _HTML.format(
         refresh=_REFRESH_SECONDS,
         timestamp=str(status.get("timestamp_utc", ""))[:19],
@@ -208,6 +268,14 @@ def _render_html(status: dict[str, object]) -> str:
         sell_count=pnl.get("sell_trades", "0") if isinstance(pnl, dict) else "0",
         trades_table=_render_trades_table(trades if isinstance(trades, list) else []),
         log_tail="\n".join(log_lines if isinstance(log_lines, list) else []),
+        finbert_status="Available" if finbert_ok else "Unavailable",
+        finbert_class="status-ok" if finbert_ok else "status-err",
+        aion_status="Available" if aion_ok else "Unavailable",
+        aion_class="status-ok" if aion_ok else "status-err",
+        aggregator_status="Available" if aggregator_ok else "Unavailable",
+        aggregator_class="status-ok" if aggregator_ok else "status-err",
+        ensemble_status_display="Operational" if ensemble_ok else "Error",
+        ensemble_class="pass" if ensemble_ok else "fail",
     )
 
 
