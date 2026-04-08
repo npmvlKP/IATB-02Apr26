@@ -56,8 +56,8 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
             # Enable deterministic algorithms (may impact performance)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
-    except ImportError:
-        # PyTorch not installed, skip
+    except (ImportError, OSError):
+        # PyTorch not installed or DLL loading failed, skip
         pass
 
     yield

@@ -11,8 +11,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-import mlflow
-import optuna
+import mlflow  # type: ignore[import-not-found]
+import optuna  # type: ignore[import-not-found]
 from pydantic import BaseModel, Field
 
 from iatb.core.exceptions import ConfigError
@@ -21,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Optional PyTorch support for MLflow
 try:
-    import mlflow.pytorch  # noqa: F401
+    import mlflow.pytorch  # type: ignore[import-not-found]  # noqa: F401
 
     _PYTORCH_AVAILABLE = True
 except (ImportError, OSError):
@@ -450,28 +450,9 @@ class HyperparameterOptimizer:
             _LOGGER.error("Study creation failed")
             raise ConfigError(msg)
 
-        def tracked_objective(trial: optuna.Trial) -> float:
-            """Objective function with optional MLflow tracking."""
-            # Log trial parameters if tracker is available
-            if tracker is not None and tracker.config.enable_tracking:
-                tracker.start_run(run_name=f"trial-{trial.number}")
-                tracker.log_params(trial.params)
-
-            # Run objective
-            value = objective(trial)
-
-            # Log objective value if tracker is available
-            if tracker is not None and tracker.config.enable_tracking:
-                tracker.log_metrics(
-                    ExperimentMetrics(custom_metrics={"objective_value": Decimal(str(value))})
-                )
-                tracker.end_run()
-
-            return value
-
         try:
             self.study.optimize(
-                tracked_objective,
+                lambda trial: self._run_trial(trial, objective, tracker),
                 n_trials=self.config.n_trials,
                 timeout=self.config.timeout,
             )
@@ -487,6 +468,39 @@ class HyperparameterOptimizer:
             raise
 
         return self.study
+
+    def _run_trial(
+        self,
+        trial: optuna.Trial,
+        objective: Callable[[optuna.Trial], float],
+        tracker: ExperimentTracker | None = None,
+    ) -> float:
+        """Run a single optimization trial with optional MLflow tracking.
+
+        Args:
+            trial: Optuna trial object.
+            objective: Objective function to evaluate.
+            tracker: Optional ExperimentTracker for logging.
+
+        Returns:
+            Objective value for the trial.
+        """
+        # Log trial parameters if tracker is available
+        if tracker is not None and tracker.config.enable_tracking:
+            tracker.start_run(run_name=f"trial-{trial.number}")
+            tracker.log_params(trial.params)
+
+        # Run objective
+        value = objective(trial)
+
+        # Log objective value if tracker is available
+        if tracker is not None and tracker.config.enable_tracking:
+            tracker.log_metrics(
+                ExperimentMetrics(custom_metrics={"objective_value": Decimal(str(value))})
+            )
+            tracker.end_run()
+
+        return value
 
     def get_best_params(self) -> dict[str, Any]:
         """Get best parameters from the study.
@@ -507,7 +521,7 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return self.study.best_params
+        return self.study.best_params  # type: ignore[no-any-return]
 
     def get_best_value(self) -> float:
         """Get best objective value from the study.
@@ -528,7 +542,7 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return self.study.best_value
+        return self.study.best_value  # type: ignore[no-any-return]
 
 
 def create_default_tracking(
