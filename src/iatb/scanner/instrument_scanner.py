@@ -248,9 +248,9 @@ class InstrumentScanner:
     def _load_pandas_ta() -> object:
         """Load pandas-ta module."""
         try:
-            return importlib.import_module("pandas_ta")
+            return importlib.import_module("pandas_ta_classic")
         except ModuleNotFoundError as exc:
-            msg = "pandas-ta dependency is required for InstrumentScanner"
+            msg = "pandas-ta-classic dependency is required for InstrumentScanner"
             raise ConfigError(msg) from exc
 
     @staticmethod
@@ -364,7 +364,7 @@ class InstrumentScanner:
                     breadth_ratio=Decimal("1.5"),
                 )
                 all_data.append(market_data)
-            except Exception:  # noqa: S112 - scanner continues on individual failures
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
                 continue
 
         return all_data
@@ -381,7 +381,7 @@ class InstrumentScanner:
                 closes.append(_to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close"))
                 highs.append(_to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"))
                 lows.append(_to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"))
-            except Exception:  # noqa: S112 - scanner continues on individual failures
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
                 continue
 
         if len(closes) < 14:
@@ -451,7 +451,7 @@ class InstrumentScanner:
                     "volume",
                 )
                 volumes.append(vol)
-            except Exception:  # noqa: S112 - scanner continues on individual failures
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
                 continue
 
         if not volumes:
@@ -466,7 +466,7 @@ class InstrumentScanner:
             try:
                 close = _to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close")
                 closes.append(close)
-            except Exception:  # noqa: S112 - scanner continues on individual failures
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
                 continue
 
         if len(closes) < 2:

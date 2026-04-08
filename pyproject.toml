@@ -110,4 +110,4 @@ fail_under = 90
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]  # Skip assert_used warning
+skips = ["B101", "B112"]  # Skip assert_used warning

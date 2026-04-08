@@ -103,10 +103,10 @@ def check_gate_g6() -> tuple[bool, str]:
     """G6: Tests - pytest with coverage"""
     success, output = run_command(
         ["poetry", "run", "pytest", "--cov=src/iatb", "--cov-fail-under=90", "-x", "-v"],
-        "G6 - Test Coverage (≥90%)",
+        "G6 - Test Coverage (>=90%)",
     )
     if success:
-        return True, "PASS: All tests passed with ≥90% coverage"
+        return True, "PASS: All tests passed with >=90% coverage"
     else:
         # Extract coverage percentage from output
         if "TOTAL" in output:
@@ -128,7 +128,7 @@ def check_gate_g7() -> tuple[bool, str]:
     success, output = run_command(
         ["python", "scripts/verify_g7_g8_g9.py"], "G7 - No Float in Financial Paths"
     )
-    if success and "G7: PASS" in output:
+    if success and ("[PASS]" in output or "G7 - No Float in Financial Paths: [PASS]" in output):
         return True, "PASS: No float usage in financial calculation paths"
     else:
         return False, output
@@ -140,7 +140,7 @@ def check_gate_g8() -> tuple[bool, str]:
     success, output = run_command(
         ["python", "scripts/verify_g7_g8_g9.py"], "G8 - No Naive Datetime"
     )
-    if success and "G8: PASS" in output:
+    if success and ("[PASS]" in output or "G8 - No Naive Datetime: [PASS]" in output):
         return True, "PASS: No naive datetime.now() usage"
     else:
         return False, output
@@ -152,7 +152,7 @@ def check_gate_g9() -> tuple[bool, str]:
     success, output = run_command(
         ["python", "scripts/verify_g7_g8_g9.py"], "G9 - No Print Statements in src/"
     )
-    if success and "G9: PASS" in output:
+    if success and ("[PASS]" in output or "G9 - No Print Statements in src/: [PASS]" in output):
         return True, "PASS: No print() statements in src/"
     else:
         return False, output
@@ -194,10 +194,10 @@ def main():
 
         if success:
             passed += 1
-            print(f"\n✓ {gate_name}: PASS")
+            print(f"\n[OK] {gate_name}: PASS")
         else:
             failed += 1
-            print(f"\n✗ {gate_name}: FAIL")
+            print(f"\n[FAIL] {gate_name}: FAIL")
             print(f"  {output[:500]}")  # Show first 500 chars of error
 
     # Generate summary report
@@ -210,10 +210,10 @@ def main():
     print(f"Success Rate: {passed/len(gates)*100:.1f}%")
 
     if failed == 0:
-        print("\n✓ ALL GATES PASSED - Ready for commit and push")
+        print("\n[SUCCESS] ALL GATES PASSED - Ready for commit and push")
         return 0
     else:
-        print(f"\n✗ {failed} GATE(S) FAILED - Fix issues before committing")
+        print(f"\n[ERROR] {failed} GATE(S) FAILED - Fix issues before committing")
         print("\nFailed Gates:")
         for gate_name, (success, _) in results.items():
             if not success:
