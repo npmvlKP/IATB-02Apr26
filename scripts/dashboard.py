@@ -30,6 +30,9 @@ _LOG_DIR = Path("logs")
 _REFRESH_SECONDS = 5
 _SCANNER_DATA: dict[str, Any] = {"gainers": [], "losers": [], "timestamp": ""}
 
+# Global scanner instance for live updates
+_scanner_instance = None
+
 
 def _read_trades() -> list[dict[str, str]]:
     if not _AUDIT_DB.exists():
@@ -128,9 +131,10 @@ def _generate_plotly_chart(candidates: list[Any], title: str) -> dict[str, Any]:
         return {"data": [], "layout": {"title": {"text": title}}}
 
     symbols = [c.get("symbol", "N/A") for c in candidates]
-    pct_changes = [float(c.get("pct_change", 0)) for c in candidates]
-    composite_scores = [float(c.get("composite_score", 0)) for c in candidates]
-    volume_ratios = [float(c.get("volume_ratio", 0)) for c in candidates]
+    # Convert Decimal to float for Plotly compatibility
+    pct_changes = [float(Decimal(str(c.get("pct_change", 0)))) for c in candidates]
+    composite_scores = [float(Decimal(str(c.get("composite_score", 0)))) for c in candidates]
+    volume_ratios = [float(Decimal(str(c.get("volume_ratio", 0)))) for c in candidates]
 
     data = [
         {
@@ -338,10 +342,17 @@ def _render_html(status: dict[str, object]) -> str:
     log_lines = status.get("log_tail", [])
     sentiment_health = status.get("sentiment_health", {})
 
-    finbert_ok = isinstance(sentiment_health, dict) and sentiment_health.get("finbert", "") == "available"
+    finbert_ok = (
+        isinstance(sentiment_health, dict) and sentiment_health.get("finbert", "") == "available"
+    )
     aion_ok = isinstance(sentiment_health, dict) and sentiment_health.get("aion", "") == "available"
-    aggregator_ok = isinstance(sentiment_health, dict) and sentiment_health.get("aggregator", "") == "available"
-    ensemble_ok = isinstance(sentiment_health, dict) and sentiment_health.get("ensemble_status", "") == "operational"
+    aggregator_ok = (
+        isinstance(sentiment_health, dict) and sentiment_health.get("aggregator", "") == "available"
+    )
+    ensemble_ok = (
+        isinstance(sentiment_health, dict)
+        and sentiment_health.get("ensemble_status", "") == "operational"
+    )
 
     total_trades_val = pnl.get("total_trades", "0") if isinstance(pnl, dict) else "0"
     net_pnl_val = pnl.get("net_notional_pnl", "0") if isinstance(pnl, dict) else "0"
@@ -377,6 +388,24 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/api/status":
             status = _build_status()
             body = json.dumps(status, default=str).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/api/charts/gainers":
+            gainers = _SCANNER_DATA.get("gainers", [])
+            chart = _generate_plotly_chart(gainers, "Top Gainers - Live Scanner")
+            body = json.dumps(chart, default=str).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/api/charts/losers":
+            losers = _SCANNER_DATA.get("losers", [])
+            chart = _generate_plotly_chart(losers, "Top Losers - Live Scanner")
+            body = json.dumps(chart, default=str).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

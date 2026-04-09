@@ -8,7 +8,6 @@ import pytest
 import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
-from iatb.market_strength.regime_detector import MarketRegime
 from iatb.scanner.instrument_scanner import (
     InstrumentCategory,
     ScannerCandidate,

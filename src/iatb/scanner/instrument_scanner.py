@@ -379,7 +379,7 @@ class InstrumentScanner:
     ) -> MarketData:
         """Build MarketData object from components."""
         avg_volume = self._calculate_average_volume(frame)
-        close_price = latest_row["close"]  # type: ignore[arg-type]
+        close_price = _to_decimal(latest_row["close"], "close")
 
         return MarketData(
             symbol=symbol,
@@ -387,15 +387,15 @@ class InstrumentScanner:
             category=self._determine_category(symbol),
             close_price=close_price,
             prev_close_price=self._get_previous_close(frame),
-            volume=latest_row["volume"],  # type: ignore[arg-type]
+            volume=_to_decimal(latest_row["volume"], "volume"),
             avg_volume=avg_volume,
-            timestamp_utc=latest_row["timestamp"],  # type: ignore[arg-type]
-            high_price=latest_row["high"],  # type: ignore[arg-type]
-            low_price=latest_row["low"],  # type: ignore[arg-type]
+            timestamp_utc=_coerce_datetime(latest_row["timestamp"]),
+            high_price=_to_decimal(latest_row["high"], "high"),
+            low_price=_to_decimal(latest_row["low"], "low"),
             adx=indicators.adx,
             atr_pct=(
-                indicators.atr / close_price  # type: ignore[operator]
-                if close_price > Decimal("0")  # type: ignore[operator]
+                indicators.atr / close_price
+                if close_price > Decimal("0")
                 else Decimal("0")
             ),
             breadth_ratio=Decimal("1.5"),
