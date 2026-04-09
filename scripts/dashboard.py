@@ -66,7 +66,9 @@ def _check_health() -> str:
     import urllib.request
 
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as r:  # nosec: B310
+        with urllib.request.urlopen(  # nosec: S310
+            "http://127.0.0.1:8000/health", timeout=2
+        ) as r:
             data = r.read()
             return data.decode() if isinstance(data, bytes) else str(data)
     except Exception:

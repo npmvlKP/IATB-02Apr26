@@ -393,11 +393,7 @@ class InstrumentScanner:
             high_price=_to_decimal(latest_row["high"], "high"),
             low_price=_to_decimal(latest_row["low"], "low"),
             adx=indicators.adx,
-            atr_pct=(
-                indicators.atr / close_price
-                if close_price > Decimal("0")
-                else Decimal("0")
-            ),
+            atr_pct=(indicators.atr / close_price if close_price > Decimal("0") else Decimal("0")),
             breadth_ratio=Decimal("1.5"),
         )
 
