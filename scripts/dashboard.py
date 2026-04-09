@@ -10,6 +10,7 @@ Serves a live status page at http://localhost:8080 showing:
   - Recent trades from audit SQLite
   - Session PnL summary
   - Log tail (last 50 lines)
+  - Live Plotly charts from instrument scanner
 
 Run:  poetry run python scripts/dashboard.py
 Open:  http://localhost:8080
@@ -21,11 +22,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 _PORT = 8080
 _AUDIT_DB = Path("data/audit/trades.sqlite")
 _LOG_DIR = Path("logs")
 _REFRESH_SECONDS = 5
+_SCANNER_DATA: dict[str, Any] = {"gainers": [], "losers": [], "timestamp": ""}
 
 
 def _read_trades() -> list[dict[str, str]]:
@@ -36,7 +39,7 @@ def _read_trades() -> list[dict[str, str]]:
         conn.row_factory = sqlite3.Row
         today = datetime.now(UTC).date().isoformat()
         rows = conn.execute(
-            "SELECT * FROM trade_audit WHERE timestamp_utc LIKE ? ORDER BY timestamp_utc DESC",
+            "SELECT * FROM trade_audit WHERE timestamp_utc LIKE ? " "ORDER BY timestamp_utc DESC",
             (f"{today}%",),
         ).fetchall()
         conn.close()
@@ -58,9 +61,11 @@ def _read_log_tail(n: int = 50) -> list[str]:
 
 def _check_health() -> str:
     import urllib.request
+
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as r:
-            return r.read().decode()
+        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as r:  # nosec: B310
+            data = r.read()
+            return data.decode() if isinstance(data, bytes) else str(data)
     except Exception:
         return '{"status":"unreachable"}'
 
@@ -68,9 +73,10 @@ def _check_health() -> str:
 def _check_sentiment_health() -> dict[str, str]:
     """Check sentiment analysis health status."""
     try:
-        from iatb.sentiment.aggregator import SentimentAggregator
-        from iatb.sentiment.aion_analyzer import AionAnalyzer
-        from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
+        import iatb.sentiment.aggregator  # noqa: F401
+        import iatb.sentiment.aion_analyzer  # noqa: F401
+        import iatb.sentiment.finbert_analyzer  # noqa: F401
+
         return {
             "finbert": "available",
             "aion": "available",
@@ -108,6 +114,83 @@ def _compute_pnl(trades: list[dict[str, str]]) -> dict[str, str]:
     }
 
 
+def _update_scanner_data(gainers: list[Any], losers: list[Any]) -> None:
+    """Update global scanner data for dashboard display."""
+    global _SCANNER_DATA
+    _SCANNER_DATA["gainers"] = gainers
+    _SCANNER_DATA["losers"] = losers
+    _SCANNER_DATA["timestamp"] = datetime.now(UTC).isoformat()
+
+
+def _generate_plotly_chart(candidates: list[Any], title: str) -> dict[str, Any]:
+    """Generate Plotly chart JSON for scanner candidates."""
+    if not candidates:
+        return {"data": [], "layout": {"title": {"text": title}}}
+
+    symbols = [c.get("symbol", "N/A") for c in candidates]
+    pct_changes = [float(c.get("pct_change", 0)) for c in candidates]
+    composite_scores = [float(c.get("composite_score", 0)) for c in candidates]
+    volume_ratios = [float(c.get("volume_ratio", 0)) for c in candidates]
+
+    data = [
+        {
+            "x": symbols,
+            "y": pct_changes,
+            "type": "bar",
+            "name": "% Change",
+            "marker": {"color": "#58a6ff"},
+            "yaxis": "y",
+        },
+        {
+            "x": symbols,
+            "y": composite_scores,
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": "Composite Score",
+            "line": {"color": "#3fb950", "width": 3},
+            "yaxis": "y2",
+        },
+        {
+            "x": symbols,
+            "y": volume_ratios,
+            "type": "scatter",
+            "mode": "markers",
+            "name": "Volume Ratio",
+            "marker": {"color": "#d29922", "size": 10},
+            "yaxis": "y2",
+        },
+    ]
+
+    layout = {
+        "title": {"text": title, "font": {"color": "#c9d1d9"}},
+        "plot_bgcolor": "#0d1117",
+        "paper_bgcolor": "#161b22",
+        "font": {"color": "#8b949e"},
+        "xaxis": {
+            "tickangle": -45,
+            "tickfont": {"color": "#8b949e"},
+            "gridcolor": "#30363d",
+        },
+        "yaxis": {
+            "title": "% Change",
+            "tickfont": {"color": "#58a6ff"},
+            "gridcolor": "#30363d",
+        },
+        "yaxis2": {
+            "title": "Score / Ratio",
+            "overlaying": "y",
+            "side": "right",
+            "tickfont": {"color": "#3fb950"},
+            "gridcolor": "#30363d",
+        },
+        "legend": {"font": {"color": "#8b949e"}},
+        "margin": {"b": 150, "l": 60, "r": 60, "t": 60},
+        "height": 400,
+    }
+
+    return {"data": data, "layout": layout}
+
+
 def _build_status() -> dict[str, object]:
     trades = _read_trades()
     pnl = _compute_pnl(trades)
@@ -122,6 +205,7 @@ def _build_status() -> dict[str, object]:
         "pnl_summary": pnl,
         "recent_trades": trades[:20],
         "log_tail": log_tail,
+        "scanner_data": _SCANNER_DATA,
     }
 
 
@@ -131,10 +215,12 @@ _HTML = """<!DOCTYPE html>
 <meta http-equiv="refresh" content="{refresh}">
 <title>iATB Deployment Dashboard</title>
 <style>
-  body {{ font-family: 'Segoe UI', Consolas, monospace; background: #0d1117; color: #c9d1d9; margin: 20px; }}
+  body {{ font-family: 'Segoe UI', Consolas, monospace; background: #0d1117;
+          color: #c9d1d9; margin: 20px; }}
   h1 {{ color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 10px; }}
   h2 {{ color: #8b949e; margin-top: 30px; }}
-  .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 10px 0; }}
+  .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+          padding: 16px; margin: 10px 0; }}
   .pass {{ color: #3fb950; font-weight: bold; }}
   .fail {{ color: #f85149; font-weight: bold; }}
   .warn {{ color: #d29922; }}
@@ -251,23 +337,30 @@ def _render_html(status: dict[str, object]) -> str:
     trades = status.get("recent_trades", [])
     log_lines = status.get("log_tail", [])
     sentiment_health = status.get("sentiment_health", {})
-    
-    finbert_ok = sentiment_health.get("finbert", "") == "available"
-    aion_ok = sentiment_health.get("aion", "") == "available"
-    aggregator_ok = sentiment_health.get("aggregator", "") == "available"
-    ensemble_ok = sentiment_health.get("ensemble_status", "") == "operational"
-    
+
+    finbert_ok = isinstance(sentiment_health, dict) and sentiment_health.get("finbert", "") == "available"
+    aion_ok = isinstance(sentiment_health, dict) and sentiment_health.get("aion", "") == "available"
+    aggregator_ok = isinstance(sentiment_health, dict) and sentiment_health.get("aggregator", "") == "available"
+    ensemble_ok = isinstance(sentiment_health, dict) and sentiment_health.get("ensemble_status", "") == "operational"
+
+    total_trades_val = pnl.get("total_trades", "0") if isinstance(pnl, dict) else "0"
+    net_pnl_val = pnl.get("net_notional_pnl", "0") if isinstance(pnl, dict) else "0"
+    buy_count_val = pnl.get("buy_trades", "0") if isinstance(pnl, dict) else "0"
+    sell_count_val = pnl.get("sell_trades", "0") if isinstance(pnl, dict) else "0"
+    trades_table_val = _render_trades_table(trades if isinstance(trades, list) else [])
+    log_tail_val = "\n".join(log_lines if isinstance(log_lines, list) else [])
+
     return _HTML.format(
         refresh=_REFRESH_SECONDS,
         timestamp=str(status.get("timestamp_utc", ""))[:19],
         health_status="ONLINE" if health_ok else "OFFLINE",
         health_class="pass" if health_ok else "fail",
-        total_trades=pnl.get("total_trades", "0") if isinstance(pnl, dict) else "0",
-        net_pnl=pnl.get("net_notional_pnl", "0") if isinstance(pnl, dict) else "0",
-        buy_count=pnl.get("buy_trades", "0") if isinstance(pnl, dict) else "0",
-        sell_count=pnl.get("sell_trades", "0") if isinstance(pnl, dict) else "0",
-        trades_table=_render_trades_table(trades if isinstance(trades, list) else []),
-        log_tail="\n".join(log_lines if isinstance(log_lines, list) else []),
+        total_trades=total_trades_val,
+        net_pnl=net_pnl_val,
+        buy_count=buy_count_val,
+        sell_count=sell_count_val,
+        trades_table=trades_table_val,
+        log_tail=log_tail_val,
         finbert_status="Available" if finbert_ok else "Unavailable",
         finbert_class="status-ok" if finbert_ok else "status-err",
         aion_status="Available" if aion_ok else "Unavailable",
@@ -280,7 +373,7 @@ def _render_html(status: dict[str, object]) -> str:
 
 
 class _DashboardHandler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None:
+    def do_GET(self) -> None:  # noqa: N802
         if self.path == "/api/status":
             status = _build_status()
             body = json.dumps(status, default=str).encode()
@@ -305,16 +398,16 @@ class _DashboardHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    print(f"iATB Deployment Dashboard")
-    print(f"  URL:  http://localhost:{_PORT}")
-    print(f"  API:  http://localhost:{_PORT}/api/status")
-    print(f"  Auto-refresh: {_REFRESH_SECONDS}s")
-    print(f"  Press Ctrl+C to stop\n")
+    print("iATB Deployment Dashboard")  # noqa: T201
+    print(f"  URL:  http://localhost:{_PORT}")  # noqa: T201
+    print(f"  API:  http://localhost:{_PORT}/api/status")  # noqa: T201
+    print(f"  Auto-refresh: {_REFRESH_SECONDS}s")  # noqa: T201
+    print("  Press Ctrl+C to stop\n")  # noqa: T201
     server = ThreadingHTTPServer(("127.0.0.1", _PORT), _DashboardHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nDashboard stopped.")
+        print("\nDashboard stopped.")  # noqa: T201
         server.shutdown()
 
 
