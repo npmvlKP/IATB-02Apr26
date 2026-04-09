@@ -264,6 +264,59 @@ class VectorBTEngine:
 
         return metrics
 
+    def _validate_walk_forward_input(self, prices: list[Decimal]) -> int:
+        """Validate walk-forward input and return train size."""
+        if len(prices) < 10:
+            msg = "prices must contain at least 10 points for walk-forward"
+            raise ConfigError(msg)
+
+        train_size = int(len(prices) * self._config.train_pct)
+        if train_size < 5:
+            msg = "Training period too short"
+            raise ConfigError(msg)
+
+        return train_size
+
+    def _split_and_run_walk_forward(
+        self,
+        prices: list[Decimal],
+        timestamps: list[datetime],
+        composite_scores: list[Decimal] | None,
+        exit_probabilities: list[Decimal] | None,
+        train_size: int,
+    ) -> tuple[BacktestResult, BacktestResult]:
+        """Split data and run train/test backtests."""
+        train_prices = prices[:train_size]
+        train_timestamps = timestamps[:train_size]
+        test_prices = prices[train_size:]
+        test_timestamps = timestamps[train_size:]
+
+        train_scores = composite_scores[:train_size] if composite_scores else None
+        test_scores = composite_scores[train_size:] if composite_scores else None
+
+        train_probs = exit_probabilities[:train_size] if exit_probabilities else None
+        test_probs = exit_probabilities[train_size:] if exit_probabilities else None
+
+        train_metrics = self.run_backtest(train_prices, train_timestamps, train_scores, train_probs)
+        test_metrics = self.run_backtest(test_prices, test_timestamps, test_scores, test_probs)
+        return train_metrics, test_metrics
+
+    def _calculate_walk_forward_degradation(
+        self, train_metrics: BacktestResult, test_metrics: BacktestResult
+    ) -> dict[str, Decimal]:
+        """Calculate degradation metrics from train and test results."""
+        return {
+            "cagr_degradation": train_metrics.cagr - test_metrics.cagr
+            if train_metrics.cagr > Decimal("0")
+            else Decimal("0"),
+            "sharpe_degradation": train_metrics.sharpe_ratio - test_metrics.sharpe_ratio
+            if train_metrics.sharpe_ratio > Decimal("0")
+            else Decimal("0"),
+            "win_rate_degradation": train_metrics.win_rate - test_metrics.win_rate
+            if train_metrics.win_rate > Decimal("0")
+            else Decimal("0"),
+        }
+
     def run_walk_forward(
         self,
         prices: list[Decimal],
@@ -283,52 +336,85 @@ class VectorBTEngine:
         Returns:
             WalkForwardResult with train/test degradation metrics
         """
-        if len(prices) < 10:
-            msg = "prices must contain at least 10 points for walk-forward"
-            raise ConfigError(msg)
-
-        train_size = int(len(prices) * self._config.train_pct)
-        if train_size < 5:
-            msg = "Training period too short"
-            raise ConfigError(msg)
-
-        train_prices = prices[:train_size]
-        train_timestamps = timestamps[:train_size]
-        test_prices = prices[train_size:]
-        test_timestamps = timestamps[train_size:]
-
-        train_scores = composite_scores[:train_size] if composite_scores else None
-        test_scores = composite_scores[train_size:] if composite_scores else None
-
-        train_probs = exit_probabilities[:train_size] if exit_probabilities else None
-        test_probs = exit_probabilities[train_size:] if exit_probabilities else None
-
-        train_metrics = self.run_backtest(train_prices, train_timestamps, train_scores, train_probs)
-        test_metrics = self.run_backtest(test_prices, test_timestamps, test_scores, test_probs)
-
-        cagr_degrade = (
-            train_metrics.cagr - test_metrics.cagr
-            if train_metrics.cagr > Decimal("0")
-            else Decimal("0")
+        train_size = self._validate_walk_forward_input(prices)
+        train_metrics, test_metrics = self._split_and_run_walk_forward(
+            prices, timestamps, composite_scores, exit_probabilities, train_size
         )
-        sharpe_degrade = (
-            train_metrics.sharpe_ratio - test_metrics.sharpe_ratio
-            if train_metrics.sharpe_ratio > Decimal("0")
-            else Decimal("0")
-        )
-        win_rate_degrade = (
-            train_metrics.win_rate - test_metrics.win_rate
-            if train_metrics.win_rate > Decimal("0")
-            else Decimal("0")
-        )
+        degradation = self._calculate_walk_forward_degradation(train_metrics, test_metrics)
 
         return WalkForwardResult(
             train_metrics=train_metrics,
             test_metrics=test_metrics,
-            cagr_degradation=cagr_degrade,
-            sharpe_degradation=sharpe_degrade,
-            win_rate_degradation=win_rate_degrade,
+            cagr_degradation=degradation["cagr_degradation"],
+            sharpe_degradation=degradation["sharpe_degradation"],
+            win_rate_degradation=degradation["win_rate_degradation"],
         )
+
+    def _run_monte_carlo_simulations(
+        self,
+        prices: list[Decimal],
+        timestamps: list[datetime],
+        composite_scores: list[Decimal] | None,
+        exit_probabilities: list[Decimal] | None,
+    ) -> list[Decimal]:
+        """Run all Monte Carlo simulations and return final equities."""
+        final_equities: list[Decimal] = []
+
+        for _ in range(self._config.num_simulations):
+            shuffled = self._shuffle_returns(prices)
+            sim_prices = self._apply_shuffled_returns(prices, shuffled)
+            result = self.run_backtest(sim_prices, timestamps, composite_scores, exit_probabilities)
+            final_equity = self._config.initial_capital * (Decimal("1") + result.total_return)
+            final_equities.append(final_equity)
+
+        return final_equities
+
+    def _calculate_distribution_metrics(self, sorted_equities: list[Decimal]) -> dict[str, Decimal]:
+        """Calculate distribution metrics from sorted equities."""
+        n = len(sorted_equities)
+        mean_eq = sum(sorted_equities) / Decimal(str(n))
+        median_eq = sorted_equities[n // 2]
+        variance = sum((e - mean_eq) ** 2 for e in sorted_equities) / Decimal(str(n))
+        std_eq = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
+
+        return {
+            "mean_final_equity": mean_eq,
+            "median_final_equity": median_eq,
+            "std_final_equity": std_eq,
+        }
+
+    def _calculate_probability_metrics(self, sorted_equities: list[Decimal]) -> dict[str, Decimal]:
+        """Calculate probability metrics from sorted equities."""
+        n = len(sorted_equities)
+
+        profit_count = sum(1 for e in sorted_equities if e > self._config.initial_capital)
+        prob_profit = Decimal(str(profit_count)) / Decimal(str(n))
+
+        five_pct_count = sum(
+            1 for e in sorted_equities if e >= self._config.initial_capital * Decimal("1.05")
+        )
+        prob_5pct = Decimal(str(five_pct_count)) / Decimal(str(n))
+
+        ten_pct_count = sum(
+            1 for e in sorted_equities if e >= self._config.initial_capital * Decimal("1.10")
+        )
+        prob_10pct = Decimal(str(ten_pct_count)) / Decimal(str(n))
+
+        return {
+            "prob_profit": prob_profit,
+            "prob_5pct_return": prob_5pct,
+            "prob_10pct_return": prob_10pct,
+        }
+
+    def _calculate_percentile_metrics(self, sorted_equities: list[Decimal]) -> dict[str, Decimal]:
+        """Calculate percentile metrics from sorted equities."""
+        n = len(sorted_equities)
+        return {
+            "p5_equity": sorted_equities[int(n * 0.05)],  # API boundary
+            "p25_equity": sorted_equities[int(n * 0.25)],  # API boundary
+            "p75_equity": sorted_equities[int(n * 0.75)],  # API boundary
+            "p95_equity": sorted_equities[int(n * 0.95)],  # API boundary
+        }
 
     def run_monte_carlo(
         self,
@@ -353,49 +439,28 @@ class VectorBTEngine:
             msg = "prices must contain at least 10 points for Monte Carlo"
             raise ConfigError(msg)
 
-        final_equities: list[Decimal] = []
-
-        for _ in range(self._config.num_simulations):
-            shuffled = self._shuffle_returns(prices)
-            sim_prices = self._apply_shuffled_returns(prices, shuffled)
-            result = self.run_backtest(sim_prices, timestamps, composite_scores, exit_probabilities)
-            final_equity = self._config.initial_capital * (Decimal("1") + result.total_return)
-            final_equities.append(final_equity)
-
+        final_equities = self._run_monte_carlo_simulations(
+            prices, timestamps, composite_scores, exit_probabilities
+        )
         sorted_equities = sorted(final_equities)
-        n = len(sorted_equities)
 
-        mean_eq = sum(sorted_equities) / Decimal(str(n))
-        median_eq = sorted_equities[n // 2]
-        variance = sum((e - mean_eq) ** 2 for e in sorted_equities) / Decimal(str(n))
-        std_eq = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
-
-        profit_count = sum(1 for e in sorted_equities if e > self._config.initial_capital)
-        prob_profit = Decimal(str(profit_count)) / Decimal(str(n))
-
-        five_pct_count = sum(
-            1 for e in sorted_equities if e >= self._config.initial_capital * Decimal("1.05")
-        )
-        prob_5pct = Decimal(str(five_pct_count)) / Decimal(str(n))
-
-        ten_pct_count = sum(
-            1 for e in sorted_equities if e >= self._config.initial_capital * Decimal("1.10")
-        )
-        prob_10pct = Decimal(str(ten_pct_count)) / Decimal(str(n))
+        distribution_metrics = self._calculate_distribution_metrics(sorted_equities)
+        probability_metrics = self._calculate_probability_metrics(sorted_equities)
+        percentile_metrics = self._calculate_percentile_metrics(sorted_equities)
 
         return MonteCarloResult(
-            mean_final_equity=mean_eq,
-            median_final_equity=median_eq,
-            std_final_equity=std_eq,
-            prob_profit=prob_profit,
-            prob_5pct_return=prob_5pct,
-            prob_10pct_return=prob_10pct,
+            mean_final_equity=distribution_metrics["mean_final_equity"],
+            median_final_equity=distribution_metrics["median_final_equity"],
+            std_final_equity=distribution_metrics["std_final_equity"],
+            prob_profit=probability_metrics["prob_profit"],
+            prob_5pct_return=probability_metrics["prob_5pct_return"],
+            prob_10pct_return=probability_metrics["prob_10pct_return"],
             worst_case_equity=sorted_equities[0],
             best_case_equity=sorted_equities[-1],
-            p5_equity=sorted_equities[int(n * 0.05)],
-            p25_equity=sorted_equities[int(n * 0.25)],
-            p75_equity=sorted_equities[int(n * 0.75)],
-            p95_equity=sorted_equities[int(n * 0.95)],
+            p5_equity=percentile_metrics["p5_equity"],
+            p25_equity=percentile_metrics["p25_equity"],
+            p75_equity=percentile_metrics["p75_equity"],
+            p95_equity=percentile_metrics["p95_equity"],
         )
 
     def _create_session_mask(self, timestamps: list[datetime]) -> list[bool]:
@@ -510,14 +575,8 @@ class VectorBTEngine:
             "is_winner": net_pnl > Decimal("0"),
         }
 
-    def _calculate_metrics(
-        self, data: dict[str, list[Any]], trades: list[dict[str, Any]]
-    ) -> BacktestResult:
-        """Calculate comprehensive backtest metrics."""
-        if not trades:
-            return self._empty_result(data)
-
-        # Trade statistics
+    def _calculate_trade_statistics(self, trades: list[dict[str, Any]]) -> dict[str, Any]:
+        """Calculate basic trade statistics."""
         total_trades = len(trades)
         winning_trades = sum(1 for t in trades if t["is_winner"])
         losing_trades = total_trades - winning_trades
@@ -534,7 +593,20 @@ class VectorBTEngine:
         gross_loss = abs(sum(losses))
         profit_factor = gross_profit / gross_loss if gross_loss > Decimal("0") else Decimal("0")
 
-        # Total return
+        return {
+            "total_trades": total_trades,
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "win_rate": win_rate,
+            "profit_factor": profit_factor,
+        }
+
+    def _calculate_return_metrics(
+        self, trades: list[dict[str, Any]], timestamps: list[datetime]
+    ) -> tuple[Decimal, Decimal]:
+        """Calculate total return and CAGR."""
         total_pnl = sum(t["net_pnl"] for t in trades)
         total_return = (
             total_pnl / self._config.initial_capital
@@ -542,12 +614,11 @@ class VectorBTEngine:
             else Decimal("0")
         )
 
-        # CAGR
-        if len(data["timestamps"]) > 1:
-            start_ts = data["timestamps"][0]
-            end_ts = data["timestamps"][-1]
-            years = (end_ts - start_ts).total_seconds() / (365.25 * 24 * 3600)
-            cagr = (
+        if len(timestamps) > 1:
+            start_ts = timestamps[0]
+            end_ts = timestamps[-1]
+            years = (end_ts - start_ts).total_seconds() / (365.25 * 24 * 3600)  # API boundary
+            cagr = (  # type: ignore[no-any-return]
                 ((Decimal("1") + total_return) ** (Decimal("1") / Decimal(str(years))))
                 - Decimal("1")
                 if years > 0
@@ -556,88 +627,82 @@ class VectorBTEngine:
         else:
             cagr = Decimal("0")
 
-        # Sharpe ratio (simplified)
-        returns = [t["return_pct"] for t in trades]
-        avg_return = sum(returns) / Decimal(str(len(returns))) if returns else Decimal("0")
-        variance = (
-            sum((r - avg_return) ** 2 for r in returns) / Decimal(str(len(returns)))
-            if returns
-            else Decimal("0")
-        )
-        std_return = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
-        sharpe_ratio = avg_return / std_return if std_return > Decimal("0") else Decimal("0")
+        return total_return, cagr
 
-        # Max drawdown (simplified)
+    def _calculate_sharpe_ratio(self, trades: list[dict[str, Any]]) -> Decimal:
+        """Calculate Sharpe ratio from trade returns."""
+        returns = [t["return_pct"] for t in trades]
+        if not returns:
+            return Decimal("0")
+
+        avg_return = sum(returns) / Decimal(str(len(returns)))
+        variance = sum((r - avg_return) ** 2 for r in returns) / Decimal(str(len(returns)))
+        std_return = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
+
+        return avg_return / std_return if std_return > Decimal("0") else Decimal("0")
+
+    def _calculate_cost_breakdown(self, trades: list[dict[str, Any]]) -> dict[str, Decimal]:
+        """Calculate breakdown of all transaction costs."""
+        total_costs = sum(t["entry_cost"] + t["exit_cost"] for t in trades)
+
+        stt_total = Decimal("0")
+        sebi_total = Decimal("0")
+        exchange_txn_total = Decimal("0")
+        stamp_duty_total = Decimal("0")
+        gst_total = Decimal("0")
+
+        for trade in trades:
+            entry_costs = calculate_indian_costs(trade["entry_price"], self._config.segment)
+            exit_costs = calculate_indian_costs(trade["exit_price"], self._config.segment)
+
+            stt_total += entry_costs.stt + exit_costs.stt
+            sebi_total += entry_costs.sebi + exit_costs.sebi
+            exchange_txn_total += entry_costs.exchange_txn + exit_costs.exchange_txn
+            stamp_duty_total += entry_costs.stamp_duty + exit_costs.stamp_duty
+            gst_total += entry_costs.gst + exit_costs.gst
+
+        return {
+            "total_costs": total_costs,
+            "stt_total": stt_total,
+            "sebi_total": sebi_total,
+            "exchange_txn_total": exchange_txn_total,
+            "stamp_duty_total": stamp_duty_total,
+            "gst_total": gst_total,
+        }
+
+    def _get_timing_metrics(self, timestamps: list[datetime]) -> tuple[date, date, int]:
+        """Get start date, end date, and number of days."""
+        start_date = timestamps[0].date() if timestamps else datetime.now(UTC).date()
+        end_date = timestamps[-1].date() if timestamps else datetime.now(UTC).date()
+        num_days = (end_date - start_date).days + 1
+        return start_date, end_date, num_days
+
+    def _get_integration_scores(
+        self, scores: list[Decimal], probs: list[Decimal]
+    ) -> tuple[Decimal, Decimal]:
+        """Calculate average composite score and exit probability."""
+        avg_composite_score = sum(scores) / Decimal(str(len(scores))) if scores else Decimal("0")
+        avg_exit_probability = sum(probs) / Decimal(str(len(probs))) if probs else Decimal("0")
+        return avg_composite_score, avg_exit_probability
+
+    def _calculate_metrics(
+        self, data: dict[str, list[Any]], trades: list[dict[str, Any]]
+    ) -> BacktestResult:
+        """Calculate comprehensive backtest metrics."""
+        if not trades:
+            return self._empty_result(data)
+
+        trade_stats = self._calculate_trade_statistics(trades)
+        total_return, cagr = self._calculate_return_metrics(trades, data["timestamps"])
+        sharpe_ratio = self._calculate_sharpe_ratio(trades)
+
         equity_curve = self._build_equity_curve(trades)
         max_drawdown = self._calculate_max_drawdown(equity_curve)
 
-        # Cost breakdown
-        total_costs = sum(t["entry_cost"] + t["exit_cost"] for t in trades)
-        stt_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).stt for t in trades
-            )
-            + sum(calculate_indian_costs(t["exit_price"], self._config.segment).stt for t in trades)
-        )
-
-        sebi_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).sebi for t in trades
-            )
-            + sum(
-                calculate_indian_costs(t["exit_price"], self._config.segment).sebi for t in trades
-            )
-        )
-
-        exchange_txn_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).exchange_txn
-                for t in trades
-            )
-            + sum(
-                calculate_indian_costs(t["exit_price"], self._config.segment).exchange_txn
-                for t in trades
-            )
-        )
-
-        stamp_duty_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).stamp_duty
-                for t in trades
-            )
-            + sum(
-                calculate_indian_costs(t["exit_price"], self._config.segment).stamp_duty
-                for t in trades
-            )
-        )
-
-        gst_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).gst for t in trades
-            )
-            + sum(calculate_indian_costs(t["exit_price"], self._config.segment).gst for t in trades)
-        )
-
-        # Timing
-        start_date = (
-            data["timestamps"][0].date() if data["timestamps"] else datetime.now(UTC).date()
-        )
-        end_date = data["timestamps"][-1].date() if data["timestamps"] else datetime.now(UTC).date()
-        num_days = (end_date - start_date).days + 1
-
-        # Integration scores
-        avg_composite_score = (
-            sum(data["scores"]) / Decimal(str(len(data["scores"])))
-            if data["scores"]
-            else Decimal("0")
-        )
-        avg_exit_probability = (
-            sum(data["probs"]) / Decimal(str(len(data["probs"]))) if data["probs"] else Decimal("0")
+        cost_breakdown = self._calculate_cost_breakdown(trades)
+        start_date, end_date, num_days = self._get_timing_metrics(data["timestamps"])
+        avg_composite_score, avg_exit_probability = self._get_integration_scores(
+            data["scores"], data["probs"]
         )
 
         return BacktestResult(
@@ -645,19 +710,19 @@ class VectorBTEngine:
             cagr=cagr,
             sharpe_ratio=sharpe_ratio,
             max_drawdown=max_drawdown,
-            win_rate=win_rate,
-            profit_factor=profit_factor,
-            total_trades=total_trades,
-            winning_trades=winning_trades,
-            losing_trades=losing_trades,
-            avg_win=avg_win,
-            avg_loss=avg_loss,
-            total_costs=total_costs,
-            stt_total=stt_total,
-            sebi_total=sebi_total,
-            exchange_txn_total=exchange_txn_total,
-            stamp_duty_total=stamp_duty_total,
-            gst_total=gst_total,
+            win_rate=trade_stats["win_rate"],
+            profit_factor=trade_stats["profit_factor"],
+            total_trades=trade_stats["total_trades"],
+            winning_trades=trade_stats["winning_trades"],
+            losing_trades=trade_stats["losing_trades"],
+            avg_win=trade_stats["avg_win"],
+            avg_loss=trade_stats["avg_loss"],
+            total_costs=cost_breakdown["total_costs"],
+            stt_total=cost_breakdown["stt_total"],
+            sebi_total=cost_breakdown["sebi_total"],
+            exchange_txn_total=cost_breakdown["exchange_txn_total"],
+            stamp_duty_total=cost_breakdown["stamp_duty_total"],
+            gst_total=cost_breakdown["gst_total"],
             start_date=start_date,
             end_date=end_date,
             num_days=num_days,
