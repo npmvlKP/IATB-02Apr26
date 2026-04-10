@@ -1,6 +1,9 @@
 # Zerodha Credential Setup - Stores API keys securely in OS keyring
 # Usage: .\scripts\zerodha_login.ps1
 # Prerequisites: Set ZERODHA_API_KEY, ZERODHA_API_SECRET, ZERODHA_TOTP_SECRET in .env
+# NOTE: This script ONLY stores static credentials (api_key, api_secret, totp_secret).
+#       It does NOT perform the OAuth login flow or generate an access_token.
+#       For full login, use: poetry run python scripts/zerodha_connect.py --save-access-token
 
 $ErrorActionPreference = "Stop"
 
@@ -44,4 +47,5 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "Done. You can now start the engine with .\scripts\engine_launcher.ps1" -ForegroundColor Green
+Write-Host "Static credentials stored in keyring." -ForegroundColor Green
+Write-Host "NOTE: Access token NOT yet obtained. Run zerodha_connect.py for OAuth login." -ForegroundColor Yellow
