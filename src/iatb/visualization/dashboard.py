@@ -24,6 +24,7 @@ from iatb.visualization.breakout_scanner import (
     health_status_to_color,
 )
 from iatb.visualization.dashboard_status import (
+    EngineStatus,
     ExchangeSessionStatus,
     ScannerInstrumentRow,
     ZerodhaAccountSnapshot,
@@ -442,6 +443,42 @@ def convert_candidates_to_health_matrix(
     return matrices
 
 
+def _render_zerodha_metrics(st: object, snapshot: ZerodhaAccountSnapshot) -> None:
+    metric_fn = getattr(st, "metric", None)
+    columns_fn = getattr(st, "columns", None)
+    if not callable(metric_fn) or not callable(columns_fn):
+        return
+    cols = columns_fn(3)
+    if len(cols) < 3:
+        return
+    user_metric = getattr(cols[0], "metric", None)
+    balance_metric = getattr(cols[1], "metric", None)
+    email_metric = getattr(cols[2], "metric", None)
+    if callable(user_metric):
+        user_metric("User ID", snapshot.user_id)
+    if callable(balance_metric):
+        balance_metric("Available Balance", f"₹{snapshot.available_balance:,.2f}")
+    if callable(email_metric):
+        email_metric("Email", snapshot.user_email)
+
+
+def _render_zerodha_connection_info(st: object, snapshot: ZerodhaAccountSnapshot) -> None:
+    success_fn = getattr(st, "success", None)
+    if not callable(success_fn):
+        return
+    ts_label = (
+        snapshot.snapshot_timestamp_utc.isoformat()[:19] + "Z"
+        if snapshot.snapshot_timestamp_utc
+        else "N/A"
+    )
+    success_fn(
+        f"Connected as {snapshot.user_name} (UID: {snapshot.user_id}) "
+        f"| Equity Margin: ₹{snapshot.equity_margin:,.2f} "
+        f"| Commodity Margin: ₹{snapshot.commodity_margin:,.2f} "
+        f"| Last Sync: {ts_label}"
+    )
+
+
 def render_zerodha_account_status(
     snapshot: ZerodhaAccountSnapshot | None = None,
     streamlit_module: object | None = None,
@@ -464,36 +501,8 @@ def render_zerodha_account_status(
         result["reason"] = "no_snapshot"
         return result
 
-    metric_fn = getattr(st, "metric", None)
-    columns_fn = getattr(st, "columns", None)
-
-    if callable(metric_fn) and callable(columns_fn):
-        cols = columns_fn(3)
-        if len(cols) >= 3:
-            user_metric = getattr(cols[0], "metric", None)
-            balance_metric = getattr(cols[1], "metric", None)
-            email_metric = getattr(cols[2], "metric", None)
-
-            if callable(user_metric):
-                user_metric("User ID", snapshot.user_id)
-            if callable(balance_metric):
-                balance_metric("Available Balance", f"₹{snapshot.available_balance:,.2f}")
-            if callable(email_metric):
-                email_metric("Email", snapshot.user_email)
-
-    success_fn = getattr(st, "success", None)
-    if callable(success_fn):
-        ts_label = (
-            snapshot.snapshot_timestamp_utc.isoformat()[:19] + "Z"
-            if snapshot.snapshot_timestamp_utc
-            else "N/A"
-        )
-        success_fn(
-            f"Connected as {snapshot.user_name} (UID: {snapshot.user_id}) "
-            f"| Equity Margin: ₹{snapshot.equity_margin:,.2f} "
-            f"| Commodity Margin: ₹{snapshot.commodity_margin:,.2f} "
-            f"| Last Sync: {ts_label}"
-        )
+    _render_zerodha_metrics(st, snapshot)
+    _render_zerodha_connection_info(st, snapshot)
 
     result["rendered"] = True
     result["user_id"] = snapshot.user_id
@@ -551,6 +560,74 @@ def render_exchange_status_panel(
     return rendered
 
 
+def _render_scanner_summary_metrics(
+    st: object,
+    total: int,
+    approved: int,
+) -> None:
+    metric_fn = getattr(st, "metric", None)
+    columns_fn = getattr(st, "columns", None)
+    if not callable(metric_fn) or not callable(columns_fn):
+        return
+    cols = columns_fn(3)
+    if len(cols) < 3:
+        return
+    m1 = getattr(cols[0], "metric", None)
+    m2 = getattr(cols[1], "metric", None)
+    m3 = getattr(cols[2], "metric", None)
+    if callable(m1):
+        m1("Total Scanned", str(total))
+    if callable(m2):
+        m2("Approved", str(approved))
+    if callable(m3):
+        rate = (approved / total * 100) if total > 0 else 0
+        m3("Approval Rate", f"{rate:.1f}%")
+
+
+def _render_scanner_dataframe(
+    st: object,
+    instruments: list[ScannerInstrumentRow],
+) -> None:
+    data_fn = getattr(st, "dataframe", None)
+    if not callable(data_fn):
+        return
+    rows = [
+        {
+            "Symbol": inst.symbol,
+            "Exchange": inst.exchange.value,
+            "Sentiment": f"{float(inst.sentiment_score):.2f}",
+            "Strength": f"{float(inst.market_strength_score):.2f}",
+            "DRL": f"{float(inst.drl_score):.2f}",
+            "Volume Profile": f"{float(inst.volume_profile_score):.2f}",
+            "Composite": f"{float(inst.composite_score):.2f}",
+            "Approved": "✅" if inst.is_approved else "❌",
+        }
+        for inst in instruments
+    ]
+    data_fn(rows, use_container_width=True, hide_index=True)
+
+
+def _render_approved_instrument_charts(
+    st: object,
+    go: Any,
+    instruments: list[ScannerInstrumentRow],
+) -> list[str]:
+    subheader_fn = getattr(st, "subheader", None)
+    plotly_chart_fn = getattr(st, "plotly_chart", None)
+    rendered: list[str] = []
+    for inst in instruments:
+        if not inst.is_approved:
+            continue
+        if callable(subheader_fn):
+            subheader_fn(f"✅ {inst.symbol} ({inst.exchange.value})")
+        if callable(plotly_chart_fn):
+            fig = _build_instrument_factor_chart(go, inst)
+            if fig is not None:
+                plotly_chart_fn(fig, use_container_width=True)
+        rendered.append(inst.symbol)
+    return rendered
+
+
 def render_scanner_matrix_from_sqlite(
     instruments: list[ScannerInstrumentRow] | None = None,
     streamlit_module: object | None = None,
@@ -565,11 +642,7 @@ def render_scanner_matrix_from_sqlite(
     st = streamlit_module or _load_streamlit()
     go = plotly_module or _load_plotly_go()
 
-    result: dict[str, object] = {
-        "total": 0,
-        "approved": 0,
-        "symbols": [],
-    }
+    result: dict[str, object] = {"total": 0, "approved": 0, "symbols": []}
 
     header_fn = getattr(st, "header", None)
     if callable(header_fn):
@@ -590,63 +663,17 @@ def render_scanner_matrix_from_sqlite(
     result["total"] = total
     result["approved"] = approved
 
-    metric_fn = getattr(st, "metric", None)
-    columns_fn = getattr(st, "columns", None)
-    if callable(metric_fn) and callable(columns_fn):
-        cols = columns_fn(3)
-        if len(cols) >= 3:
-            m1 = getattr(cols[0], "metric", None)
-            m2 = getattr(cols[1], "metric", None)
-            m3 = getattr(cols[2], "metric", None)
-            if callable(m1):
-                m1("Total Scanned", str(total))
-            if callable(m2):
-                m2("Approved", str(approved))
-            if callable(m3):
-                rate = (approved / total * 100) if total > 0 else 0
-                m3("Approval Rate", f"{rate:.1f}%")
-
-    data_fn = getattr(st, "dataframe", None)
-    if callable(data_fn):
-        rows = []
-        for inst in instruments:
-            rows.append(
-                {
-                    "Symbol": inst.symbol,
-                    "Exchange": inst.exchange.value,
-                    "Sentiment": f"{float(inst.sentiment_score):.2f}",
-                    "Strength": f"{float(inst.market_strength_score):.2f}",
-                    "DRL": f"{float(inst.drl_score):.2f}",
-                    "Volume Profile": f"{float(inst.volume_profile_score):.2f}",
-                    "Composite": f"{float(inst.composite_score):.2f}",
-                    "Approved": "✅" if inst.is_approved else "❌",
-                }
-            )
-        data_fn(rows, use_container_width=True, hide_index=True)
+    _render_scanner_summary_metrics(st, total, approved)
+    _render_scanner_dataframe(st, instruments)
 
     divider_fn = getattr(st, "divider", None)
     subheader_fn = getattr(st, "subheader", None)
-
     if callable(divider_fn):
         divider_fn()
     if callable(subheader_fn):
         subheader_fn("Approved Instrument Charts")
 
-    plotly_chart_fn = getattr(st, "plotly_chart", None)
-    rendered_symbols: list[str] = []
-
-    for inst in instruments:
-        if not inst.is_approved:
-            continue
-        if callable(subheader_fn):
-            subheader_fn(f"✅ {inst.symbol} ({inst.exchange.value})")
-        if callable(plotly_chart_fn):
-            fig = _build_instrument_factor_chart(go, inst)
-            if fig is not None:
-                plotly_chart_fn(fig, use_container_width=True)
-        rendered_symbols.append(inst.symbol)
-
-    result["symbols"] = rendered_symbols
+    result["symbols"] = _render_approved_instrument_charts(st, go, instruments)
     return result
 
 
@@ -744,6 +771,54 @@ def render_live_chart(
     return fig  # type: ignore[no-any-return]
 
 
+def _render_engine_health_section(
+    st: object,
+    engine_status: EngineStatus,
+) -> None:
+    subheader_fn = getattr(st, "subheader", None)
+    success_fn = getattr(st, "success", None)
+    warning_fn = getattr(st, "warning", None)
+
+    if callable(subheader_fn):
+        subheader_fn("Engine Health")
+
+    if engine_status.is_running:
+        if not callable(success_fn):
+            return
+        hb_label = (
+            engine_status.last_heartbeat_utc.isoformat()[:19] + "Z"
+            if engine_status.last_heartbeat_utc
+            else "N/A"
+        )
+        success_fn(
+            f"Engine Online | Mode: {engine_status.mode} | "
+            f"Trades Today: {engine_status.trades_today} | "
+            f"Heartbeat: {hb_label}"
+        )
+    else:
+        if callable(warning_fn):
+            warning_fn("Engine Offline — start with scripts/start_paper.ps1")
+
+
+def _render_engine_metrics(st: object, engine_status: EngineStatus) -> None:
+    metric_fn = getattr(st, "metric", None)
+    columns_fn = getattr(st, "columns", None)
+    if not callable(metric_fn) or not callable(columns_fn):
+        return
+    cols = columns_fn(3)
+    if len(cols) < 3:
+        return
+    m1 = getattr(cols[0], "metric", None)
+    m2 = getattr(cols[1], "metric", None)
+    m3 = getattr(cols[2], "metric", None)
+    if callable(m1):
+        m1("Mode", engine_status.mode)
+    if callable(m2):
+        m2("Trades Today", str(engine_status.trades_today))
+    if callable(m3):
+        m3("Scanner Instruments", str(engine_status.scanner_instruments_count))
+
+
 def render_system_tab(
     db_path: Path | None = None,
     streamlit_module: object | None = None,
@@ -765,45 +840,11 @@ def render_system_tab(
     engine_status = read_engine_status(path)
     result["engine_running"] = engine_status.is_running
 
-    subheader_fn = getattr(st, "subheader", None)
-    success_fn = getattr(st, "success", None)
-    warning_fn = getattr(st, "warning", None)
-    metric_fn = getattr(st, "metric", None)
-    columns_fn = getattr(st, "columns", None)
+    _render_engine_health_section(st, engine_status)
+    _render_engine_metrics(st, engine_status)
 
-    if callable(subheader_fn):
-        subheader_fn("Engine Health")
-
-    if engine_status.is_running:
-        if callable(success_fn):
-            hb_label = (
-                engine_status.last_heartbeat_utc.isoformat()[:19] + "Z"
-                if engine_status.last_heartbeat_utc
-                else "N/A"
-            )
-            success_fn(
-                f"Engine Online | Mode: {engine_status.mode} | "
-                f"Trades Today: {engine_status.trades_today} | "
-                f"Heartbeat: {hb_label}"
-            )
-    else:
-        if callable(warning_fn):
-            warning_fn("Engine Offline — start with scripts/start_paper.ps1")
-
-    if callable(metric_fn) and callable(columns_fn):
-        cols = columns_fn(3)
-        if len(cols) >= 3:
-            m1 = getattr(cols[0], "metric", None)
-            m2 = getattr(cols[1], "metric", None)
-            m3 = getattr(cols[2], "metric", None)
-            if callable(m1):
-                m1("Mode", engine_status.mode)
-            if callable(m2):
-                m2("Trades Today", str(engine_status.trades_today))
-            if callable(m3):
-                m3("Scanner Instruments", str(engine_status.scanner_instruments_count))
-
-    if callable(divider_or_none := getattr(st, "divider", None)):
+    divider_or_none = getattr(st, "divider", None)
+    if callable(divider_or_none):
         divider_or_none()
 
     zerodha_snapshot = read_zerodha_snapshot(path)
@@ -838,11 +879,9 @@ def _load_plotly_go() -> Any:
 # Streamlit app entry point
 if __name__ == "__main__":  # pragma: no cover
     import os
-    from datetime import UTC, datetime
 
     import streamlit as st
 
-    from iatb.core.enums import Exchange
     from iatb.data.openalgo_provider import DataFeedStatus, ExchangeFeedState, FeedStatus
 
     # Page configuration

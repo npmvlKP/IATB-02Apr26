@@ -198,17 +198,35 @@ def write_scanner_results(
             )
 
 
+def _default_engine_status() -> EngineStatus:
+    return EngineStatus(
+        is_running=False,
+        mode="UNKNOWN",
+        last_heartbeat_utc=None,
+        uptime_seconds=0,
+        trades_today=0,
+        scanner_instruments_count=0,
+    )
+
+
+def _parse_heartbeat(data: dict[str, str]) -> tuple[datetime | None, int]:
+    last_hb_str = data.get("last_heartbeat_utc")
+    if not last_hb_str:
+        return None, 0
+    try:
+        last_hb = datetime.fromisoformat(last_hb_str)
+        if last_hb.tzinfo is None:
+            last_hb = last_hb.replace(tzinfo=UTC)
+        delta = (datetime.now(UTC) - last_hb).total_seconds()
+        return last_hb, max(0, int(delta))
+    except (ValueError, OSError):
+        return None, 0
+
+
 def read_engine_status(db_path: Path = _DEFAULT_DB_PATH) -> EngineStatus:
     """Poll engine status from SQLite (<10ms)."""
     if not db_path.exists():
-        return EngineStatus(
-            is_running=False,
-            mode="UNKNOWN",
-            last_heartbeat_utc=None,
-            uptime_seconds=0,
-            trades_today=0,
-            scanner_instruments_count=0,
-        )
+        return _default_engine_status()
     try:
         with _connect(db_path) as conn:
             rows = conn.execute(
@@ -220,19 +238,7 @@ def read_engine_status(db_path: Path = _DEFAULT_DB_PATH) -> EngineStatus:
             ).fetchone()
 
         is_running = data.get("is_running") == "1"
-        last_hb_str = data.get("last_heartbeat_utc")
-        last_hb = None
-        uptime = 0
-        if last_hb_str:
-            try:
-                last_hb = datetime.fromisoformat(last_hb_str)
-                if last_hb.tzinfo is None:
-                    last_hb = last_hb.replace(tzinfo=UTC)
-                delta = (datetime.now(UTC) - last_hb).total_seconds()
-                uptime = max(0, int(delta))
-            except (ValueError, OSError):
-                last_hb = None
-
+        last_hb, uptime = _parse_heartbeat(data)
         count = int(scanner_count["cnt"]) if scanner_count else 0
 
         return EngineStatus(
@@ -245,14 +251,7 @@ def read_engine_status(db_path: Path = _DEFAULT_DB_PATH) -> EngineStatus:
         )
     except (sqlite3.Error, ConfigError):
         logger.debug("Engine status poll failed, returning unavailable")
-        return EngineStatus(
-            is_running=False,
-            mode="UNKNOWN",
-            last_heartbeat_utc=None,
-            uptime_seconds=0,
-            trades_today=0,
-            scanner_instruments_count=0,
-        )
+        return _default_engine_status()
 
 
 def read_zerodha_snapshot(db_path: Path = _DEFAULT_DB_PATH) -> ZerodhaAccountSnapshot | None:
@@ -330,6 +329,36 @@ def read_scanner_results(db_path: Path = _DEFAULT_DB_PATH) -> list[ScannerInstru
         return []
 
 
+def _parse_time_parts(time_str: str) -> tuple[int, int] | None:
+    try:
+        parts = time_str.split(":")
+        return int(parts[0]), int(parts[1])
+    except (ValueError, IndexError):
+        return None
+
+
+def _build_weekend_status(
+    exchange: Exchange,
+    open_time: str,
+    close_time: str,
+) -> ExchangeSessionStatus:
+    return ExchangeSessionStatus(
+        exchange=exchange,
+        is_open=False,
+        session_open_time=open_time,
+        session_close_time=close_time,
+        status_label="CLOSED (Weekend)",
+    )
+
+
+def _compute_session_label(now_minutes: int, open_minutes: int, close_minutes: int) -> str:
+    if open_minutes <= now_minutes < close_minutes:
+        return "OPEN"
+    if now_minutes < open_minutes:
+        return "PRE-MARKET"
+    return "CLOSED"
+
+
 def read_exchange_session_status(
     exchange: Exchange,
     open_time: str = "09:15",
@@ -349,20 +378,11 @@ def read_exchange_session_status(
     ist_today = now_ist.date()
     weekday = ist_today.weekday()
     if weekday >= 5:
-        return ExchangeSessionStatus(
-            exchange=exchange,
-            is_open=False,
-            session_open_time=open_time,
-            session_close_time=close_time,
-            status_label="CLOSED (Weekend)",
-        )
+        return _build_weekend_status(exchange, open_time, close_time)
 
-    try:
-        open_parts = open_time.split(":")
-        close_parts = close_time.split(":")
-        open_h, open_m = int(open_parts[0]), int(open_parts[1])
-        close_h, close_m = int(close_parts[0]), int(close_parts[1])
-    except (ValueError, IndexError):
+    parsed_open = _parse_time_parts(open_time)
+    parsed_close = _parse_time_parts(close_time)
+    if parsed_open is None or parsed_close is None:
         return ExchangeSessionStatus(
             exchange=exchange,
             is_open=False,
@@ -371,17 +391,14 @@ def read_exchange_session_status(
             status_label="ERROR",
         )
 
+    open_h, open_m = parsed_open
+    close_h, close_m = parsed_close
     now_minutes = now_ist.hour * 60 + now_ist.minute
     open_minutes = open_h * 60 + open_m
     close_minutes = close_h * 60 + close_m
 
     is_open = open_minutes <= now_minutes < close_minutes
-    if is_open:
-        label = "OPEN"
-    elif now_minutes < open_minutes:
-        label = "PRE-MARKET"
-    else:
-        label = "CLOSED"
+    label = _compute_session_label(now_minutes, open_minutes, close_minutes)
 
     return ExchangeSessionStatus(
         exchange=exchange,

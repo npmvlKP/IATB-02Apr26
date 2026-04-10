@@ -1,0 +1,6 @@
+title = "IATB Gitleaks Config"
+
+[allowlist]
+  paths = [
+    ".env.example",
+  ]
