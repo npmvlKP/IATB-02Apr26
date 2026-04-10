@@ -1,11 +1,13 @@
 """
 Instrument scanner for auto-selecting tradable Stocks/Options/Futures.
 
-Uses jugaad-data + pandas-ta (proven blueprint components) to scan NSE/CDS/MCX
-and rank top gainers/losers by % change with multi-factor filtering.
+Uses OpenAlgo (Zerodha) as primary data feed with jugaad-data fallback
+for public/EOD symbols.  Scans NSE/CDS/MCX and ranks top gainers/losers
+by % change with multi-factor filtering.
 """
 
 import importlib
+import logging
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -15,9 +17,19 @@ from typing import Any, cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
+from iatb.data.openalgo_provider import (
+    DataFeedStatus,
+    ExchangeFeedState,
+    FeedStatus,
+    OpenAlgoProvider,
+    ZerodhaAuth,
+    initialize_feed_status,
+)
 from iatb.market_strength.indicators import IndicatorSnapshot
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class InstrumentCategory(StrEnum):
@@ -215,9 +227,67 @@ def _extract_value(payload: Mapping[str, object], keys: tuple[str, ...]) -> obje
     raise ConfigError(msg)
 
 
+class DataFeedManager:
+    """Manages OpenAlgo primary feed + jugaad-data fallback per exchange.
+
+    On initialization, attempts Zerodha/OpenAlgo authentication and checks
+    data availability for NSE, CDS, and MCX.  Falls back to jugaad-data
+    for exchanges where OpenAlgo is unavailable.
+    """
+
+    def __init__(
+        self,
+        auth: ZerodhaAuth | None = None,
+        provider: OpenAlgoProvider | None = None,
+        exchanges: tuple[Exchange, ...] = (Exchange.NSE, Exchange.CDS, Exchange.MCX),
+    ) -> None:
+        self._auth = auth
+        self._provider = provider
+        self._exchanges = exchanges
+        self._feed_status = DataFeedStatus()
+
+    def initialize(self) -> DataFeedStatus:
+        """Authenticate and check per-exchange feed availability."""
+        if self._auth is not None and self._provider is not None:
+            try:
+                self._auth.authenticate()
+            except ConfigError as exc:
+                _LOGGER.warning("OpenAlgo auth failed, using fallback: %s", exc)
+            self._feed_status = initialize_feed_status(
+                self._auth,
+                self._provider,
+                self._exchanges,
+            )
+        else:
+            now = datetime.now(UTC)
+            for exchange in self._exchanges:
+                self._feed_status.exchanges[exchange] = ExchangeFeedState(
+                    exchange=exchange,
+                    status=FeedStatus.FALLBACK,
+                    source="jugaad-data (EOD)",
+                    checked_at_utc=now,
+                    error="OpenAlgo not configured",
+                )
+            _LOGGER.info(self._feed_status.summary_line())
+        return self._feed_status
+
+    @property
+    def feed_status(self) -> DataFeedStatus:
+        """Return current feed status."""
+        return self._feed_status
+
+    def is_live(self, exchange: Exchange) -> bool:
+        """Check if a specific exchange has live data feed."""
+        state = self._feed_status.exchanges.get(exchange)
+        return state is not None and state.status == FeedStatus.LIVE
+
+
 class InstrumentScanner:
     """
-    Multi-factor instrument scanner using jugaad-data + pandas-ta.
+    Multi-factor instrument scanner using OpenAlgo + jugaad-data + pandas-ta.
+
+    Primary data: OpenAlgo (Zerodha) for live NSE/CDS/MCX.
+    Fallback: jugaad-data for public/EOD symbols.
 
     Filters instruments by:
     - VERY_STRONG sentiment (|score| >= 0.75)
@@ -235,6 +305,7 @@ class InstrumentScanner:
         sentiment_analyzer: Callable[[str], tuple[Decimal, bool]] | None = None,
         rl_predictor: Callable[[list[Decimal]], Decimal] | None = None,
         symbols: Sequence[str] | None = None,
+        data_feed_manager: DataFeedManager | None = None,
     ) -> None:
         self._config = config or ScannerConfig()
         self._strength_scorer = strength_scorer or StrengthScorer()
@@ -243,6 +314,13 @@ class InstrumentScanner:
         self._symbols = symbols or []
         self._pandas_ta = self._load_pandas_ta()
         self._jugaad_nse = self._load_jugaad_nse()
+        self._data_feed_manager = data_feed_manager or DataFeedManager()
+        self._feed_status = self._data_feed_manager.initialize()
+
+    @property
+    def feed_status(self) -> DataFeedStatus:
+        """Return current data feed status for dashboard display."""
+        return self._feed_status
 
     @staticmethod
     def _load_pandas_ta() -> object:

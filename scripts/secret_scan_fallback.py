@@ -16,9 +16,7 @@ SECRET_PATTERNS = [
     re.compile(r"-----BEGIN (RSA|EC|DSA|OPENSSH|PGP) PRIVATE KEY-----"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(
-        r"(?i)\b(api[_-]?key|token|secret|password|passwd)\b\s*[:=]\s*[\"']([^\"']+)[\"']"
-    ),
+    re.compile(r"(?i)\b(api[_-]?key|token|secret|password|passwd)\b\s*[:=]\s*[\"']([^\"']+)[\"']"),
 ]
 
 PLACEHOLDER_MARKERS = {"example", "dummy", "sample", "placeholder", "changeme", "test", "xxxx"}

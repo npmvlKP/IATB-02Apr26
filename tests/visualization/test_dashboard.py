@@ -2,12 +2,18 @@ import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
+from iatb.data.openalgo_provider import (
+    DataFeedStatus,
+    ExchangeFeedState,
+    FeedStatus,
+)
 from iatb.scanner.instrument_scanner import (
     InstrumentCategory,
     ScannerCandidate,
@@ -20,11 +26,18 @@ from iatb.visualization.breakout_scanner import (
 from iatb.visualization.dashboard import (
     INSTRUMENT_SCANNER_TAB,
     REQUIRED_MARKET_TABS,
+    _build_approval_chart,
+    _build_summary_chart,
+    _load_plotly_go,
+    _load_streamlit,
+    _render_scanner_content,
+    _render_scanner_metrics,
     build_dashboard_payload,
     build_scanner_payload,
     convert_candidates_to_health_matrix,
     render_approved_charts,
     render_dashboard,
+    render_data_feed_status,
     render_health_matrix_table,
     render_instrument_scanner_tab,
 )
@@ -77,6 +90,8 @@ class _FakeStreamlitWithFunctions:
     headers: list[str] = field(default_factory=list)
     subheaders: list[str] = field(default_factory=list)
     infos: list[str] = field(default_factory=list)
+    successes: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     metrics: list[tuple[str, str]] = field(default_factory=list)
     dataframes: list[object] = field(default_factory=list)
     charts: list[object] = field(default_factory=list)
@@ -90,6 +105,12 @@ class _FakeStreamlitWithFunctions:
 
     def info(self, text: str) -> None:
         self.infos.append(text)
+
+    def success(self, text: str) -> None:
+        self.successes.append(text)
+
+    def warning(self, text: str) -> None:
+        self.warnings.append(text)
 
     def metric(self, label: str, value: str) -> None:
         self.metrics.append((label, value))
@@ -321,8 +342,8 @@ def test_render_instrument_scanner_tab_no_result() -> None:
     assert result["total_count"] == 0
     assert len(st.headers) == 1
     assert "Instrument Scanner" in st.headers[0]
-    assert len(st.infos) == 1
-    assert "No scanner result available" in st.infos[0]
+    assert len(st.infos) == 2
+    assert "No scanner result available" in st.infos[1]
 
 
 def test_render_instrument_scanner_tab_with_result() -> None:
@@ -474,3 +495,533 @@ def test_health_matrix_utc_timestamp_validation() -> None:
             safe_exit_probability=Decimal("0.65"),
             timestamp_utc=non_utc_ts,
         )
+
+
+class _FakeStreamlitNoTabWrite:
+    def __init__(self) -> None:
+        self.titles: list[str] = []
+
+    def title(self, text: str) -> None:
+        self.titles.append(text)
+
+    def tabs(self, names: list[str]) -> list[object]:
+        _ = names
+        return [object() for _ in ALL_TABS]
+
+
+ALL_TABS = REQUIRED_MARKET_TABS + (INSTRUMENT_SCANNER_TAB,)
+
+
+def test_render_dashboard_tab_without_callable_write() -> None:
+    payload = build_dashboard_payload({"NSE EQ": {"signals": 3}})
+    st = _FakeStreamlitNoTabWrite()
+    rendered = render_dashboard(payload, st)
+    assert rendered == list(ALL_TABS)
+
+
+@dataclass
+class _MinimalSt:
+    def header(self, text: str) -> None:
+        pass
+
+    def info(self, text: str) -> None:
+        pass
+
+    def subheader(self, text: str) -> None:
+        pass
+
+    def metric(self, label: str, value: str) -> None:
+        pass
+
+    def columns(self, n: int) -> list["_MinimalSt"]:
+        return [self for _ in range(n)]
+
+    def divider(self) -> None:
+        pass
+
+    def plotly_chart(self, fig: object, **kwargs: object) -> None:
+        pass
+
+    def dataframe(self, data: object, **kwargs: object) -> None:
+        pass
+
+
+def test_render_health_matrix_table_no_info_fn() -> None:
+    st = _MinimalSt()
+    rendered = render_health_matrix_table([], st)
+    assert rendered == []
+
+
+@dataclass
+class _MinimalStNoDataframe:
+    def header(self, text: str) -> None:
+        pass
+
+    def info(self, text: str) -> None:
+        pass
+
+    def subheader(self, text: str) -> None:
+        pass
+
+    def metric(self, label: str, value: str) -> None:
+        pass
+
+    def columns(self, n: int) -> list["_MinimalStNoDataframe"]:
+        return [self for _ in range(n)]
+
+    def divider(self) -> None:
+        pass
+
+    def plotly_chart(self, fig: object, **kwargs: object) -> None:
+        pass
+
+
+def test_render_health_matrix_table_no_dataframe_fn() -> None:
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    st = _MinimalStNoDataframe()
+    rendered = render_health_matrix_table([matrix], st)
+    assert rendered == []
+
+
+def test_render_approved_charts_single_ohlcv_row() -> None:
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    chart_data = {
+        "RELIANCE": [
+            {
+                "timestamp": timestamp,
+                "open": Decimal("2500"),
+                "high": Decimal("2550"),
+                "low": Decimal("2480"),
+                "close": Decimal("2530"),
+            },
+        ]
+    }
+    st = _FakeStreamlitWithFunctions()
+    go = _FakePlotlyGo()
+    rendered = render_approved_charts([matrix], chart_data, st, go)
+    assert len(rendered) == 1
+    assert go.figures[0].traces[0]["type"] == "bar"
+
+
+def test_render_approved_charts_no_chart_fn() -> None:
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    st = _MinimalSt()
+    go = _FakePlotlyGo()
+    rendered = render_approved_charts([matrix], None, st, go)
+    assert len(rendered) == 1
+
+
+def test_render_approved_charts_no_subheader_fn() -> None:
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    st = _MinimalSt()
+    go = _FakePlotlyGo()
+    rendered = render_approved_charts([matrix], None, st, go)
+    assert len(rendered) == 1
+
+
+def test_render_scanner_metrics_no_metric_fn() -> None:
+    st = object()
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    result = build_scanner_health_result([matrix])
+    _render_scanner_metrics(st, result)
+
+
+def test_render_scanner_metrics_no_columns_fn() -> None:
+    st = _MinimalSt()
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    result = build_scanner_health_result([matrix])
+    _render_scanner_metrics(st, result)
+
+
+def test_render_scanner_metrics_fewer_than_3_cols() -> None:
+    st = _MinimalSt()
+
+    original_columns = st.columns
+
+    def columns_2(n: int) -> list:
+        return [st for _ in range(max(n, 2))]
+
+    st.columns = columns_2
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    result = build_scanner_health_result([matrix])
+    _render_scanner_metrics(st, result)
+    st.columns = original_columns
+
+
+def test_render_scanner_content_no_divider_or_subheader() -> None:
+    st = _MinimalSt()
+    go = _FakePlotlyGo()
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    result = build_scanner_health_result([matrix])
+    table_syms, chart_syms = _render_scanner_content(st, go, result, None)
+    assert len(table_syms) == 1
+    assert len(chart_syms) == 1
+
+
+def test_render_instrument_scanner_tab_no_header_fn() -> None:
+    st = _MinimalSt()
+    go = _FakePlotlyGo()
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    result = build_scanner_health_result([matrix])
+    output = render_instrument_scanner_tab(result, None, st, go)
+    assert output["total_count"] == 1
+
+
+def test_render_instrument_scanner_tab_no_info_fn() -> None:
+    st = _MinimalSt()
+    go = _FakePlotlyGo()
+    output = render_instrument_scanner_tab(None, None, st, go)
+    assert output["table_symbols"] == []
+
+
+def test_render_instrument_scanner_tab_zero_total_scanned() -> None:
+    st = _FakeStreamlitWithFunctions()
+    go = _FakePlotlyGo()
+    result = build_scanner_health_result([])
+    output = render_instrument_scanner_tab(result, None, st, go)
+    assert output["total_count"] == 0
+    assert output["approved_count"] == 0
+    approval_rate_metric = [m for m in st.metrics if m[0] == "Approval Rate"]
+    assert len(approval_rate_metric) == 1
+    assert approval_rate_metric[0][1] == "0.0%"
+
+
+@patch(
+    "iatb.visualization.dashboard.importlib.import_module",
+    side_effect=ModuleNotFoundError("no streamlit"),
+)
+def test_load_streamlit_raises_config_error(mock_import: MagicMock) -> None:
+    with pytest.raises(ConfigError, match="streamlit dependency is required"):
+        _load_streamlit()
+    mock_import.assert_called_once_with("streamlit")
+
+
+@patch(
+    "iatb.visualization.dashboard.importlib.import_module",
+    side_effect=ModuleNotFoundError("no plotly"),
+)
+def test_load_plotly_go_raises_config_error(mock_import: MagicMock) -> None:
+    with pytest.raises(ConfigError, match="plotly dependency is required"):
+        _load_plotly_go()
+    mock_import.assert_called_once_with("plotly.graph_objects")
+
+
+def test_build_approval_chart_fallback_to_summary() -> None:
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    go = _FakePlotlyGo()
+    _build_approval_chart(go, matrix, [{"timestamp": timestamp, "open": 1}])
+    assert go.figures[0].traces[0]["type"] == "bar"
+
+
+def test_build_summary_chart() -> None:
+    timestamp = datetime.now(UTC)
+    matrix = build_instrument_health_matrix(
+        symbol="TCS",
+        sentiment_score=Decimal("0.3"),
+        market_strength_score=Decimal("0.4"),
+        volume_score=Decimal("0.35"),
+        drl_backtest_score=Decimal("0.3"),
+        safe_exit_probability=Decimal("0.3"),
+        timestamp_utc=timestamp,
+    )
+    go = _FakePlotlyGo()
+    _build_summary_chart(go, matrix)
+    assert go.figures[0].traces[0]["type"] == "bar"
+    assert len(go.figures[0].traces[0]["marker_color"]) == 5
+
+
+def test_render_dashboard_with_all_tabs() -> None:
+    payload = {tab: {"data": f"test_{tab}"} for tab in REQUIRED_MARKET_TABS}
+    streamlit = _FakeStreamlit()
+    rendered = render_dashboard(payload, streamlit)
+    assert len(rendered) == len(ALL_TABS)
+    assert all(tab in rendered for tab in ALL_TABS)
+
+
+def test_convert_candidates_empty_list() -> None:
+    matrices = convert_candidates_to_health_matrix([])
+    assert matrices == []
+
+
+def test_convert_candidates_missing_metadata_key() -> None:
+    timestamp = datetime.now(UTC)
+    candidates = [
+        ScannerCandidate(
+            symbol="RELIANCE",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            pct_change=Decimal("5.2"),
+            composite_score=Decimal("0.75"),
+            sentiment_score=Decimal("0.8"),
+            volume_ratio=Decimal("3.5"),
+            exit_probability=Decimal("0.65"),
+            is_tradable=True,
+            regime="SIDEWAYS",
+            rank=1,
+            timestamp_utc=timestamp,
+            metadata={},
+        ),
+    ]
+    matrices = convert_candidates_to_health_matrix(candidates)
+    assert len(matrices) == 1
+    assert matrices[0].market_strength_health.score == Decimal("0.5")
+
+
+def test_convert_candidates_high_volume_ratio() -> None:
+    timestamp = datetime.now(UTC)
+    candidates = [
+        ScannerCandidate(
+            symbol="RELIANCE",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            pct_change=Decimal("5.2"),
+            composite_score=Decimal("0.75"),
+            sentiment_score=Decimal("0.8"),
+            volume_ratio=Decimal("10.0"),
+            exit_probability=Decimal("0.65"),
+            is_tradable=True,
+            regime="SIDEWAYS",
+            rank=1,
+            timestamp_utc=timestamp,
+            metadata={"strength_score": "0.75"},
+        ),
+    ]
+    matrices = convert_candidates_to_health_matrix(candidates)
+    assert matrices[0].volume_analysis_health.score == Decimal("1")
+
+
+class TestRenderDataFeedStatus:
+    """Tests for render_data_feed_status dashboard function."""
+
+    def test_render_none_status_shows_info(self) -> None:
+        """Test rendering when no feed status available."""
+        st = _FakeStreamlitWithFunctions()
+        result = render_data_feed_status(None, st)
+        assert "not initialized" in result
+        assert len(st.infos) == 1
+
+    def test_render_all_live_status(self) -> None:
+        """Test rendering when all exchanges are LIVE."""
+        now = datetime.now(UTC)
+        status = DataFeedStatus(
+            exchanges={
+                Exchange.NSE: ExchangeFeedState(
+                    exchange=Exchange.NSE,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+                Exchange.CDS: ExchangeFeedState(
+                    exchange=Exchange.CDS,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+                Exchange.MCX: ExchangeFeedState(
+                    exchange=Exchange.MCX,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+            },
+        )
+        st = _FakeStreamlitWithFunctions()
+        result = render_data_feed_status(status, st)
+        assert "NSE" in result
+        assert "CDS" in result
+        assert "MCX" in result
+        assert "Zerodha/OpenAlgo" in result
+        assert len(st.subheaders) == 1
+
+    def test_render_mixed_status_shows_warning(self) -> None:
+        """Test rendering when some exchanges are fallback."""
+        now = datetime.now(UTC)
+        status = DataFeedStatus(
+            exchanges={
+                Exchange.NSE: ExchangeFeedState(
+                    exchange=Exchange.NSE,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+                Exchange.CDS: ExchangeFeedState(
+                    exchange=Exchange.CDS,
+                    status=FeedStatus.FALLBACK,
+                    source="jugaad-data",
+                    checked_at_utc=now,
+                    error="timeout",
+                ),
+            },
+        )
+        st = _FakeStreamlitWithFunctions()
+        result = render_data_feed_status(status, st)
+        assert "jugaad-data" in result
+
+    def test_render_feed_status_in_scanner_tab(self) -> None:
+        """Test that feed_status is rendered in scanner tab."""
+        now = datetime.now(UTC)
+        feed_status = DataFeedStatus(
+            exchanges={
+                Exchange.NSE: ExchangeFeedState(
+                    exchange=Exchange.NSE,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+            },
+        )
+        st = _FakeStreamlitWithFunctions()
+        go = _FakePlotlyGo()
+        output = render_instrument_scanner_tab(  # noqa: F841
+            None,
+            None,
+            st,
+            go,
+            feed_status=feed_status,
+        )
+        assert "Data Feed Status" in st.subheaders
+
+    def test_render_feed_status_all_live_uses_success(self) -> None:
+        """Test all-LIVE feed status calls st.success."""
+        now = datetime.now(UTC)
+        feed_status = DataFeedStatus(
+            exchanges={
+                Exchange.NSE: ExchangeFeedState(
+                    exchange=Exchange.NSE,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+                Exchange.CDS: ExchangeFeedState(
+                    exchange=Exchange.CDS,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+                Exchange.MCX: ExchangeFeedState(
+                    exchange=Exchange.MCX,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+            },
+        )
+        st = _FakeStreamlitWithFunctions()
+        result = render_data_feed_status(feed_status, st)
+        assert len(st.successes) == 1
+        assert "NSE" in result
+
+    def test_render_feed_status_mixed_uses_warning(self) -> None:
+        """Test mixed feed status calls st.warning."""
+        now = datetime.now(UTC)
+        feed_status = DataFeedStatus(
+            exchanges={
+                Exchange.NSE: ExchangeFeedState(
+                    exchange=Exchange.NSE,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+                Exchange.CDS: ExchangeFeedState(
+                    exchange=Exchange.CDS,
+                    status=FeedStatus.FALLBACK,
+                    source="jugaad-data",
+                    checked_at_utc=now,
+                    error="timeout",
+                ),
+            },
+        )
+        st = _FakeStreamlitWithFunctions()
+        result = render_data_feed_status(feed_status, st)
+        assert len(st.warnings) == 1
+        assert "CDS" in result

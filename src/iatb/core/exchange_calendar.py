@@ -85,10 +85,11 @@ def _load_config_file(config_path: Path) -> dict[str, Any]:
         ConfigError: If config file cannot be loaded.
     """
     try:
-        import tomli  # type: ignore[import-not-found]
+        import tomli
 
         with config_path.open("rb") as f:
-            return tomli.load(f)  # type: ignore[no-any-return]
+            result: dict[str, Any] = tomli.load(f)
+            return result
     except FileNotFoundError:
         logger.warning(
             "Config file not found, using defaults",
@@ -136,10 +137,7 @@ def _parse_session_times(config: dict[str, Any]) -> dict[Exchange, SessionWindow
                     },
                 )
             except ValueError as e:
-                msg = (
-                    f"Invalid time format for {exchange_name}: "
-                    f"open={open_str}, close={close_str}"
-                )
+                msg = f"Invalid time format for {exchange_name}: open={open_str}, close={close_str}"
                 raise ConfigError(msg) from e
 
     return sessions

@@ -618,7 +618,7 @@ class VectorBTEngine:
             start_ts = timestamps[0]
             end_ts = timestamps[-1]
             years = (end_ts - start_ts).total_seconds() / (365.25 * 24 * 3600)  # API boundary
-            cagr = (  # type: ignore[no-any-return]
+            cagr = (
                 ((Decimal("1") + total_return) ** (Decimal("1") / Decimal(str(years))))
                 - Decimal("1")
                 if years > 0
@@ -631,7 +631,7 @@ class VectorBTEngine:
 
     def _calculate_sharpe_ratio(self, trades: list[dict[str, Any]]) -> Decimal:
         """Calculate Sharpe ratio from trade returns."""
-        returns = [t["return_pct"] for t in trades]
+        returns: list[Decimal] = [Decimal(str(t["return_pct"])) for t in trades]
         if not returns:
             return Decimal("0")
 

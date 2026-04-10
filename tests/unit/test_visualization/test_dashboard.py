@@ -817,7 +817,9 @@ class TestRenderInstrumentScannerTab:
         result = render_instrument_scanner_tab(None, None, mock_streamlit, None)
         assert result["table_symbols"] == []
         assert result["chart_symbols"] == []
-        mock_streamlit.info.assert_called_once()
+        mock_streamlit.info.assert_any_call(
+            "No scanner result available. Run scanner to see instruments."
+        )
         mock_streamlit.header.assert_called_once_with("🔍 Instrument Scanner")
 
     def test_with_result_renders_all(self, mock_streamlit, mock_plotly_go, sample_health_matrix):

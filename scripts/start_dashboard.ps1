@@ -23,7 +23,7 @@ if (-not (Test-Path $ConfigPath)) {
 }
 
 # Verify dashboard.py exists
-$dashboardPath = "src\iatb\visualization\dashboard.py"
+$dashboardPath = "src\iatb\visualization\streamlit_app.py"
 if (-not (Test-Path $dashboardPath)) {
     Write-Host "ERROR: Dashboard not found: $dashboardPath" -ForegroundColor Red
     exit 1

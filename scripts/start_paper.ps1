@@ -33,17 +33,10 @@ if ($configContent -notmatch "paper_trade_enforced\s*=\s*true") {
     Write-Host "Proceeding anyway, but verify configuration." -ForegroundColor Yellow
 }
 
-# Verify paper_executor.py exists
-$paperExecutorPath = "src\iatb\execution\paper_executor.py"
-if (-not (Test-Path $paperExecutorPath)) {
-    Write-Host "ERROR: Paper executor not found: $paperExecutorPath" -ForegroundColor Red
-    exit 1
-}
-
-# Verify engine.py exists
-$enginePath = "src\iatb\core\engine.py"
-if (-not (Test-Path $enginePath)) {
-    Write-Host "ERROR: Engine not found: $enginePath" -ForegroundColor Red
+# Verify paper_runtime.py exists
+$paperRuntimePath = "src\iatb\core\paper_runtime.py"
+if (-not (Test-Path $paperRuntimePath)) {
+    Write-Host "ERROR: Paper runtime not found: $paperRuntimePath" -ForegroundColor Red
     exit 1
 }
 
@@ -62,12 +55,12 @@ Write-Host "Starting Paper Trading Engine..." -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop (graceful shutdown)" -ForegroundColor Yellow
 Write-Host ""
 
-# Launch engine with structured logging (no print, JSON logging)
+# Launch paper trading engine with continuous scan loop
 try {
-    poetry run python -m iatb.core.runtime
+    poetry run python -m iatb.core.paper_runtime
 }
 catch {
-    Write-Host "FATAL: Engine crashed with error:" -ForegroundColor Red
+    Write-Host "FATAL: Paper trading engine crashed with error:" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
     exit 1

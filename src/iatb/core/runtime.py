@@ -4,7 +4,6 @@ Runtime entrypoint for containerized/local engine startup.
 
 import asyncio
 import logging
-import signal
 
 from iatb.core.engine import Engine
 from iatb.core.health import HealthServer
@@ -30,12 +29,14 @@ async def run_runtime(stop_event: asyncio.Event | None = None, health_port: int 
 
 def _register_signal_handlers(stop_event: asyncio.Event) -> None:
     """Wire SIGINT/SIGTERM handlers to stop event."""
+    import signal
+
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             loop.add_signal_handler(sig, stop_event.set)
-        except NotImplementedError:
-            signal.signal(sig, lambda _sig, _frame: stop_event.set())
+        except (NotImplementedError, OSError):
+            pass
 
 
 async def _main() -> None:

@@ -2,7 +2,6 @@
 """Check custom gates G7-G10."""
 
 import os
-from pathlib import Path
 
 # G7: No float in financial paths
 print("G7: Checking for floats in financial paths...")
@@ -21,11 +20,7 @@ for path in paths:
                 filepath = os.path.join(root, f)
                 with open(filepath, encoding="utf-8") as fp:
                     for i, line in enumerate(fp, 1):
-                        if (
-                            "float" in line
-                            and "# noqa" not in line
-                            and "__float__" not in line
-                        ):
+                        if "float" in line and "# noqa" not in line and "__float__" not in line:
                             found_floats.append((filepath, i, line.strip()))
 
 if found_floats:
@@ -86,20 +81,24 @@ for root, dirs, files in os.walk("src/"):
                 func_start = 0
                 func_name = ""
                 indent_level = 0
-                
+
                 for i, line in enumerate(lines, 1):
                     stripped = line.strip()
-                    if stripped.startswith("def ") and ":" in stripped:
+                    if (
+                        stripped.startswith("def ") or stripped.startswith("async def ")
+                    ) and ":" in stripped:
                         # Save previous function if any
                         if in_func and func_name:
                             func_size = i - func_start - 1
                             if func_size > 50:
-                                found_large_funcs.append((filepath, func_name, func_size, func_start))
+                                found_large_funcs.append(
+                                    (filepath, func_name, func_size, func_start)
+                                )
                         # Start new function
                         in_func = True
                         func_start = i
                         func_name = stripped.split("(")[0].replace("def ", "")
-                
+
                 # Check last function
                 if in_func and func_name:
                     func_size = len(lines) - func_start

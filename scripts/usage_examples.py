@@ -34,6 +34,7 @@ def print_section(title: str) -> None:
     print(f"  {title}")
     print(f"{'=' * 70}")
 
+
 def create_market_tick(symbol: str, price: str, quantity: str = "100") -> MarketTickEvent:
     """Create a demo market tick event."""
     return MarketTickEvent(
@@ -127,7 +128,7 @@ def example_1_types_and_enums() -> None:
 
     # Calculate target and stop loss
     target_price = entry_price * Decimal("1.05")  # 5% target
-    stop_loss = entry_price * Decimal("0.98")     # 2% stop loss
+    stop_loss = entry_price * Decimal("0.98")  # 2% stop loss
 
     print("\nRisk Management:")
     print(f"  Target Price: ₹{target_price:.2f}")
@@ -299,7 +300,8 @@ def example_7_error_handling() -> None:
         print(f"  Caught EngineError: {e.message}")
 
     print("\nProper error handling pattern:")
-    print("""
+    print(
+        """
     try:
         price = validate_price(input_price)
         create_order(symbol, price, quantity)
@@ -309,7 +311,8 @@ def example_7_error_handling() -> None:
     except EngineError as e:
         logger.error(f"System error: {e.message}")
         # Handle system error
-    """)
+    """
+    )
 
 
 async def example_8_complete_workflow() -> None:

@@ -2,6 +2,7 @@
 Unit tests for src/iatb/scanner/instrument_scanner.py.
 
 Tests cover: happy path, edge cases, errors, precision, timezone handling.
+Tests cover: DataFeedManager initialization, auth, per-exchange status.
 All external calls are mocked.
 """
 
@@ -14,8 +15,16 @@ import pytest
 import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
+from iatb.data.openalgo_provider import (
+    DataFeedStatus,
+    ExchangeFeedState,
+    FeedStatus,
+    OpenAlgoProvider,
+    ZerodhaAuth,
+)
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.scanner.instrument_scanner import (
+    DataFeedManager,
     InstrumentCategory,
     InstrumentScanner,
     MarketData,
@@ -1056,3 +1065,109 @@ class TestEnums:
     def test_sort_direction_from_string(self):
         """Test SortDirection can be created from string."""
         assert SortDirection("GAINERS") == SortDirection.GAINERS
+
+
+# =============================================================================
+# DataFeedManager Tests
+# =============================================================================
+
+
+class TestDataFeedManager:
+    """Tests for DataFeedManager initialization and feed status."""
+
+    def test_initialize_without_auth_returns_fallback(self):
+        """Test DataFeedManager without auth returns fallback status."""
+        manager = DataFeedManager()
+        status = manager.initialize()
+        assert isinstance(status, DataFeedStatus)
+        for exchange in (Exchange.NSE, Exchange.CDS, Exchange.MCX):
+            state = status.exchanges.get(exchange)
+            assert state is not None
+            assert state.status == FeedStatus.FALLBACK
+
+    def test_initialize_with_auth_and_provider(self):
+        """Test DataFeedManager with authenticated auth and provider."""
+        provider = OpenAlgoProvider(
+            base_url="https://api.openalgo.local",
+            api_key="secret",
+            http_get=lambda url, headers: {
+                "data": {"bid": 100, "ask": 101, "last": 100, "volume_24h": 1000},
+            },
+        )
+        auth = ZerodhaAuth(
+            base_url="http://localhost:5000",
+            access_token="test-token",
+        )
+        auth.authenticate()
+        manager = DataFeedManager(auth=auth, provider=provider)
+        status = manager.initialize()
+        assert isinstance(status, DataFeedStatus)
+        assert len(status.exchanges) == 3
+
+    def test_initialize_auth_failure_falls_back(self, monkeypatch):
+        """Test DataFeedManager falls back when auth fails."""
+        monkeypatch.delenv("ZERODHA_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("ZERODHA_REQUEST_TOKEN", raising=False)
+        provider = OpenAlgoProvider(
+            base_url="https://api.openalgo.local",
+            api_key="secret",
+            http_get=lambda url, headers: {
+                "data": {"bid": 100, "ask": 101, "last": 100},
+            },
+        )
+        auth = ZerodhaAuth(base_url="http://localhost:5000")
+        manager = DataFeedManager(auth=auth, provider=provider)
+        status = manager.initialize()
+        for state in status.exchanges.values():
+            assert state.status == FeedStatus.FALLBACK
+
+    def test_is_live_returns_false_without_auth(self):
+        """Test is_live returns False when no auth configured."""
+        manager = DataFeedManager()
+        manager.initialize()
+        assert manager.is_live(Exchange.NSE) is False
+
+    def test_is_live_returns_true_with_live_feed(self):
+        """Test is_live returns True when feed is live."""
+        now = datetime.now(UTC)
+        status = DataFeedStatus(
+            exchanges={
+                Exchange.NSE: ExchangeFeedState(
+                    exchange=Exchange.NSE,
+                    status=FeedStatus.LIVE,
+                    source="Zerodha/OpenAlgo",
+                    checked_at_utc=now,
+                ),
+            },
+        )
+        manager = DataFeedManager()
+        manager._feed_status = status
+        assert manager.is_live(Exchange.NSE) is True
+        assert manager.is_live(Exchange.CDS) is False
+
+    def test_feed_status_property(self):
+        """Test feed_status property returns DataFeedStatus."""
+        manager = DataFeedManager()
+        manager.initialize()
+        assert isinstance(manager.feed_status, DataFeedStatus)
+
+    def test_custom_exchanges(self):
+        """Test DataFeedManager with custom exchange list."""
+        manager = DataFeedManager(exchanges=(Exchange.NSE,))
+        status = manager.initialize()
+        assert Exchange.NSE in status.exchanges
+
+    def test_scanner_with_data_feed_manager(self):
+        """Test InstrumentScanner accepts DataFeedManager."""
+        manager = DataFeedManager()
+        manager.initialize()
+        scanner = InstrumentScanner(
+            data_feed_manager=manager,
+            symbols=[],
+        )
+        assert isinstance(scanner.feed_status, DataFeedStatus)
+
+    def test_scanner_feed_status_available(self):
+        """Test scanner exposes feed_status property."""
+        scanner = InstrumentScanner(symbols=[])
+        assert isinstance(scanner.feed_status, DataFeedStatus)

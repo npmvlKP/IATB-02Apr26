@@ -1,9 +1,33 @@
 #!/usr/bin/env python
 """
-iATB Deployment Dashboard — Zero-dependency browser UI.
+DEPRECATED: This script is superseded by src/iatb/deployment_dashboard.py.
+
+Use the FastAPI-based dashboard instead:
+  poetry run uvicorn src.iatb.deployment_dashboard:app --host 127.0.0.1 --port 8080
+
+Or use the master startup script:
+  .\\scripts\\start_all.ps1
+
+This file is retained for backward compatibility only and will be removed
+in a future release.
+"""
+
+import warnings
+
+warnings.warn(
+    "scripts/dashboard.py is DEPRECATED. "
+    "Use src/iatb.deployment_dashboard.py or scripts/start_all.ps1 instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+"""
+iATB Deployment Dashboard - Zero-dependency browser UI.
 
 Serves a live status page at http://localhost:8080 showing:
   - Engine & health status
+  - Broker status (Zerodha)
+  - Exchange trading status (NSE/CDS/MCX)
   - Pre-flight check results
   - Kill switch state
   - Daily loss guard state
@@ -18,6 +42,7 @@ Open:  http://localhost:8080
 
 import json
 import sqlite3
+import urllib.request
 from datetime import UTC, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +58,8 @@ _SCANNER_DATA: dict[str, Any] = {"gainers": [], "losers": [], "timestamp": ""}
 # Global scanner instance for live updates
 _scanner_instance = None
 
+_ENGINE_API = "http://127.0.0.1:8000"
+
 
 def _read_trades() -> list[dict[str, str]]:
     if not _AUDIT_DB.exists():
@@ -42,7 +69,7 @@ def _read_trades() -> list[dict[str, str]]:
         conn.row_factory = sqlite3.Row
         today = datetime.now(UTC).date().isoformat()
         rows = conn.execute(
-            "SELECT * FROM trade_audit WHERE timestamp_utc LIKE ? " "ORDER BY timestamp_utc DESC",
+            "SELECT * FROM trade_audit WHERE timestamp_utc LIKE ? ORDER BY timestamp_utc DESC",
             (f"{today}%",),
         ).fetchall()
         conn.close()
@@ -62,17 +89,56 @@ def _read_log_tail(n: int = 50) -> list[str]:
         return [f"Error reading log: {exc}"]
 
 
-def _check_health() -> str:
-    import urllib.request
-
+def _api_get(endpoint: str, timeout: int = 5) -> dict[str, Any] | str:
+    """Fetch JSON from the engine API, returning parsed dict or raw string."""
     try:
         with urllib.request.urlopen(  # nosec: S310
-            "http://127.0.0.1:8000/health", timeout=2
+            f"{_ENGINE_API}{endpoint}", timeout=timeout
         ) as r:
             data = r.read()
-            return data.decode() if isinstance(data, bytes) else str(data)
+            raw = data.decode() if isinstance(data, bytes) else str(data)
+            return json.loads(raw)
     except Exception:
         return '{"status":"unreachable"}'
+
+
+def _check_health() -> str:
+    result = _api_get("/health", timeout=2)
+    return result if isinstance(result, str) else json.dumps(result)
+
+
+def _check_broker_status() -> dict[str, str]:
+    """Fetch broker status from engine API."""
+    result = _api_get("/broker/status", timeout=5)
+    if isinstance(result, dict) and "uid" in result:
+        return {
+            "uid": str(result.get("uid", "")),
+            "name": str(result.get("name", "")),
+            "email": str(result.get("email", "")),
+            "available_balance": str(result.get("available_balance", "0")),
+            "margin_used": str(result.get("margin_used", "0")),
+            "status": "connected",
+        }
+    return {
+        "uid": "",
+        "name": "",
+        "email": "",
+        "available_balance": "0",
+        "margin_used": "0",
+        "status": "unreachable",
+    }
+
+
+def _check_exchange_status() -> dict[str, str]:
+    """Fetch exchange status from engine API."""
+    result = _api_get("/exchanges/status", timeout=5)
+    if isinstance(result, dict) and "nse" in result:
+        return {
+            "nse": str(result.get("nse", "unknown")),
+            "cds": str(result.get("cds", "unknown")),
+            "mcx": str(result.get("mcx", "unknown")),
+        }
+    return {"nse": "unknown", "cds": "unknown", "mcx": "unknown"}
 
 
 def _check_sentiment_health() -> dict[str, str]:
@@ -133,7 +199,6 @@ def _generate_plotly_chart(candidates: list[Any], title: str) -> dict[str, Any]:
         return {"data": [], "layout": {"title": {"text": title}}}
 
     symbols = [c.get("symbol", "N/A") for c in candidates]
-    # Convert Decimal to float for Plotly compatibility
     pct_changes = [float(Decimal(str(c.get("pct_change", 0)))) for c in candidates]
     composite_scores = [float(Decimal(str(c.get("composite_score", 0)))) for c in candidates]
     volume_ratios = [float(Decimal(str(c.get("volume_ratio", 0)))) for c in candidates]
@@ -202,11 +267,15 @@ def _build_status() -> dict[str, object]:
     pnl = _compute_pnl(trades)
     health = _check_health()
     sentiment_health = _check_sentiment_health()
+    broker_info = _check_broker_status()
+    exchange_info = _check_exchange_status()
     log_tail = _read_log_tail(30)
     return {
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "engine_health": health,
         "sentiment_health": sentiment_health,
+        "broker_info": broker_info,
+        "exchange_info": exchange_info,
         "trades_today": len(trades),
         "pnl_summary": pnl,
         "recent_trades": trades[:20],
@@ -238,6 +307,7 @@ _HTML = """<!DOCTYPE html>
   .metric-label {{ font-size: 0.8em; color: #8b949e; }}
   .grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }}
   .grid-2 {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }}
+  .grid-3 {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }}
   pre {{ background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px;
          font-size: 0.8em; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }}
   .badge {{ display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; }}
@@ -269,6 +339,40 @@ _HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<h2>Broker Status (Zerodha)</h2>
+<div class="grid-2">
+  <div class="card">
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>UID</td><td>{broker_uid}</td></tr>
+      <tr><td>Name</td><td>{broker_name}</td></tr>
+      <tr><td>Email</td><td>{broker_email}</td></tr>
+      <tr><td>Available Balance</td><td>{broker_balance}</td></tr>
+      <tr><td>Margin Used</td><td>{broker_margin_used}</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <div class="metric-label">Connection</div>
+    <div class="metric {broker_conn_class}">{broker_conn_status}</div>
+  </div>
+</div>
+
+<h2>Exchange Status</h2>
+<div class="grid-3">
+  <div class="card">
+    <div class="metric-label">NSE</div>
+    <div class="metric {nse_class}">{nse_status}</div>
+  </div>
+  <div class="card">
+    <div class="metric-label">CDS</div>
+    <div class="metric {cds_class}">{cds_status}</div>
+  </div>
+  <div class="card">
+    <div class="metric-label">MCX</div>
+    <div class="metric {mcx_class}">{mcx_status}</div>
+  </div>
+</div>
+
 <h2>Sentiment Analysis Health</h2>
 <div class="grid-2">
   <div class="card">
@@ -292,8 +396,8 @@ _HTML = """<!DOCTYPE html>
     <div class="metric-label">Ensemble Status</div>
     <div class="metric {ensemble_class}">{ensemble_status_display}</div>
     <p style="color:#8b949e; margin-top:10px; font-size:0.85em;">
-      VERY_STRONG threshold: |score| ≥ 0.75<br>
-      Volume confirmation: ratio ≥ 1.5
+      VERY_STRONG threshold: |score| &ge; 0.75<br>
+      Volume confirmation: ratio &ge; 1.5
     </p>
   </div>
 </div>
@@ -318,14 +422,14 @@ def _render_trades_table(trades: list[dict[str, str]]) -> str:
         badge = "badge-filled" if status == "FILLED" else "badge-rejected"
         rows += (
             f"<tr>"
-            f"<td>{t.get('order_id','')}</td>"
-            f"<td>{t.get('timestamp_utc','')[:19]}</td>"
-            f"<td><b>{t.get('side','')}</b></td>"
-            f"<td>{t.get('symbol','')}</td>"
-            f"<td>{t.get('quantity','')}</td>"
-            f"<td>{t.get('price','')}</td>"
+            f"<td>{t.get('order_id', '')}</td>"
+            f"<td>{t.get('timestamp_utc', '')[:19]}</td>"
+            f"<td><b>{t.get('side', '')}</b></td>"
+            f"<td>{t.get('symbol', '')}</td>"
+            f"<td>{t.get('quantity', '')}</td>"
+            f"<td>{t.get('price', '')}</td>"
             f"<td><span class='badge {badge}'>{status}</span></td>"
-            f"<td>{t.get('algo_id','')}</td>"
+            f"<td>{t.get('algo_id', '')}</td>"
             f"</tr>"
         )
     return (
@@ -336,6 +440,10 @@ def _render_trades_table(trades: list[dict[str, str]]) -> str:
     )
 
 
+def _exchange_class(status: str) -> str:
+    return "pass" if "Open" in status else ("warn" if "Holiday" in status else "fail")
+
+
 def _render_html(status: dict[str, object]) -> str:
     health_raw = str(status.get("engine_health", ""))
     health_ok = "ok" in health_raw
@@ -343,6 +451,8 @@ def _render_html(status: dict[str, object]) -> str:
     trades = status.get("recent_trades", [])
     log_lines = status.get("log_tail", [])
     sentiment_health = status.get("sentiment_health", {})
+    broker_info = status.get("broker_info", {})
+    exchange_info = status.get("exchange_info", {})
 
     finbert_ok = (
         isinstance(sentiment_health, dict) and sentiment_health.get("finbert", "") == "available"
@@ -354,6 +464,28 @@ def _render_html(status: dict[str, object]) -> str:
     ensemble_ok = (
         isinstance(sentiment_health, dict)
         and sentiment_health.get("ensemble_status", "") == "operational"
+    )
+
+    broker_uid = broker_info.get("uid", "N/A") if isinstance(broker_info, dict) else "N/A"
+    broker_name = broker_info.get("name", "N/A") if isinstance(broker_info, dict) else "N/A"
+    broker_email = broker_info.get("email", "N/A") if isinstance(broker_info, dict) else "N/A"
+    broker_balance = (
+        broker_info.get("available_balance", "0") if isinstance(broker_info, dict) else "0"
+    )
+    broker_margin = broker_info.get("margin_used", "0") if isinstance(broker_info, dict) else "0"
+    broker_conn = (
+        broker_info.get("status", "unreachable") if isinstance(broker_info, dict) else "unreachable"
+    )
+    broker_conn_class = "pass" if broker_conn == "connected" else "fail"
+
+    nse_status = (
+        exchange_info.get("nse", "unknown") if isinstance(exchange_info, dict) else "unknown"
+    )
+    cds_status = (
+        exchange_info.get("cds", "unknown") if isinstance(exchange_info, dict) else "unknown"
+    )
+    mcx_status = (
+        exchange_info.get("mcx", "unknown") if isinstance(exchange_info, dict) else "unknown"
     )
 
     total_trades_val = pnl.get("total_trades", "0") if isinstance(pnl, dict) else "0"
@@ -374,6 +506,19 @@ def _render_html(status: dict[str, object]) -> str:
         sell_count=sell_count_val,
         trades_table=trades_table_val,
         log_tail=log_tail_val,
+        broker_uid=broker_uid,
+        broker_name=broker_name,
+        broker_email=broker_email,
+        broker_balance=broker_balance,
+        broker_margin_used=broker_margin,
+        broker_conn_status="Connected" if broker_conn == "connected" else "Unreachable",
+        broker_conn_class=broker_conn_class,
+        nse_status=nse_status,
+        nse_class=_exchange_class(nse_status),
+        cds_status=cds_status,
+        cds_class=_exchange_class(cds_status),
+        mcx_status=mcx_status,
+        mcx_class=_exchange_class(mcx_status),
         finbert_status="Available" if finbert_ok else "Unavailable",
         finbert_class="status-ok" if finbert_ok else "status-err",
         aion_status="Available" if aion_ok else "Unavailable",
@@ -385,34 +530,39 @@ def _render_html(status: dict[str, object]) -> str:
     )
 
 
+def _send_json(handler: BaseHTTPRequestHandler, data: object) -> None:
+    body = json.dumps(data, default=str).encode()
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 class _DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/api/status":
-            status = _build_status()
-            body = json.dumps(status, default=str).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            _send_json(self, _build_status())
+        elif self.path == "/api/broker/status":
+            _send_json(self, _check_broker_status())
+        elif self.path == "/api/exchanges/status":
+            _send_json(self, _check_exchange_status())
         elif self.path == "/api/charts/gainers":
-            gainers = _SCANNER_DATA.get("gainers", [])
-            chart = _generate_plotly_chart(gainers, "Top Gainers - Live Scanner")
-            body = json.dumps(chart, default=str).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            _send_json(
+                self,
+                _generate_plotly_chart(
+                    _SCANNER_DATA.get("gainers", []),
+                    "Top Gainers - Live Scanner",
+                ),
+            )
         elif self.path == "/api/charts/losers":
-            losers = _SCANNER_DATA.get("losers", [])
-            chart = _generate_plotly_chart(losers, "Top Losers - Live Scanner")
-            body = json.dumps(chart, default=str).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            _send_json(
+                self,
+                _generate_plotly_chart(
+                    _SCANNER_DATA.get("losers", []),
+                    "Top Losers - Live Scanner",
+                ),
+            )
         elif self.path == "/" or self.path == "/dashboard":
             status = _build_status()
             html = _render_html(status).encode()
@@ -424,8 +574,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def log_message(self, fmt: str, *args: object) -> None:
-        pass  # suppress console noise
+    def log_message(self, format: str, *args: object) -> None:
+        pass
 
 
 def main() -> None:

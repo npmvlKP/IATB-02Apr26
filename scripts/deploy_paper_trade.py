@@ -19,7 +19,6 @@ and printed to console in real time.
 """
 
 import asyncio
-import json
 import logging
 import subprocess
 import sys
@@ -61,7 +60,11 @@ def _run_cmd(cmd: str, check: bool = True) -> tuple[int, str]:
     """Run a shell command, log output, return (exitcode, stdout)."""
     log.info("  $ %s", cmd)
     result = subprocess.run(
-        cmd, shell=True, capture_output=True, text=True, cwd=str(Path.cwd()),
+        cmd,
+        shell=True,
+        capture_output=True,
+        text=True,
+        cwd=str(Path.cwd()),
     )
     combined = (result.stdout + result.stderr).strip()
     for line in combined.splitlines():
@@ -126,6 +129,7 @@ def step_3_configure() -> bool:
         example = Path(".env.example")
         if example.exists():
             import shutil
+
             shutil.copy(example, env_path)
             log.info("  Created .env from .env.example")
         else:
@@ -166,7 +170,10 @@ def step_5_preflight() -> bool:
     executor = PaperExecutor()
     ks = KillSwitch(executor)
     result = run_preflight_checks(
-        executor, ks, Path("data"), Path("data/audit/trades.sqlite"),
+        executor,
+        ks,
+        Path("data"),
+        Path("data/audit/trades.sqlite"),
     )
     log.info("  Pre-flight: %s", _pass_fail(result))
     return result
@@ -197,6 +204,7 @@ async def step_6_7_engine_and_health() -> bool:
 
     _section("Step 7: Health Endpoint Check")
     import urllib.request
+
     try:
         with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3) as resp:
             body = resp.read().decode()

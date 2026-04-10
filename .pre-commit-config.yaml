@@ -6,11 +6,11 @@ repos:
         name: ruff check
         args: [--fix, --exit-non-zero-on-fix]
         types_or: [python, pyi, jupyter]
-        exclude: ^(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py)$
+        exclude: ^(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py|check_g.*\.py|add_seeds.*\.py|remove_unused_ignore\.py|sync_to_remote\.py|verify_git_state\.py|verify_intraday_enforcement\.py)$
       - id: ruff-format
         name: ruff format
         types_or: [python, pyi, jupyter]
-        exclude: ^(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py)$
+        exclude: ^(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py|check_g.*\.py|add_seeds.*\.py|remove_unused_ignore\.py|sync_to_remote\.py|verify_git_state\.py|verify_intraday_enforcement\.py)$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
