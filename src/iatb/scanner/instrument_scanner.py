@@ -343,15 +343,15 @@ class InstrumentScanner:
 
     def _get_latest_row(self, frame: Any) -> dict[str, object] | None:
         """Extract the latest (most recent) row from frame."""
-        latest_row = None
-        latest_timestamp = None
+        latest_row: dict[str, object] | None = None
+        latest_timestamp: datetime | None = None
 
         for row in _iter_dataframe_rows(frame):
             row_dict = dict(row)
             row_timestamp = _coerce_datetime(
                 _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
             )
-            if latest_timestamp is None or row_timestamp > latest_timestamp:  # type: ignore[unreachable]
+            if latest_timestamp is None or row_timestamp > latest_timestamp:
                 latest_timestamp = row_timestamp
                 latest_row = {
                     "timestamp": row_timestamp,

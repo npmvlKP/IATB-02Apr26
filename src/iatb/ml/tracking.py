@@ -521,7 +521,7 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return self.study.best_params
+        return dict(self.study.best_params)
 
     def get_best_value(self) -> float:
         """Get best objective value from the study.
@@ -542,7 +542,7 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return self.study.best_value
+        return float(self.study.best_value)
 
 
 def create_default_tracking(
