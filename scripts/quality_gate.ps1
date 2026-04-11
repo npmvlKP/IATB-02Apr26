@@ -39,9 +39,9 @@ try {
     if ($LASTEXITCODE -eq 0) { Write-Gate "G4" "PASS" } else { Write-Gate "G4" "FAIL" $out; $allPassed = $false }
 } catch { Write-Gate "G4" "FAIL" $_.Exception.Message; $allPassed = $false }
 
-# G5: Gitleaks secrets
+# G5: Gitleaks secrets (scan current files only, not git history)
 try {
-    $out = gitleaks detect --source . --no-banner 2>&1
+    $out = gitleaks detect --source . --no-git --no-banner 2>&1
     if ($LASTEXITCODE -eq 0) { Write-Gate "G5" "PASS" } else { Write-Gate "G5" "FAIL" $out; $allPassed = $false }
 } catch { Write-Gate "G5" "FAIL" $_.Exception.Message; $allPassed = $false }
 

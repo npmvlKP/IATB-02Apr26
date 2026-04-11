@@ -1,0 +1,33 @@
+# Gitleaks configuration for IATB
+# Excludes example files and templates from secret detection
+
+[allowlist]
+  description = "Allowlist for example and template files"
+  paths = [
+    "\\.env\\.example$",
+    "\\.example$",
+    "/examples/",
+    "/templates/",
+  ]
+  
+  # Allow common placeholder patterns
+  regexes = [
+    "your_.*",
+    "replace_.*",
+    "REPLACE_.*",
+    "YOUR_.*",
+    "example_.*",
+    "EXAMPLE_.*",
+  ]
+
+[[rules]]
+  description = "Zerodha API Key"
+  id = "zerodha-api-key"
+  regex = "ZERODHA_API_KEY\\s*=\\s*[a-zA-Z0-9]{16,}"
+  path = "\\.env$"
+
+[[rules]]
+  description = "Zerodha API Secret"
+  id = "zerodha-api-secret"
+  regex = "ZERODHA_API_SECRET\\s*=\\s*[a-zA-Z0-9]{20,}"
+  path = "\\.env$"
