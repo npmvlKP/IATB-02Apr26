@@ -177,4 +177,5 @@ Write-Host "Your Zerodha session is now active." -ForegroundColor Cyan
 Write-Host "The access token will be valid until 6 AM IST tomorrow." -ForegroundColor Gray
 Write-Host ""
 Write-Host "To verify, run:" -ForegroundColor Yellow
-Write-Host "  poetry run python -c \`"from iatb.broker.token_manager import ZerodhaTokenManager; print(ZerodhaTokenManager(api_key='$ApiKey', api_secret='$ApiSecret').is_token_fresh())\`"" -ForegroundColor Gray
+$verifyCmd = "poetry run python -c 'from iatb.broker.token_manager import ZerodhaTokenManager; print(ZerodhaTokenManager(api_key=`'$ApiKey`', api_secret=`'$ApiSecret`').is_token_fresh())'"
+Write-Host "  $verifyCmd" -ForegroundColor Gray
