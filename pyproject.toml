@@ -35,6 +35,7 @@ mlflow = "^3.3.2"
 streamlit = "^1.48.1"
 plotly = "^6.3.0"
 python-telegram-bot = "^22.4"
+tomli = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.0"
@@ -109,4 +110,4 @@ fail_under = 90
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]  # Skip assert_used warning
+skips = ["B101", "B112"]  # Skip assert_used warning

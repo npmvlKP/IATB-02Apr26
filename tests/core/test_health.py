@@ -2,12 +2,20 @@
 Tests for health endpoint server.
 """
 
+import random
 import time
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.health import HealthServer
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_health_endpoint_returns_ok_payload() -> None:

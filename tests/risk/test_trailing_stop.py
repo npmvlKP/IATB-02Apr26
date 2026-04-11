@@ -1,8 +1,11 @@
 """Tests for adaptive trailing stop strategies."""
 
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from iatb.core.enums import OrderSide
@@ -16,6 +19,11 @@ from iatb.risk.trailing_stop import (
     RegimeAdaptiveTrailingStop,
     TimeDecayTrailingStop,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _state(

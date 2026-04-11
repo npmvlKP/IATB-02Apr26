@@ -1,10 +1,18 @@
 """Tests for correlation_matrix.py module."""
 
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.selection.correlation_matrix import compute_pairwise_correlations
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_compute_pairwise_correlations_basic() -> None:

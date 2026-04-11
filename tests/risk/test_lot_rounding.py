@@ -1,12 +1,20 @@
 """Tests for lot_rounded_size and freeze_limit_slices."""
 
+import random
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from iatb.core.exceptions import ConfigError
 from iatb.risk.position_sizer import freeze_limit_slices, lot_rounded_size
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class TestLotRoundedSize:

@@ -1,11 +1,19 @@
+import random
 from decimal import Decimal
 
 import iatb.market_strength.strength_scorer as strength_module
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _base_inputs() -> StrengthInputs:

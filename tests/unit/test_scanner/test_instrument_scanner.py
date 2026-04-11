@@ -5,10 +5,13 @@ Tests cover: happy path, edge cases, errors, precision, timezone handling.
 All external calls are mocked.
 """
 
+import random
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
@@ -24,6 +27,11 @@ from iatb.scanner.instrument_scanner import (
     create_mock_rl_predictor,
     create_mock_sentiment_analyzer,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 # =============================================================================
 # Fixtures

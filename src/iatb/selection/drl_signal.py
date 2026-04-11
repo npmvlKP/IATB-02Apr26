@@ -89,10 +89,11 @@ def _drawdown_factor(max_drawdown_pct: Decimal) -> Decimal:
 
 def _sigmoid_normalize(sharpe: Decimal) -> Decimal:
     """Map Sharpe ratio to [0, 1] via sigmoid."""
-    # math.exp at API boundary; result converted to Decimal.
+    # API boundary: math.exp requires float; result immediately converted to Decimal.
     exponent = -float(sharpe)  # float required: math.exp API
-    clamped = max(-500.0, min(500.0, exponent))
-    raw = Decimal(str(1.0 / (1.0 + math.exp(clamped))))
+    # Clamp exponent to avoid overflow in math.exp.
+    clamped = max(-500.0, min(500.0, exponent))  # API boundary: clamp uses float literals
+    raw = Decimal(str(1.0 / (1.0 + math.exp(clamped))))  # float required: math.exp API
     return clamp_01(raw)
 
 

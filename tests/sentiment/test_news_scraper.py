@@ -1,12 +1,20 @@
+import random
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.sentiment.news_scraper import (
     NewsScraper,
     _default_article_extractor,
     _default_fetcher,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 _RSS_MONEYC = """<?xml version="1.0"?>
 <rss><channel>

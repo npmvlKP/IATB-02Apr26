@@ -1,9 +1,17 @@
+import random
 from decimal import Decimal
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
+import torch
 from iatb.backtesting.walk_forward import WalkForwardOptimizer
 from iatb.core.exceptions import ConfigError
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_walk_forward_optimizer_runs_expected_number_of_folds(

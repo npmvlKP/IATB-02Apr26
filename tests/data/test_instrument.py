@@ -1,9 +1,12 @@
 """Tests for instrument model, InstrumentType enum, and validation."""
 
+import random
 from datetime import date
 from decimal import Decimal
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ValidationError
 from iatb.data.instrument import (
@@ -11,6 +14,11 @@ from iatb.data.instrument import (
     InstrumentType,
     map_kite_instrument_type,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _equity(symbol: str = "RELIANCE") -> Instrument:

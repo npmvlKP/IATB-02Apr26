@@ -1,8 +1,16 @@
+import random
 from decimal import Decimal
 
+import numpy as np
+import torch
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
 from iatb.execution.base import OrderRequest
 from iatb.execution.paper_executor import PaperExecutor
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_paper_executor_end_to_end_buy_and_sell() -> None:

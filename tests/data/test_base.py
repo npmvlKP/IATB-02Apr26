@@ -2,13 +2,21 @@
 Tests for normalized data contracts.
 """
 
+import random
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.types import create_price
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 class DummyProvider:

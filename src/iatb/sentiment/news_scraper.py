@@ -73,9 +73,11 @@ class NewsScraper:
     def __init__(
         self,
         rss_feeds: dict[str, str] | None = None,
+        # API boundary: rate limit is time-based, not financial calculation.
         rate_limit_seconds: float = 1.0,
         fetcher: Callable[[str], str] | None = None,
         article_extractor: Callable[[str], str] | None = None,
+        # API boundary: sleep function requires float seconds.
         sleep_func: Callable[[float], None] | None = None,
     ) -> None:
         if rate_limit_seconds < 0:

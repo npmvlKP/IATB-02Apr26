@@ -78,7 +78,7 @@ IMPLEMENT → GATES(G1–G10) → DEBUG/FIX(max 3) → RE-VERIFY → COMMIT-READ
 | **G4** Security | `poetry run bandit -r src/ -q` | 0 high/medium |
 | **G5** Secrets | `gitleaks detect --source . --no-banner` | 0 leaks |
 | **G6** Tests | `poetry run pytest --cov=src/iatb --cov-fail-under=90 -x` | All pass ≥90% |
-| **G7** No float | `grep -r "float" src/iatb/finance/` | 0 float in financial paths |
+| **G7** No float | `grep -r "float" src/iatb/risk/ src/iatb/backtesting/ src/iatb/execution/ src/iatb/selection/ src/iatb/sentiment/` | 0 float in financial calculations (API boundary conversions with comments allowed) |
 | **G8** No naive dt | `grep -r "datetime.now()" src/` | 0 naive datetime |
 | **G9** No print | `grep -r "print(" src/` | 0 print() statements |
 | **G10** Func size | Function LOC check | ≤50 LOC each |

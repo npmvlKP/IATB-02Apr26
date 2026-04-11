@@ -1,10 +1,18 @@
 """Tests for order_throttle.py module."""
 
+import random
 from datetime import UTC, datetime, timedelta
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.execution.order_throttle import OrderThrottle
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_order_throttle_initialization_with_default() -> None:

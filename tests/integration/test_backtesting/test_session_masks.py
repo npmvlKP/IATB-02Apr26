@@ -483,3 +483,94 @@ class TestIntegration:
                 assert window is not None
                 open_time, close_time = window
                 assert close_time < time(15, 30)
+
+
+# =============================================================================
+# Config Loading Integration Tests
+# =============================================================================
+
+
+class TestConfigLoadingIntegration:
+    """Integration tests for config loading with session masks."""
+
+    def test_calendar_uses_config_session_times(self):
+        """Test DEFAULT_EXCHANGE_CALENDAR uses config session times."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        # Verify NSE session from config
+        nse_session = DEFAULT_EXCHANGE_CALENDAR.get_regular_session(Exchange.NSE)
+        assert nse_session.open_time == time(9, 15)
+        assert nse_session.close_time == time(15, 30)
+
+        # Verify MCX session from config
+        mcx_session = DEFAULT_EXCHANGE_CALENDAR.get_regular_session(Exchange.MCX)
+        assert mcx_session.open_time == time(9, 0)
+        assert mcx_session.close_time == time(23, 30)
+
+    def test_calendar_uses_config_holidays(self):
+        """Test DEFAULT_EXCHANGE_CALENDAR uses config holidays."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        # Test Republic Day is a holiday
+        republic_day = date(2026, 1, 26)
+        assert DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.NSE, republic_day)
+        assert DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.MCX, republic_day)
+
+        # Test Independence Day is a holiday
+        independence_day = date(2026, 8, 15)
+        assert DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.CDS, independence_day)
+
+    def test_holiday_blocks_mis_trading(self):
+        """Test holidays block MIS trading."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        republic_day = date(2026, 1, 26)
+
+        # On Republic Day, no session should be available
+        session = DEFAULT_EXCHANGE_CALENDAR.session_for(Exchange.NSE, republic_day)
+        assert session is None
+
+    def test_maharashtra_day_exchange_specific(self):
+        """Test Maharashtra Day is NSE-only, not CDS."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        maharashtra_day = date(2026, 5, 1)
+
+        # NSE should have Maharashtra Day as holiday
+        assert DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.NSE, maharashtra_day)
+
+        # CDS should NOT have Maharashtra Day as holiday
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.CDS, maharashtra_day)
+
+    def test_config_loaded_at_module_import(self):
+        """Test config is loaded when module is imported."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        # If config loaded successfully, calendar should have sessions
+        assert DEFAULT_EXCHANGE_CALENDAR.get_regular_session(Exchange.NSE) is not None
+        assert DEFAULT_EXCHANGE_CALENDAR.get_regular_session(Exchange.CDS) is not None
+        assert DEFAULT_EXCHANGE_CALENDAR.get_regular_session(Exchange.MCX) is not None
+
+    def test_weekend_blocks_trading(self):
+        """Test weekends block trading across all exchanges."""
+        from iatb.core.exchange_calendar import DEFAULT_EXCHANGE_CALENDAR
+
+        saturday = date(2026, 1, 3)
+        sunday = date(2026, 1, 4)
+
+        for exchange in [Exchange.NSE, Exchange.CDS, Exchange.MCX]:
+            assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(exchange, saturday)
+            assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(exchange, sunday)
+
+    def test_trading_session_mask_excludes_holidays(self):
+        """Test session mask excludes holidays."""
+
+        # Create mask for a period that includes Republic Day
+        start = date(2026, 1, 25)
+        end = date(2026, 1, 27)
+
+        mask = create_mis_session_mask(Exchange.NSE, start, end)
+
+        # Republic Day should not be in the mask
+        republic_day = date(2026, 1, 26)
+        assert republic_day not in mask

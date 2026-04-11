@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import numpy as np
+import torch
 from iatb.execution.zerodha_token_manager import ZerodhaTokenManager, load_env_file
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def test_resolve_saved_access_token_reuses_same_day_value(tmp_path: Path) -> None:

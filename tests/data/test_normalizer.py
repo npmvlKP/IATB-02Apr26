@@ -2,13 +2,21 @@
 Tests for OHLCV payload normalization.
 """
 
+import random
 from datetime import UTC, datetime
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ValidationError
 from iatb.core.types import create_price
 from iatb.data.normalizer import normalize_ohlcv_batch, normalize_ohlcv_record
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _raw_ohlcv(timestamp: object) -> dict[str, object]:

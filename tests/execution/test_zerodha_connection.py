@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import hashlib
+import random
 from datetime import UTC
 from decimal import Decimal
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs
 
+import numpy as np
 import pytest
+import torch
 from iatb.core.exceptions import ConfigError
 from iatb.execution.zerodha_connection import (
     ZerodhaConnection,
     extract_request_token_from_redirect_url,
     extract_request_token_from_text,
 )
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 
 def _profile_payload() -> dict[str, object]:

@@ -35,7 +35,7 @@ def temporal_decay(
         msg = "signal_timestamp cannot be in the future"
         raise ConfigError(msg)
     hours_elapsed = elapsed_seconds / _SECONDS_PER_HOUR
-    # math.exp at API boundary; convert immediately to Decimal.
+    # API boundary: math.exp requires float; convert immediately to Decimal.
     exponent = -(rate * hours_elapsed)
     # Clamp exponent to avoid overflow in math.exp.
     clamped = max(Decimal("-500"), exponent)

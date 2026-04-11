@@ -3,9 +3,12 @@ Deterministic property tests for core event and clock invariants.
 """
 
 import asyncio
+import random
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+import numpy as np
+import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from iatb.core.clock import Clock, TradingSessions
@@ -13,6 +16,11 @@ from iatb.core.enums import Exchange
 from iatb.core.event_bus import EventBus
 from iatb.core.events import MarketTickEvent
 from iatb.core.types import create_price, create_quantity
+
+# Set deterministic seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 SESSION_EXCHANGES = (Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS)
 PRICE_STRATEGY = st.decimals(

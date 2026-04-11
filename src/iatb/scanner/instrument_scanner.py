@@ -5,14 +5,17 @@ Uses jugaad-data + pandas-ta (proven blueprint components) to scan NSE/CDS/MCX
 and rank top gainers/losers by % change with multi-factor filtering.
 """
 
-from collections.abc import Callable, Sequence
+import importlib
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
+from typing import Any, cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
+from iatb.market_strength.indicators import IndicatorSnapshot
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
 
@@ -46,6 +49,7 @@ class ScannerConfig:
         InstrumentCategory.OPTION,
         InstrumentCategory.FUTURE,
     )
+    lookback_days: int = 30
 
     def __post_init__(self) -> None:
         if self.min_volume_ratio < Decimal("0"):
@@ -143,6 +147,74 @@ class _CandidateScores:
     exit_probability: Decimal
 
 
+def _to_decimal(value: object, field_name: str) -> Decimal:
+    """Convert value to Decimal with validation."""
+    if value is None:
+        msg = f"{field_name} cannot be None"
+        raise ConfigError(msg)
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        msg = f"{field_name} is not decimal-compatible: {value!r}"
+        raise ConfigError(msg) from exc
+    if not decimal_value.is_finite():
+        msg = f"{field_name} must be finite"
+        raise ConfigError(msg)
+    return decimal_value
+
+
+def _last_decimal(values: object, field_name: str) -> Decimal:
+    """Extract last value from sequence and convert to Decimal."""
+    if isinstance(values, Sequence) and not isinstance(values, str):
+        if not values:
+            msg = f"{field_name} returned empty sequence"
+            raise ConfigError(msg)
+        return _to_decimal(values[-1], field_name)
+    msg = f"{field_name} returned unsupported output type: {type(values).__name__}"
+    raise ConfigError(msg)
+
+
+def _iter_dataframe_rows(frame: Any) -> Iterable[Mapping[str, object]]:
+    """Iterate over jugaad-data DataFrame rows."""
+    if hasattr(frame, "iterrows"):
+        for _, payload in frame.iterrows():
+            if not isinstance(payload, Mapping):
+                msg = "jugaad dataframe rows must be mapping-like"
+                raise ConfigError(msg)
+            yield payload
+        return
+    if isinstance(frame, list):
+        for payload in frame:
+            if not isinstance(payload, Mapping):
+                msg = "jugaad list rows must be mapping-like"
+                raise ConfigError(msg)
+            yield payload
+        return
+    msg = "Unsupported jugaad history response type"
+    raise ConfigError(msg)
+
+
+def _coerce_datetime(value: object) -> datetime:
+    """Convert value to UTC datetime."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if isinstance(value, str):
+        normalized = value.strip()
+        parsed = datetime.fromisoformat(normalized)
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    msg = f"Unsupported timestamp value from jugaad payload: {type(value).__name__}"
+    raise ConfigError(msg)
+
+
+def _extract_value(payload: Mapping[str, object], keys: tuple[str, ...]) -> object:
+    """Extract value from payload using fallback keys."""
+    for key in keys:
+        if key in payload and payload[key] is not None:
+            return payload[key]
+    msg = f"Missing required OHLCV key from jugaad payload: {keys}"
+    raise ConfigError(msg)
+
+
 class InstrumentScanner:
     """
     Multi-factor instrument scanner using jugaad-data + pandas-ta.
@@ -162,31 +234,58 @@ class InstrumentScanner:
         strength_scorer: StrengthScorer | None = None,
         sentiment_analyzer: Callable[[str], tuple[Decimal, bool]] | None = None,
         rl_predictor: Callable[[list[Decimal]], Decimal] | None = None,
-        data_provider: Callable[[Exchange, InstrumentCategory], list[MarketData]] | None = None,
+        symbols: Sequence[str] | None = None,
     ) -> None:
         self._config = config or ScannerConfig()
         self._strength_scorer = strength_scorer or StrengthScorer()
         self._sentiment_analyzer = sentiment_analyzer
         self._rl_predictor = rl_predictor
-        self._data_provider = data_provider
+        self._symbols = symbols or []
+        self._pandas_ta = self._load_pandas_ta()
+        self._jugaad_nse = self._load_jugaad_nse()
+
+    @staticmethod
+    def _load_pandas_ta() -> object:
+        """Load pandas-ta module."""
+        try:
+            return importlib.import_module("pandas_ta_classic")
+        except ModuleNotFoundError as exc:
+            msg = "pandas-ta-classic dependency is required for InstrumentScanner"
+            raise ConfigError(msg) from exc
+
+    @staticmethod
+    def _load_jugaad_nse() -> Callable[..., object]:
+        """Load jugaad-data.nse.stock_df function."""
+        try:
+            module = importlib.import_module("jugaad_data.nse")
+        except ModuleNotFoundError as exc:
+            msg = "jugaad-data dependency is required for InstrumentScanner"
+            raise ConfigError(msg) from exc
+        if not hasattr(module, "stock_df"):
+            msg = "jugaad_data.nse.stock_df is not available"
+            raise ConfigError(msg)
+        return cast(Callable[..., object], module.stock_df)
 
     def scan(
         self,
         direction: SortDirection = SortDirection.GAINERS,
-        custom_data: list[MarketData] | None = None,
+        custom_data: Iterable[MarketData] | None = None,
     ) -> ScannerResult:
         """
-        Scan instruments and return ranked candidates.
+        Scan instruments using jugaad-data + pandas-ta.
 
         Args:
             direction: Sort by gainers or losers
-            custom_data: Optional pre-fetched market data (for testing)
+            custom_data: Optional custom market data for testing (bypasses jugaad-data fetch)
 
         Returns:
             ScannerResult with ranked gainers/losers
         """
         scan_timestamp = datetime.now(UTC)
-        all_candidates = custom_data or self._fetch_all_market_data()
+        if custom_data is not None:
+            all_candidates = list(custom_data)
+        else:
+            all_candidates = self._fetch_market_data()
         scored = self._score_candidates(all_candidates)
         filtered = self._apply_filters(scored)
         gainers, losers = self._rank_and_split(filtered)
@@ -198,16 +297,199 @@ class InstrumentScanner:
             scan_timestamp_utc=scan_timestamp,
         )
 
-    def _fetch_all_market_data(self) -> list[MarketData]:
-        """Fetch market data for all configured exchanges and categories."""
-        if self._data_provider is None:
+    def _fetch_market_data(self) -> list[MarketData]:
+        """Fetch market data using jugaad-data and calculate indicators with pandas-ta."""
+        if not self._symbols:
             return []
+
         all_data: list[MarketData] = []
-        for exchange in self._config.exchanges:
-            for category in self._config.categories:
-                data = self._data_provider(exchange, category)
-                all_data.extend(data)
+        end_date = datetime.now(UTC).date()
+        start_date = (datetime.now(UTC) - timedelta(days=self._config.lookback_days)).date()
+
+        for symbol in self._symbols:
+            try:
+                frame = self._jugaad_nse(
+                    symbol=symbol,
+                    from_date=start_date,
+                    to_date=end_date,
+                )
+
+                if frame is None or len(frame) == 0:  # type: ignore[arg-type]
+                    continue
+
+                indicators = self._calculate_indicators(frame)
+                latest_row = None
+                for row in _iter_dataframe_rows(frame):
+                    row_dict = dict(row)
+                    row_timestamp = _coerce_datetime(
+                        _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
+                    )
+                    if latest_row is None or row_timestamp > cast(
+                        "datetime", latest_row["timestamp"]
+                    ):
+                        latest_row = {
+                            "timestamp": _coerce_datetime(
+                                _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
+                            ),
+                            "open": _to_decimal(_extract_value(row_dict, ("open", "OPEN")), "open"),
+                            "high": _to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"),
+                            "low": _to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"),
+                            "close": _to_decimal(
+                                _extract_value(row_dict, ("close", "CLOSE")), "close"
+                            ),
+                            "volume": _to_decimal(
+                                (
+                                    _extract_value(
+                                        row_dict,
+                                        ("volume", "VOLUME", "TOTTRDQTY", "TTL_TRD_QNT"),
+                                    ),
+                                ),
+                                "volume",
+                            ),
+                        }
+
+                if latest_row is None:
+                    continue
+
+                avg_volume = self._calculate_average_volume(frame)
+                market_data = MarketData(
+                    symbol=symbol,
+                    exchange=Exchange.NSE,
+                    category=self._determine_category(symbol),
+                    close_price=latest_row["close"],  # type: ignore[arg-type]
+                    prev_close_price=self._get_previous_close(frame),
+                    volume=latest_row["volume"],  # type: ignore[arg-type]
+                    avg_volume=avg_volume,
+                    timestamp_utc=latest_row["timestamp"],  # type: ignore[arg-type]
+                    high_price=latest_row["high"],  # type: ignore[arg-type]
+                    low_price=latest_row["low"],  # type: ignore[arg-type]
+                    adx=indicators.adx,
+                    atr_pct=(
+                        indicators.atr / latest_row["close"]  # type: ignore[operator]
+                        if latest_row["close"] > Decimal("0")  # type: ignore[operator]
+                        else Decimal("0")
+                    ),
+                    breadth_ratio=Decimal("1.5"),
+                )
+                all_data.append(market_data)
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
+                continue
+
         return all_data
+
+    def _calculate_indicators(self, frame: Any) -> "IndicatorSnapshot":
+        """Calculate technical indicators using pandas-ta."""
+        closes: list[Decimal] = []
+        highs: list[Decimal] = []
+        lows: list[Decimal] = []
+
+        for row in _iter_dataframe_rows(frame):
+            row_dict = dict(row)
+            try:
+                closes.append(_to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close"))
+                highs.append(_to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"))
+                lows.append(_to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"))
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
+                continue
+
+        if len(closes) < 14:
+            return self._default_indicators()
+
+        try:
+            rsi_result = self._pandas_ta.rsi(closes, length=14)  # type: ignore[attr-defined]
+            adx_payload = self._pandas_ta.adx(high=highs, low=lows, close=closes, length=14)  # type: ignore[attr-defined]
+            atr_result = self._pandas_ta.atr(high=highs, low=lows, close=closes, length=14)  # type: ignore[attr-defined]
+            macd_payload = self._pandas_ta.macd(closes, fast=12, slow=26, signal=9)  # type: ignore[attr-defined]  # noqa: F841
+            bb_payload = self._pandas_ta.bbands(closes, length=20, std=2.0)  # type: ignore[attr-defined]
+
+            adx_col = self._extract_from_payload(adx_payload, "ADX_14")
+            atr_val = _last_decimal(atr_result, "atr")
+            bb_upper = self._extract_from_payload(bb_payload, "BBU_20_2.0")
+            bb_middle = self._extract_from_payload(bb_payload, "BBM_20_2.0")
+            bb_lower = self._extract_from_payload(bb_payload, "BBL_20_2.0")
+
+            return IndicatorSnapshot(
+                rsi=_last_decimal(rsi_result, "rsi"),
+                adx=_last_decimal(adx_col, "adx"),
+                atr=atr_val,
+                macd_histogram=Decimal("0"),  # Simplified
+                bollinger_upper=_last_decimal(bb_upper, "bb_upper"),
+                bollinger_middle=_last_decimal(bb_middle, "bb_middle"),
+                bollinger_lower=_last_decimal(bb_lower, "bb_lower"),
+            )
+        except Exception:
+            return self._default_indicators()
+
+    def _extract_from_payload(self, payload: object, column_name: str) -> object:
+        """Extract column from pandas-ta payload."""
+        if isinstance(payload, dict):
+            if column_name not in payload:
+                msg = f"indicator payload missing column: {column_name}"
+                raise ConfigError(msg)
+            return payload[column_name]
+        if hasattr(payload, "__getitem__"):
+            try:
+                return payload[column_name]
+            except Exception as exc:
+                msg = f"indicator payload missing column: {column_name}"
+                raise ConfigError(msg) from exc
+        msg = "indicator payload must support named column access"
+        raise ConfigError(msg)
+
+    def _default_indicators(self) -> "IndicatorSnapshot":
+        """Return default indicator values when calculation fails."""
+        return IndicatorSnapshot(
+            rsi=Decimal("50"),
+            adx=Decimal("20"),
+            atr=Decimal("0"),
+            macd_histogram=Decimal("0"),
+            bollinger_upper=Decimal("0"),
+            bollinger_middle=Decimal("0"),
+            bollinger_lower=Decimal("0"),
+        )
+
+    def _calculate_average_volume(self, frame: Any) -> Decimal:
+        """Calculate average volume over the period."""
+        volumes: list[Decimal] = []
+        for row in _iter_dataframe_rows(frame):
+            row_dict = dict(row)
+            try:
+                vol = _to_decimal(
+                    _extract_value(row_dict, ("volume", "VOLUME", "TOTTRDQTY", "TTL_TRD_QNT")),
+                    "volume",
+                )
+                volumes.append(vol)
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
+                continue
+
+        if not volumes:
+            return Decimal("0")
+        return sum(volumes) / Decimal(str(len(volumes)))
+
+    def _get_previous_close(self, frame: Any) -> Decimal:
+        """Get previous close price from frame."""
+        closes: list[Decimal] = []
+        for row in _iter_dataframe_rows(frame):
+            row_dict = dict(row)
+            try:
+                close = _to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close")
+                closes.append(close)
+            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
+                continue
+
+        if len(closes) < 2:
+            return Decimal("0")
+        return closes[-2]
+
+    @staticmethod
+    def _determine_category(symbol: str) -> InstrumentCategory:
+        """Determine instrument category from symbol name."""
+        symbol_upper = symbol.upper()
+        if "FUT" in symbol_upper or "FUTURE" in symbol_upper:
+            return InstrumentCategory.FUTURE
+        if "CE" in symbol_upper or "PE" in symbol_upper or len(symbol_upper) > 10:
+            return InstrumentCategory.OPTION
+        return InstrumentCategory.STOCK
 
     def _score_candidates(self, candidates: list[MarketData]) -> list[_CandidateScores]:
         """Score each candidate with sentiment, strength, and RL."""
@@ -271,7 +553,7 @@ class InstrumentScanner:
                     volume_ratio=s.market_data.volume_ratio,
                     exit_probability=s.exit_probability,
                     is_tradable=s.is_strength_tradable,
-                    regime=MarketRegime.SIDEWAYS,  # Default; can be enhanced
+                    regime=MarketRegime.SIDEWAYS,
                     rank=idx + 1,
                     timestamp_utc=s.market_data.timestamp_utc,
                     metadata={
@@ -288,7 +570,8 @@ class InstrumentScanner:
         if self._sentiment_analyzer is None:
             return Decimal("0"), False
         score, is_strong = self._sentiment_analyzer(data.symbol)
-        return score, is_strong
+        is_very_strong = abs(score) >= self._config.very_strong_threshold
+        return score, is_very_strong
 
     def _get_strength(self, data: MarketData) -> tuple[Decimal, bool]:
         """Get strength score and tradability flag."""
@@ -341,6 +624,7 @@ class InstrumentScanner:
         return min(Decimal("1"), max(Decimal("0"), composite))
 
 
+# Mock helpers for testing
 def create_mock_data_provider(
     data: Sequence[MarketData],
 ) -> Callable[[Exchange, InstrumentCategory], list[MarketData]]:

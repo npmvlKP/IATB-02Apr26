@@ -21,6 +21,7 @@ from iatb.core.exceptions import ConfigError
 
 _DEFAULT_TIMEOUT_SECONDS = 10
 _DEFAULT_MAX_RETRIES = 3
+# API boundary: retry delay is time-based, not financial calculation.
 _DEFAULT_RETRY_DELAY_SECONDS = 1.0
 _LOGIN_BASE_URL = "https://kite.zerodha.com"
 _API_BASE_URL = "https://api.kite.trade"
@@ -59,6 +60,7 @@ class ZerodhaConnection:
         base_url: str = _API_BASE_URL,
         timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
         max_retries: int = _DEFAULT_MAX_RETRIES,
+        # API boundary: retry delay is time-based, not financial calculation.
         retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,
         http_request: HttpRequest | None = None,
     ) -> None:
@@ -93,6 +95,7 @@ class ZerodhaConnection:
         base_url: str = _API_BASE_URL,
         timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
         max_retries: int = _DEFAULT_MAX_RETRIES,
+        # API boundary: retry delay is time-based, not financial calculation.
         retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,
         http_request: HttpRequest | None = None,
     ) -> ZerodhaConnection:
