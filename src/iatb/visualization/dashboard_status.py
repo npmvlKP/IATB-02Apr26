@@ -371,15 +371,6 @@ def read_exchange_session_status(
     """
     from datetime import timedelta
 
-    now_utc = datetime.now(UTC)
-    ist_offset = timedelta(hours=5, minutes=30)
-    now_ist = now_utc + ist_offset
-
-    ist_today = now_ist.date()
-    weekday = ist_today.weekday()
-    if weekday >= 5:
-        return _build_weekend_status(exchange, open_time, close_time)
-
     parsed_open = _parse_time_parts(open_time)
     parsed_close = _parse_time_parts(close_time)
     if parsed_open is None or parsed_close is None:
@@ -390,6 +381,15 @@ def read_exchange_session_status(
             session_close_time=close_time,
             status_label="ERROR",
         )
+
+    now_utc = datetime.now(UTC)
+    ist_offset = timedelta(hours=5, minutes=30)
+    now_ist = now_utc + ist_offset
+
+    ist_today = now_ist.date()
+    weekday = ist_today.weekday()
+    if weekday >= 5:
+        return _build_weekend_status(exchange, open_time, close_time)
 
     open_h, open_m = parsed_open
     close_h, close_m = parsed_close

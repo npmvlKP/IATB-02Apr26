@@ -19,8 +19,14 @@ event_bus_max_queue_size = 1000
 event_bus_batch_size = 100
 max_tasks = 100
 
-[telegram]
-bot_token = ""
-chat_id = ""
-max_messages_per_minute = 20
-enabled = false
+  [telegram]
+  bot_token = ""
+  chat_id = ""
+  max_messages_per_minute = 20
+  enabled = false
+
+  [scanner]
+  watchlist = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"]
+  scan_interval_seconds = 60
+  max_candidates = 5
+  +++++++ REPLACE

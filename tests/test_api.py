@@ -103,16 +103,32 @@ class TestBrokerStatus:
         sys.modules["kiteconnect"] = None
         try:
             with patch("iatb.api.keyring") as mock_kr:
-                mock_kr.get_password.side_effect = lambda _svc, key: (
-                    "val" if key == "zerodha_api_key" else "tok"
-                )
-                resp = client.get("/broker/status")
+                with patch("iatb.broker.token_manager.ZerodhaTokenManager") as mock_tm:
+                    mock_tm.return_value.is_token_fresh.return_value = True
+                    mock_kr.get_password.side_effect = lambda _svc, key: (
+                        "val" if key == "zerodha_api_key" else "tok"
+                    )
+                    resp = client.get("/broker/status")
             assert resp.status_code == 503
         finally:
             if saved is not None:
                 sys.modules["kiteconnect"] = saved
             elif "kiteconnect" in sys.modules:
                 del sys.modules["kiteconnect"]
+
+    def test_expired_token_returns_401_with_relogin_required(self) -> None:
+        """Test that expired token returns 401 with relogin_required detail."""
+        import iatb.api as api_mod
+
+        api_mod._kite = None
+        try:
+            with patch("iatb.broker.token_manager.ZerodhaTokenManager") as mock_tm:
+                mock_tm.return_value.is_token_fresh.return_value = False
+                resp = client.get("/broker/status")
+            assert resp.status_code == 401
+            assert resp.json()["detail"] == "relogin_required"
+        finally:
+            api_mod._kite = None
 
 
 class TestExchangeStatus:

@@ -62,6 +62,14 @@ def _init_kite() -> Any:
     global _kite
     if _kite is not None:
         return _kite
+    from iatb.broker.token_manager import ZerodhaTokenManager
+
+    token_manager = ZerodhaTokenManager()
+    if not token_manager.is_token_fresh():
+        raise HTTPException(
+            status_code=401,
+            detail="relogin_required",
+        )
     api_key = keyring.get_password("iatb", "zerodha_api_key")
     access_token = keyring.get_password("iatb", "zerodha_access_token")
     if not api_key or not access_token:
