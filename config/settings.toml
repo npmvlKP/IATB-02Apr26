@@ -29,4 +29,3 @@ max_tasks = 100
   watchlist = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"]
   scan_interval_seconds = 60
   max_candidates = 5
-  +++++++ REPLACE

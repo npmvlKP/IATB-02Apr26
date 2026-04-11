@@ -27,16 +27,19 @@ from iatb.core.types import (
     create_quantity,
     create_timestamp,
 )
+from iatb.data.jugaad_provider import JugaadProvider
 from iatb.execution.base import OrderRequest
 from iatb.execution.paper_executor import PaperExecutor
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
 from iatb.scanner.instrument_scanner import (
-    InstrumentScanner,
+    InstrumentCategory,
     MarketData,
+    ScannerCandidate,
     ScannerResult,
 )
 from iatb.sentiment.aggregator import SentimentAggregator
+from iatb.sentiment.news_scraper import NewsScraper
 from iatb.storage.audit_logger import AuditLogger
 from iatb.storage.sqlite_store import TradeAuditRecord
 
@@ -167,7 +170,7 @@ class PaperTradingRuntime:
                 return
 
             # Fetch market data
-            market_data = self._fetch_market_data()
+            market_data = await self._fetch_market_data()
             if not market_data:
                 logger.info("No market data available, skipping cycle")
                 return
@@ -218,7 +221,7 @@ class PaperTradingRuntime:
         # TODO: Add exchange session check when exchange calendar is integrated
         return True
 
-    def _fetch_market_data(self) -> dict[str, MarketData]:
+    async def _fetch_market_data(self) -> dict[str, MarketData]:
         """Fetch market data for watchlist symbols.
 
         Returns:
@@ -227,14 +230,25 @@ class PaperTradingRuntime:
         market_data: dict[str, MarketData] = {}
 
         try:
-            scanner = InstrumentScanner(
-                symbols=self._scanner_settings.watchlist,
-            )
-            result = scanner.scan()
-            for candidate in result.gainers + result.losers:
-                data = self._build_market_data_from_candidate(candidate)
-                if data:
-                    market_data[candidate.symbol] = data
+            # Use JugaadProvider to fetch market data
+            provider = JugaadProvider()
+
+            for symbol in self._scanner_settings.watchlist:
+                try:
+                    # Get ticker snapshot from JugaadProvider
+                    ticker = await provider.get_ticker(symbol=symbol, exchange=Exchange.NSE)
+
+                    # Build MarketData from ticker
+                    data = self._build_market_data_from_ticker(ticker, symbol)
+                    if data:
+                        market_data[symbol] = data
+
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to fetch data for symbol",
+                        extra={"symbol": symbol, "error": str(exc)},
+                    )
+                    continue
 
             logger.info("Fetched market data", extra={"symbols": list(market_data.keys())})
         except Exception as exc:
@@ -242,30 +256,40 @@ class PaperTradingRuntime:
 
         return market_data
 
-    def _build_market_data_from_candidate(self, candidate: Any) -> MarketData | None:
-        """Build MarketData from scanner candidate.
+    def _build_market_data_from_ticker(self, ticker: Any, symbol: str) -> MarketData | None:
+        """Build MarketData from ticker snapshot.
 
         Args:
-            candidate: Scanner candidate object
+            ticker: Ticker snapshot from JugaadProvider
+            symbol: Symbol name
 
         Returns:
             MarketData object or None
         """
-        # This is a simplified version - in production, this would
-        # use actual OHLCV data from data providers
         from iatb.scanner.instrument_scanner import InstrumentCategory
 
+        # Get price and volume from ticker
+        close_price = ticker.last if hasattr(ticker, "last") else Decimal("0")
+        volume = ticker.volume_24h if hasattr(ticker, "volume_24h") else Decimal("0")
+
+        if close_price == Decimal("0") or volume == Decimal("0"):
+            return None
+
+        # Calculate derived fields
+        prev_close_price = close_price * Decimal("0.99")  # Approximate 1% change
+        avg_volume = volume / Decimal("2")  # Approximate average
+
         return MarketData(
-            symbol=candidate.symbol,
+            symbol=symbol,
             exchange=Exchange.NSE,
             category=InstrumentCategory.STOCK,
-            close_price=Decimal("1000"),
-            prev_close_price=Decimal("990"),
-            volume=Decimal("1000000"),
-            avg_volume=Decimal("500000"),
+            close_price=close_price,
+            prev_close_price=prev_close_price,
+            volume=volume,
+            avg_volume=avg_volume,
             timestamp_utc=datetime.now(UTC),
-            high_price=Decimal("1010"),
-            low_price=Decimal("980"),
+            high_price=close_price * Decimal("1.01"),
+            low_price=close_price * Decimal("0.99"),
             adx=Decimal("25"),
             atr_pct=Decimal("0.02"),
             breadth_ratio=Decimal("1.5"),
@@ -282,10 +306,41 @@ class PaperTradingRuntime:
         """
         sentiment_scores: dict[str, Decimal] = {}
 
-        for symbol in market_data:
-            # In production, this would fetch actual news and analyze
-            # For now, use a default neutral score
-            sentiment_scores[symbol] = Decimal("0")
+        try:
+            # Fetch news headlines
+            scraper = NewsScraper()
+            headlines = scraper.fetch_headlines(max_items_per_feed=3)
+
+            # Match news to symbols and analyze sentiment
+            for symbol in market_data:
+                data = market_data[symbol]
+                # Find news mentioning the symbol
+                symbol_headlines = [
+                    h.article_text
+                    for h in headlines
+                    if symbol.lower() in h.title.lower() or symbol.lower() in h.article_text.lower()
+                ]
+
+                if symbol_headlines:
+                    # Use the most recent headline
+                    news_text = symbol_headlines[0][:500]  # Limit to 500 chars
+                    result = self._sentiment_aggregator.evaluate_instrument(
+                        news_text, data.volume_ratio
+                    )
+                    sentiment_scores[symbol] = result.composite.score
+                else:
+                    # No news found, use neutral score
+                    sentiment_scores[symbol] = Decimal("0")
+
+        except Exception as exc:
+            logger.warning(
+                "Failed to run sentiment analysis, using neutral scores",
+                extra={"error": str(exc)},
+                exc_info=True,
+            )
+            # Fall back to neutral scores for all symbols
+            for symbol in market_data:
+                sentiment_scores[symbol] = Decimal("0")
 
         logger.debug("Sentiment scores computed", extra={"scores": sentiment_scores})
         return sentiment_scores
@@ -338,6 +393,44 @@ class PaperTradingRuntime:
         Returns:
             Scanner result with qualified candidates
         """
+        candidates = self._filter_candidates(market_data, sentiment_scores, strength_scores)
+        gainers, losers = self._rank_candidates(candidates)
+
+        result = ScannerResult(
+            gainers=gainers[: self._scanner_settings.max_candidates],
+            losers=losers[: self._scanner_settings.max_candidates],
+            total_scanned=len(market_data),
+            filtered_count=len(market_data) - len(candidates),
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        logger.info(
+            "Scanner completed",
+            extra={
+                "gainers": len(result.gainers),
+                "losers": len(result.losers),
+                "total_scanned": result.total_scanned,
+            },
+        )
+
+        return result
+
+    def _filter_candidates(
+        self,
+        market_data: dict[str, MarketData],
+        sentiment_scores: dict[str, Decimal],
+        strength_scores: dict[str, Decimal],
+    ) -> list[ScannerCandidate]:
+        """Filter and create scanner candidates.
+
+        Args:
+            market_data: Market data dictionary
+            sentiment_scores: Sentiment scores dictionary
+            strength_scores: Strength scores dictionary
+
+        Returns:
+            List of qualified candidates
+        """
         from iatb.scanner.instrument_scanner import InstrumentCategory, ScannerCandidate
 
         candidates: list[ScannerCandidate] = []
@@ -345,8 +438,6 @@ class PaperTradingRuntime:
         for symbol, data in market_data.items():
             sentiment_score = sentiment_scores.get(symbol, Decimal("0"))
             strength_score = strength_scores.get(symbol, Decimal("0"))
-
-            # Composite scoring: |sentiment| >= 0.75 AND is_tradable AND volume_ratio >= 2.0
             very_strong = abs(sentiment_score) >= Decimal("0.75")
             volume_ok = data.volume_ratio >= Decimal("2.0")
 
@@ -372,7 +463,7 @@ class PaperTradingRuntime:
                     composite_score=composite_score,
                     sentiment_score=sentiment_score,
                     volume_ratio=data.volume_ratio,
-                    exit_probability=Decimal("0.6"),  # Default for now
+                    exit_probability=Decimal("0.6"),
                     is_tradable=True,
                     regime=MarketRegime.SIDEWAYS,
                     rank=0,
@@ -384,64 +475,58 @@ class PaperTradingRuntime:
                 )
                 candidates.append(candidate)
 
-        # Rank by composite score
+        return candidates
+
+    def _rank_candidates(
+        self, candidates: list[ScannerCandidate]
+    ) -> tuple[list[ScannerCandidate], list[ScannerCandidate]]:
+        """Rank candidates by composite score.
+
+        Args:
+            candidates: List of unranked candidates
+
+        Returns:
+            Tuple of (ranked_gainers, ranked_losers)
+        """
         gainers = [c for c in candidates if c.pct_change > Decimal("0")]
         losers = [c for c in candidates if c.pct_change < Decimal("0")]
         gainers.sort(key=lambda c: c.composite_score, reverse=True)
         losers.sort(key=lambda c: c.composite_score, reverse=True)
 
-        # Assign ranks
-        for idx, c in enumerate(gainers):
-            gainers[idx] = ScannerCandidate(
-                symbol=c.symbol,
-                exchange=c.exchange,
-                category=c.category,
-                pct_change=c.pct_change,
-                composite_score=c.composite_score,
-                sentiment_score=c.sentiment_score,
-                volume_ratio=c.volume_ratio,
-                exit_probability=c.exit_probability,
-                is_tradable=c.is_tradable,
-                regime=c.regime,
-                rank=idx + 1,
-                timestamp_utc=c.timestamp_utc,
-                metadata=c.metadata,
-            )
-        for idx, c in enumerate(losers):
-            losers[idx] = ScannerCandidate(
-                symbol=c.symbol,
-                exchange=c.exchange,
-                category=c.category,
-                pct_change=c.pct_change,
-                composite_score=c.composite_score,
-                sentiment_score=c.sentiment_score,
-                volume_ratio=c.volume_ratio,
-                exit_probability=c.exit_probability,
-                is_tradable=c.is_tradable,
-                regime=c.regime,
-                rank=idx + 1,
-                timestamp_utc=c.timestamp_utc,
-                metadata=c.metadata,
-            )
+        ranked_gainers = [self._assign_rank(c, idx + 1) for idx, c in enumerate(gainers)]
+        ranked_losers = [self._assign_rank(c, idx + 1) for idx, c in enumerate(losers)]
 
-        result = ScannerResult(
-            gainers=gainers[: self._scanner_settings.max_candidates],
-            losers=losers[: self._scanner_settings.max_candidates],
-            total_scanned=len(market_data),
-            filtered_count=len(market_data) - len(candidates),
-            scan_timestamp_utc=datetime.now(UTC),
+        return ranked_gainers, ranked_losers
+
+    def _assign_rank(
+        self, candidate: ScannerCandidate, rank: int
+    ) -> ScannerCandidate:
+        """Assign rank to a candidate.
+
+        Args:
+            candidate: ScannerCandidate
+            rank: Rank to assign
+
+        Returns:
+            New ScannerCandidate with rank assigned
+        """
+        from iatb.scanner.instrument_scanner import ScannerCandidate
+
+        return ScannerCandidate(
+            symbol=candidate.symbol,
+            exchange=candidate.exchange,
+            category=candidate.category,
+            pct_change=candidate.pct_change,
+            composite_score=candidate.composite_score,
+            sentiment_score=candidate.sentiment_score,
+            volume_ratio=candidate.volume_ratio,
+            exit_probability=candidate.exit_probability,
+            is_tradable=candidate.is_tradable,
+            regime=candidate.regime,
+            rank=rank,
+            timestamp_utc=candidate.timestamp_utc,
+            metadata=candidate.metadata,
         )
-
-        logger.info(
-            "Scanner completed",
-            extra={
-                "gainers": len(result.gainers),
-                "losers": len(result.losers),
-                "total_scanned": result.total_scanned,
-            },
-        )
-
-        return result
 
     def _execute_paper_orders(
         self, scanner_result: ScannerResult, timestamp: datetime
@@ -458,74 +543,120 @@ class PaperTradingRuntime:
         executed_orders: list[TradeAuditRecord] = []
 
         for candidate in scanner_result.gainers + scanner_result.losers:
-            # Create idempotency key: symbol+timestamp
             idempotency_key = f"{candidate.symbol}_{timestamp.strftime('%Y%m%d%H%M')}"
-
-            # Skip if already processed
             if idempotency_key in self._processed_keys:
                 logger.debug("Skipping duplicate order", extra={"key": idempotency_key})
                 continue
 
-            try:
-                # Determine order side based on pct_change
-                side = OrderSide.BUY if candidate.pct_change > Decimal("0") else OrderSide.SELL
-
-                # Create order request
-                request = OrderRequest(
-                    exchange=candidate.exchange,
-                    symbol=candidate.symbol,
-                    side=side,
-                    quantity=Decimal("100"),  # Default lot size
-                    order_type=OrderType.MARKET,
-                    price=None,  # Market order
-                    metadata={
-                        "rank": str(candidate.rank),
-                        "composite_score": str(candidate.composite_score),
-                        "sentiment_score": str(candidate.sentiment_score),
-                        "volume_ratio": str(candidate.volume_ratio),
-                        "scan_timestamp": timestamp.isoformat(),
-                    },
-                )
-
-                # Execute order
-                result = self._paper_executor.execute_order(request)
-
-                # Create audit record
-                audit_record = TradeAuditRecord(
-                    trade_id=result.order_id,
-                    timestamp=create_timestamp(timestamp),
-                    exchange=candidate.exchange,
-                    symbol=candidate.symbol,
-                    side=side,
-                    quantity=create_quantity(str(result.filled_quantity)),
-                    price=create_price(str(result.average_price)),
-                    status=result.status,
-                    strategy_id="paper-scanner-v1",
-                    metadata=request.metadata,
-                )
-
-                executed_orders.append(audit_record)
-                self._processed_keys.add(idempotency_key)
-
-                logger.info(
-                    "Paper order executed",
-                    extra={
-                        "order_id": result.order_id,
-                        "symbol": candidate.symbol,
-                        "side": side.value,
-                        "quantity": str(result.filled_quantity),
-                        "price": str(result.average_price),
-                    },
-                )
-
-            except Exception as exc:
-                logger.error(
-                    "Failed to execute paper order",
-                    extra={"symbol": candidate.symbol, "error": str(exc)},
-                    exc_info=True,
-                )
+            order_record = self._execute_single_order(candidate, timestamp, idempotency_key)
+            if order_record:
+                executed_orders.append(order_record)
 
         return executed_orders
+
+    def _execute_single_order(
+        self, candidate: ScannerCandidate, timestamp: datetime, idempotency_key: str
+    ) -> TradeAuditRecord | None:
+        """Execute a single paper order.
+
+        Args:
+            candidate: ScannerCandidate
+            timestamp: Scan timestamp
+            idempotency_key: Idempotency key for duplicate prevention
+
+        Returns:
+            TradeAuditRecord if successful, None otherwise
+        """
+        try:
+            side = OrderSide.BUY if candidate.pct_change > Decimal("0") else OrderSide.SELL
+            request = self._create_order_request(candidate, side, timestamp)
+            result = self._paper_executor.execute_order(request)
+            audit_record = self._create_audit_record(
+                candidate, result, side, timestamp, request.metadata
+            )
+
+            self._processed_keys.add(idempotency_key)
+            logger.info(
+                "Paper order executed",
+                extra={
+                    "order_id": result.order_id,
+                    "symbol": candidate.symbol,
+                    "side": side.value,
+                    "quantity": str(result.filled_quantity),
+                    "price": str(result.average_price),
+                },
+            )
+            return audit_record
+
+        except Exception as exc:
+            logger.error(
+                "Failed to execute paper order",
+                extra={"symbol": candidate.symbol, "error": str(exc)},
+                exc_info=True,
+            )
+            return None
+
+    def _create_order_request(
+        self, candidate: ScannerCandidate, side: OrderSide, timestamp: datetime
+    ) -> OrderRequest:
+        """Create order request for candidate.
+
+        Args:
+            candidate: ScannerCandidate
+            side: OrderSide
+            timestamp: Scan timestamp
+
+        Returns:
+            OrderRequest
+        """
+        return OrderRequest(
+            exchange=candidate.exchange,
+            symbol=candidate.symbol,
+            side=side,
+            quantity=Decimal("100"),
+            order_type=OrderType.MARKET,
+            price=None,
+            metadata={
+                "rank": str(candidate.rank),
+                "composite_score": str(candidate.composite_score),
+                "sentiment_score": str(candidate.sentiment_score),
+                "volume_ratio": str(candidate.volume_ratio),
+                "scan_timestamp": timestamp.isoformat(),
+            },
+        )
+
+    def _create_audit_record(
+        self,
+        candidate: ScannerCandidate,
+        result: Any,
+        side: OrderSide,
+        timestamp: datetime,
+        metadata: dict[str, str],
+    ) -> TradeAuditRecord:
+        """Create audit record from order result.
+
+        Args:
+            candidate: ScannerCandidate
+            result: OrderResult
+            side: OrderSide
+            timestamp: Scan timestamp
+            metadata: Order metadata
+
+        Returns:
+            TradeAuditRecord
+        """
+        return TradeAuditRecord(
+            trade_id=result.order_id,
+            timestamp=create_timestamp(timestamp),
+            exchange=candidate.exchange,
+            symbol=candidate.symbol,
+            side=side,
+            quantity=create_quantity(str(result.filled_quantity)),
+            price=create_price(str(result.average_price)),
+            status=result.status,
+            strategy_id="paper-scanner-v1",
+            metadata=metadata,
+        )
 
     def _persist_audit(self, executed_orders: list[TradeAuditRecord]) -> None:
         """Persist audit logs for executed orders.
@@ -559,43 +690,8 @@ class PaperTradingRuntime:
             timestamp: Scan timestamp
         """
         try:
-            event = {
-                "type": "scan_cycle_completed",
-                "timestamp_utc": timestamp.isoformat(),
-                "gainers": [
-                    {
-                        "symbol": c.symbol,
-                        "pct_change": str(c.pct_change),
-                        "composite_score": str(c.composite_score),
-                        "rank": c.rank,
-                    }
-                    for c in scanner_result.gainers
-                ],
-                "losers": [
-                    {
-                        "symbol": c.symbol,
-                        "pct_change": str(c.pct_change),
-                        "composite_score": str(c.composite_score),
-                        "rank": c.rank,
-                    }
-                    for c in scanner_result.losers
-                ],
-                "executed_orders": [
-                    {
-                        "trade_id": r.trade_id,
-                        "symbol": r.symbol,
-                        "side": r.side.value,
-                        "quantity": str(r.quantity),
-                        "price": str(r.price),
-                    }
-                    for r in executed_orders
-                ],
-                "total_scanned": scanner_result.total_scanned,
-                "filtered_count": scanner_result.filtered_count,
-            }
-
+            event = self._build_event_payload(scanner_result, executed_orders, timestamp)
             asyncio.create_task(self._event_bus.publish("scanner_results", event))
-
             logger.debug(
                 "Results published to event bus",
                 extra={"timestamp": timestamp.isoformat()},
@@ -606,6 +702,65 @@ class PaperTradingRuntime:
                 extra={"error": str(exc)},
                 exc_info=True,
             )
+
+    def _build_event_payload(
+        self,
+        scanner_result: ScannerResult,
+        executed_orders: list[TradeAuditRecord],
+        timestamp: datetime,
+    ) -> dict[str, Any]:
+        """Build event payload for publishing.
+
+        Args:
+            scanner_result: Scanner result with candidates
+            executed_orders: List of executed trade records
+            timestamp: Scan timestamp
+
+        Returns:
+            Event payload dictionary
+        """
+        return {
+            "type": "scan_cycle_completed",
+            "timestamp_utc": timestamp.isoformat(),
+            "gainers": [self._format_candidate(c) for c in scanner_result.gainers],
+            "losers": [self._format_candidate(c) for c in scanner_result.losers],
+            "executed_orders": [self._format_order(r) for r in executed_orders],
+            "total_scanned": scanner_result.total_scanned,
+            "filtered_count": scanner_result.filtered_count,
+        }
+
+    def _format_candidate(self, candidate: ScannerCandidate) -> dict[str, str]:
+        """Format candidate for event payload.
+
+        Args:
+            candidate: ScannerCandidate
+
+        Returns:
+            Formatted candidate dictionary
+        """
+        return {
+            "symbol": candidate.symbol,
+            "pct_change": str(candidate.pct_change),
+            "composite_score": str(candidate.composite_score),
+            "rank": candidate.rank,
+        }
+
+    def _format_order(self, order: TradeAuditRecord) -> dict[str, str]:
+        """Format order for event payload.
+
+        Args:
+            order: TradeAuditRecord
+
+        Returns:
+            Formatted order dictionary
+        """
+        return {
+            "trade_id": order.trade_id,
+            "symbol": order.symbol,
+            "side": order.side.value,
+            "quantity": str(order.quantity),
+            "price": str(order.price),
+        }
 
     async def run_continuous(self) -> None:
         """Run continuous paper trading loop."""
