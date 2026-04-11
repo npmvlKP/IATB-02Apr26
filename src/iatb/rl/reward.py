@@ -10,6 +10,15 @@ from iatb.core.exceptions import ConfigError
 
 _LOGGER = logging.getLogger(__name__)
 
+# Optional MLflow tracking integration
+try:
+    from iatb.ml.tracking import ExperimentMetrics, ExperimentTracker  # noqa: F401
+
+    _MLFLOW_AVAILABLE = True
+except ImportError:
+    _MLFLOW_AVAILABLE = False
+    _LOGGER.debug("MLflow tracking not available for RL rewards")
+
 _SQRT_252 = Decimal("15.8745078664")
 _DEFAULT_POSITIVE_EXIT_THRESHOLD = Decimal("0.7")
 

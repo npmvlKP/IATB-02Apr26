@@ -8,7 +8,7 @@ and rank top gainers/losers by % change with multi-factor filtering.
 import importlib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any, cast
@@ -315,14 +315,14 @@ class InstrumentScanner:
 
         return all_data
 
-    def _get_date_range(self) -> tuple["date", "date"]:
+    def _get_date_range(self) -> tuple[date, date]:
         """Get start and end dates for data fetch."""
         end_date = datetime.now(UTC).date()
         start_date = (datetime.now(UTC) - timedelta(days=self._config.lookback_days)).date()
         return start_date, end_date
 
     def _fetch_single_symbol(
-        self, symbol: str, start_date: "date", end_date: "date"
+        self, symbol: str, start_date: date, end_date: date
     ) -> MarketData | None:
         """Fetch and process data for a single symbol."""
         frame = self._jugaad_nse(
