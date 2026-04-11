@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 import torch
 from iatb.core.exceptions import ConfigError
-from iatb.sentiment.finbert_analyzer import FinbertAnalyzer, _default_predictor
+from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
+from iatb.sentiment.helpers import resolve_finbert_predictor
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -40,11 +41,11 @@ def test_finbert_default_predictor_missing_dependency_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "iatb.sentiment.finbert_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: (_ for _ in ()).throw(ModuleNotFoundError),
     )
     with pytest.raises(ConfigError, match="transformers dependency"):
-        _default_predictor("ProsusAI/finbert")
+        resolve_finbert_predictor("ProsusAI/finbert")
 
 
 def test_finbert_analyzer_rejects_empty_text() -> None:
@@ -64,11 +65,11 @@ def test_finbert_default_predictor_pipeline_unavailable_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "iatb.sentiment.finbert_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: SimpleNamespace(),
     )
     with pytest.raises(ConfigError, match="pipeline is unavailable"):
-        _default_predictor("ProsusAI/finbert")
+        resolve_finbert_predictor("ProsusAI/finbert")
 
 
 def test_finbert_default_predictor_returns_callable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,8 +78,8 @@ def test_finbert_default_predictor_returns_callable(monkeypatch: pytest.MonkeyPa
         return lambda text, truncation: [{"label": "positive", "score": 0.9}]
 
     monkeypatch.setattr(
-        "iatb.sentiment.finbert_analyzer.importlib.import_module",
+        "iatb.sentiment.helpers.importlib.import_module",
         lambda _: SimpleNamespace(pipeline=_pipeline),
     )
-    predictor = _default_predictor("ProsusAI/finbert")
+    predictor = resolve_finbert_predictor("ProsusAI/finbert")
     assert predictor("RBI hints at growth support.") == [{"label": "positive", "score": 0.9}]

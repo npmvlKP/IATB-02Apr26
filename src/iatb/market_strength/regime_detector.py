@@ -3,6 +3,7 @@ HMM-based market regime detector (bull/bear/sideways).
 """
 
 import importlib
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
@@ -10,6 +11,8 @@ from enum import StrEnum
 
 from iatb.core.events import RegimeChangeEvent
 from iatb.core.exceptions import ConfigError
+
+logger = logging.getLogger(__name__)
 
 
 class MarketRegime(StrEnum):
@@ -47,6 +50,10 @@ class RegimeDetector:
         )
 
     def detect(self, features: Sequence[Sequence[Decimal]]) -> RegimeResult:
+        logger.debug(
+            "Detecting regime from features",
+            extra={"feature_rows": len(features)},
+        )
         if len(features) < 3:
             msg = "at least three feature rows are required for regime detection"
             raise ConfigError(msg)
@@ -54,6 +61,7 @@ class RegimeDetector:
             msg = "feature rows cannot be empty"
             raise ConfigError(msg)
         model = self._model_factory()
+        # API boundary: hmmlearn requires float inputs (G7 exception)
         feature_matrix = [[float(value) for value in row] for row in features]
         self._fit_model(model, feature_matrix)
         states = self._predict_states(model, feature_matrix)
@@ -61,17 +69,30 @@ class RegimeDetector:
         event = self._create_transition_event(regime)
         confidence = self._estimate_confidence(states)
         self._last_regime = regime
+        logger.info(
+            "Regime detected",
+            extra={
+                "regime": regime.value,
+                "confidence": str(confidence),
+                "transition": event is not None,
+            },
+        )
         return RegimeResult(regime=regime, confidence=confidence, transition_event=event)
 
     @staticmethod
-    def _fit_model(model: object, feature_matrix: Sequence[Sequence[float]]) -> None:
+    def _fit_model(
+        model: object, feature_matrix: Sequence[Sequence[float]]
+    ) -> None:  # API boundary type (G7)
         if not hasattr(model, "fit"):
             msg = "HMM model must expose fit()"
             raise ConfigError(msg)
         model.fit(feature_matrix)
+        logger.debug("HMM model fitted")
 
     @staticmethod
-    def _predict_states(model: object, feature_matrix: Sequence[Sequence[float]]) -> list[int]:
+    def _predict_states(
+        model: object, feature_matrix: Sequence[Sequence[float]]
+    ) -> list[int]:  # API boundary type (G7)
         if not hasattr(model, "predict"):
             msg = "HMM model must expose predict()"
             raise ConfigError(msg)
@@ -80,6 +101,7 @@ class RegimeDetector:
         if not states:
             msg = "HMM predict() returned no states"
             raise ConfigError(msg)
+        logger.debug("States predicted", extra={"num_states": len(states)})
         return states
 
     @staticmethod
@@ -106,6 +128,13 @@ class RegimeDetector:
     def _create_transition_event(self, regime: MarketRegime) -> RegimeChangeEvent | None:
         if self._last_regime is None or self._last_regime == regime:
             return None
+        logger.info(
+            "Regime transition detected",
+            extra={
+                "from_regime": self._last_regime.value,
+                "to_regime": regime.value,
+            },
+        )
         return RegimeChangeEvent(
             regime_type=regime.value,
             description=f"Regime transition {self._last_regime.value} -> {regime.value}",
