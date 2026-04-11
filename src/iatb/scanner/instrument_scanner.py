@@ -351,7 +351,7 @@ class InstrumentScanner:
             row_timestamp = _coerce_datetime(
                 _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
             )
-            if latest_timestamp is None or row_timestamp > latest_timestamp:
+            if latest_timestamp is None or row_timestamp > latest_timestamp:  # type: ignore[unreachable]
                 latest_timestamp = row_timestamp
                 latest_row = {
                     "timestamp": row_timestamp,
@@ -379,7 +379,7 @@ class InstrumentScanner:
     ) -> MarketData:
         """Build MarketData object from components."""
         avg_volume = self._calculate_average_volume(frame)
-        close_price = latest_row["close"]  # type: ignore[arg-type]
+        close_price = cast(Decimal, latest_row["close"])
 
         return MarketData(
             symbol=symbol,
@@ -387,17 +387,13 @@ class InstrumentScanner:
             category=self._determine_category(symbol),
             close_price=close_price,
             prev_close_price=self._get_previous_close(frame),
-            volume=latest_row["volume"],  # type: ignore[arg-type]
+            volume=cast(Decimal, latest_row["volume"]),
             avg_volume=avg_volume,
-            timestamp_utc=latest_row["timestamp"],  # type: ignore[arg-type]
-            high_price=latest_row["high"],  # type: ignore[arg-type]
-            low_price=latest_row["low"],  # type: ignore[arg-type]
+            timestamp_utc=cast(datetime, latest_row["timestamp"]),
+            high_price=cast(Decimal, latest_row["high"]),
+            low_price=cast(Decimal, latest_row["low"]),
             adx=indicators.adx,
-            atr_pct=(
-                indicators.atr / close_price  # type: ignore[operator]
-                if close_price > Decimal("0")  # type: ignore[operator]
-                else Decimal("0")
-            ),
+            atr_pct=(indicators.atr / close_price if close_price > Decimal("0") else Decimal("0")),
             breadth_ratio=Decimal("1.5"),
         )
 
