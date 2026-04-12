@@ -150,3 +150,40 @@ class TestEngineTasks:
 
         assert len(completed_tasks) == 3
         await engine.stop()
+
+
+class TestEngineProperties:
+    """Test engine properties."""
+
+    def test_instrument_scorer_property(self) -> None:
+        """Test instrument_scorer property."""
+        from iatb.selection.instrument_scorer import InstrumentScorer
+
+        scorer = InstrumentScorer()
+        engine = Engine(instrument_scorer=scorer)
+
+        assert engine.instrument_scorer is scorer
+
+    def test_default_instrument_scorer(self) -> None:
+        """Test that engine creates default scorer if none provided."""
+        engine = Engine()
+        assert engine.instrument_scorer is not None
+
+    def test_kill_switch_property_none(self) -> None:
+        """Test kill_switch property when not configured."""
+        engine = Engine()
+        assert engine.kill_switch is None
+
+    def test_engage_kill_switch_without_config_raises_error(self) -> None:
+        """Test engaging kill switch when not configured raises error."""
+        engine = Engine()
+
+        with pytest.raises(EngineError, match="no kill switch configured"):
+            engine.engage_kill_switch("Test reason")
+
+    def test_disengage_kill_switch_without_config_raises_error(self) -> None:
+        """Test disengaging kill switch when not configured raises error."""
+        engine = Engine()
+
+        with pytest.raises(EngineError, match="no kill switch configured"):
+            engine.disengage_kill_switch()

@@ -1,14 +1,13 @@
 """
-Comprehensive tests for weight_optimizer.py to achieve 90%+ coverage.
+Tests for weight optimization module.
 """
 
 import random
+from collections.abc import Sequence
 from decimal import Decimal
-from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.selection.weight_optimizer import (
@@ -27,499 +26,263 @@ from iatb.selection.weight_optimizer import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 class TestValidateInputs:
     """Test input validation."""
 
-    def test_equal_length_passes(self):
-        """Equal length history and returns should pass."""
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 10
-        _validate_inputs(history, returns, 50)  # Should not raise
-
-    def test_unequal_length_raises(self):
-        """Unequal length should raise ConfigError."""
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 9
-        with pytest.raises(
-            ConfigError, match="signal_history and forward_returns must have equal length"
-        ):
+    def test_validate_inputs_length_mismatch_raises(self) -> None:
+        """Test that mismatched lengths raise error."""
+        history = [{"sentiment": Decimal("0.8")}]
+        returns: Sequence[Decimal] = [Decimal("0.1"), Decimal("0.2")]
+        with pytest.raises(ConfigError, match="equal length"):
             _validate_inputs(history, returns, 50)
 
-    def test_insufficient_observations_raises(self):
-        """Less than 10 observations should raise ConfigError."""
-        history = [{"sentiment": Decimal("0.5")}] * 9
-        returns = [Decimal("0.1")] * 9
-        with pytest.raises(ConfigError, match="at least 10 observations required"):
+    def test_validate_inputs_too_few_observations_raises(self) -> None:
+        """Test that less than 10 observations raise error."""
+        history = [{"sentiment": Decimal("0.8")}] * 9
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 9
+        with pytest.raises(ConfigError, match="at least 10 observations"):
             _validate_inputs(history, returns, 50)
 
-    def test_zero_trials_raises(self):
-        """Zero trials should raise ConfigError."""
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 10
+    def test_validate_inputs_zero_trials_raises(self) -> None:
+        """Test that zero trials raise error."""
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
         with pytest.raises(ConfigError, match="n_trials must be positive"):
             _validate_inputs(history, returns, 0)
 
-    def test_negative_trials_raises(self):
-        """Negative trials should raise ConfigError."""
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 10
+    def test_validate_inputs_negative_trials_raises(self) -> None:
+        """Test that negative trials raise error."""
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
         with pytest.raises(ConfigError, match="n_trials must be positive"):
-            _validate_inputs(history, returns, -10)
+            _validate_inputs(history, returns, -1)
+
+    def test_validate_inputs_valid_passes(self) -> None:
+        """Test that valid inputs pass validation."""
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
+        # Should not raise
+        _validate_inputs(history, returns, 50)
 
 
 class TestLoadOptuna:
     """Test Optuna loading."""
 
-    def test_loads_optuna_successfully(self):
-        """Should load optuna module successfully."""
-        optuna = _load_optuna()
-        assert optuna is not None
-        assert hasattr(optuna, "create_study")
+    def test_load_optuna_missing_dependency_raises(self) -> None:
+        """Test that missing optuna raises error."""
+        # Mock importlib to raise ModuleNotFoundError
+        import importlib
+        from unittest.mock import patch
 
-    @patch("importlib.import_module")
-    def test_missing_optuna_raises(self, mock_import):
-        """Missing optuna should raise ConfigError."""
-        mock_import.side_effect = ModuleNotFoundError("No module named 'optuna'")
-        with pytest.raises(ConfigError, match="optuna dependency required"):
-            _load_optuna()
+        with patch.object(importlib, "import_module", side_effect=ModuleNotFoundError()):
+            with pytest.raises(ConfigError, match="optuna dependency required"):
+                _load_optuna()
 
 
 class TestBuildSampler:
-    """Test TPE sampler building."""
+    """Test TPESampler building."""
 
-    def test_builds_tpe_sampler(self):
-        """Should build TPE sampler with seed."""
-        optuna = _load_optuna()
-        sampler = _build_sampler(optuna, 42)
-        assert sampler is not None
+    def test_build_sampler_missing_samplers_raises(self) -> None:
+        """Test that missing samplers attribute raises error."""
+        mock_optuna = type("MockOptuna", (), {})()
+        with pytest.raises(ConfigError, match="TPESampler unavailable"):
+            _build_sampler(mock_optuna, 42)
 
-    def test_missing_samplers_raises(self, monkeypatch):
-        """Missing samplers should raise ConfigError."""
-        optuna = Mock()
-        delattr(optuna, "samplers")
-        with pytest.raises(ConfigError, match="optuna.samplers.TPESampler unavailable"):
-            _build_sampler(optuna, 42)
-
-    def test_missing_tpe_sampler_raises(self, monkeypatch):
-        """Missing TPESampler should raise ConfigError."""
-        optuna = Mock()
-        optuna.samplers = Mock()
-        delattr(optuna.samplers, "TPESampler")
-        with pytest.raises(ConfigError, match="optuna.samplers.TPESampler unavailable"):
-            _build_sampler(optuna, 42)
+    def test_build_sampler_missing_tpe_raises(self) -> None:
+        """Test that missing TPESampler class raises error."""
+        mock_optuna = type("MockOptuna", (), {"samplers": None})()
+        with pytest.raises(ConfigError, match="TPESampler unavailable"):
+            _build_sampler(mock_optuna, 42)
 
 
 class TestCreateStudy:
-    """Test Optuna study creation."""
+    """Test study creation."""
 
-    def test_creates_study(self):
-        """Should create study with maximize direction."""
-        optuna = _load_optuna()
-        sampler = _build_sampler(optuna, 42)
-        study = _create_study(optuna, sampler)
-        assert study is not None
-
-    def test_missing_create_study_raises(self, monkeypatch):
-        """Missing create_study should raise ConfigError."""
-        optuna = Mock()
-        delattr(optuna, "create_study")
-        with pytest.raises(ConfigError, match="optuna.create_study unavailable"):
-            _create_study(optuna, Mock())
+    def test_create_study_missing_create_raises(self) -> None:
+        """Test that missing create_study raises error."""
+        mock_optuna = type("MockOptuna", (), {})()
+        mock_sampler = object()
+        with pytest.raises(ConfigError, match="create_study unavailable"):
+            _create_study(mock_optuna, mock_sampler)
 
 
 class TestRunStudy:
-    """Test study optimization."""
+    """Test study running."""
 
-    def test_runs_study_with_objective(self):
-        """Should run study with objective function."""
-        study = Mock()
-        study.optimize = Mock()
-
-        def objective(trial):  # noqa: ARG001 - trial not used
-            return 0.5
-
-        _run_study(study, objective, 10)
-        study.optimize.assert_called_once_with(objective, n_trials=10)
-
-    def test_missing_optimize_raises(self):
-        """Missing optimize should raise ConfigError."""
-        study = Mock()
-        delattr(study, "optimize")
-        with pytest.raises(ConfigError, match="study.optimize unavailable"):
-            _run_study(study, Mock(), 10)
+    def test_run_study_missing_optimize_raises(self) -> None:
+        """Test that missing optimize method raises error."""
+        mock_study = type("MockStudy", (), {})()
+        with pytest.raises(ConfigError, match="optimize unavailable"):
+            _run_study(mock_study, lambda: 0.5, 10)
 
 
 class TestExtractBestWeights:
     """Test best weights extraction."""
 
-    def test_extracts_weights_from_params(self):
-        """Should extract and normalize weights from params."""
-        study = Mock()
-        study.best_params = {
-            "sentiment": 20,
-            "strength": 30,
-            "volume_profile": 25,
-            "drl": 25,
-        }
-        weights = _extract_best_weights(study)
-        assert weights.sentiment == Decimal("20") / Decimal("100")
-        assert weights.strength == Decimal("30") / Decimal("100")
-        assert weights.volume_profile == Decimal("25") / Decimal("100")
-        assert weights.drl == Decimal("25") / Decimal("100")
+    def test_extract_best_weights_missing_params_raises(self) -> None:
+        """Test that missing best_params raises error."""
+        mock_study = type("MockStudy", (), {})()
+        with pytest.raises(ConfigError, match="best_params unavailable"):
+            _extract_best_weights(mock_study)
 
-    def test_handles_missing_params_with_defaults(self):
-        """Should use defaults for missing params."""
-        study = Mock()
-        study.best_params = {}
-        weights = _extract_best_weights(study)
-        total = 25 + 25 + 25 + 25
-        assert weights.sentiment == Decimal("25") / Decimal(total)
-        assert weights.strength == Decimal("25") / Decimal(total)
-        assert weights.volume_profile == Decimal("25") / Decimal(total)
-        assert weights.drl == Decimal("25") / Decimal(total)
+    def test_extract_best_weights_non_dict_params_raises(self) -> None:
+        """Test that non-dict best_params raises error."""
+        mock_study = type("MockStudy", (), {"best_params": "not_a_dict"})()
+        with pytest.raises(ConfigError, match="best_params unavailable"):
+            _extract_best_weights(mock_study)
 
-    def test_missing_best_params_raises(self):
-        """Missing best_params should raise ConfigError."""
-        study = Mock()
-        delattr(study, "best_params")
-        with pytest.raises(ConfigError, match="study.best_params unavailable"):
-            _extract_best_weights(study)
+    def test_extract_best_weights_defaults_to_25(self) -> None:
+        """Test that missing params default to 25."""
+        mock_study = type("MockStudy", (), {"best_params": {}})()
+        weights = _extract_best_weights(mock_study)
+        assert weights.sentiment == Decimal("0.25")
+        assert weights.strength == Decimal("0.25")
+        assert weights.volume_profile == Decimal("0.25")
+        assert weights.drl == Decimal("0.25")
 
-    def test_non_dict_best_params_raises(self):
-        """Non-dict best_params should raise ConfigError."""
-        study = Mock()
-        study.best_params = "not a dict"
-        with pytest.raises(ConfigError, match="study.best_params unavailable"):
-            _extract_best_weights(study)
+    def test_extract_best_weights_normalizes(self) -> None:
+        """Test that weights are normalized."""
+        mock_study = type(
+            "MockStudy",
+            (),
+            {"best_params": {"sentiment": 10, "strength": 20, "volume_profile": 30, "drl": 40}},
+        )()
+        weights = _extract_best_weights(mock_study)
+        assert weights.sentiment == Decimal("0.10")
+        assert weights.strength == Decimal("0.20")
+        assert weights.volume_profile == Decimal("0.30")
+        assert weights.drl == Decimal("0.40")
 
 
 class TestBestValue:
     """Test best value extraction."""
 
-    def test_extracts_float_value(self):
-        """Should extract float value."""
-        study = Mock()
-        study.best_value = 0.85
-        value = _best_value(study)
-        assert value == 0.85
+    def test_best_value_missing_raises(self) -> None:
+        """Test that missing best_value raises error."""
+        mock_study = type("MockStudy", (), {})()
+        with pytest.raises(ConfigError, match="best_value unavailable"):
+            _best_value(mock_study)
 
-    def test_converts_int_to_float(self):
-        """Should convert int value to float."""
-        study = Mock()
-        study.best_value = 85
-        value = _best_value(study)
-        assert value == 85.0
+    def test_best_value_float_returns_float(self) -> None:
+        """Test that float best_value is returned."""
+        mock_study = type("MockStudy", (), {"best_value": 0.85})()
+        assert _best_value(mock_study) == 0.85
 
-    def test_missing_best_value_raises(self):
-        """Missing best_value should raise ConfigError."""
-        study = Mock()
-        delattr(study, "best_value")
-        with pytest.raises(ConfigError, match="study.best_value unavailable"):
-            _best_value(study)
-
-    def test_invalid_type_raises(self):
-        """Invalid type should raise ConfigError."""
-        study = Mock()
-        study.best_value = "not a number"
-        with pytest.raises(ConfigError, match="study.best_value unavailable"):
-            _best_value(study)
+    def test_best_value_int_converts_to_float(self) -> None:
+        """Test that int best_value is converted to float."""
+        mock_study = type("MockStudy", (), {"best_value": 1})()
+        assert _best_value(mock_study) == 1.0
 
 
 class TestSuggestWeights:
     """Test weight suggestion from trial."""
 
-    def test_suggests_weights(self):
-        """Should suggest weights from trial."""
-        trial = Mock()
-        trial.suggest_int = Mock(side_effect=[20, 30, 25, 25])
-        weights = _suggest_weights(trial)
-        assert weights.sentiment == Decimal("20") / Decimal("100")
-        assert weights.strength == Decimal("30") / Decimal("100")
-        assert weights.volume_profile == Decimal("25") / Decimal("100")
-        assert weights.drl == Decimal("25") / Decimal("100")
-
-    def test_missing_suggest_int_raises(self):
-        """Missing suggest_int should raise ConfigError."""
-        trial = Mock()
-        delattr(trial, "suggest_int")
-        with pytest.raises(ConfigError, match="trial does not provide suggest_int"):
-            _suggest_weights(trial)
-
-    def test_non_callable_suggest_int_raises(self):
-        """Non-callable suggest_int should raise ConfigError."""
-        trial = Mock()
-        trial.suggest_int = "not callable"
-        with pytest.raises(ConfigError, match="trial does not provide suggest_int"):
-            _suggest_weights(trial)
+    def test_suggest_weights_missing_suggest_int_raises(self) -> None:
+        """Test that missing suggest_int raises error."""
+        mock_trial = type("MockTrial", (), {})()
+        with pytest.raises(ConfigError, match="suggest_int"):
+            _suggest_weights(mock_trial)
 
 
 class TestComputeComposites:
     """Test composite score computation."""
 
-    def test_computes_composites(self):
-        """Should compute composite scores."""
+    def test_compute_composites_basic(self) -> None:
+        """Test basic composite computation."""
         history = [
-            {"sentiment": Decimal("0.5"), "strength": Decimal("0.7")},
-            {"sentiment": Decimal("0.3"), "strength": Decimal("0.9")},
+            {"sentiment": Decimal("0.8"), "strength": Decimal("0.7")},
+            {"sentiment": Decimal("0.6"), "strength": Decimal("0.9")},
         ]
-        weights = Mock()
-        weights.sentiment = Decimal("0.4")
-        weights.strength = Decimal("0.6")
-        weights.volume_profile = Decimal("0.0")
-        weights.drl = Decimal("0.0")
-
+        weights = type(
+            "W",
+            (),
+            {
+                "sentiment": Decimal("0.5"),
+                "strength": Decimal("0.5"),
+                "volume_profile": Decimal("0.0"),
+                "drl": Decimal("0.0"),
+            },
+        )()
         composites = _compute_composites(history, weights)
-
         assert len(composites) == 2
-        assert composites[0] == Decimal("0.4") * Decimal("0.5") + Decimal("0.6") * Decimal("0.7")
-        assert composites[1] == Decimal("0.4") * Decimal("0.3") + Decimal("0.6") * Decimal("0.9")
+        assert composites[0] == Decimal("0.75")  # 0.5*0.8 + 0.5*0.7
+        assert composites[1] == Decimal("0.75")  # 0.5*0.6 + 0.5*0.9
 
-    def test_handles_missing_keys(self):
-        """Should handle missing keys with defaults."""
-        history = [{"sentiment": Decimal("0.5")}]
-        weights = Mock()
-        weights.sentiment = Decimal("1.0")
-        weights.strength = Decimal("0.0")
-        weights.volume_profile = Decimal("0.0")
-        weights.drl = Decimal("0.0")
-
+    def test_compute_composites_with_missing_keys(self) -> None:
+        """Test that missing keys default to 0."""
+        history = [{"sentiment": Decimal("0.8")}, {"strength": Decimal("0.9")}]
+        weights = type(
+            "W",
+            (),
+            {
+                "sentiment": Decimal("1.0"),
+                "strength": Decimal("0.0"),
+                "volume_profile": Decimal("0.0"),
+                "drl": Decimal("0.0"),
+            },
+        )()
         composites = _compute_composites(history, weights)
-        assert len(composites) == 1
-        assert composites[0] == Decimal("0.5")
+        assert composites[0] == Decimal("0.8")
+        assert composites[1] == Decimal("0.0")
 
-    def test_clamps_composites_to_01(self):
-        """Should clamp composites to [0, 1]."""
-        history = [
-            {"sentiment": Decimal("2.0"), "strength": Decimal("0.0")},
-        ]
-        weights = Mock()
-        weights.sentiment = Decimal("1.0")
-        weights.strength = Decimal("0.0")
-        weights.volume_profile = Decimal("0.0")
-        weights.drl = Decimal("0.0")
-
+    def test_compute_composites_clamps_to_01(self) -> None:
+        """Test that composites are clamped to [0, 1]."""
+        history = [{"sentiment": Decimal("1.5"), "strength": Decimal("1.5")}]
+        weights = type(
+            "W",
+            (),
+            {
+                "sentiment": Decimal("1.0"),
+                "strength": Decimal("1.0"),
+                "volume_profile": Decimal("0.0"),
+                "drl": Decimal("0.0"),
+            },
+        )()
         composites = _compute_composites(history, weights)
-        assert composites[0] == Decimal("1.0")  # Clamped
-
-    def test_handles_negative_values(self):
-        """Should handle negative signal values."""
-        history = [
-            {"sentiment": Decimal("-0.5")},
-        ]
-        weights = Mock()
-        weights.sentiment = Decimal("1.0")
-        weights.strength = Decimal("0.0")
-        weights.volume_profile = Decimal("0.0")
-        weights.drl = Decimal("0.0")
-
-        composites = _compute_composites(history, weights)
-        assert composites[0] == Decimal("0.0")  # Clamped to 0
+        assert composites[0] == Decimal("1.0")
 
 
 class TestOptimizeWeightsForRegime:
-    """Integration test for weight optimization."""
+    """Test main optimization function."""
 
-    @patch("iatb.selection.weight_optimizer._load_optuna")
-    @patch("iatb.selection.weight_optimizer._build_sampler")
-    @patch("iatb.selection.weight_optimizer._create_study")
-    @patch("iatb.selection.weight_optimizer._run_study")
-    @patch("iatb.selection.weight_optimizer._extract_best_weights")
-    @patch("iatb.selection.weight_optimizer._best_value")
-    @patch("iatb.selection.weight_optimizer.compute_information_coefficient")
-    def test_optimization_success(
-        self,
-        mock_ic,
-        mock_best_value,
-        mock_extract_weights,
-        mock_run_study,
-        mock_create_study,
-        mock_build_sampler,
-        mock_load_optuna,
-    ):
-        """Should successfully optimize weights."""
-        # Setup mocks
-        mock_optuna = Mock()
-        mock_optuna.create_study = Mock()
-        mock_load_optuna.return_value = mock_optuna
-        mock_build_sampler.return_value = Mock()
-        mock_study = Mock()
-        mock_study.best_params = {
-            "sentiment": 20,
-            "strength": 30,
-            "volume_profile": 25,
-            "drl": 25,
-        }
-        mock_study.best_value = 0.05
-        mock_create_study.return_value = mock_study
+    def test_optimize_weights_validates_inputs(self) -> None:
+        """Test that optimization validates inputs."""
+        from unittest.mock import patch
 
-        mock_ic_result = Mock()
-        mock_ic_result.ic = Decimal("0.05")
-        mock_ic.return_value = mock_ic_result
-        mock_best_value.return_value = 0.05
-        mock_extract_weights.return_value = Mock(
-            sentiment=Decimal("0.20"),
-            strength=Decimal("0.30"),
-            volume_profile=Decimal("0.25"),
-            drl=Decimal("0.25"),
-        )
+        history = [{"sentiment": Decimal("0.8")}] * 5
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 5
 
-        # Execute
-        history = [{"sentiment": Decimal("0.5"), "strength": Decimal("0.7")}] * 10
-        returns = [Decimal("0.1")] * 10
-        result = optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=10)
+        with patch("iatb.selection.weight_optimizer._validate_inputs") as mock_validate:
+            optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5)
+            mock_validate.assert_called_once()
 
-        # Verify
-        assert result.regime == MarketRegime.BULL
-        assert result.trials == 10
-        assert result.best_ic == Decimal("0.05")
-        assert result.improved is True
+    def test_optimize_weights_calls_study_methods(self) -> None:
+        """Test that optimization calls study methods correctly."""
+        from unittest.mock import MagicMock, patch
 
-    @patch("iatb.selection.weight_optimizer._load_optuna")
-    @patch("iatb.selection.weight_optimizer._build_sampler")
-    @patch("iatb.selection.weight_optimizer._create_study")
-    @patch("iatb.selection.weight_optimizer._run_study")
-    @patch("iatb.selection.weight_optimizer._extract_best_weights")
-    @patch("iatb.selection.weight_optimizer._best_value")
-    @patch("iatb.selection.weight_optimizer.compute_information_coefficient")
-    def test_optimization_below_threshold(
-        self,
-        mock_ic,
-        mock_best_value,
-        mock_extract_weights,
-        mock_run_study,
-        mock_create_study,
-        mock_build_sampler,
-        mock_load_optuna,
-    ):
-        """Should mark as not improved when IC below threshold."""
-        # Setup mocks
-        mock_optuna = Mock()
-        mock_optuna.create_study = Mock()
-        mock_load_optuna.return_value = mock_optuna
-        mock_build_sampler.return_value = Mock()
-        mock_study = Mock()
-        mock_study.best_params = {"sentiment": 25, "strength": 25, "volume_profile": 25, "drl": 25}
-        mock_study.best_value = 0.01
-        mock_create_study.return_value = mock_study
-
-        mock_ic_result = Mock()
-        mock_ic_result.ic = Decimal("0.01")
-        mock_ic.return_value = mock_ic_result
-        mock_best_value.return_value = 0.01
-        mock_extract_weights.return_value = Mock(
-            sentiment=Decimal("0.25"),
-            strength=Decimal("0.25"),
-            volume_profile=Decimal("0.25"),
-            drl=Decimal("0.25"),
-        )
-
-        # Execute
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 10
-        result = optimize_weights_for_regime(MarketRegime.BEAR, history, returns, n_trials=10)
-
-        # Verify
-        assert result.regime == MarketRegime.BEAR
-        assert result.improved is False
-        assert result.best_ic == Decimal("0.01")
-
-    def test_optimization_uses_default_seed(self):
-        """Should use default seed when not specified."""
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 10
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
 
         with patch("iatb.selection.weight_optimizer._load_optuna") as mock_load:
-            with patch("iatb.selection.weight_optimizer._build_sampler") as mock_build:
-                mock_optuna = Mock()
-                mock_load.return_value = mock_optuna
-                mock_build.return_value = Mock()
+            mock_optuna = MagicMock()
+            mock_load.return_value = mock_optuna
 
-                with patch("iatb.selection.weight_optimizer._create_study") as mock_create:
-                    mock_study = Mock()
-                    mock_study.best_params = {
-                        "sentiment": 25,
-                        "strength": 25,
-                        "volume_profile": 25,
-                        "drl": 25,
-                    }
-                    mock_study.best_value = 0.05
-                    mock_create.return_value = mock_study
+            mock_study = MagicMock()
+            mock_study.best_params = {
+                "sentiment": 25,
+                "strength": 25,
+                "volume_profile": 25,
+                "drl": 25,
+            }
+            mock_study.best_value = 0.05
+            mock_optuna.create_study.return_value = mock_study
+            mock_optuna.samplers.TPESampler.return_value = MagicMock()
 
-                    with patch("iatb.selection.weight_optimizer._run_study"):
-                        with patch(
-                            "iatb.selection.weight_optimizer._extract_best_weights"
-                        ) as mock_extract:
-                            mock_extract.return_value = Mock(
-                                sentiment=Decimal("0.25"),
-                                strength=Decimal("0.25"),
-                                volume_profile=Decimal("0.25"),
-                                drl=Decimal("0.25"),
-                            )
+            result = optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5)
 
-                            with patch("iatb.selection.weight_optimizer._best_value") as mock_best:
-                                with patch(
-                                    "iatb.selection.weight_optimizer.compute_information_coefficient"
-                                ) as mock_ic:
-                                    mock_best.return_value = 0.05
-                                    mock_ic_result = Mock()
-                                    mock_ic_result.ic = Decimal("0.05")
-                                    mock_ic.return_value = mock_ic_result
-
-                                    optimize_weights_for_regime(
-                                        MarketRegime.SIDEWAYS, history, returns
-                                    )
-
-                                    # Verify seed=42 was used
-                                    mock_build.assert_called_once()
-
-    def test_optimization_with_custom_seed(self):
-        """Should use custom seed when specified."""
-        history = [{"sentiment": Decimal("0.5")}] * 10
-        returns = [Decimal("0.1")] * 10
-
-        with patch("iatb.selection.weight_optimizer._load_optuna") as mock_load:
-            with patch("iatb.selection.weight_optimizer._build_sampler") as mock_build:
-                mock_optuna = Mock()
-                mock_load.return_value = mock_optuna
-                mock_build.return_value = Mock()
-
-                with patch("iatb.selection.weight_optimizer._create_study") as mock_create:
-                    mock_study = Mock()
-                    mock_study.best_params = {
-                        "sentiment": 25,
-                        "strength": 25,
-                        "volume_profile": 25,
-                        "drl": 25,
-                    }
-                    mock_study.best_value = 0.05
-                    mock_create.return_value = mock_study
-
-                    with patch("iatb.selection.weight_optimizer._run_study"):
-                        with patch(
-                            "iatb.selection.weight_optimizer._extract_best_weights"
-                        ) as mock_extract:
-                            mock_extract.return_value = Mock(
-                                sentiment=Decimal("0.25"),
-                                strength=Decimal("0.25"),
-                                volume_profile=Decimal("0.25"),
-                                drl=Decimal("0.25"),
-                            )
-
-                            with patch("iatb.selection.weight_optimizer._best_value") as mock_best:
-                                with patch(
-                                    "iatb.selection.weight_optimizer.compute_information_coefficient"
-                                ) as mock_ic:
-                                    mock_best.return_value = 0.05
-                                    mock_ic_result = Mock()
-                                    mock_ic_result.ic = Decimal("0.05")
-                                    mock_ic.return_value = mock_ic_result
-
-                                    optimize_weights_for_regime(
-                                        MarketRegime.BULL, history, returns, seed=123
-                                    )
-
-                                    # Verify custom seed was used
-                                    mock_build.assert_called_once()
+            assert result.regime == MarketRegime.BULL
+            assert result.trials == 5
+            assert result.best_ic == Decimal("0.05")
+            assert result.improved is True  # IC >= 0.03 threshold

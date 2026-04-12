@@ -11,7 +11,7 @@ Usage:
 
 import subprocess
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 
 def run_command(cmd: list[str], description: str) -> tuple[bool, str]:

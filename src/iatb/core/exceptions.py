@@ -52,3 +52,9 @@ class InstrumentResolutionError(IATBError):
     """Exception raised when instrument resolution fails."""
 
     pass
+
+
+class EngineNotRunningError(IATBError):
+    """Exception raised when engine/runtime is not started."""
+
+    pass

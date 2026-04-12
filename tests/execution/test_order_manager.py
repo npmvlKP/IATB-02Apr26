@@ -51,3 +51,66 @@ def test_order_manager_validations() -> None:
     manager.receive_heartbeat(datetime(2026, 1, 5, 4, 0, tzinfo=UTC))
     fresh_now = datetime(2026, 1, 5, 4, 0, tzinfo=UTC) + timedelta(milliseconds=500)
     assert not manager.check_dead_man_switch(fresh_now)
+
+
+def test_order_manager_multiple_orders() -> None:
+    """Test tracking multiple orders."""
+    executor = _StubExecutor()
+    manager = OrderManager(executor, heartbeat_timeout_seconds=30)
+
+    request1 = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"))
+    result1 = manager.place_order(request1)
+
+    request2 = OrderRequest(Exchange.NSE, "BANKNIFTY", OrderSide.SELL, Decimal("2"))
+    result2 = manager.place_order(request2)
+
+    assert manager.get_order_status(result1.order_id) == OrderStatus.OPEN
+    assert manager.get_order_status(result2.order_id) == OrderStatus.OPEN
+
+
+def test_order_manager_dead_man_switch_cancels_all() -> None:
+    """Test that dead man switch cancels all open orders."""
+    executor = _StubExecutor()
+    manager = OrderManager(executor, heartbeat_timeout_seconds=30)
+
+    # Place multiple orders
+    for i in range(3):
+        request = OrderRequest(Exchange.NSE, f"SYM{i}", OrderSide.BUY, Decimal("1"))
+        manager.place_order(request)
+
+    # Receive heartbeat
+    manager.receive_heartbeat(datetime(2026, 1, 5, 4, 0, tzinfo=UTC))
+
+    # Trigger dead man switch
+    stale_time = datetime(2026, 1, 5, 4, 1, tzinfo=UTC)
+    assert manager.check_dead_man_switch(stale_time)
+
+    # All orders should be cancelled
+    assert executor.cancel_count == 1
+
+
+def test_order_manager_heartbeat_updates_timestamp() -> None:
+    """Test that heartbeat updates the last heartbeat timestamp."""
+    executor = _StubExecutor()
+    manager = OrderManager(executor, heartbeat_timeout_seconds=30)
+
+    heartbeat_time = datetime(2026, 1, 5, 4, 0, tzinfo=UTC)
+    manager.receive_heartbeat(heartbeat_time)
+
+    # Check immediately after heartbeat
+    assert not manager.check_dead_man_switch(heartbeat_time + timedelta(seconds=1))
+
+    # Check after timeout
+    assert manager.check_dead_man_switch(heartbeat_time + timedelta(seconds=31))
+
+
+def test_order_manager_no_heartbeat_triggers_switch() -> None:
+    """Test that missing heartbeat triggers dead man switch."""
+    executor = _StubExecutor()
+    manager = OrderManager(executor, heartbeat_timeout_seconds=30)
+
+    # Don't send heartbeat, just check
+    check_time = datetime(2026, 1, 5, 4, 1, tzinfo=UTC)
+
+    # Should trigger since no heartbeat received
+    assert manager.check_dead_man_switch(check_time)

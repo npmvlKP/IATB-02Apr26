@@ -65,13 +65,23 @@ def test_is_token_fresh_expired(token_manager: ZerodhaTokenManager) -> None:
 
 def test_is_token_fresh_valid(token_manager: ZerodhaTokenManager) -> None:
     """Test is_token_fresh returns True for valid token."""
-    recent_time = datetime.now(UTC) - timedelta(hours=1)
+    # Create token time that's recent and should be fresh
+    # Use a fixed time to ensure consistency across test runs
+    # Token created at 0:00 AM UTC (5:30 AM IST), before 6 AM IST expiry
+    token_time = datetime(2026, 4, 12, 0, 0, 0, tzinfo=UTC)  # 0:00 AM UTC = 5:30 AM IST
     with patch.object(
         keyring,
         "get_password",
-        side_effect=["test_token", recent_time.isoformat()],
+        side_effect=["test_token", token_time.isoformat()],
     ):
-        assert token_manager.is_token_fresh() is True
+        # Now time is 0:20 AM UTC (5:50 AM IST), still before 6 AM IST expiry
+        now_time = datetime(2026, 4, 12, 0, 20, 0, tzinfo=UTC)
+        with patch("iatb.broker.token_manager.datetime") as mock_dt:
+            # Only mock now(), preserve other datetime methods
+            mock_dt.now.return_value = now_time
+            mock_dt.fromisoformat = datetime.fromisoformat
+            mock_dt.combine = datetime.combine
+            assert token_manager.is_token_fresh() is True
 
 
 def test_get_login_url(token_manager: ZerodhaTokenManager) -> None:

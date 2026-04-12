@@ -1,0 +1,306 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: g:\IATB-02Apr26\IATB
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.13.0, hypothesis-6.151.11, asyncio-0.23.8, cov-4.1.0
+asyncio: mode=Mode.AUTO
+collected 1532 items
+
+tests\backtesting\test_event_driven.py ....                              [  0%]
+tests\backtesting\test_forward_test.py ..                                [  0%]
+tests\backtesting\test_indian_costs.py ...                               [  0%]
+tests\backtesting\test_monte_carlo.py ...                                [  0%]
+tests\backtesting\test_report.py .....                                   [  1%]
+tests\backtesting\test_session_masks.py ...                              [  1%]
+tests\backtesting\test_vectorized.py .......                             [  1%]
+tests\backtesting\test_walk_forward.py ....                              [  2%]
+tests\broker\test_token_manager.py ..................                    [  3%]
+tests\core\test_clock.py ..................................              [  5%]
+tests\core\test_config.py ..................                             [  6%]
+tests\core\test_engine.py ..............                                 [  7%]
+tests\core\test_enums.py ..........                                      [  8%]
+tests\core\test_event_bus.py .................                           [  9%]
+tests\core\test_event_validation.py .........                            [  9%]
+tests\core\test_events.py ..................                             [ 11%]
+tests\core\test_exceptions.py ................                           [ 12%]
+tests\core\test_health.py ..                                             [ 12%]
+tests\core\test_property_invariants.py ...                               [ 12%]
+tests\core\test_runtime.py ....                                          [ 12%]
+tests\core\test_types.py ..............                                  [ 13%]
+tests\data\test_base.py ....                                             [ 13%]
+tests\data\test_ccxt_provider.py ..........                              [ 14%]
+tests\data\test_instrument.py ..........                                 [ 15%]
+tests\data\test_instrument_master.py ..............                      [ 16%]
+tests\data\test_jugaad_provider.py .........                             [ 16%]
+tests\data\test_normalizer.py ..................                         [ 17%]
+tests\data\test_openalgo_provider.py ...........                         [ 18%]
+tests\data\test_validator.py ...............                             [ 19%]
+tests\data\test_yfinance_provider.py .........                           [ 20%]
+tests\execution\test_base.py .........                                   [ 20%]
+tests\execution\test_ccxt_executor.py ....                               [ 20%]
+tests\execution\test_instrument_resolver.py .......                      [ 21%]
+tests\execution\test_order_manager.py ......                             [ 21%]
+tests\execution\test_order_throttle.py ..........                        [ 22%]
+tests\execution\test_paper_executor.py .                                 [ 22%]
+tests\execution\test_strike_selector.py ............                     [ 23%]
+tests\execution\test_transaction_costs.py ..                             [ 23%]
+tests\execution\test_zerodha_connection.py ................              [ 24%]
+tests\execution\test_zerodha_token_manager.py .....                      [ 24%]
+tests\integration\test_backtesting\test_session_masks.py ............... [ 25%]
+.....................................                                    [ 28%]
+tests\integration\test_backtesting\test_vectorbt_engine.py ............. [ 29%]
+................................                                         [ 31%]
+tests\market_strength\test_breadth.py ............                       [ 31%]
+tests\market_strength\test_indicators.py ..........                      [ 32%]
+tests\market_strength\test_regime_detector.py ............               [ 33%]
+tests\market_strength\test_strength_scorer.py ..........                 [ 34%]
+tests\market_strength\test_volume_profile.py ......                      [ 34%]
+tests\ml\test_base.py ..                                                 [ 34%]
+tests\ml\test_feature_engine.py ..                                       [ 34%]
+tests\ml\test_gnn_model.py ..                                            [ 34%]
+tests\ml\test_hmm_model.py ..                                            [ 34%]
+tests\ml\test_lstm_model.py ..                                           [ 35%]
+tests\ml\test_predictor.py ..                                            [ 35%]
+tests\ml\test_tracking.py .............................................. [ 38%]
+.......s......                                                           [ 39%]
+tests\ml\test_trainer.py ...                                             [ 39%]
+tests\ml\test_transformer_model.py ..                                    [ 39%]
+tests\risk\test_circuit_breaker.py ..                                    [ 39%]
+tests\risk\test_daily_loss_guard.py ......................               [ 40%]
+tests\risk\test_lot_rounding.py ............                             [ 41%]
+tests\risk\test_portfolio_risk.py ..                                     [ 41%]
+tests\risk\test_position_sizer.py ..........                             [ 42%]
+tests\risk\test_sebi_compliance.py ...                                   [ 42%]
+tests\risk\test_stop_loss.py ........................................... [ 45%]
+...........                                                              [ 46%]
+tests\risk\test_trailing_stop.py ...........................             [ 48%]
+tests\rl\test_agent.py ......                                            [ 48%]
+tests\rl\test_callbacks.py ...                                           [ 48%]
+tests\rl\test_environment.py ......                                      [ 49%]
+tests\rl\test_optimizer.py ....                                          [ 49%]
+tests\rl\test_reward.py ........................................         [ 51%]
+tests\safety\test_safety.py ......................                       [ 53%]
+tests\scanner\test_instrument_scanner.py ............................... [ 55%]
+..........                                                               [ 56%]
+tests\scripts\test_monitor_zerodha_connection.py ....                    [ 56%]
+tests\scripts\test_zerodha_connect_script.py ............                [ 57%]
+tests\selection\test_correlation_matrix.py ..............                [ 57%]
+tests\selection\test_sector_strength.py .............                    [ 58%]
+tests\selection\test_selection.py ...................................... [ 61%]
+......................................................................   [ 65%]
+tests\selection\test_selector_validator.py .............                 [ 66%]
+tests\selection\test_sentiment_signal.py ....................            [ 68%]
+tests\selection\test_strength_signal.py .................                [ 69%]
+tests\selection\test_weight_optimizer.py ............................... [ 71%]
+..                                                                       [ 71%]
+tests\sentiment\test_aggregator.py ....                                  [ 71%]
+tests\sentiment\test_aion_analyzer.py ..........                         [ 72%]
+tests\sentiment\test_base.py .....                                       [ 72%]
+tests\sentiment\test_finbert_analyzer.py ........                        [ 73%]
+tests\sentiment\test_helpers.py ......................                   [ 74%]
+tests\sentiment\test_news_scraper.py ............                        [ 75%]
+tests\sentiment\test_recency_weighting.py ..............                 [ 76%]
+tests\sentiment\test_vader_analyzer.py .......                           [ 76%]
+tests\sentiment\test_volume_filter.py ..                                 [ 76%]
+tests\storage\test_duckdb_store.py .....                                 [ 77%]
+tests\storage\test_git_sync.py .......                                   [ 77%]
+tests\storage\test_parquet_store.py .....                                [ 77%]
+tests\storage\test_sqlite_store.py .......                               [ 78%]
+tests\strategies\test_base.py ..........                                 [ 78%]
+tests\strategies\test_breakout.py .....                                  [ 79%]
+tests\strategies\test_ensemble.py ...                                    [ 79%]
+tests\strategies\test_mean_reversion.py ...                              [ 79%]
+tests\strategies\test_momentum.py ...                                    [ 79%]
+tests\strategies\test_sentiment_driven.py ...                            [ 80%]
+tests\test_api.py ....................                                   [ 81%]
+tests\test_fastapi_app.py ...........................                    [ 83%]
+tests\test_init.py ...                                                   [ 83%]
+tests\unit\test_core\test_clock.py ..................................... [ 85%]
+..............                                                           [ 86%]
+tests\unit\test_execution\test_openalgo_executor.py .................... [ 87%]
+......                                                                   [ 88%]
+tests\unit\test_scanner\test_instrument_scanner.py ..................... [ 89%]
+..................................                                       [ 91%]
+tests\unit\test_visualization\test_dashboard.py ........................ [ 93%]
+.....................                                                    [ 94%]
+tests\visualization\test_alerts.py ............                          [ 95%]
+tests\visualization\test_breakout_scanner.py ..                          [ 95%]
+tests\visualization\test_charts.py .....                                 [ 96%]
+tests\visualization\test_dashboard.py ................                   [ 97%]
+tests\visualization\test_deployment_dashboard.py ....................... [ 98%]
+..................                                                       [ 99%]
+tests\visualization\test_portfolio_view.py ..                            [100%]
+
+============================== warnings summary ===============================
+src\iatb\fastapi_app.py:161
+  G:\IATB-02Apr26\IATB\src\iatb\fastapi_app.py:161: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\fastapi\applications.py:4656
+C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\fastapi\applications.py:4656
+  C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\fastapi\applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+src\iatb\fastapi_app.py:171
+  G:\IATB-02Apr26\IATB\src\iatb\fastapi_app.py:171: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform win32, python 3.12.7-final-0 -----------
+Name                                             Stmts   Miss Branch BrPart   Cover   Missing
+---------------------------------------------------------------------------------------------
+src\iatb\__init__.py                                 2      0      0      0 100.00%
+src\iatb\api.py                                     85      0     28      4  96.46%   197->204, 200->199, 213->215, 215->218
+src\iatb\backtesting\__init__.py                    12      0      0      0 100.00%
+src\iatb\backtesting\event_driven.py                46      5      8      1  85.19%   48-52
+src\iatb\backtesting\forward_test.py                32      0      8      0 100.00%
+src\iatb\backtesting\indian_costs.py                37      0      6      0 100.00%
+src\iatb\backtesting\monte_carlo.py                 38      0      6      0 100.00%
+src\iatb\backtesting\report.py                      31      0      6      0 100.00%
+src\iatb\backtesting\session_masks.py               79      7     30      6  88.07%   52-53, 81, 83->104, 101-102, 116, 137
+src\iatb\backtesting\vectorbt_engine.py            325      8     68      6  96.44%   36-38, 292-293, 557, 679, 731->730, 743, 747->746
+src\iatb\backtesting\vectorized.py                  59      8     10      0  88.41%   55-62
+src\iatb\backtesting\walk_forward.py                74      8     16      5  85.56%   44-45, 71, 77, 86-87, 109-110
+src\iatb\broker\__init__.py                          2      0      0      0 100.00%
+src\iatb\broker\token_manager.py                    92      2     12      1  97.12%   203-204
+src\iatb\core\__init__.py                            9      0      0      0 100.00%
+src\iatb\core\clock.py                             143      2     42      2  97.84%   203->215, 212-213
+src\iatb\core\config.py                             56      3     10      0  95.45%   95-97
+src\iatb\core\engine.py                             88     10     16      2  88.46%   106, 117-119, 130-131, 146-148, 155-157
+src\iatb\core\enums.py                              29      0      0      0 100.00%
+src\iatb\core\event_bus.py                          92      5     34      7  90.48%   61->exit, 62->exit, 64->66, 81, 94-95, 104, 108
+src\iatb\core\event_validation.py                  148     12     54      7  90.59%   55-56, 139-140, 146, 186-187, 213-214, 220-221, 235
+src\iatb\core\events.py                             72      0      0      0 100.00%
+src\iatb\core\exceptions.py                         20      0      0      0 100.00%
+src\iatb\core\exchange_calendar.py                 113     27     28      6  76.60%   53, 93-101, 112->111, 129-134, 158-166, 184, 187->202, 193->192, 195-196, 202->182, 207-208, 228, 237-243, 270-277
+src\iatb\core\health.py                             35      1      6      2  92.68%   49, 61->exit
+src\iatb\core\paper_runtime.py                      88     88     16      0   0.00%   7-271
+src\iatb\core\preflight.py                          53      9     10      3  80.95%   54-55, 62-66, 85-86
+src\iatb\core\runtime.py                            34      3      4      1  89.47%   37-38, 55
+src\iatb\core\types.py                              26      0      8      0 100.00%
+src\iatb\data\__init__.py                           10      0      0      0 100.00%
+src\iatb\data\base.py                               39      0      0      0 100.00%
+src\iatb\data\ccxt_provider.py                     106      8     28      6  89.55%   49, 52->51, 55, 65-66, 94-95, 156-157
+src\iatb\data\instrument.py                         69      3     14      1  95.18%   85, 96-97
+src\iatb\data\instrument_master.py                 112     10     16      0  90.62%   102-111
+src\iatb\data\jugaad_provider.py                   102     18     38      8  77.14%   32-33, 38, 40, 45-46, 57-65, 84, 139, 151
+src\iatb\data\normalizer.py                         82      0     30      0 100.00%
+src\iatb\data\openalgo_provider.py                 113     18     30      4  83.22%   29-30, 52, 57-58, 116, 162-173
+src\iatb\data\validator.py                          66      0     24      0 100.00%
+src\iatb\data\yfinance_provider.py                 132     21     40      7  80.23%   40-43, 70-71, 83-88, 98-99, 116, 128-129, 163-164, 167-168
+src\iatb\execution\__init__.py                       9      0      0      0 100.00%
+src\iatb\execution\base.py                          43      0     12      0 100.00%
+src\iatb\execution\ccxt_executor.py                 52      0     10      0 100.00%
+src\iatb\execution\instrument_resolver.py           79     14     22      6  80.20%   85->74, 93-99, 123, 128-129, 138, 140-141, 157, 160-162
+src\iatb\execution\openalgo_executor.py             90      0     18      0 100.00%
+src\iatb\execution\order_manager.py                 84     18     26      8  74.55%   38-39, 61-63, 90-91, 95-98, 102-104, 114-120, 130, 146->150, 148->147
+src\iatb\execution\order_throttle.py                29      0      8      0 100.00%
+src\iatb\execution\paper_executor.py                29      2      4      1  90.91%   17-18
+src\iatb\execution\pre_trade_validator.py           64     10     22      4  81.40%   28-29, 31-32, 55-59, 83
+src\iatb\execution\strike_selector.py               83      7     24      4  89.72%   99, 111-112, 131-132, 137-138
+src\iatb\execution\trade_audit.py                   37      0      0      0 100.00%
+src\iatb\execution\transaction_costs.py             11      0      2      0 100.00%
+src\iatb\execution\zerodha_connection.py           245     42     72     18  80.44%   74-75, 77-78, 80-81, 150, 220, 226-228, 240->242, 249-250, 298-299, 312-313, 315-316, 328-329, 346->353, 365-366, 369-371, 384, 386->381, 388-389, 397, 407-418
+src\iatb\execution\zerodha_token_manager.py         99      5     36      3  94.07%   26, 44->51, 84, 140, 143-144
+src\iatb\fastapi_app.py                             78      2      8      0  97.67%   112, 168
+src\iatb\market_strength\__init__.py                 5      0      0      0 100.00%
+src\iatb\market_strength\breadth.py                 40      0     18      0 100.00%
+src\iatb\market_strength\indicators.py              82      0     20      0 100.00%
+src\iatb\market_strength\regime_detector.py         91      1     18      0  99.08%   45
+src\iatb\market_strength\strength_scorer.py         77      0     26      0 100.00%
+src\iatb\market_strength\volume_profile.py          44      0     14      0 100.00%
+src\iatb\ml\__init__.py                             10      0      0      0 100.00%
+src\iatb\ml\base.py                                 37      5      8      1  86.67%   15-17, 19-20
+src\iatb\ml\feature_engine.py                       94      5     22      3  93.10%   49-50, 96-97, 147
+src\iatb\ml\gnn_model.py                            70      4     16      3  91.86%   40->42, 60-61, 74-75
+src\iatb\ml\hmm_model.py                            63      4     16      3  91.14%   36->38, 51-52, 65-66
+src\iatb\ml\lstm_model.py                           67      2     12      2  94.94%   40->42, 60-61
+src\iatb\ml\predictor.py                            40      1     10      1  96.00%   37
+src\iatb\ml\tracking.py                            207     16     68      6  91.27%   27-29, 287, 291, 299->296, 339-347, 445->448, 449-451
+src\iatb\ml\trainer.py                              83      9     22      5  86.67%   73, 77-78, 95-96, 112-113, 120-121
+src\iatb\ml\transformer_model.py                    69      2     12      2  95.06%   36->38, 57-58
+src\iatb\risk\__init__.py                            6      0      0      0 100.00%
+src\iatb\risk\circuit_breaker.py                    19      0      8      0 100.00%
+src\iatb\risk\daily_loss_guard.py                   50      0     10      0 100.00%
+src\iatb\risk\kill_switch.py                        56      2     10      1  95.45%   93-94
+src\iatb\risk\portfolio_risk.py                     43      1     10      1  96.23%   30
+src\iatb\risk\position_sizer.py                     94      4     40      2  95.52%   36-37, 46-47
+src\iatb\risk\sebi_compliance.py                    91     30     32      6  60.98%   40-41, 43-44, 50-51, 67, 75-76, 84->exit, 100, 108-115, 131-149
+src\iatb\risk\stop_loss.py                         138      0     38      0 100.00%
+src\iatb\risk\trailing_stop.py                     138     15     48      9  87.10%   38-39, 41-42, 97-98, 108, 125-126, 146-147, 152-153, 167, 194
+src\iatb\rl\__init__.py                              6      0      0      0 100.00%
+src\iatb\rl\agent.py                               134     24     40      3  79.89%   74-77, 106-127, 161->163, 165->167, 168->172
+src\iatb\rl\callbacks.py                            50      6     12      5  82.26%   27, 32, 44-45, 63, 70
+src\iatb\rl\environment.py                          99      5     26      3  93.60%   86-87, 89-90, 109
+src\iatb\rl\optimizer.py                            96     10     28      5  87.90%   48-49, 91-92, 99-100, 114-115, 129-130
+src\iatb\rl\reward.py                               83      4     18      1  95.05%   18-20, 336
+src\iatb\scanner\__init__.py                         2      0      0      0 100.00%
+src\iatb\scanner\instrument_scanner.py             380    110    102      5  68.67%   179-194, 261-263, 265-266, 305-316, 320-322, 328-342, 346-371, 381-384, 402-441, 449, 456-457, 461, 473-487, 491-502, 540, 609-610
+src\iatb\selection\__init__.py                       0      0      0      0 100.00%
+src\iatb\selection\_util.py                         29      0     10      0 100.00%
+src\iatb\selection\composite_score.py               69      0     12      0 100.00%
+src\iatb\selection\correlation_matrix.py            48      1     20      1  97.06%   67
+src\iatb\selection\decay.py                         34      0     10      0 100.00%
+src\iatb\selection\drl_signal.py                   119     40     30      5  60.40%   113-114, 116-117, 119-120, 128-129, 131-132, 143-154, 168-170, 175-177, 182-193
+src\iatb\selection\ic_monitor.py                    53      0     14      1  98.51%   53->60
+src\iatb\selection\instrument_scorer.py             61      0      4      0 100.00%
+src\iatb\selection\ranking.py                       66      0     18      0 100.00%
+src\iatb\selection\sector_strength.py               21      0      6      0 100.00%
+src\iatb\selection\selection_bridge.py              49      0     18      0 100.00%
+src\iatb\selection\selector_validator.py            50      1     14      1  96.88%   47
+src\iatb\selection\sentiment_signal.py              50      0     12      0 100.00%
+src\iatb\selection\strength_signal.py               44      0      8      0 100.00%
+src\iatb\selection\volume_profile_signal.py         97      0     26      0 100.00%
+src\iatb\selection\weight_optimizer.py             106      4     22      0  96.88%   55-59
+src\iatb\sentiment\__init__.py                       8      0      0      0 100.00%
+src\iatb\sentiment\aggregator.py                    35      0      2      0 100.00%
+src\iatb\sentiment\aion_analyzer.py                 24      0      6      0 100.00%
+src\iatb\sentiment\base.py                          46      0     14      0 100.00%
+src\iatb\sentiment\finbert_analyzer.py              22      0      6      0 100.00%
+src\iatb\sentiment\helpers.py                       65      0     22      1  98.85%   32->36
+src\iatb\sentiment\news_scraper.py                 100      1     22      1  98.36%   139
+src\iatb\sentiment\recency_weighting.py             34      0     12      0 100.00%
+src\iatb\sentiment\vader_analyzer.py                37      0      6      0 100.00%
+src\iatb\sentiment\volume_filter.py                 11      0      4      0 100.00%
+src\iatb\storage\__init__.py                         5      0      0      0 100.00%
+src\iatb\storage\duckdb_store.py                    79      7     14      2  90.32%   19-20, 25-27, 30-31
+src\iatb\storage\git_sync.py                        52      0      6      0 100.00%
+src\iatb\storage\parquet_store.py                   81     12     12      4  82.80%   19-20, 25-27, 30-31, 43-44, 84, 121-122
+src\iatb\storage\sqlite_store.py                   101      9     16      4  88.89%   25-26, 76-78, 80, 87-88, 191
+src\iatb\strategies\__init__.py                      7      0      0      0 100.00%
+src\iatb\strategies\base.py                         66      0     10      0 100.00%
+src\iatb\strategies\breakout.py                     41      1     10      1  96.08%   35
+src\iatb\strategies\ensemble.py                     54      5     22      6  85.53%   32, 34, 37, 67->60, 71, 79
+src\iatb\strategies\mean_reversion.py               40      3     10      3  88.00%   35, 40, 55
+src\iatb\strategies\momentum.py                     41      2      8      2  91.84%   46, 62
+src\iatb\strategies\sentiment_driven.py             33      2     10      2  90.70%   40, 55
+src\iatb\visualization\__init__.py                   6      0      0      0 100.00%
+src\iatb\visualization\alerts.py                    56      0     14      0 100.00%
+src\iatb\visualization\breakout_scanner.py         126      9     36      5  91.36%   30-31, 36-37, 40-41, 85-86, 166
+src\iatb\visualization\charts.py                    74      0     14      0 100.00%
+src\iatb\visualization\dashboard.py                174     10     62     20  87.29%   50->52, 88->90, 93->118, 150->154, 156->163, 158->163, 160->163, 175, 247, 251, 255, 261->263, 263->265, 265->exit, 287->290, 290->293, 295->298, 298->301, 327->330, 332->334, 386-388, 394-396
+src\iatb\visualization\deployment_dashboard.py      29      0      6      0 100.00%
+src\iatb\visualization\portfolio_view.py            26      0      4      0 100.00%
+---------------------------------------------------------------------------------------------
+TOTAL                                             8716    743   2186    249  89.87%
+Coverage HTML written to dir htmlcov
+
+FAIL Required test coverage of 90% not reached. Total coverage: 89.87%
+================ 1531 passed, 1 skipped, 4 warnings in 33.41s =================

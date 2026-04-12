@@ -1,0 +1,63 @@
+tests\backtesting\test_vectorized.py:55:5: E731 Do not assign a `lambda` expression, use a `def`
+tests\backtesting\test_vectorized.py:74:1: W293 [*] Blank line contains whitespace
+tests\backtesting\test_vectorized.py:89:5: E731 Do not assign a `lambda` expression, use a `def`
+tests\backtesting\test_vectorized.py:108:1: W293 [*] Blank line contains whitespace
+tests\conftest.py:63:10: W292 [*] No newline at end of file
+tests\core\test_engine.py:7:21: F401 [*] `decimal.Decimal` imported but unused
+tests\execution\test_order_manager.py:60:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:63:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:66:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:75:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:80:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:83:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:87:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:96:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:99:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:102:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:111:1: W293 [*] Blank line contains whitespace
+tests\execution\test_order_manager.py:114:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:338:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:342:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:347:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:356:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:359:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:382:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:384:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:435:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:470:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:504:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:512:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:519:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:522:101: E501 Line too long (105 > 100)
+tests\scanner\test_instrument_scanner.py:527:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:535:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:551:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:553:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:565:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:581:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:589:1: W293 [*] Blank line contains whitespace
+tests\scanner\test_instrument_scanner.py:605:1: W293 [*] Blank line contains whitespace
+tests\selection\test_drl_signal.py:5:1: I001 [*] Import block is un-sorted or un-formatted
+tests\selection\test_drl_signal.py:12:42: F401 [*] `iatb.backtesting.monte_carlo.MonteCarloResult` imported but unused
+tests\selection\test_drl_signal.py:13:43: F401 [*] `iatb.backtesting.walk_forward.WalkForwardResult` imported but unused
+tests\selection\test_drl_signal.py:13:62: F401 [*] `iatb.backtesting.walk_forward.WalkForwardFold` imported but unused
+tests\selection\test_drl_signal.py:26:5: F401 [*] `iatb.selection.drl_signal.build_conclusion` imported but unused
+tests\selection\test_drl_signal.py:49:27: DTZ005 The use of `datetime.datetime.now()` without `tz` argument is not allowed
+tests\selection\test_drl_signal.py:68:46: DTZ005 The use of `datetime.datetime.now()` without `tz` argument is not allowed
+tests\selection\test_drl_signal.py:361:101: E501 Line too long (105 > 100)
+tests\selection\test_drl_signal.py:366:101: E501 Line too long (120 > 100)
+tests\selection\test_drl_signal.py:372:101: E501 Line too long (108 > 100)
+tests\selection\test_drl_signal.py:378:101: E501 Line too long (108 > 100)
+tests\selection\test_drl_signal.py:403:27: DTZ005 The use of `datetime.datetime.now()` without `tz` argument is not allowed
+tests\selection\test_drl_signal.py:422:1: W293 [*] Blank line contains whitespace
+tests\selection\test_drl_signal.py:428:45: W292 [*] No newline at end of file
+tests\selection\test_weight_optimizer.py:198:101: E501 Line too long (149 > 100)
+tests\selection\test_weight_optimizer.py:207:101: E501 Line too long (149 > 100)
+tests\selection\test_weight_optimizer.py:215:101: E501 Line too long (149 > 100)
+tests\selection\test_weight_optimizer.py:246:101: E501 Line too long (103 > 100)
+tests\selection\test_weight_optimizer.py:256:67: W292 [*] No newline at end of file
+tests\test_fastapi_app.py:254:1: I001 [*] Import block is un-sorted or un-formatted
+tests\test_fastapi_app.py:260:1: W293 [*] Blank line contains whitespace
+tests\visualization\test_dashboard.py:516:1: W293 [*] Blank line contains whitespace
+Found 61 errors.
+[*] 47 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).

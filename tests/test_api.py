@@ -133,3 +133,103 @@ def test_create_api() -> None:
     )
     assert isinstance(api, IATBApi)
     assert api._token_manager is not None
+
+
+def test_broker_status_relogin_required(api_instance: IATBApi) -> None:
+    """Test broker_status with expired token."""
+    api_instance._token_manager.is_token_fresh.return_value = False
+    result = api_instance.broker_status()
+    assert result["status"] == "relogin_required"
+    assert result["uid"] is None
+    assert result["balance"] is None
+
+
+def test_broker_status_connected(api_instance: IATBApi) -> None:
+    """Test broker_status with valid connection."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.profile.return_value = {"user_id": "ABC123"}
+    mock_kite.margins.return_value = {"equity": {"net": 100000.0}}
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.broker_status()
+            assert result["status"] == "connected"
+            assert result["uid"] == "ABC123"
+            assert result["balance"] == 100000.0
+
+
+def test_broker_status_error(api_instance: IATBApi) -> None:
+    """Test broker_status with error."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.profile.side_effect = Exception("Network error")
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.broker_status()
+            assert result["status"] == "error"
+            assert result["uid"] is None
+            assert result["balance"] is None
+
+
+def test_get_ohlcv_relogin_required(api_instance: IATBApi) -> None:
+    """Test get_ohlcv with expired token."""
+    api_instance._token_manager.is_token_fresh.return_value = False
+    result = api_instance.get_ohlcv("RELIANCE")
+    assert result["status"] == "error"
+    assert result["ticker"] == "RELIANCE"
+    assert result["data"] is None
+
+
+def test_get_ohlcv_success(api_instance: IATBApi) -> None:
+    """Test get_ohlcv with valid data."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+    ]
+    mock_kite.historical_data.return_value = [
+        {
+            "date": "2026-01-01",
+            "open": 1000,
+            "high": 1100,
+            "low": 950,
+            "close": 1050,
+            "volume": 100000,
+        }
+    ]
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.get_ohlcv("RELIANCE")
+            assert result["status"] == "success"
+            assert result["ticker"] == "RELIANCE"
+            assert result["data"] is not None
+            assert result["count"] == 1
+
+
+def test_get_ohlcv_instrument_not_found(api_instance: IATBApi) -> None:
+    """Test get_ohlcv when instrument not found."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = []
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.get_ohlcv("RELIANCE")
+            assert result["status"] == "error"
+            assert "not found" in result["message"].lower()
+
+
+def test_get_ohlcv_error(api_instance: IATBApi) -> None:
+    """Test get_ohlcv with error."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.side_effect = Exception("Network error")
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.get_ohlcv("RELIANCE")
+            assert result["status"] == "error"
+            assert result["data"] is None

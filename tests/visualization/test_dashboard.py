@@ -474,3 +474,45 @@ def test_health_matrix_utc_timestamp_validation() -> None:
             safe_exit_probability=Decimal("0.65"),
             timestamp_utc=non_utc_ts,
         )
+
+
+def test_render_approved_charts_multiple_instruments() -> None:
+    """Test rendering charts for multiple approved instruments."""
+    timestamp = datetime.now(UTC)
+    matrix1 = build_instrument_health_matrix(
+        symbol="RELIANCE",
+        sentiment_score=Decimal("0.8"),
+        market_strength_score=Decimal("0.75"),
+        volume_score=Decimal("0.85"),
+        drl_backtest_score=Decimal("0.7"),
+        safe_exit_probability=Decimal("0.65"),
+        timestamp_utc=timestamp,
+    )
+    matrix2 = build_instrument_health_matrix(
+        symbol="TCS",
+        sentiment_score=Decimal("0.9"),
+        market_strength_score=Decimal("0.85"),
+        volume_score=Decimal("0.9"),
+        drl_backtest_score=Decimal("0.8"),
+        safe_exit_probability=Decimal("0.7"),
+        timestamp_utc=timestamp,
+    )
+
+    st = _FakeStreamlitWithFunctions()
+    go = _FakePlotlyGo()
+    rendered = render_approved_charts([matrix1, matrix2], None, st, go)
+
+    assert len(rendered) == 2
+    assert "RELIANCE" in rendered
+    assert "TCS" in rendered
+    assert len(st.charts) == 2
+
+
+def test_render_dashboard_with_empty_data() -> None:
+    """Test rendering dashboard with no market data."""
+    payload = build_dashboard_payload({})
+    streamlit = _FakeStreamlit()
+    rendered = render_dashboard(payload, streamlit)
+
+    assert rendered == list(REQUIRED_MARKET_TABS) + [INSTRUMENT_SCANNER_TAB]
+    assert streamlit.titles == ["IATB Multi-Market Dashboard"]

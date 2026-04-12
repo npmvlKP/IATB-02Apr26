@@ -392,10 +392,10 @@ class VectorBTEngine:
             prob_10pct_return=prob_10pct,
             worst_case_equity=sorted_equities[0],
             best_case_equity=sorted_equities[-1],
-            p5_equity=sorted_equities[int(n * 0.05)],
-            p25_equity=sorted_equities[int(n * 0.25)],
-            p75_equity=sorted_equities[int(n * 0.75)],
-            p95_equity=sorted_equities[int(n * 0.95)],
+            p5_equity=sorted_equities[n // 20],  # 5th percentile (1/20)
+            p25_equity=sorted_equities[n // 4],  # 25th percentile (1/4)
+            p75_equity=sorted_equities[(n * 3) // 4],  # 75th percentile (3/4)
+            p95_equity=sorted_equities[(n * 19) // 20],  # 95th percentile (19/20)
         )
 
     def _create_session_mask(self, timestamps: list[datetime]) -> list[bool]:
@@ -546,11 +546,13 @@ class VectorBTEngine:
         if len(data["timestamps"]) > 1:
             start_ts = data["timestamps"][0]
             end_ts = data["timestamps"][-1]
-            years = (end_ts - start_ts).total_seconds() / (365.25 * 24 * 3600)
+            # Convert seconds to years using Decimal for precision
+            seconds_in_year = Decimal("365.25") * Decimal("24") * Decimal("3600")
+            total_seconds = Decimal(str((end_ts - start_ts).total_seconds()))
+            years = total_seconds / seconds_in_year
             cagr = (
-                ((Decimal("1") + total_return) ** (Decimal("1") / Decimal(str(years))))
-                - Decimal("1")
-                if years > 0
+                ((Decimal("1") + total_return) ** (Decimal("1") / years)) - Decimal("1")
+                if years > Decimal("0")
                 else Decimal("0")
             )
         else:

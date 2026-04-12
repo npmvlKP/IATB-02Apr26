@@ -5,6 +5,7 @@ FastAPI application for IATB trading bot.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from iatb.broker.token_manager import ZerodhaTokenManager
@@ -124,6 +125,117 @@ class IATBApi:
             "detail": "operational",
             "message": "API is operational.",
         }
+
+    def broker_status(self) -> dict[str, Any]:
+        """Get broker connection status and account details.
+
+        Returns:
+            Broker status dict with uid, balance, and connection state.
+        """
+        init_result = self._init_kite()
+        if init_result.get("status") != "success":
+            return {
+                "status": "relogin_required",
+                "uid": None,
+                "balance": None,
+                "message": init_result.get("message", "Access token expired"),
+            }
+
+        try:
+            kite = self.get_kite_client()
+            profile = kite.profile()
+            margins = kite.margins()
+            balance = margins.get("equity", {}).get("net", 0) if margins else 0
+            return {
+                "status": "connected",
+                "uid": profile.get("user_id"),
+                "balance": balance,
+                "message": "Broker connection active.",
+            }
+        except Exception as exc:
+            _LOGGER.error("Failed to fetch broker status: %s", exc)
+            return {
+                "status": "error",
+                "uid": None,
+                "balance": None,
+                "message": str(exc),
+            }
+
+    def get_ohlcv(
+        self,
+        ticker: str,
+        instrument_token: str | None = None,
+        interval: str = "day",
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Get OHLCV data for a ticker.
+
+        Args:
+            ticker: Trading symbol (e.g., "RELIANCE").
+            instrument_token: Kite instrument token (optional).
+            interval: Candle interval (day, 5minute, 15minute, etc.).
+            from_date: From date in YYYY-MM-DD format (optional).
+            to_date: To date in YYYY-MM-DD format (optional).
+
+        Returns:
+            Dict with OHLCV data or error.
+        """
+        init_result = self._init_kite()
+        if init_result.get("status") != "success":
+            return {
+                "status": "error",
+                "ticker": ticker,
+                "data": None,
+                "message": init_result.get("message", "Access token expired"),
+            }
+
+        try:
+            kite = self.get_kite_client()
+
+            # Try to find instrument token if not provided
+            if not instrument_token:
+                instruments = kite.instruments("NSE")
+                for inst in instruments:
+                    if inst.get("tradingsymbol") == ticker:
+                        instrument_token = inst.get("instrument_token")
+                        break
+
+            if not instrument_token:
+                return {
+                    "status": "error",
+                    "ticker": ticker,
+                    "data": None,
+                    "message": f"Instrument {ticker} not found",
+                }
+
+            # Default to last 30 days if dates not provided
+            if not from_date:
+                from_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+            if not to_date:
+                to_date = datetime.now(UTC).strftime("%Y-%m-%d")
+
+            data = kite.historical_data(
+                instrument_token=str(instrument_token),
+                from_date=from_date,
+                to_date=to_date,
+                interval=interval,
+            )
+
+            return {
+                "status": "success",
+                "ticker": ticker,
+                "data": data,
+                "count": len(data) if data else 0,
+            }
+        except Exception as exc:
+            _LOGGER.error("Failed to fetch OHLCV for %s: %s", ticker, exc)
+            return {
+                "status": "error",
+                "ticker": ticker,
+                "data": None,
+                "message": str(exc),
+            }
 
 
 def create_api(

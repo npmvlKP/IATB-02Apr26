@@ -231,9 +231,7 @@ class TestRunGate:
         sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
         from run_gate import check_gate_g5
 
-        responses = [
-            _result(["gitleaks"], returncode=1, stdout="Leak found: API_KEY\n")
-        ]
+        responses = [_result(["gitleaks"], returncode=1, stdout="Leak found: API_KEY\n")]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
 

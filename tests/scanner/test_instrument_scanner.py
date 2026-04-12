@@ -254,3 +254,363 @@ class TestMarketData:
             breadth_ratio=Decimal("1.2"),
         )
         assert data.volume_ratio == Decimal("0")
+
+
+class TestScannerSorting:
+    """Test scanner sorting and ranking functionality."""
+
+    def test_rank_and_split_with_mixed_gainers_losers(self):
+        """Test that gainers and losers are correctly split and ranked."""
+        scanner = InstrumentScanner(
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {
+                    "GAINER1": (Decimal("0.8"), True),
+                    "GAINER2": (Decimal("0.9"), True),
+                    "LOSER1": (Decimal("-0.8"), True),
+                    "LOSER2": (Decimal("-0.9"), True),
+                }
+            ),
+            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+        )
+
+        custom_data = [
+            MarketData(
+                symbol="GAINER1",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("110"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("115"),
+                low_price=Decimal("105"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            MarketData(
+                symbol="GAINER2",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("120"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("125"),
+                low_price=Decimal("115"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            MarketData(
+                symbol="LOSER1",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("90"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("95"),
+                low_price=Decimal("85"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            MarketData(
+                symbol="LOSER2",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("80"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("85"),
+                low_price=Decimal("75"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+        ]
+
+        result = scanner.scan(custom_data=custom_data)
+
+        # Should have 2 gainers and 2 losers
+        assert len(result.gainers) == 2
+        assert len(result.losers) == 2
+
+        # Gainers should be sorted by pct_change descending
+        assert result.gainers[0].pct_change > result.gainers[1].pct_change
+        assert result.gainers[0].symbol == "GAINER2"  # 20% gain
+        assert result.gainers[1].symbol == "GAINER1"  # 10% gain
+
+        # Losers should be sorted by pct_change ascending
+        assert result.losers[0].pct_change < result.losers[1].pct_change
+        assert result.losers[0].symbol == "LOSER2"  # -20% loss
+        assert result.losers[1].symbol == "LOSER1"  # -10% loss
+
+    def test_composite_score_calculation(self):
+        """Test that composite score is calculated correctly."""
+        scanner = InstrumentScanner()
+
+        # Create a candidate with known values
+        from iatb.scanner.instrument_scanner import _CandidateScores
+
+        candidate = _CandidateScores(
+            market_data=MarketData(
+                symbol="TEST",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("100"),
+                prev_close_price=Decimal("95"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("105"),
+                low_price=Decimal("98"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            sentiment_score=Decimal("0.8"),
+            is_very_strong=True,
+            strength_score=Decimal("0.7"),
+            is_strength_tradable=True,
+            exit_probability=Decimal("0.6"),
+        )
+
+        composite = scanner._compute_composite_score(candidate)
+
+        # Composite should be between 0 and 1
+        assert Decimal("0") <= composite <= Decimal("1")
+        # With strong sentiment, strength, and RL, composite should be relatively high
+        assert composite > Decimal("0.5")
+
+    def test_filter_by_volume_ratio(self):
+        """Test that candidates with low volume ratio are filtered out."""
+        scanner = InstrumentScanner(
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {
+                    "HIGH_VOL": (Decimal("0.8"), True),
+                    "LOW_VOL": (Decimal("0.8"), True),
+                }
+            ),
+            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+            config=ScannerConfig(min_volume_ratio=Decimal("3.0")),
+        )
+
+        custom_data = [
+            MarketData(
+                symbol="HIGH_VOL",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("110"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("3000000"),  # 3x avg volume
+                avg_volume=Decimal("1000000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("115"),
+                low_price=Decimal("105"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            MarketData(
+                symbol="LOW_VOL",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("110"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("1000000"),  # 1x avg volume (below threshold)
+                avg_volume=Decimal("1000000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("115"),
+                low_price=Decimal("105"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+        ]
+
+        result = scanner.scan(custom_data=custom_data)
+
+        # Only HIGH_VOL should pass volume filter
+        assert len(result.gainers) == 1
+        assert result.gainers[0].symbol == "HIGH_VOL"
+
+    def test_filter_by_exit_probability(self):
+        """Test that candidates with low exit probability are filtered out."""
+        scanner = InstrumentScanner(
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {
+                    "HIGH_EXIT": (Decimal("0.8"), True),
+                    "LOW_EXIT": (Decimal("0.8"), True),
+                }
+            ),
+            rl_predictor=lambda obs: Decimal("0.3"),  # Low exit probability
+            config=ScannerConfig(min_exit_probability=Decimal("0.5")),
+        )
+
+        custom_data = [
+            MarketData(
+                symbol="HIGH_EXIT",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("110"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("115"),
+                low_price=Decimal("105"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+        ]
+
+        result = scanner.scan(custom_data=custom_data)
+
+        # Should be filtered out due to low exit probability
+        assert len(result.gainers) == 0
+
+    def test_top_n_limiting(self):
+        """Test that only top_n candidates are returned."""
+        scanner = InstrumentScanner(
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {f"STOCK{i}": (Decimal("0.8"), True) for i in range(1, 16)}
+            ),
+            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+            config=ScannerConfig(top_n=5),
+        )
+
+        custom_data = [
+            MarketData(
+                symbol=f"STOCK{i}",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal(str(100 + i)),  # Different prices
+                prev_close_price=Decimal("100"),
+                volume=Decimal("2000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal(str(100 + i + 5)),
+                low_price=Decimal(str(100 + i - 2)),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            )
+            for i in range(1, 16)
+        ]
+
+        result = scanner.scan(custom_data=custom_data)
+
+        # Should only return top 5
+        assert len(result.gainers) == 5
+        assert result.total_scanned == 15
+
+    def test_determine_category_fut(self):
+        """Test category detection for FUT symbols."""
+        from iatb.scanner.instrument_scanner import InstrumentScanner
+
+        assert InstrumentScanner._determine_category("NIFTYFUT") == InstrumentCategory.FUTURE
+        assert InstrumentScanner._determine_category("BANKNIFTYFUTURE") == InstrumentCategory.FUTURE
+
+    def test_determine_category_option(self):
+        """Test category detection for OPTION symbols."""
+        from iatb.scanner.instrument_scanner import InstrumentScanner
+
+        assert InstrumentScanner._determine_category("NIFTY25000CE") == InstrumentCategory.OPTION
+        assert InstrumentScanner._determine_category("NIFTY25000PE") == InstrumentCategory.OPTION
+        assert (
+            InstrumentScanner._determine_category("VERYLONGOPTIONSYMBOL")
+            == InstrumentCategory.OPTION
+        )
+
+    def test_determine_category_stock(self):
+        """Test category detection for STOCK symbols."""
+        from iatb.scanner.instrument_scanner import InstrumentScanner
+
+        assert InstrumentScanner._determine_category("TCS") == InstrumentCategory.STOCK
+        assert InstrumentScanner._determine_category("INFY") == InstrumentCategory.STOCK
+        assert InstrumentScanner._determine_category("HDFC") == InstrumentCategory.STOCK
+
+    def test_build_observation(self):
+        """Test building observation vector for RL predictor."""
+        scanner = InstrumentScanner()
+
+        data = MarketData(
+            symbol="TEST",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),  # 5% change
+            prev_close_price=Decimal("100"),
+            volume=Decimal("1000000"),
+            avg_volume=Decimal("500000"),  # 2x volume
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("98"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        )
+
+        observation = scanner._build_observation(data)
+
+        # Should return list of 5 Decimal values
+        assert len(observation) == 5
+        assert all(isinstance(v, Decimal) for v in observation)
+        # pct_change should be normalized (/100)
+        assert observation[0] == Decimal("0.05")
+        # volume_ratio should be 2.0
+        assert observation[1] == Decimal("2.0")
+
+    def test_get_sentiment_without_analyzer(self):
+        """Test sentiment when no analyzer is configured."""
+        scanner = InstrumentScanner(sentiment_analyzer=None)
+
+        data = MarketData(
+            symbol="TEST",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("100"),
+            prev_close_price=Decimal("95"),
+            volume=Decimal("1000"),
+            avg_volume=Decimal("500"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("105"),
+            low_price=Decimal("98"),
+            adx=Decimal("25"),
+            atr_pct=Decimal("0.01"),
+            breadth_ratio=Decimal("1.2"),
+        )
+
+        score, is_very_strong = scanner._get_sentiment(data)
+        assert score == Decimal("0")
+        assert is_very_strong is False
+
+    def test_get_exit_probability_without_predictor(self):
+        """Test exit probability when no predictor is configured."""
+        scanner = InstrumentScanner(rl_predictor=None)
+
+        data = MarketData(
+            symbol="TEST",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("100"),
+            prev_close_price=Decimal("95"),
+            volume=Decimal("1000"),
+            avg_volume=Decimal("500"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("105"),
+            low_price=Decimal("98"),
+            adx=Decimal("25"),
+            atr_pct=Decimal("0.01"),
+            breadth_ratio=Decimal("1.2"),
+        )
+
+        prob = scanner._get_exit_probability(data)
+        assert prob == Decimal("0")
