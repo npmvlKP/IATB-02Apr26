@@ -2,6 +2,13 @@
 """
 iATB Deployment Dashboard — Zero-dependency browser UI.
 
+⚠️  DEPRECATED: This script is deprecated. Use `scripts/start_master.py` instead.
+    The master startup script orchestrates engine and dashboard startup in the
+    correct sequence, preventing the "Loading..." issue.
+
+    To start all services:
+      poetry run python scripts/start_master.py
+
 Serves a live status page at http://localhost:8080 showing:
   - Engine & health status
   - Pre-flight check results
@@ -58,6 +65,7 @@ def _read_log_tail(n: int = 50) -> list[str]:
 
 def _check_health() -> str:
     import urllib.request
+
     try:
         with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as r:
             return r.read().decode()
@@ -67,23 +75,50 @@ def _check_health() -> str:
 
 def _check_sentiment_health() -> dict[str, str]:
     """Check sentiment analysis health status."""
+    components = {
+        "finbert": "unavailable",
+        "aion": "unavailable",
+        "aggregator": "unavailable",
+        "ensemble_status": "not operational",
+    }
+
+    # Check FinBERT
     try:
-        from iatb.sentiment.aggregator import SentimentAggregator
-        from iatb.sentiment.aion_analyzer import AionAnalyzer
         from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
-        return {
-            "finbert": "available",
-            "aion": "available",
-            "aggregator": "available",
-            "ensemble_status": "operational",
-        }
+
+        analyzer = FinbertAnalyzer()
+        _ = analyzer  # Trigger import validation
+        components["finbert"] = "available"
     except Exception as exc:
-        return {
-            "finbert": "unavailable",
-            "aion": "unavailable",
-            "aggregator": "unavailable",
-            "ensemble_status": f"error: {exc}",
-        }
+        components["finbert"] = f"error: {type(exc).__name__}"
+
+    # Check AION
+    try:
+        from iatb.sentiment.aion_analyzer import AionAnalyzer
+
+        analyzer = AionAnalyzer()
+        _ = analyzer  # Trigger import validation
+        components["aion"] = "available"
+    except Exception as exc:
+        components["aion"] = f"error: {type(exc).__name__}"
+
+    # Check Aggregator (requires both components)
+    if components["finbert"] == "available" and components["aion"] == "available":
+        try:
+            from iatb.sentiment.aggregator import SentimentAggregator
+
+            aggregator = SentimentAggregator()
+            _ = aggregator  # Trigger import validation
+            components["aggregator"] = "available"
+            components["ensemble_status"] = "operational"
+        except Exception as exc:
+            components["aggregator"] = f"error: {type(exc).__name__}"
+            components["ensemble_status"] = f"error: {type(exc).__name__}"
+    else:
+        components["aggregator"] = "unavailable (dependencies missing)"
+        components["ensemble_status"] = "unavailable (dependencies missing)"
+
+    return components
 
 
 def _compute_pnl(trades: list[dict[str, str]]) -> dict[str, str]:
@@ -246,22 +281,47 @@ def _render_trades_table(trades: list[dict[str, str]]) -> str:
 
 def _render_html(status: dict[str, object]) -> str:
     health_raw = str(status.get("engine_health", ""))
-    health_ok = "ok" in health_raw
+    health_ok = "ok" in health_raw and "unreachable" not in health_raw
+
+    # If engine is down, show error state for all cards
+    if not health_ok:
+        return _HTML.format(
+            refresh=_REFRESH_SECONDS,
+            timestamp=str(status.get("timestamp_utc", ""))[:19],
+            health_status="OFFLINE",
+            health_class="fail",
+            total_trades="N/A",
+            net_pnl="N/A",
+            buy_count="N/A",
+            sell_count="N/A",
+            trades_table="<p style='color:#f85149'>Engine unreachable. No trades available.</p>",
+            log_tail="<p style='color:#f85149'>Engine unreachable. Logs unavailable.</p>",
+            finbert_status="Unknown",
+            finbert_class="status-err",
+            aion_status="Unknown",
+            aion_class="status-err",
+            aggregator_status="Unknown",
+            aggregator_class="status-err",
+            ensemble_status_display="Engine Unreachable",
+            ensemble_class="fail",
+        )
+
+    # Engine is up, render normally
     pnl = status.get("pnl_summary", {})
     trades = status.get("recent_trades", [])
     log_lines = status.get("log_tail", [])
     sentiment_health = status.get("sentiment_health", {})
-    
+
     finbert_ok = sentiment_health.get("finbert", "") == "available"
     aion_ok = sentiment_health.get("aion", "") == "available"
     aggregator_ok = sentiment_health.get("aggregator", "") == "available"
     ensemble_ok = sentiment_health.get("ensemble_status", "") == "operational"
-    
+
     return _HTML.format(
         refresh=_REFRESH_SECONDS,
         timestamp=str(status.get("timestamp_utc", ""))[:19],
-        health_status="ONLINE" if health_ok else "OFFLINE",
-        health_class="pass" if health_ok else "fail",
+        health_status="ONLINE",
+        health_class="pass",
         total_trades=pnl.get("total_trades", "0") if isinstance(pnl, dict) else "0",
         net_pnl=pnl.get("net_notional_pnl", "0") if isinstance(pnl, dict) else "0",
         buy_count=pnl.get("buy_trades", "0") if isinstance(pnl, dict) else "0",
@@ -305,11 +365,16 @@ class _DashboardHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    print(f"iATB Deployment Dashboard")
+    print("⚠️  DEPRECATION NOTICE")
+    print("  This script is deprecated. Use `scripts/start_master.py` instead.")
+    print("  The master startup script orchestrates engine and dashboard startup")
+    print("  in the correct sequence, preventing the 'Loading...' issue.")
+    print("")
+    print("iATB Deployment Dashboard")
     print(f"  URL:  http://localhost:{_PORT}")
     print(f"  API:  http://localhost:{_PORT}/api/status")
     print(f"  Auto-refresh: {_REFRESH_SECONDS}s")
-    print(f"  Press Ctrl+C to stop\n")
+    print("  Press Ctrl+C to stop\n")
     server = ThreadingHTTPServer(("127.0.0.1", _PORT), _DashboardHandler)
     try:
         server.serve_forever()

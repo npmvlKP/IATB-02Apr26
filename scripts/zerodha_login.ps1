@@ -64,7 +64,9 @@ Write-Host ""
 # Step 1: Generate TOTP
 Write-Host "[1/6] Generating TOTP code..." -ForegroundColor Yellow
 try {
-    $totpResult = poetry run python -c "import pyotp; print(pyotp.TOTP('$TotpSecret').now())" 2>&1
+    $env:IATB_TOTP_SECRET = $TotpSecret
+    $totpResult = poetry run python -c "import pyotp, os; print(pyotp.TOTP(os.environ['IATB_TOTP_SECRET']).now())" 2>&1
+    Remove-Item Env:\IATB_TOTP_SECRET -ErrorAction SilentlyContinue
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to generate TOTP: $totpResult"
         exit 1
@@ -112,18 +114,9 @@ if ([string]::IsNullOrEmpty($redirectUrl)) {
 # Step 5: Extract request_token
 Write-Host "[5/6] Extracting request_token..." -ForegroundColor Yellow
 try {
-    $extractResult = poetry run python -c "
-from urllib.parse import urlparse, parse_qs
-import sys
-url = '$redirectUrl'
-parsed = urlparse(url)
-params = parse_qs(parsed.query)
-if 'request_token' in params:
-    print(params['request_token'][0])
-else:
-    print('ERROR: No request_token found in URL', file=sys.stderr)
-    sys.exit(1)
-" 2>&1
+    $env:IATB_REDIRECT_URL = $redirectUrl
+    $extractResult = poetry run python -c "from urllib.parse import urlparse, parse_qs; import sys, os; url = os.environ['IATB_REDIRECT_URL']; parsed = urlparse(url); params = parse_qs(parsed.query); print(params['request_token'][0] if 'request_token' in params else sys.exit('ERROR: No request_token found in URL'))" 2>&1
+    Remove-Item Env:\IATB_REDIRECT_URL -ErrorAction SilentlyContinue
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to extract request_token: $extractResult"
@@ -142,20 +135,15 @@ catch {
 # Step 6: Exchange for access_token and store
 Write-Host "[6/6] Exchanging for access_token and storing..." -ForegroundColor Yellow
 try {
-    $exchangeResult = poetry run python -c "
-import sys
-sys.path.insert(0, 'src')
-from iatb.broker.token_manager import ZerodhaTokenManager
-manager = ZerodhaTokenManager(
-    api_key='$ApiKey',
-    api_secret='$ApiSecret',
-    totp_secret='$TotpSecret'
-)
-access_token = manager.exchange_request_token('$requestToken')
-manager.store_access_token(access_token)
-print('SUCCESS: Access token stored successfully')
-print(f'Access Token: {access_token}')
-" 2>&1
+    $env:IATB_API_KEY = $ApiKey
+    $env:IATB_API_SECRET = $ApiSecret
+    $env:IATB_TOTP_SECRET = $TotpSecret
+    $env:IATB_REQUEST_TOKEN = $requestToken
+    $exchangeResult = poetry run python -c "import sys, os; sys.path.insert(0, 'src'); from iatb.broker.token_manager import ZerodhaTokenManager; manager = ZerodhaTokenManager(api_key=os.environ['IATB_API_KEY'], api_secret=os.environ['IATB_API_SECRET'], totp_secret=os.environ['IATB_TOTP_SECRET']); access_token = manager.exchange_request_token(os.environ['IATB_REQUEST_TOKEN']); manager.store_access_token(access_token); print('SUCCESS: Access token stored successfully'); print(f'Access Token: {access_token}')" 2>&1
+    Remove-Item Env:\IATB_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:\IATB_API_SECRET -ErrorAction SilentlyContinue
+    Remove-Item Env:\IATB_TOTP_SECRET -ErrorAction SilentlyContinue
+    Remove-Item Env:\IATB_REQUEST_TOKEN -ErrorAction SilentlyContinue
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to exchange request_token: $exchangeResult"
@@ -177,5 +165,4 @@ Write-Host "Your Zerodha session is now active." -ForegroundColor Cyan
 Write-Host "The access token will be valid until 6 AM IST tomorrow." -ForegroundColor Gray
 Write-Host ""
 Write-Host "To verify, run:" -ForegroundColor Yellow
-$verifyCmd = "poetry run python -c 'from iatb.broker.token_manager import ZerodhaTokenManager; print(ZerodhaTokenManager(api_key=`'$ApiKey`', api_secret=`'$ApiSecret`').is_token_fresh())'"
-Write-Host "  $verifyCmd" -ForegroundColor Gray
+Write-Host "  poetry run python -c 'from iatb.broker.token_manager import ZerodhaTokenManager; import os; manager = ZerodhaTokenManager(api_key=os.environ.get(\"ZERODHA_API_KEY\"), api_secret=os.environ.get(\"ZERODHA_API_SECRET\")); print(manager.is_token_fresh())'" -ForegroundColor Gray

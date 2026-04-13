@@ -283,43 +283,134 @@ class VectorBTEngine:
         Returns:
             WalkForwardResult with train/test degradation metrics
         """
+        self._validate_walk_forward_input(prices)
+        train_size = self._calculate_train_size(prices)
+
+        train_data = self._split_train_data(
+            prices, timestamps, composite_scores, exit_probabilities, train_size
+        )
+        test_data = self._split_test_data(
+            prices, timestamps, composite_scores, exit_probabilities, train_size
+        )
+
+        train_metrics = self.run_backtest(
+            train_data["prices"],
+            train_data["timestamps"],
+            train_data["scores"],
+            train_data["probs"],
+        )
+        test_metrics = self.run_backtest(
+            test_data["prices"],
+            test_data["timestamps"],
+            test_data["scores"],
+            test_data["probs"],
+        )
+
+        return self._build_walk_forward_result(train_metrics, test_metrics)
+
+    def _validate_walk_forward_input(self, prices: list[Decimal]) -> None:
+        """Validate walk-forward input.
+
+        Args:
+            prices: List of closing prices.
+
+        Raises:
+            ConfigError: If validation fails.
+        """
         if len(prices) < 10:
             msg = "prices must contain at least 10 points for walk-forward"
             raise ConfigError(msg)
 
+    def _calculate_train_size(self, prices: list[Decimal]) -> int:
+        """Calculate training set size.
+
+        Args:
+            prices: List of closing prices.
+
+        Returns:
+            Training set size.
+
+        Raises:
+            ConfigError: If training period too short.
+        """
         train_size = int(len(prices) * self._config.train_pct)
         if train_size < 5:
             msg = "Training period too short"
             raise ConfigError(msg)
+        return train_size
 
-        train_prices = prices[:train_size]
-        train_timestamps = timestamps[:train_size]
-        test_prices = prices[train_size:]
-        test_timestamps = timestamps[train_size:]
+    def _split_train_data(
+        self,
+        prices: list[Decimal],
+        timestamps: list[datetime],
+        composite_scores: list[Decimal] | None,
+        exit_probabilities: list[Decimal] | None,
+        train_size: int,
+    ) -> dict[str, Any]:
+        """Split training data.
 
-        train_scores = composite_scores[:train_size] if composite_scores else None
-        test_scores = composite_scores[train_size:] if composite_scores else None
+        Args:
+            prices: List of closing prices.
+            timestamps: List of timestamps.
+            composite_scores: Optional composite scores.
+            exit_probabilities: Optional exit probabilities.
+            train_size: Training set size.
 
-        train_probs = exit_probabilities[:train_size] if exit_probabilities else None
-        test_probs = exit_probabilities[train_size:] if exit_probabilities else None
+        Returns:
+            Dict with training data.
+        """
+        return {
+            "prices": prices[:train_size],
+            "timestamps": timestamps[:train_size],
+            "scores": composite_scores[:train_size] if composite_scores else None,
+            "probs": exit_probabilities[:train_size] if exit_probabilities else None,
+        }
 
-        train_metrics = self.run_backtest(train_prices, train_timestamps, train_scores, train_probs)
-        test_metrics = self.run_backtest(test_prices, test_timestamps, test_scores, test_probs)
+    def _split_test_data(
+        self,
+        prices: list[Decimal],
+        timestamps: list[datetime],
+        composite_scores: list[Decimal] | None,
+        exit_probabilities: list[Decimal] | None,
+        train_size: int,
+    ) -> dict[str, Any]:
+        """Split testing data.
 
-        cagr_degrade = (
-            train_metrics.cagr - test_metrics.cagr
-            if train_metrics.cagr > Decimal("0")
-            else Decimal("0")
+        Args:
+            prices: List of closing prices.
+            timestamps: List of timestamps.
+            composite_scores: Optional composite scores.
+            exit_probabilities: Optional exit probabilities.
+            train_size: Training set size.
+
+        Returns:
+            Dict with testing data.
+        """
+        return {
+            "prices": prices[train_size:],
+            "timestamps": timestamps[train_size:],
+            "scores": composite_scores[train_size:] if composite_scores else None,
+            "probs": exit_probabilities[train_size:] if exit_probabilities else None,
+        }
+
+    def _build_walk_forward_result(
+        self, train_metrics: BacktestResult, test_metrics: BacktestResult
+    ) -> WalkForwardResult:
+        """Build walk-forward result with degradation metrics.
+
+        Args:
+            train_metrics: Training backtest metrics.
+            test_metrics: Testing backtest metrics.
+
+        Returns:
+            WalkForwardResult with degradation metrics.
+        """
+        cagr_degrade = self._calculate_degradation(train_metrics.cagr, test_metrics.cagr)
+        sharpe_degrade = self._calculate_degradation(
+            train_metrics.sharpe_ratio, test_metrics.sharpe_ratio
         )
-        sharpe_degrade = (
-            train_metrics.sharpe_ratio - test_metrics.sharpe_ratio
-            if train_metrics.sharpe_ratio > Decimal("0")
-            else Decimal("0")
-        )
-        win_rate_degrade = (
-            train_metrics.win_rate - test_metrics.win_rate
-            if train_metrics.win_rate > Decimal("0")
-            else Decimal("0")
+        win_rate_degrade = self._calculate_degradation(
+            train_metrics.win_rate, test_metrics.win_rate
         )
 
         return WalkForwardResult(
@@ -329,6 +420,20 @@ class VectorBTEngine:
             sharpe_degradation=sharpe_degrade,
             win_rate_degradation=win_rate_degrade,
         )
+
+    def _calculate_degradation(self, train_value: Decimal, test_value: Decimal) -> Decimal:
+        """Calculate degradation between train and test values.
+
+        Args:
+            train_value: Training metric value.
+            test_value: Testing metric value.
+
+        Returns:
+            Degradation value (non-negative).
+        """
+        if train_value > Decimal("0"):
+            return train_value - test_value
+        return Decimal("0")
 
     def run_monte_carlo(
         self,
@@ -353,6 +458,32 @@ class VectorBTEngine:
             msg = "prices must contain at least 10 points for Monte Carlo"
             raise ConfigError(msg)
 
+        final_equities = self._run_simulations(
+            prices, timestamps, composite_scores, exit_probabilities
+        )
+        sorted_equities = sorted(final_equities)
+        n = len(sorted_equities)
+
+        return self._build_monte_carlo_result(sorted_equities, n)
+
+    def _run_simulations(
+        self,
+        prices: list[Decimal],
+        timestamps: list[datetime],
+        composite_scores: list[Decimal] | None,
+        exit_probabilities: list[Decimal] | None,
+    ) -> list[Decimal]:
+        """Run all Monte Carlo simulations.
+
+        Args:
+            prices: List of closing prices.
+            timestamps: List of timestamps.
+            composite_scores: Optional composite scores.
+            exit_probabilities: Optional exit probabilities.
+
+        Returns:
+            List of final equities from all simulations.
+        """
         final_equities: list[Decimal] = []
 
         for _ in range(self._config.num_simulations):
@@ -362,14 +493,68 @@ class VectorBTEngine:
             final_equity = self._config.initial_capital * (Decimal("1") + result.total_return)
             final_equities.append(final_equity)
 
-        sorted_equities = sorted(final_equities)
-        n = len(sorted_equities)
+        return final_equities
 
+    def _build_monte_carlo_result(self, sorted_equities: list[Decimal], n: int) -> MonteCarloResult:
+        """Build Monte Carlo result from sorted equities.
+
+        Args:
+            sorted_equities: Sorted list of final equities.
+            n: Number of simulations.
+
+        Returns:
+            MonteCarloResult with all metrics.
+        """
+        mean_eq, median_eq, std_eq = self._calculate_equity_statistics(sorted_equities, n)
+        prob_profit, prob_5pct, prob_10pct = self._calculate_return_probabilities(
+            sorted_equities, n
+        )
+
+        return MonteCarloResult(
+            mean_final_equity=mean_eq,
+            median_final_equity=median_eq,
+            std_final_equity=std_eq,
+            prob_profit=prob_profit,
+            prob_5pct_return=prob_5pct,
+            prob_10pct_return=prob_10pct,
+            worst_case_equity=sorted_equities[0],
+            best_case_equity=sorted_equities[-1],
+            p5_equity=sorted_equities[n // 20],
+            p25_equity=sorted_equities[n // 4],
+            p75_equity=sorted_equities[(n * 3) // 4],
+            p95_equity=sorted_equities[(n * 19) // 20],
+        )
+
+    def _calculate_equity_statistics(
+        self, sorted_equities: list[Decimal], n: int
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """Calculate equity statistics.
+
+        Args:
+            sorted_equities: Sorted list of equities.
+            n: Number of equities.
+
+        Returns:
+            Tuple of (mean, median, std).
+        """
         mean_eq = sum(sorted_equities) / Decimal(str(n))
         median_eq = sorted_equities[n // 2]
         variance = sum((e - mean_eq) ** 2 for e in sorted_equities) / Decimal(str(n))
         std_eq = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
+        return mean_eq, median_eq, std_eq
 
+    def _calculate_return_probabilities(
+        self, sorted_equities: list[Decimal], n: int
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """Calculate return probabilities.
+
+        Args:
+            sorted_equities: Sorted list of equities.
+            n: Number of equities.
+
+        Returns:
+            Tuple of (prob_profit, prob_5pct, prob_10pct).
+        """
         profit_count = sum(1 for e in sorted_equities if e > self._config.initial_capital)
         prob_profit = Decimal(str(profit_count)) / Decimal(str(n))
 
@@ -383,20 +568,7 @@ class VectorBTEngine:
         )
         prob_10pct = Decimal(str(ten_pct_count)) / Decimal(str(n))
 
-        return MonteCarloResult(
-            mean_final_equity=mean_eq,
-            median_final_equity=median_eq,
-            std_final_equity=std_eq,
-            prob_profit=prob_profit,
-            prob_5pct_return=prob_5pct,
-            prob_10pct_return=prob_10pct,
-            worst_case_equity=sorted_equities[0],
-            best_case_equity=sorted_equities[-1],
-            p5_equity=sorted_equities[n // 20],  # 5th percentile (1/20)
-            p25_equity=sorted_equities[n // 4],  # 25th percentile (1/4)
-            p75_equity=sorted_equities[(n * 3) // 4],  # 75th percentile (3/4)
-            p95_equity=sorted_equities[(n * 19) // 20],  # 95th percentile (19/20)
-        )
+        return prob_profit, prob_5pct, prob_10pct
 
     def _create_session_mask(self, timestamps: list[datetime]) -> list[bool]:
         """Create session mask for trading hours."""
@@ -517,7 +689,49 @@ class VectorBTEngine:
         if not trades:
             return self._empty_result(data)
 
-        # Trade statistics
+        trade_stats = self._calculate_trade_statistics(trades)
+        total_return = self._calculate_total_return(trades)
+        cagr = self._calculate_cagr(data, total_return)
+        sharpe_ratio = self._calculate_sharpe_ratio(trades)
+        max_drawdown = self._calculate_max_drawdown_from_trades(trades)
+        cost_breakdown = self._calculate_cost_breakdown(trades)
+        timing = self._calculate_timing(data)
+        integration_scores = self._calculate_integration_scores(data)
+
+        return BacktestResult(
+            total_return=total_return,
+            cagr=cagr,
+            sharpe_ratio=sharpe_ratio,
+            max_drawdown=max_drawdown,
+            win_rate=trade_stats["win_rate"],
+            profit_factor=trade_stats["profit_factor"],
+            total_trades=trade_stats["total_trades"],
+            winning_trades=trade_stats["winning_trades"],
+            losing_trades=trade_stats["losing_trades"],
+            avg_win=trade_stats["avg_win"],
+            avg_loss=trade_stats["avg_loss"],
+            total_costs=cost_breakdown["total_costs"],
+            stt_total=cost_breakdown["stt_total"],
+            sebi_total=cost_breakdown["sebi_total"],
+            exchange_txn_total=cost_breakdown["exchange_txn_total"],
+            stamp_duty_total=cost_breakdown["stamp_duty_total"],
+            gst_total=cost_breakdown["gst_total"],
+            start_date=timing["start_date"],
+            end_date=timing["end_date"],
+            num_days=timing["num_days"],
+            avg_composite_score=integration_scores["avg_composite_score"],
+            avg_exit_probability=integration_scores["avg_exit_probability"],
+        )
+
+    def _calculate_trade_statistics(self, trades: list[dict[str, Any]]) -> dict[str, Any]:
+        """Calculate trade statistics.
+
+        Args:
+            trades: List of trade dictionaries.
+
+        Returns:
+            Dict with trade statistics.
+        """
         total_trades = len(trades)
         winning_trades = sum(1 for t in trades if t["is_winner"])
         losing_trades = total_trades - winning_trades
@@ -534,105 +748,161 @@ class VectorBTEngine:
         gross_loss = abs(sum(losses))
         profit_factor = gross_profit / gross_loss if gross_loss > Decimal("0") else Decimal("0")
 
-        # Total return
+        return {
+            "total_trades": total_trades,
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "win_rate": win_rate,
+            "profit_factor": profit_factor,
+        }
+
+    def _calculate_total_return(self, trades: list[dict[str, Any]]) -> Decimal:
+        """Calculate total return from trades.
+
+        Args:
+            trades: List of trade dictionaries.
+
+        Returns:
+            Total return as Decimal.
+        """
         total_pnl = sum(t["net_pnl"] for t in trades)
-        total_return = (
+        return (
             total_pnl / self._config.initial_capital
             if self._config.initial_capital > Decimal("0")
             else Decimal("0")
         )
 
-        # CAGR
-        if len(data["timestamps"]) > 1:
-            start_ts = data["timestamps"][0]
-            end_ts = data["timestamps"][-1]
-            # Convert seconds to years using Decimal for precision
-            seconds_in_year = Decimal("365.25") * Decimal("24") * Decimal("3600")
-            total_seconds = Decimal(str((end_ts - start_ts).total_seconds()))
-            years = total_seconds / seconds_in_year
-            cagr = (
-                ((Decimal("1") + total_return) ** (Decimal("1") / years)) - Decimal("1")
-                if years > Decimal("0")
-                else Decimal("0")
-            )
-        else:
-            cagr = Decimal("0")
+    def _calculate_cagr(self, data: dict[str, list[Any]], total_return: Decimal) -> Decimal:
+        """Calculate Compound Annual Growth Rate.
 
-        # Sharpe ratio (simplified)
+        Args:
+            data: Data dictionary with timestamps.
+            total_return: Total return.
+
+        Returns:
+            CAGR as Decimal.
+        """
+        if len(data["timestamps"]) <= 1:
+            return Decimal("0")
+
+        start_ts = data["timestamps"][0]
+        end_ts = data["timestamps"][-1]
+
+        seconds_in_year = Decimal("365.25") * Decimal("24") * Decimal("3600")
+        total_seconds = Decimal(str((end_ts - start_ts).total_seconds()))
+        years = total_seconds / seconds_in_year
+
+        if years > Decimal("0"):
+            return ((Decimal("1") + total_return) ** (Decimal("1") / years)) - Decimal("1")
+        return Decimal("0")
+
+    def _calculate_sharpe_ratio(self, trades: list[dict[str, Any]]) -> Decimal:
+        """Calculate Sharpe ratio from trades.
+
+        Args:
+            trades: List of trade dictionaries.
+
+        Returns:
+            Sharpe ratio as Decimal.
+        """
         returns = [t["return_pct"] for t in trades]
-        avg_return = sum(returns) / Decimal(str(len(returns))) if returns else Decimal("0")
-        variance = (
-            sum((r - avg_return) ** 2 for r in returns) / Decimal(str(len(returns)))
-            if returns
-            else Decimal("0")
-        )
+        if not returns:
+            return Decimal("0")
+
+        avg_return = sum(returns) / Decimal(str(len(returns)))
+        variance = sum((r - avg_return) ** 2 for r in returns) / Decimal(str(len(returns)))
         std_return = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
-        sharpe_ratio = avg_return / std_return if std_return > Decimal("0") else Decimal("0")
 
-        # Max drawdown (simplified)
+        return avg_return / std_return if std_return > Decimal("0") else Decimal("0")
+
+    def _calculate_max_drawdown_from_trades(self, trades: list[dict[str, Any]]) -> Decimal:
+        """Calculate max drawdown from trades.
+
+        Args:
+            trades: List of trade dictionaries.
+
+        Returns:
+            Max drawdown as Decimal.
+        """
         equity_curve = self._build_equity_curve(trades)
-        max_drawdown = self._calculate_max_drawdown(equity_curve)
+        return self._calculate_max_drawdown(equity_curve)
 
-        # Cost breakdown
+    def _calculate_cost_breakdown(self, trades: list[dict[str, Any]]) -> dict[str, Decimal]:
+        """Calculate cost breakdown from trades.
+
+        Args:
+            trades: List of trade dictionaries.
+
+        Returns:
+            Dict with cost breakdown.
+        """
         total_costs = sum(t["entry_cost"] + t["exit_cost"] for t in trades)
-        stt_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).stt for t in trades
-            )
-            + sum(calculate_indian_costs(t["exit_price"], self._config.segment).stt for t in trades)
-        )
 
-        sebi_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).sebi for t in trades
-            )
-            + sum(
-                calculate_indian_costs(t["exit_price"], self._config.segment).sebi for t in trades
-            )
-        )
+        stt_total = self._sum_cost_type(trades, "stt")
+        sebi_total = self._sum_cost_type(trades, "sebi")
+        exchange_txn_total = self._sum_cost_type(trades, "exchange_txn")
+        stamp_duty_total = self._sum_cost_type(trades, "stamp_duty")
+        gst_total = self._sum_cost_type(trades, "gst")
 
-        exchange_txn_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).exchange_txn
-                for t in trades
-            )
-            + sum(
-                calculate_indian_costs(t["exit_price"], self._config.segment).exchange_txn
-                for t in trades
-            )
-        )
+        return {
+            "total_costs": total_costs,
+            "stt_total": stt_total,
+            "sebi_total": sebi_total,
+            "exchange_txn_total": exchange_txn_total,
+            "stamp_duty_total": stamp_duty_total,
+            "gst_total": gst_total,
+        }
 
-        stamp_duty_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).stamp_duty
-                for t in trades
-            )
-            + sum(
-                calculate_indian_costs(t["exit_price"], self._config.segment).stamp_duty
-                for t in trades
-            )
-        )
+    def _sum_cost_type(self, trades: list[dict[str, Any]], cost_type: str) -> Decimal:
+        """Sum a specific cost type across all trades.
 
-        gst_total = (
-            Decimal("0")
-            + sum(
-                calculate_indian_costs(t["entry_price"], self._config.segment).gst for t in trades
-            )
-            + sum(calculate_indian_costs(t["exit_price"], self._config.segment).gst for t in trades)
-        )
+        Args:
+            trades: List of trade dictionaries.
+            cost_type: Type of cost to sum (stt, sebi, etc.).
 
-        # Timing
+        Returns:
+            Total cost as Decimal.
+        """
+        total = Decimal("0")
+        for trade in trades:
+            entry_cost = calculate_indian_costs(trade["entry_price"], self._config.segment)
+            exit_cost = calculate_indian_costs(trade["exit_price"], self._config.segment)
+            total += getattr(entry_cost, cost_type, Decimal("0"))
+            total += getattr(exit_cost, cost_type, Decimal("0"))
+        return total
+
+    def _calculate_timing(self, data: dict[str, list[Any]]) -> dict[str, Any]:
+        """Calculate timing information from data.
+
+        Args:
+            data: Data dictionary with timestamps.
+
+        Returns:
+            Dict with timing information.
+        """
         start_date = (
             data["timestamps"][0].date() if data["timestamps"] else datetime.now(UTC).date()
         )
         end_date = data["timestamps"][-1].date() if data["timestamps"] else datetime.now(UTC).date()
         num_days = (end_date - start_date).days + 1
 
-        # Integration scores
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "num_days": num_days,
+        }
+
+    def _calculate_integration_scores(self, data: dict[str, list[Any]]) -> dict[str, Decimal]:
+        """Calculate integration score averages.
+
+        Args:
+            data: Data dictionary with scores and probabilities.
+
+        Returns:
+            Dict with average scores.
+        """
         avg_composite_score = (
             sum(data["scores"]) / Decimal(str(len(data["scores"])))
             if data["scores"]
@@ -642,30 +912,10 @@ class VectorBTEngine:
             sum(data["probs"]) / Decimal(str(len(data["probs"]))) if data["probs"] else Decimal("0")
         )
 
-        return BacktestResult(
-            total_return=total_return,
-            cagr=cagr,
-            sharpe_ratio=sharpe_ratio,
-            max_drawdown=max_drawdown,
-            win_rate=win_rate,
-            profit_factor=profit_factor,
-            total_trades=total_trades,
-            winning_trades=winning_trades,
-            losing_trades=losing_trades,
-            avg_win=avg_win,
-            avg_loss=avg_loss,
-            total_costs=total_costs,
-            stt_total=stt_total,
-            sebi_total=sebi_total,
-            exchange_txn_total=exchange_txn_total,
-            stamp_duty_total=stamp_duty_total,
-            gst_total=gst_total,
-            start_date=start_date,
-            end_date=end_date,
-            num_days=num_days,
-            avg_composite_score=avg_composite_score,
-            avg_exit_probability=avg_exit_probability,
-        )
+        return {
+            "avg_composite_score": avg_composite_score,
+            "avg_exit_probability": avg_exit_probability,
+        }
 
     def _build_equity_curve(self, trades: list[dict[str, Any]]) -> list[Decimal]:
         """Build equity curve from trades."""

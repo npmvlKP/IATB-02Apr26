@@ -46,18 +46,21 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
         pass
 
     # Set PyTorch random seed if available
-    try:
-        import torch
-
-        torch.manual_seed(DETERMINISTIC_SEED)
-        # Set deterministic mode for PyTorch CUDA operations if CUDA is available
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(DETERMINISTIC_SEED)
-            # Enable deterministic algorithms (may impact performance)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-    except (ImportError, OSError):
-        # PyTorch not installed or DLL loading failed, skip
-        pass
+    # NOTE: PyTorch import disabled due to Windows DLL loading issues
+    # that cause access violations during test execution.
+    # Tests requiring PyTorch should mock it directly.
+    # try:
+    #     import torch
+    #
+    #     torch.manual_seed(DETERMINISTIC_SEED)
+    #     # Set deterministic mode for PyTorch CUDA operations if CUDA is available
+    #     if torch.cuda.is_available():
+    #         torch.cuda.manual_seed_all(DETERMINISTIC_SEED)
+    #         # Enable deterministic algorithms (may impact performance)
+    #         torch.backends.cudnn.deterministic = True
+    #         torch.backends.cudnn.benchmark = False
+    # except (ImportError, OSError):
+    #     # PyTorch not installed or DLL loading failed, skip
+    #     pass
 
     yield

@@ -62,10 +62,23 @@ def resolve_finbert_predictor(model_id: str) -> Callable[[str], list[Mapping[str
     except ModuleNotFoundError as exc:
         msg = "transformers dependency is required for FinbertAnalyzer"
         raise ConfigError(msg) from exc
+    except OSError as exc:
+        # Handle PyTorch DLL loading failures on Windows
+        msg = "transformers/PyTorch dependency unavailable (DLL load failed)"
+        raise ConfigError(msg) from exc
+
     if not hasattr(transformers, "pipeline"):
         msg = "transformers.pipeline is unavailable"
         raise ConfigError(msg)
-    pipeline_fn = transformers.pipeline("sentiment-analysis", model=model_id, tokenizer=model_id)
+    try:
+        pipeline_fn = transformers.pipeline(
+            "sentiment-analysis", model=model_id, tokenizer=model_id
+        )
+    except OSError as exc:
+        # Handle PyTorch DLL loading failures during pipeline creation
+        msg = "PyTorch unavailable (DLL load failed during pipeline creation)"
+        raise ConfigError(msg) from exc
+
     return lambda text: pipeline_fn(text, truncation=True)
 
 

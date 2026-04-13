@@ -121,6 +121,7 @@ class ScannerCandidate:
     regime: MarketRegime
     rank: int
     timestamp_utc: datetime
+    close_price: Decimal
     metadata: dict[str, str]
 
 
@@ -576,6 +577,7 @@ class InstrumentScanner:
                     regime=MarketRegime.SIDEWAYS,
                     rank=idx + 1,
                     timestamp_utc=s.market_data.timestamp_utc,
+                    close_price=s.market_data.close_price,
                     metadata={
                         "adx": str(s.market_data.adx),
                         "atr_pct": str(s.market_data.atr_pct),

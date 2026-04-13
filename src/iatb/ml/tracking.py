@@ -19,14 +19,8 @@ from iatb.core.exceptions import ConfigError
 
 _LOGGER = logging.getLogger(__name__)
 
-# Optional PyTorch support for MLflow
-try:
-    import mlflow.pytorch  # noqa: F401
-
-    _PYTORCH_AVAILABLE = True
-except (ImportError, OSError):
-    _PYTORCH_AVAILABLE = False
-    _LOGGER.debug("PyTorch not available for MLflow PyTorch model logging")
+# PyTorch availability check - lazy import to avoid DLL loading issues
+_PYTORCH_AVAILABLE: bool = False
 
 
 class MLflowConfig(BaseModel):
@@ -336,9 +330,17 @@ class ExperimentTracker:
         if not self.config.enable_tracking or self.active_run is None:
             return
 
+        # Lazy import and check PyTorch availability
+        global _PYTORCH_AVAILABLE
         if not _PYTORCH_AVAILABLE:
-            _LOGGER.warning("PyTorch not available, skipping PyTorch model logging")
-            return
+            try:
+                import mlflow.pytorch  # noqa: F401
+
+                _PYTORCH_AVAILABLE = True
+                _LOGGER.debug("PyTorch became available for MLflow")
+            except (ImportError, OSError):
+                _LOGGER.warning("PyTorch not available, skipping PyTorch model logging")
+                return
 
         try:
             mlflow.pytorch.log_model(model, "model", input_example=input_example)

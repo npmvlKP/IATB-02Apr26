@@ -183,59 +183,121 @@ class IATBApi:
         """
         init_result = self._init_kite()
         if init_result.get("status") != "success":
-            return {
-                "status": "error",
-                "ticker": ticker,
-                "data": None,
-                "message": init_result.get("message", "Access token expired"),
-            }
+            return self._error_response(ticker, init_result.get("message", "Access token expired"))
 
         try:
             kite = self.get_kite_client()
-
-            # Try to find instrument token if not provided
+            instrument_token = self._ensure_instrument_token(kite, ticker, instrument_token)
             if not instrument_token:
-                instruments = kite.instruments("NSE")
-                for inst in instruments:
-                    if inst.get("tradingsymbol") == ticker:
-                        instrument_token = inst.get("instrument_token")
-                        break
+                return self._error_response(ticker, f"Instrument {ticker} not found")
 
-            if not instrument_token:
-                return {
-                    "status": "error",
-                    "ticker": ticker,
-                    "data": None,
-                    "message": f"Instrument {ticker} not found",
-                }
-
-            # Default to last 30 days if dates not provided
-            if not from_date:
-                from_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
-            if not to_date:
-                to_date = datetime.now(UTC).strftime("%Y-%m-%d")
-
-            data = kite.historical_data(
-                instrument_token=str(instrument_token),
-                from_date=from_date,
-                to_date=to_date,
-                interval=interval,
-            )
-
-            return {
-                "status": "success",
-                "ticker": ticker,
-                "data": data,
-                "count": len(data) if data else 0,
-            }
+            from_date, to_date = self._default_date_range(from_date, to_date)
+            data = self._fetch_historical_data(kite, instrument_token, from_date, to_date, interval)
+            return self._success_response(ticker, data)
         except Exception as exc:
             _LOGGER.error("Failed to fetch OHLCV for %s: %s", ticker, exc)
-            return {
-                "status": "error",
-                "ticker": ticker,
-                "data": None,
-                "message": str(exc),
-            }
+            return self._error_response(ticker, str(exc))
+
+    def _fetch_historical_data(
+        self,
+        kite: Any,
+        instrument_token: str,
+        from_date: str,
+        to_date: str,
+        interval: str,
+    ) -> list[dict[str, Any]]:
+        """Fetch historical data from KiteConnect.
+
+        Args:
+            kite: KiteConnect client.
+            instrument_token: Instrument token.
+            from_date: From date.
+            to_date: To date.
+            interval: Candle interval.
+
+        Returns:
+            List of historical data points.
+        """
+        data = kite.historical_data(
+            instrument_token=str(instrument_token),
+            from_date=from_date,
+            to_date=to_date,
+            interval=interval,
+        )
+        return data if data else []
+
+    def _success_response(self, ticker: str, data: list[dict[str, Any]]) -> dict[str, Any]:
+        """Create success response dict.
+
+        Args:
+            ticker: Trading symbol.
+            data: Historical data.
+
+        Returns:
+            Success response dict.
+        """
+        return {
+            "status": "success",
+            "ticker": ticker,
+            "data": data,
+            "count": len(data) if data else 0,
+        }
+
+    def _error_response(self, ticker: str, message: str) -> dict[str, Any]:
+        """Create error response dict.
+
+        Args:
+            ticker: Trading symbol.
+            message: Error message.
+
+        Returns:
+            Error response dict.
+        """
+        return {
+            "status": "error",
+            "ticker": ticker,
+            "data": None,
+            "message": message,
+        }
+
+    def _ensure_instrument_token(
+        self, kite: Any, ticker: str, instrument_token: str | None
+    ) -> str | None:
+        """Ensure instrument token is available.
+
+        Args:
+            kite: KiteConnect client.
+            ticker: Trading symbol.
+            instrument_token: Optional existing token.
+
+        Returns:
+            Instrument token or None if not found.
+        """
+        if instrument_token:
+            return instrument_token
+
+        instruments = kite.instruments("NSE")
+        for inst in instruments:
+            if inst.get("tradingsymbol") == ticker:
+                token = inst.get("instrument_token")
+                return str(token) if token is not None else None
+        return None
+
+    def _default_date_range(self, from_date: str | None, to_date: str | None) -> tuple[str, str]:
+        """Get default date range (last 30 days).
+
+        Args:
+            from_date: Optional from date.
+            to_date: Optional to date.
+
+        Returns:
+            Tuple of (from_date, to_date) in YYYY-MM-DD format.
+        """
+        if not from_date:
+            from_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+        if not to_date:
+            to_date = datetime.now(UTC).strftime("%Y-%m-%d")
+        return from_date, to_date
 
 
 def create_api(
