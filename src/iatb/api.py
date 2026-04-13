@@ -29,6 +29,7 @@ class IATBApi:
         """
         self._token_manager = token_manager
         self._kite_client: Any = None
+        self._instrument_cache: dict[str, str] = {}
 
     def _init_kite(self) -> dict[str, Any]:
         """Initialize KiteConnect client with token freshness check.
@@ -224,7 +225,7 @@ class IATBApi:
             to_date=to_date,
             interval=interval,
         )
-        return data if data else []
+        return list(data) if data else []
 
     def _success_response(self, ticker: str, data: list[dict[str, Any]]) -> dict[str, Any]:
         """Create success response dict.
@@ -260,6 +261,22 @@ class IATBApi:
             "message": message,
         }
 
+    def _populate_instrument_cache(self, kite: Any) -> None:
+        """Populate instrument cache with all NSE instruments.
+
+        Args:
+            kite: KiteConnect client.
+        """
+        if not self._instrument_cache:
+            _LOGGER.info("Populating instrument cache from NSE")
+            instruments = kite.instruments("NSE")
+            self._instrument_cache = {
+                inst.get("tradingsymbol"): str(inst.get("instrument_token"))
+                for inst in instruments
+                if inst.get("tradingsymbol") and inst.get("instrument_token")
+            }
+            _LOGGER.info("Cached %d instruments", len(self._instrument_cache))
+
     def _ensure_instrument_token(
         self, kite: Any, ticker: str, instrument_token: str | None
     ) -> str | None:
@@ -276,12 +293,13 @@ class IATBApi:
         if instrument_token:
             return instrument_token
 
-        instruments = kite.instruments("NSE")
-        for inst in instruments:
-            if inst.get("tradingsymbol") == ticker:
-                token = inst.get("instrument_token")
-                return str(token) if token is not None else None
-        return None
+        self._populate_instrument_cache(kite)
+        return self._instrument_cache.get(ticker)
+
+    def clear_instrument_cache(self) -> None:
+        """Clear the instrument cache."""
+        self._instrument_cache = {}
+        _LOGGER.info("Instrument cache cleared")
 
     def _default_date_range(self, from_date: str | None, to_date: str | None) -> tuple[str, str]:
         """Get default date range (last 30 days).

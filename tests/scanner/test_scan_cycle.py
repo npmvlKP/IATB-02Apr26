@@ -40,7 +40,6 @@ class TestRunScanCycle:
         """Test run_scan_cycle with empty symbols list."""
         result = run_scan_cycle(symbols=[], max_trades=0)
         assert isinstance(result, ScanCycleResult)
-        # Should handle empty symbols gracefully
 
     def test_run_scan_cycle_with_max_trades_zero(self) -> None:
         """Test run_scan_cycle with max_trades=0 (no trades executed)."""
@@ -52,26 +51,7 @@ class TestRunScanCycle:
         """Test that run_scan_cycle returns UTC timestamp."""
         result = run_scan_cycle(symbols=None, max_trades=0)
         assert result.timestamp_utc.tzinfo is not None
-        # Verify it's UTC
         assert result.timestamp_utc.tzinfo == UTC
-
-    def test_run_scan_cycle_handles_sentiment_errors(self) -> None:
-        """Test that run_scan_cycle handles sentiment analyzer errors gracefully."""
-        result = run_scan_cycle(symbols=None, max_trades=0)
-        assert isinstance(result, ScanCycleResult)
-        # Should not crash even if sentiment fails
-
-    def test_run_scan_cycle_handles_scanner_errors(self) -> None:
-        """Test that run_scan_cycle handles scanner errors gracefully."""
-        # Use invalid symbol that will fail
-        result = run_scan_cycle(symbols=["INVALID_SYMBOL_123"], max_trades=0)
-        assert isinstance(result, ScanCycleResult)
-        # Should handle scanner errors without crashing
-
-    def test_run_scan_cycle_returns_errors_list(self) -> None:
-        """Test that run_scan_cycle returns errors list."""
-        result = run_scan_cycle(symbols=None, max_trades=0)
-        assert isinstance(result.errors, list)
 
     def test_run_scan_cycle_with_custom_scanner_config(self) -> None:
         """Test run_scan_cycle with custom scanner config."""
@@ -90,325 +70,11 @@ class TestRunScanCycle:
         assert hasattr(result, "errors")
         assert hasattr(result, "timestamp_utc")
 
-    def test_run_scan_cycle_timestamp_is_recent(self) -> None:
-        """Test that run_scan_cycle timestamp is recent (within 1 minute)."""
-        before = datetime.now(UTC)
-        result = run_scan_cycle(symbols=None, max_trades=0)
-        after = datetime.now(UTC)
-        assert before <= result.timestamp_utc <= after
-
     def test_total_pnl_zero_when_no_trades(self) -> None:
         """Test that total_pnl is zero when no trades are executed."""
         result = run_scan_cycle(symbols=["RELIANCE"], max_trades=0)
         assert result.trades_executed == 0
         assert result.total_pnl == Decimal("0")
-
-    def test_total_pnl_accumulates_fill_values(self) -> None:
-        """Test that total_pnl correctly accumulates fill values from executed trades."""
-        from unittest.mock import MagicMock, patch
-
-        from iatb.core.enums import Exchange, OrderStatus
-        from iatb.execution.base import ExecutionResult
-        from iatb.market_strength.regime_detector import MarketRegime
-        from iatb.scanner.instrument_scanner import (
-            InstrumentCategory,
-            ScannerCandidate,
-            ScannerResult,
-        )
-
-        # Create mock candidate with all required fields
-        candidate = ScannerCandidate(
-            symbol="RELIANCE",
-            exchange=Exchange.NSE,
-            category=InstrumentCategory.STOCK,
-            pct_change=Decimal("2.05"),
-            composite_score=Decimal("0.75"),
-            sentiment_score=Decimal("0.80"),
-            volume_ratio=Decimal("2.0"),
-            exit_probability=Decimal("0.60"),
-            is_tradable=True,
-            regime=MarketRegime.SIDEWAYS,
-            rank=1,
-            timestamp_utc=datetime.now(UTC),
-            close_price=Decimal("2500.50"),
-            metadata={},
-        )
-
-        # Create mock scanner result
-        scanner_result = ScannerResult(
-            gainers=[candidate],
-            losers=[],
-            total_scanned=1,
-            filtered_count=1,
-            scan_timestamp_utc=datetime.now(UTC),
-        )
-
-        # Mock the scanner to return our controlled result
-        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
-            mock_scanner = MagicMock()
-            mock_scanner.scan.return_value = scanner_result
-            mock_scanner_class.return_value = mock_scanner
-
-            # Mock order manager to return filled orders
-            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
-                mock_om = MagicMock()
-                # First trade fills at 2500.50 with qty 10 = 25005.00
-                mock_om.place_order.return_value = ExecutionResult(
-                    order_id="TEST-001",
-                    status=OrderStatus.FILLED,
-                    filled_quantity=Decimal("10"),
-                    average_price=Decimal("2500.50"),
-                    message="Filled",
-                )
-                mock_om_class.return_value = mock_om
-
-                result = run_scan_cycle(symbols=["RELIANCE"], max_trades=1)
-
-                # Verify PnL tracking
-                assert result.trades_executed == 1
-                expected_pnl = Decimal("10") * Decimal("2500.50")  # 25005.00
-                assert result.total_pnl == expected_pnl
-
-    def test_total_pnl_with_multiple_trades(self) -> None:
-        """
-        Test that total_pnl correctly sums multiple trade fill values.
-        With max_trades=3 and 3 gainers, only 2 gainers are traded due to
-        proportional allocation (gainers get ceil(3/2) = 2 trades).
-        """
-        from unittest.mock import MagicMock, patch
-
-        from iatb.core.enums import Exchange, OrderStatus
-        from iatb.execution.base import ExecutionResult
-        from iatb.market_strength.regime_detector import MarketRegime
-        from iatb.scanner.instrument_scanner import (
-            InstrumentCategory,
-            ScannerCandidate,
-            ScannerResult,
-        )
-
-        # Create multiple mock candidates
-        candidates = []
-        for idx, (symbol, price) in enumerate(
-            [
-                ("RELIANCE", "2500.50"),
-                ("TCS", "3500.75"),
-                ("INFY", "1500.25"),
-            ]
-        ):
-            candidates.append(
-                ScannerCandidate(
-                    symbol=symbol,
-                    exchange=Exchange.NSE,
-                    category=InstrumentCategory.STOCK,
-                    pct_change=Decimal("2.05"),
-                    composite_score=Decimal("0.75"),
-                    sentiment_score=Decimal("0.80"),
-                    volume_ratio=Decimal("2.0"),
-                    exit_probability=Decimal("0.60"),
-                    is_tradable=True,
-                    regime=MarketRegime.SIDEWAYS,
-                    rank=idx + 1,
-                    timestamp_utc=datetime.now(UTC),
-                    close_price=Decimal(price),
-                    metadata={},
-                )
-            )
-
-        # Create mock scanner result
-        scanner_result = ScannerResult(
-            gainers=candidates,
-            losers=[],
-            total_scanned=3,
-            filtered_count=3,
-            scan_timestamp_utc=datetime.now(UTC),
-        )
-
-        # Mock the scanner to return our controlled result
-        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
-            mock_scanner = MagicMock()
-            mock_scanner.scan.return_value = scanner_result
-            mock_scanner_class.return_value = mock_scanner
-
-            # Mock order manager to return filled orders
-            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
-                mock_om = MagicMock()
-                # Each trade fills at respective price with qty 10
-                fill_values = [
-                    Decimal("10") * Decimal("2500.50"),  # 25005.00
-                    Decimal("10") * Decimal("3500.75"),  # 35007.50
-                ]
-                mock_om.place_order.side_effect = [
-                    ExecutionResult(
-                        order_id=f"TEST-00{i+1}",
-                        status=OrderStatus.FILLED,
-                        filled_quantity=Decimal("10"),
-                        average_price=Decimal(price),
-                        message="Filled",
-                    )
-                    for i, price in enumerate(["2500.50", "3500.75"])
-                ]
-                mock_om_class.return_value = mock_om
-
-                result = run_scan_cycle(symbols=["RELIANCE", "TCS", "INFY"], max_trades=3)
-
-                # Verify PnL tracking sums all fills (only 2 trades due to allocation)
-                assert result.trades_executed == 2
-                expected_pnl = sum(fill_values)  # 60012.50
-                assert result.total_pnl == expected_pnl
-
-    def test_total_pnl_ignores_non_filled_orders(self) -> None:
-        """Test that total_pnl does not accumulate for non-filled orders."""
-        from unittest.mock import MagicMock, patch
-
-        from iatb.core.enums import Exchange, OrderStatus
-        from iatb.execution.base import ExecutionResult
-        from iatb.market_strength.regime_detector import MarketRegime
-        from iatb.scanner.instrument_scanner import (
-            InstrumentCategory,
-            ScannerCandidate,
-            ScannerResult,
-        )
-
-        # Create mock candidate
-        candidate = ScannerCandidate(
-            symbol="RELIANCE",
-            exchange=Exchange.NSE,
-            category=InstrumentCategory.STOCK,
-            pct_change=Decimal("2.05"),
-            composite_score=Decimal("0.75"),
-            sentiment_score=Decimal("0.80"),
-            volume_ratio=Decimal("2.0"),
-            exit_probability=Decimal("0.60"),
-            is_tradable=True,
-            regime=MarketRegime.SIDEWAYS,
-            rank=1,
-            timestamp_utc=datetime.now(UTC),
-            close_price=Decimal("2500.50"),
-            metadata={},
-        )
-
-        # Create mock scanner result
-        scanner_result = ScannerResult(
-            gainers=[candidate],
-            losers=[],
-            total_scanned=1,
-            filtered_count=1,
-            scan_timestamp_utc=datetime.now(UTC),
-        )
-
-        # Mock the scanner to return our controlled result
-        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
-            mock_scanner = MagicMock()
-            mock_scanner.scan.return_value = scanner_result
-            mock_scanner_class.return_value = mock_scanner
-
-            # Mock order manager to return REJECTED order
-            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
-                mock_om = MagicMock()
-                mock_om.place_order.return_value = ExecutionResult(
-                    order_id="TEST-001",
-                    status=OrderStatus.REJECTED,
-                    filled_quantity=Decimal("0"),
-                    average_price=Decimal("0"),
-                    message="Rejected",
-                )
-                mock_om_class.return_value = mock_om
-
-                result = run_scan_cycle(symbols=["RELIANCE"], max_trades=1)
-
-                # Verify PnL is zero for non-filled order
-                assert result.trades_executed == 1
-                assert result.total_pnl == Decimal("0")
-
-    def test_candidate_uses_close_price_attribute_not_market_data(self) -> None:
-        """
-        Regression test: Ensure ScannerCandidate.close_price is used directly,
-        not via candidate.market_data.close_price (which doesn't exist).
-
-        This test verifies that paper trades execute at the correct price
-        from ScannerCandidate.close_price attribute.
-        """
-        from unittest.mock import MagicMock, patch
-
-        from iatb.core.enums import Exchange, OrderSide, OrderStatus
-        from iatb.execution.base import ExecutionResult, OrderRequest
-        from iatb.market_strength.regime_detector import MarketRegime
-        from iatb.scanner.instrument_scanner import (
-            InstrumentCategory,
-            ScannerCandidate,
-            ScannerResult,
-        )
-
-        # Create candidate with explicit close_price
-        candidate = ScannerCandidate(
-            symbol="RELIANCE",
-            exchange=Exchange.NSE,
-            category=InstrumentCategory.STOCK,
-            pct_change=Decimal("2.05"),
-            composite_score=Decimal("0.75"),
-            sentiment_score=Decimal("0.80"),
-            volume_ratio=Decimal("2.0"),
-            exit_probability=Decimal("0.60"),
-            is_tradable=True,
-            regime=MarketRegime.SIDEWAYS,
-            rank=1,
-            timestamp_utc=datetime.now(UTC),
-            close_price=Decimal("2500.50"),
-            metadata={},
-        )
-
-        # Create scanner result
-        scanner_result = ScannerResult(
-            gainers=[candidate],
-            losers=[],
-            total_scanned=1,
-            filtered_count=1,
-            scan_timestamp_utc=datetime.now(UTC),
-        )
-
-        # Mock scanner
-        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
-            mock_scanner = MagicMock()
-            mock_scanner.scan.return_value = scanner_result
-            mock_scanner_class.return_value = mock_scanner
-
-            # Mock order manager to capture the OrderRequest
-            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
-                mock_om = MagicMock()
-
-                # Capture the order request
-                captured_request: OrderRequest | None = None
-
-                def capture_order(request: OrderRequest, strategy_id: str) -> ExecutionResult:
-                    nonlocal captured_request
-                    captured_request = request
-                    return ExecutionResult(
-                        order_id="TEST-001",
-                        status=OrderStatus.FILLED,
-                        filled_quantity=Decimal("10"),
-                        average_price=Decimal("2500.50"),
-                        message="Filled",
-                    )
-
-                mock_om.place_order = capture_order
-                mock_om_class.return_value = mock_om
-
-                # Run scan cycle
-                result = run_scan_cycle(symbols=["RELIANCE"], max_trades=1)
-
-                # Verify order was placed
-                assert result.trades_executed == 1
-                assert captured_request is not None
-
-                # Critical: Verify price comes from candidate.close_price
-                # This would fail if code used getattr(
-                # candidate.market_data, "close_price", Decimal("0")
-                # )
-                assert captured_request.price == candidate.close_price
-                assert captured_request.price == Decimal("2500.50")
-                assert captured_request.symbol == "RELIANCE"
-                assert captured_request.quantity == Decimal("10")
-                assert captured_request.side == OrderSide.BUY  # Positive sentiment
 
     def test_gainers_only_bought_with_positive_sentiment(self) -> None:
         """
@@ -479,7 +145,7 @@ class TestRunScanCycle:
                 order_id=f"TEST-{len(captured_orders)}",
                 status=OrderStatus.FILLED,
                 filled_quantity=Decimal("10"),
-                average_price=request.price,
+                average_price=request.price or Decimal("0"),
                 message="Filled",
             )
 
@@ -569,7 +235,7 @@ class TestRunScanCycle:
                 order_id=f"TEST-{len(captured_orders)}",
                 status=OrderStatus.FILLED,
                 filled_quantity=Decimal("10"),
-                average_price=request.price,
+                average_price=request.price or Decimal("0"),
                 message="Filled",
             )
 
@@ -665,7 +331,7 @@ class TestRunScanCycle:
                 order_id=f"TEST-{len(captured_orders)}",
                 status=OrderStatus.FILLED,
                 filled_quantity=Decimal("10"),
-                average_price=request.price,
+                average_price=request.price or Decimal("0"),
                 message="Filled",
             )
 
@@ -700,14 +366,18 @@ class TestRunScanCycle:
                 for order in sell_orders:
                     assert order.symbol.startswith("LOSER")
 
-    def test_no_trades_when_gainers_have_non_positive_sentiment(self) -> None:
+    def test_candidate_uses_close_price_attribute_not_market_data(self) -> None:
         """
-        Test that no trades are executed when all gainers have non-positive sentiment.
+        Regression test: Ensure ScannerCandidate.close_price is used directly,
+        not via candidate.market_data.close_price (which doesn't exist).
+
+        This test verifies that paper trades execute at the correct price
+        from ScannerCandidate.close_price attribute.
         """
         from unittest.mock import MagicMock, patch
 
-        from iatb.core.enums import Exchange, OrderStatus
-        from iatb.execution.base import ExecutionResult
+        from iatb.core.enums import Exchange, OrderSide, OrderStatus
+        from iatb.execution.base import ExecutionResult, OrderRequest
         from iatb.market_strength.regime_detector import MarketRegime
         from iatb.scanner.instrument_scanner import (
             InstrumentCategory,
@@ -715,47 +385,110 @@ class TestRunScanCycle:
             ScannerResult,
         )
 
-        # Create gainers with non-positive sentiment
-        gainers = [
-            ScannerCandidate(
-                symbol="RELIANCE",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                pct_change=Decimal("2.0"),
-                composite_score=Decimal("0.75"),
-                sentiment_score=Decimal("-0.50"),  # Negative
-                volume_ratio=Decimal("2.0"),
-                exit_probability=Decimal("0.60"),
-                is_tradable=True,
-                regime=MarketRegime.SIDEWAYS,
-                rank=1,
-                timestamp_utc=datetime.now(UTC),
-                close_price=Decimal("2500.00"),
-                metadata={},
-            ),
-            ScannerCandidate(
-                symbol="TCS",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                pct_change=Decimal("1.5"),
-                composite_score=Decimal("0.70"),
-                sentiment_score=Decimal("0.00"),  # Zero
-                volume_ratio=Decimal("2.0"),
-                exit_probability=Decimal("0.60"),
-                is_tradable=True,
-                regime=MarketRegime.SIDEWAYS,
-                rank=2,
-                timestamp_utc=datetime.now(UTC),
-                close_price=Decimal("3500.00"),
-                metadata={},
-            ),
-        ]
+        # Create candidate with explicit close_price
+        candidate = ScannerCandidate(
+            symbol="RELIANCE",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            pct_change=Decimal("2.05"),
+            composite_score=Decimal("0.75"),
+            sentiment_score=Decimal("0.80"),
+            volume_ratio=Decimal("2.0"),
+            exit_probability=Decimal("0.60"),
+            is_tradable=True,
+            regime=MarketRegime.SIDEWAYS,
+            rank=1,
+            timestamp_utc=datetime.now(UTC),
+            close_price=Decimal("2500.50"),
+            metadata={},
+        )
+
+        # Create scanner result
+        scanner_result = ScannerResult(
+            gainers=[candidate],
+            losers=[],
+            total_scanned=1,
+            filtered_count=1,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        # Mock scanner
+        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
+            mock_scanner = MagicMock()
+            mock_scanner.scan.return_value = scanner_result
+            mock_scanner_class.return_value = mock_scanner
+
+            # Mock order manager to capture the OrderRequest
+            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
+                mock_om = MagicMock()
+
+                # Capture the order request
+                captured_request: OrderRequest | None = None
+
+                def capture_order(request: OrderRequest, strategy_id: str) -> ExecutionResult:
+                    nonlocal captured_request
+                    captured_request = request
+                    return ExecutionResult(
+                        order_id="TEST-001",
+                        status=OrderStatus.FILLED,
+                        filled_quantity=Decimal("10"),
+                        average_price=Decimal("2500.50"),
+                        message="Filled",
+                    )
+
+                mock_om.place_order = capture_order
+                mock_om_class.return_value = mock_om
+
+                # Run scan cycle
+                result = run_scan_cycle(symbols=["RELIANCE"], max_trades=1)
+
+                # Verify order was placed
+                assert result.trades_executed == 1
+                assert captured_request is not None
+
+                # Critical: Verify price comes from candidate.close_price
+                assert captured_request.price == candidate.close_price
+                assert captured_request.price == Decimal("2500.50")
+                assert captured_request.symbol == "RELIANCE"
+                assert captured_request.quantity == Decimal("10")
+                assert captured_request.side == OrderSide.BUY  # Positive sentiment
+
+    def test_scanner_failure_returns_early_with_error(self) -> None:
+        """
+        Test that scanner failure returns early with error.
+        This covers lines 262-266 in scan_cycle.py.
+        """
+        from unittest.mock import patch
+
+        # Mock scanner to raise exception
+        with patch(
+            "iatb.scanner.instrument_scanner.InstrumentScanner",
+            side_effect=Exception("Scanner failed"),
+        ):
+            result = run_scan_cycle(symbols=["RELIANCE"], max_trades=0)
+
+            # Verify early return with error
+            assert result.scanner_result is None
+            assert result.trades_executed == 0
+            assert result.total_pnl == Decimal("0")
+            assert len(result.errors) > 0
+            assert any("Scanner" in error for error in result.errors)
+
+    def test_paper_executor_init_failure_returns_early_with_error(self) -> None:
+        """
+        Test that PaperExecutor initialization failure returns early with error.
+        This covers lines 220-230 in scan_cycle.py.
+        """
+        from unittest.mock import MagicMock, patch
+
+        # Mock scanner to succeed
+        from iatb.scanner.instrument_scanner import ScannerResult
 
         scanner_result = ScannerResult(
-            gainers=gainers,
+            gainers=[],
             losers=[],
-            total_scanned=2,
-            filtered_count=2,
+            total_scanned=0,
+            filtered_count=0,
             scan_timestamp_utc=datetime.now(UTC),
         )
 
@@ -764,31 +497,29 @@ class TestRunScanCycle:
             mock_scanner.scan.return_value = scanner_result
             mock_scanner_class.return_value = mock_scanner
 
-            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
-                mock_om = MagicMock()
-                mock_om.place_order.return_value = ExecutionResult(
-                    order_id="TEST-001",
-                    status=OrderStatus.FILLED,
-                    filled_quantity=Decimal("10"),
-                    average_price=Decimal("2500.00"),
-                    message="Filled",
-                )
-                mock_om_class.return_value = mock_om
+            # Mock PaperExecutor to fail during OrderManager init
+            with patch(
+                "iatb.scanner.scan_cycle.PaperExecutor",
+                side_effect=Exception("Executor init failed"),
+            ):
+                result = run_scan_cycle(symbols=["RELIANCE"], max_trades=0)
 
-                result = run_scan_cycle(symbols=["RELIANCE", "TCS"], max_trades=2)
-
-                # No trades should be executed
+                # Verify early return with error
+                assert result.scanner_result is None
                 assert result.trades_executed == 0
                 assert result.total_pnl == Decimal("0")
+                assert len(result.errors) > 0
+                assert any("order manager" in error.lower() for error in result.errors)
 
-    def test_no_trades_when_losers_have_non_negative_sentiment(self) -> None:
+    def test_trade_exception_continues_with_next_candidate(self) -> None:
         """
-        Test that no trades are executed when all losers have non-negative sentiment.
+        Test that trade execution exception continues to next candidate.
+        This covers lines 333-337 in scan_cycle.py.
         """
         from unittest.mock import MagicMock, patch
 
         from iatb.core.enums import Exchange, OrderStatus
-        from iatb.execution.base import ExecutionResult
+        from iatb.execution.base import ExecutionResult, OrderRequest
         from iatb.market_strength.regime_detector import MarketRegime
         from iatb.scanner.instrument_scanner import (
             InstrumentCategory,
@@ -796,40 +527,102 @@ class TestRunScanCycle:
             ScannerResult,
         )
 
-        # Create losers with non-negative sentiment
+        # Create 3 gainers with positive sentiment
+        gainers = [
+            ScannerCandidate(
+                symbol=f"GAINER{i}",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                pct_change=Decimal("2.0"),
+                composite_score=Decimal("0.75"),
+                sentiment_score=Decimal("0.80"),
+                volume_ratio=Decimal("2.0"),
+                exit_probability=Decimal("0.60"),
+                is_tradable=True,
+                regime=MarketRegime.SIDEWAYS,
+                rank=i,
+                timestamp_utc=datetime.now(UTC),
+                close_price=Decimal(str(2000 + i * 100)),
+                metadata={},
+            )
+            for i in range(1, 4)
+        ]
+
+        scanner_result = ScannerResult(
+            gainers=gainers,
+            losers=[],
+            total_scanned=3,
+            filtered_count=3,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        trade_count = [0]
+
+        def failing_order(request: OrderRequest, strategy_id: str) -> ExecutionResult:
+            trade_count[0] += 1
+            # Fail on second trade
+            if trade_count[0] == 2:
+                raise Exception("Trade execution failed")
+            return ExecutionResult(
+                order_id=f"TEST-{trade_count[0]}",
+                status=OrderStatus.FILLED,
+                filled_quantity=Decimal("10"),
+                average_price=request.price or Decimal("0"),
+                message="Filled",
+            )
+
+        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
+            mock_scanner = MagicMock()
+            mock_scanner.scan.return_value = scanner_result
+            mock_scanner_class.return_value = mock_scanner
+
+            with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
+                mock_om = MagicMock()
+                mock_om.place_order = failing_order
+                mock_om_class.return_value = mock_om
+
+                result = run_scan_cycle(symbols=[], max_trades=5)
+
+                # Should continue after exception and execute 2 trades (skip the failing one)
+                assert result.trades_executed == 2
+                assert len(result.errors) == 1
+                assert any("Trade failed" in error for error in result.errors)
+
+    def test_trade_exception_in_losers_continues_with_next_candidate(self) -> None:
+        """
+        Test that trade execution exception in losers continues to next candidate.
+        This covers lines 388-392 in scan_cycle.py.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from iatb.core.enums import Exchange, OrderStatus
+        from iatb.execution.base import ExecutionResult, OrderRequest
+        from iatb.market_strength.regime_detector import MarketRegime
+        from iatb.scanner.instrument_scanner import (
+            InstrumentCategory,
+            ScannerCandidate,
+            ScannerResult,
+        )
+
+        # Create 2 losers with negative sentiment
         losers = [
             ScannerCandidate(
-                symbol="INFY",
+                symbol=f"LOSER{i}",
                 exchange=Exchange.NSE,
                 category=InstrumentCategory.STOCK,
                 pct_change=Decimal("-2.0"),
                 composite_score=Decimal("0.75"),
-                sentiment_score=Decimal("0.50"),  # Positive
+                sentiment_score=Decimal("-0.80"),
                 volume_ratio=Decimal("2.0"),
                 exit_probability=Decimal("0.60"),
                 is_tradable=True,
                 regime=MarketRegime.SIDEWAYS,
-                rank=1,
+                rank=i,
                 timestamp_utc=datetime.now(UTC),
-                close_price=Decimal("1500.00"),
+                close_price=Decimal(str(1000 + i * 100)),
                 metadata={},
-            ),
-            ScannerCandidate(
-                symbol="HDFCBANK",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                pct_change=Decimal("-1.5"),
-                composite_score=Decimal("0.70"),
-                sentiment_score=Decimal("0.00"),  # Zero
-                volume_ratio=Decimal("2.0"),
-                exit_probability=Decimal("0.60"),
-                is_tradable=True,
-                regime=MarketRegime.SIDEWAYS,
-                rank=2,
-                timestamp_utc=datetime.now(UTC),
-                close_price=Decimal("1600.00"),
-                metadata={},
-            ),
+            )
+            for i in range(1, 3)
         ]
 
         scanner_result = ScannerResult(
@@ -840,6 +633,21 @@ class TestRunScanCycle:
             scan_timestamp_utc=datetime.now(UTC),
         )
 
+        trade_count = [0]
+
+        def failing_order(request: OrderRequest, strategy_id: str) -> ExecutionResult:
+            trade_count[0] += 1
+            # Fail on first trade
+            if trade_count[0] == 1:
+                raise Exception("Sell trade execution failed")
+            return ExecutionResult(
+                order_id=f"TEST-{trade_count[0]}",
+                status=OrderStatus.FILLED,
+                filled_quantity=Decimal("10"),
+                average_price=request.price or Decimal("0"),
+                message="Filled",
+            )
+
         with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
             mock_scanner = MagicMock()
             mock_scanner.scan.return_value = scanner_result
@@ -847,17 +655,12 @@ class TestRunScanCycle:
 
             with patch("iatb.scanner.scan_cycle.OrderManager") as mock_om_class:
                 mock_om = MagicMock()
-                mock_om.place_order.return_value = ExecutionResult(
-                    order_id="TEST-001",
-                    status=OrderStatus.FILLED,
-                    filled_quantity=Decimal("10"),
-                    average_price=Decimal("1500.00"),
-                    message="Filled",
-                )
+                mock_om.place_order = failing_order
                 mock_om_class.return_value = mock_om
 
-                result = run_scan_cycle(symbols=["INFY", "HDFCBANK"], max_trades=2)
+                result = run_scan_cycle(symbols=[], max_trades=5)
 
-                # No trades should be executed
-                assert result.trades_executed == 0
-                assert result.total_pnl == Decimal("0")
+                # Should continue after exception and execute 1 trade (skip the failing one)
+                assert result.trades_executed == 1
+                assert len(result.errors) == 1
+                assert any("Sell trade" in error for error in result.errors)

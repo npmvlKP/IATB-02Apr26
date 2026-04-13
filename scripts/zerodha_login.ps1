@@ -139,7 +139,7 @@ try {
     $env:IATB_API_SECRET = $ApiSecret
     $env:IATB_TOTP_SECRET = $TotpSecret
     $env:IATB_REQUEST_TOKEN = $requestToken
-    $exchangeResult = poetry run python -c "import sys, os; sys.path.insert(0, 'src'); from iatb.broker.token_manager import ZerodhaTokenManager; manager = ZerodhaTokenManager(api_key=os.environ['IATB_API_KEY'], api_secret=os.environ['IATB_API_SECRET'], totp_secret=os.environ['IATB_TOTP_SECRET']); access_token = manager.exchange_request_token(os.environ['IATB_REQUEST_TOKEN']); manager.store_access_token(access_token); print('SUCCESS: Access token stored successfully'); print(f'Access Token: {access_token}')" 2>&1
+    $exchangeResult = poetry run python -c "import sys, os; sys.path.insert(0, 'src'); from iatb.broker.token_manager import ZerodhaTokenManager; manager = ZerodhaTokenManager(api_key=os.environ['IATB_API_KEY'], api_secret=os.environ['IATB_API_SECRET'], totp_secret=os.environ['IATB_TOTP_SECRET']); access_token = manager.exchange_request_token(os.environ['IATB_REQUEST_TOKEN']); manager.store_access_token(access_token); print('SUCCESS: Access token stored successfully')" 2>&1
     Remove-Item Env:\IATB_API_KEY -ErrorAction SilentlyContinue
     Remove-Item Env:\IATB_API_SECRET -ErrorAction SilentlyContinue
     Remove-Item Env:\IATB_TOTP_SECRET -ErrorAction SilentlyContinue

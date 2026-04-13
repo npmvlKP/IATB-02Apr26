@@ -5,6 +5,7 @@ Tests for deployment dashboard functions.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from iatb.visualization.deployment_dashboard import (
     build_dashboard_cards,
@@ -61,7 +62,7 @@ def test_get_engine_status_uptime_calculation() -> None:
 
 def test_get_broker_status_token_invalid() -> None:
     """Test broker status when token is invalid."""
-    result = get_broker_status(uid="ABC123", balance=100000.0, token_valid=False)
+    result = get_broker_status(uid="ABC123", balance=Decimal("100000.0"), token_valid=False)
 
     assert result["status"] == "relogin_required"
     assert result["uid"] is None
@@ -71,11 +72,11 @@ def test_get_broker_status_token_invalid() -> None:
 
 def test_get_broker_status_token_valid() -> None:
     """Test broker status when token is valid."""
-    result = get_broker_status(uid="ABC123", balance=100000.0, token_valid=True)
+    result = get_broker_status(uid="ABC123", balance=Decimal("100000.0"), token_valid=True)
 
     assert result["status"] == "connected"
     assert result["uid"] == "ABC123"
-    assert result["balance"] == 100000.0
+    assert result["balance"] == Decimal("100000.0")
     assert "Broker connection active" in result["message"]
 
 
@@ -91,11 +92,11 @@ def test_get_broker_status_no_uid_balance() -> None:
 
 def test_get_broker_status_negative_balance() -> None:
     """Test broker status handles negative balance."""
-    result = get_broker_status(uid="ABC123", balance=-5000.0, token_valid=True)
+    result = get_broker_status(uid="ABC123", balance=Decimal("-5000.0"), token_valid=True)
 
     assert result["status"] == "connected"
     assert result["uid"] == "ABC123"
-    assert result["balance"] == -5000.0
+    assert result["balance"] == Decimal("-5000.0")
 
 
 def test_get_system_status_default() -> None:
@@ -414,8 +415,16 @@ def test_integration_build_and_summarize_dashboard() -> None:
     # Build dashboard cards
     cards = build_dashboard_cards(
         engine_status=get_engine_status(engine_up=True),
-        broker_status=get_broker_status(uid="ABC123", balance=100000.0, token_valid=True),
-        system_status=get_system_status(cpu_percent=50.0, memory_percent=60.0, disk_percent=70.0),
+        broker_status=get_broker_status(
+            uid="ABC123",
+            balance=Decimal("100000.0"),
+            token_valid=True,
+        ),
+        system_status=get_system_status(
+            cpu_percent=50.0,
+            memory_percent=60.0,
+            disk_percent=70.0,
+        ),
         database_status=get_database_status(connected=True, query_time_ms=500.0),
     )
 
@@ -498,7 +507,7 @@ def test_engine_status_future_heartbeat() -> None:
 
 def test_broker_status_empty_uid() -> None:
     """Test broker status with empty UID string."""
-    result = get_broker_status(uid="", balance=100000.0, token_valid=True)
+    result = get_broker_status(uid="", balance=Decimal("100000.0"), token_valid=True)
 
     assert result["status"] == "connected"
     assert result["uid"] == ""

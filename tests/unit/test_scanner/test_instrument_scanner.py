@@ -967,6 +967,7 @@ class TestScannerCandidate:
             is_tradable=True,
             regime=MarketRegime.BULL,
             rank=1,
+            close_price=Decimal("100.00"),
             timestamp_utc=utc_timestamp,
             metadata={"key": "value"},
         )
@@ -989,6 +990,7 @@ class TestScannerCandidate:
             is_tradable=True,
             regime=MarketRegime.BULL,
             rank=1,
+            close_price=Decimal("100.00"),
             timestamp_utc=utc_timestamp,
             metadata={},
         )

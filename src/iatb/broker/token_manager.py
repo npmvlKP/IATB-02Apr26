@@ -134,7 +134,7 @@ class ZerodhaTokenManager:
         import pyotp  # noqa: PLC0415
 
         totp = pyotp.TOTP(self._totp_secret)
-        return totp.now()
+        return str(totp.now())
 
     def get_totp(self) -> str:
         """Get current TOTP code for user display.

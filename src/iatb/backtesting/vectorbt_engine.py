@@ -767,7 +767,7 @@ class VectorBTEngine:
         Returns:
             Total return as Decimal.
         """
-        total_pnl = sum(t["net_pnl"] for t in trades)
+        total_pnl = Decimal(str(sum(t["net_pnl"] for t in trades)))
         return (
             total_pnl / self._config.initial_capital
             if self._config.initial_capital > Decimal("0")
@@ -815,7 +815,7 @@ class VectorBTEngine:
         variance = sum((r - avg_return) ** 2 for r in returns) / Decimal(str(len(returns)))
         std_return = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
 
-        return avg_return / std_return if std_return > Decimal("0") else Decimal("0")
+        return Decimal(str(avg_return / std_return)) if std_return > Decimal("0") else Decimal("0")
 
     def _calculate_max_drawdown_from_trades(self, trades: list[dict[str, Any]]) -> Decimal:
         """Calculate max drawdown from trades.

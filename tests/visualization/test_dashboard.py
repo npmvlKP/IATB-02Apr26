@@ -387,6 +387,7 @@ def test_convert_candidates_to_health_matrix() -> None:
             is_tradable=True,
             regime="SIDEWAYS",  # type: ignore[arg-type]
             rank=1,
+            close_price=Decimal("2500.00"),
             timestamp_utc=timestamp,
             metadata={"strength_score": "0.75"},
         ),
@@ -402,6 +403,7 @@ def test_convert_candidates_to_health_matrix() -> None:
             is_tradable=False,
             regime="SIDEWAYS",  # type: ignore[arg-type]
             rank=2,
+            close_price=Decimal("3500.00"),
             timestamp_utc=timestamp,
             metadata={"strength_score": "0.5"},
         ),
@@ -440,6 +442,7 @@ def test_convert_candidates_with_custom_thresholds() -> None:
             is_tradable=True,
             regime="SIDEWAYS",  # type: ignore[arg-type]
             rank=1,
+            close_price=Decimal("2500.00"),
             timestamp_utc=timestamp,
             metadata={"strength_score": "0.75"},
         ),

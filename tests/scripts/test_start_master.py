@@ -147,7 +147,7 @@ class TestStartMaster:
 
     @patch("scripts.start_master.subprocess.Popen")
     def test_start_dashboard_creates_subprocess(self, mock_popen: MagicMock) -> None:
-        """Test that start_dashboard creates a subprocess."""
+        """Test that start_dashboard creates a subprocess with stdout=None."""
         from scripts.start_master import start_dashboard
 
         mock_proc = MagicMock()
@@ -158,6 +158,12 @@ class TestStartMaster:
         assert result is not None
         assert result.pid == 12345
         mock_popen.assert_called_once()
+
+        # Verify stdout=None is used to avoid pipe buffer blocking
+        call_args = mock_popen.call_args
+        assert (
+            call_args.kwargs.get("stdout") is None
+        ), "stdout should be None to avoid pipe buffer blocking"
 
     @patch("scripts.start_master.subprocess.Popen")
     def test_start_dashboard_handles_errors(self, mock_popen: MagicMock) -> None:

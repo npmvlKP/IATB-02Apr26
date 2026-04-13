@@ -5,6 +5,7 @@ Deployment dashboard for monitoring engine and system status.
 import logging
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def get_engine_status(
 
 def get_broker_status(
     uid: str | None = None,
-    balance: float | None = None,
+    balance: Decimal | None = None,
     token_valid: bool = False,
 ) -> dict[str, Any]:
     """Get broker status for dashboard.

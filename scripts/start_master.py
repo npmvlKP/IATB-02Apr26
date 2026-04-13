@@ -21,6 +21,11 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from iatb.core.engine import Engine
+    from iatb.core.health import HealthServer
 
 # ── Logging Setup ──
 
@@ -40,7 +45,7 @@ _LOGGER = logging.getLogger("start_master")
 # ── Engine Startup ──
 
 
-async def start_engine() -> tuple[object, object]:
+async def start_engine() -> tuple["Engine", "HealthServer"]:
     """Start engine and health server.
 
     Returns:
@@ -55,8 +60,8 @@ async def start_engine() -> tuple[object, object]:
 
     executor = PaperExecutor()
     kill_switch = KillSwitch(executor)
-    engine = Engine(kill_switch=kill_switch)
-    health = HealthServer(port=8000)
+    engine: Engine = Engine(kill_switch=kill_switch)
+    health: HealthServer = HealthServer(port=8000)
 
     health.start()
     await engine.start()
@@ -86,7 +91,7 @@ async def wait_for_health_endpoint(timeout_seconds: int = 30) -> bool:
         try:
             # Run blocking urllib.request.urlopen in a thread to avoid blocking event loop
             result = await asyncio.to_thread(
-                lambda: urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2)
+                lambda: urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2)  # noqa: S310
             )
             with result as resp:
                 if resp.status == 200:
@@ -105,7 +110,7 @@ async def wait_for_health_endpoint(timeout_seconds: int = 30) -> bool:
 # ── Dashboard Startup ──
 
 
-def start_dashboard() -> subprocess.Popen | None:
+def start_dashboard() -> subprocess.Popen[str] | None:
     """Start dashboard server in subprocess.
 
     Returns:
@@ -116,10 +121,10 @@ def start_dashboard() -> subprocess.Popen | None:
     try:
         # Start dashboard in background
         # Command is fully controlled - no user input involved
-        proc = subprocess.Popen(  # noqa: S603 - controlled subprocess call
-            [sys.executable, "scripts/dashboard.py"],
+        proc = subprocess.Popen(
+            [sys.executable, "scripts/dashboard.py"],  # noqa: S603 - controlled subprocess call
             cwd=Path.cwd(),
-            stdout=subprocess.PIPE,
+            stdout=None,  # Inherit parent stdout to avoid pipe buffer blocking
             stderr=subprocess.STDOUT,
             text=True,
         )
@@ -144,9 +149,9 @@ async def main_async() -> int:
     _LOGGER.info("=" * 70)
 
     # Track background processes
-    engine = None
-    health = None
-    dashboard_proc = None
+    engine: Engine | None = None
+    health: HealthServer | None = None
+    dashboard_proc: subprocess.Popen[str] | None = None
     exit_code = 0
 
     try:
