@@ -19,7 +19,6 @@ import asyncio
 import logging
 import subprocess
 import sys
-import time
 import urllib.request
 from pathlib import Path
 
@@ -68,8 +67,11 @@ async def start_engine() -> tuple[object, object]:
     return engine, health
 
 
-def wait_for_health_endpoint(timeout_seconds: int = 30) -> bool:
+async def wait_for_health_endpoint(timeout_seconds: int = 30) -> bool:
     """Wait for /health endpoint to return 200 OK.
+
+    This function is fully async and uses asyncio.sleep() and asyncio.to_thread()
+    to avoid blocking the event loop.
 
     Args:
         timeout_seconds: Maximum time to wait.
@@ -78,18 +80,23 @@ def wait_for_health_endpoint(timeout_seconds: int = 30) -> bool:
         True if health endpoint is responding, False on timeout.
     """
     _LOGGER.info("Waiting for health endpoint...")
-    start_time = time.monotonic()
+    start_time = asyncio.get_event_loop().time()
 
-    while time.monotonic() - start_time < timeout_seconds:
+    while asyncio.get_event_loop().time() - start_time < timeout_seconds:
         try:
-            with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as resp:
+            # Run blocking urllib.request.urlopen in a thread to avoid blocking event loop
+            result = await asyncio.to_thread(
+                lambda: urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2)
+            )
+            with result as resp:
                 if resp.status == 200:
                     body = resp.read().decode()
                     _LOGGER.info("  ✓ Health endpoint responding: %s", body)
                     return True
         except Exception:
             _LOGGER.debug("  Health endpoint not ready yet, retrying...")
-            time.sleep(1)
+            # Use asyncio.sleep instead of time.sleep to avoid blocking
+            await asyncio.sleep(1)
 
     _LOGGER.error("  ✗ Health endpoint timeout after %d seconds", timeout_seconds)
     return False
@@ -147,7 +154,7 @@ async def main_async() -> int:
         engine, health = await start_engine()
 
         # Step 2: Wait for health endpoint
-        if not wait_for_health_endpoint(timeout_seconds=30):
+        if not await wait_for_health_endpoint(timeout_seconds=30):
             _LOGGER.error("Health endpoint did not become available")
             return 1
 

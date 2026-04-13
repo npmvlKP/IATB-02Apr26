@@ -256,15 +256,8 @@ def run_scan_cycle(
             scanner_result.filtered_count,
         )
 
-        if not scanner_result.gainers:
-            _LOGGER.warning("  No gainers found - no trades to execute")
-            return ScanCycleResult(
-                scanner_result=scanner_result,
-                trades_executed=0,
-                total_pnl=Decimal("0"),
-                errors=errors,
-                timestamp_utc=timestamp_utc,
-            )
+        # Continue to trade execution even if gainers or losers lists are empty
+        # Trades will be executed based on available candidates and sentiment
 
     except Exception as exc:
         error_msg = f"Scanner failed: {exc}"
@@ -283,10 +276,79 @@ def run_scan_cycle(
     trades_executed = 0
     total_pnl = Decimal("0")
 
-    for candidate in scanner_result.gainers[:max_trades]:
+    # Allocate trades proportionally between gainers and losers
+    # Each list gets up to half of max_trades
+    max_gainer_trades = (max_trades + 1) // 2  # Ceiling division
+    max_loser_trades = max_trades // 2
+
+    # Process gainers: BUY only if sentiment is positive
+    for candidate in scanner_result.gainers[:max_gainer_trades]:
         try:
-            # Determine order side based on sentiment
-            side = OrderSide.BUY if candidate.sentiment_score > Decimal("0") else OrderSide.SELL
+            # Only BUY gainers with positive sentiment
+            if candidate.sentiment_score <= Decimal("0"):
+                _LOGGER.debug(
+                    "  Skipping gainer %s with non-positive sentiment: %s",
+                    candidate.symbol,
+                    candidate.sentiment_score,
+                )
+                continue
+
+            side = OrderSide.BUY
+
+            request = OrderRequest(
+                exchange=candidate.exchange,
+                symbol=candidate.symbol,
+                side=side,
+                quantity=Decimal("10"),  # Fixed quantity for paper trading
+                price=candidate.close_price,
+            )
+
+            result = order_manager.place_order(request, strategy_id="scan_cycle")
+            trades_executed += 1
+
+            # Track total fill value (capital deployed during scan cycle)
+            # For paper trading, this represents notional exposure of entered positions
+            from iatb.core.enums import OrderStatus
+
+            if result.status == OrderStatus.FILLED and result.filled_quantity > Decimal("0"):
+                fill_value = result.filled_quantity * result.average_price
+                total_pnl += fill_value
+                _LOGGER.debug(
+                    "  Fill value: %s (qty: %s @ %s)",
+                    fill_value,
+                    result.filled_quantity,
+                    result.average_price,
+                )
+
+            _LOGGER.info(
+                "  ✓ Trade #%d: %s %s %s @ %s → %s",
+                trades_executed,
+                side.value,
+                candidate.symbol,
+                Decimal("10"),
+                result.average_price,
+                result.status.value,
+            )
+
+        except Exception as exc:
+            error_msg = f"Trade failed for {candidate.symbol}: {exc}"
+            _LOGGER.error("  ✗ %s", error_msg)
+            errors.append(error_msg)
+            continue
+
+    # Process losers: SELL only if sentiment is negative
+    for candidate in scanner_result.losers[:max_loser_trades]:
+        try:
+            # Only SELL losers with negative sentiment
+            if candidate.sentiment_score >= Decimal("0"):
+                _LOGGER.debug(
+                    "  Skipping loser %s with non-negative sentiment: %s",
+                    candidate.symbol,
+                    candidate.sentiment_score,
+                )
+                continue
+
+            side = OrderSide.SELL
 
             request = OrderRequest(
                 exchange=candidate.exchange,

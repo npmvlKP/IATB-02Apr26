@@ -9,6 +9,7 @@ import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
+from urllib.parse import urlencode
 
 import keyring
 
@@ -101,7 +102,7 @@ class ZerodhaTokenManager:
         }
         url = f"{_LOGIN_BASE_URL}/api/session/token"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        body = "&".join(f"{k}={v}" for k, v in payload.items()).encode()
+        body = urlencode(payload).encode()
         response = self._http_post(url, headers, body)
         data = response.get("data", {})
         access_token = data.get("access_token")

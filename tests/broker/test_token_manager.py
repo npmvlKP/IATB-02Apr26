@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs
 
 import keyring
 import pytest
@@ -198,3 +199,124 @@ def test_default_http_post() -> None:
             b"test_body",
         )
         assert result == {"data": {"access_token": "test"}}
+
+
+def test_exchange_request_token_url_encodes_payload() -> None:
+    """Test that exchange_request_token properly URL-encodes the payload."""
+    # Test with special characters that need encoding
+    mock_http_post = MagicMock(return_value={"data": {"access_token": "test_token"}})
+
+    # API key with special characters
+    api_key = "test+key=with special&chars"
+    api_secret = "secret+value=with&spaces"  # noqa: S105
+    request_token = "token+with=special&chars"  # noqa: S105
+
+    manager = ZerodhaTokenManager(
+        api_key=api_key,
+        api_secret=api_secret,
+        http_post=mock_http_post,
+    )
+
+    manager.exchange_request_token(request_token)
+
+    # Verify HTTP POST was called
+    assert mock_http_post.called
+
+    # Get the body that was passed to http_post
+    call_args = mock_http_post.call_args
+    body = call_args[0][2]  # Third argument is the body
+
+    # Decode and verify proper URL encoding
+    body_str = body.decode("utf-8")
+    parsed = parse_qs(body_str)
+
+    # Verify all parameters are present and properly decoded
+    assert "api_key" in parsed
+    assert parsed["api_key"][0] == api_key
+
+    assert "request_token" in parsed
+    assert parsed["request_token"][0] == request_token
+
+    # The checksum should be present (it's a hash, so just check it exists)
+    assert "checksum" in parsed
+    assert len(parsed["checksum"][0]) == 64  # SHA256 hex digest length
+
+
+def test_exchange_request_token_handles_plus_equals() -> None:
+    """Test that + and = characters are properly encoded in the payload."""
+    mock_http_post = MagicMock(return_value={"data": {"access_token": "test_token"}})
+
+    # Values that specifically test + and = encoding
+    api_key = "key+test=value"
+    request_token = "token+request=code"  # noqa: S105
+
+    manager = ZerodhaTokenManager(
+        api_key=api_key,
+        api_secret="test_secret",  # noqa: S106
+        http_post=mock_http_post,
+    )
+
+    manager.exchange_request_token(request_token)
+
+    # Get the body
+    call_args = mock_http_post.call_args
+    body = call_args[0][2]
+    body_str = body.decode("utf-8")
+
+    # Verify + is encoded as %2B and = is encoded as %3D (except the delimiter =)
+    # The body should have proper encoding
+    parsed = parse_qs(body_str)
+
+    # The values should be correctly decoded back
+    assert parsed["api_key"][0] == api_key
+    assert parsed["request_token"][0] == request_token
+
+
+def test_exchange_request_token_handles_spaces() -> None:
+    """Test that spaces are properly encoded as + or %20."""
+    mock_http_post = MagicMock(return_value={"data": {"access_token": "test_token"}})
+
+    api_key = "key with spaces"
+    request_token = "token with spaces"  # noqa: S105
+
+    manager = ZerodhaTokenManager(
+        api_key=api_key,
+        api_secret="test_secret",  # noqa: S106
+        http_post=mock_http_post,
+    )
+
+    manager.exchange_request_token(request_token)
+
+    # Get the body
+    call_args = mock_http_post.call_args
+    body = call_args[0][2]
+    body_str = body.decode("utf-8")
+    parsed = parse_qs(body_str)
+
+    # Spaces should be preserved when decoded
+    assert parsed["api_key"][0] == api_key
+    assert parsed["request_token"][0] == request_token
+
+
+def test_exchange_request_token_body_is_bytes() -> None:
+    """Test that the body is properly encoded as bytes."""
+    mock_http_post = MagicMock(return_value={"data": {"access_token": "test_token"}})
+
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+        http_post=mock_http_post,
+    )
+
+    manager.exchange_request_token("test_token")
+
+    # Get the body
+    call_args = mock_http_post.call_args
+    body = call_args[0][2]
+
+    # Verify body is bytes
+    assert isinstance(body, bytes)
+
+    # Verify it can be decoded
+    body_str = body.decode("utf-8")
+    assert isinstance(body_str, str)
