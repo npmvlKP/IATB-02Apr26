@@ -38,6 +38,7 @@ class SSEBroadcaster:
             return
         self._event_bus: EventBus | None = None
         self._subscribers: list[asyncio.Queue[dict[str, str] | None]] = []
+        self._forwarding_tasks: list[asyncio.Task[None]] = []
         self._running = False
         self._lock = asyncio.Lock()
         self._initialized = True
@@ -58,11 +59,13 @@ class SSEBroadcaster:
 
         # Subscribe to scan updates
         scan_queue = await event_bus.subscribe("scan")
-        asyncio.create_task(self._forward_events("scan", scan_queue))
+        task1 = asyncio.create_task(self._forward_events("scan", scan_queue))
+        self._forwarding_tasks.append(task1)
 
         # Subscribe to PnL updates
         pnl_queue = await event_bus.subscribe("pnl")
-        asyncio.create_task(self._forward_events("pnl", pnl_queue))
+        task2 = asyncio.create_task(self._forward_events("pnl", pnl_queue))
+        self._forwarding_tasks.append(task2)
 
         self._running = True
         _LOGGER.info("SSE broadcaster started")
@@ -73,6 +76,18 @@ class SSEBroadcaster:
             return
 
         self._running = False
+
+        # Cancel all forwarding tasks
+        for task in self._forwarding_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await asyncio.wait_for(task, timeout=1.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
+
+        self._forwarding_tasks.clear()
+
         async with self._lock:
             # Close all subscriber queues
             for queue in self._subscribers:

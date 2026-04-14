@@ -36,6 +36,7 @@ streamlit = "^1.48.1"
 plotly = "^6.3.0"
 python-telegram-bot = "^22.4"
 tomli = "^2.0.0"
+tomli-w = "^1.0.0"
 pyotp = "^2.9.0"
 keyring = "^25.0.0"
 

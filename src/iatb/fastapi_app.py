@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from iatb.api import IATBApi, create_api
+from iatb.core.config_manager import WatchlistConfig, get_config_manager
 from iatb.core.exceptions import ConfigError
 from iatb.core.sse_broadcaster import get_broadcaster
 from iatb.ml.model_registry import get_registry
@@ -171,6 +173,143 @@ class MLStatusResponse(BaseModel):
     degraded_models: int
     unavailable_models: int
     models: dict[str, dict[str, Any]]
+
+
+class WatchlistUpdateRequest(BaseModel):
+    """Request model for updating watchlist configuration."""
+
+    nse: list[str] | None = None
+    bse: list[str] | None = None
+    mcx: list[str] | None = None
+    cds: list[str] | None = None
+
+
+class WatchlistResponse(BaseModel):
+    """Response model for watchlist configuration."""
+
+    nse: list[str]
+    bse: list[str]
+    mcx: list[str]
+    cds: list[str]
+    total_symbols: int
+    config_path: str
+    message: str
+
+
+@app.get("/config/watchlist", response_model=WatchlistResponse)
+def get_watchlist_config() -> dict[str, Any]:
+    """Get current watchlist configuration.
+
+    Returns the current watchlist for all exchanges with symbol counts
+    and configuration file path.
+
+    Returns:
+        Watchlist configuration dict with symbols for each exchange.
+    """
+    try:
+        config_manager = get_config_manager()
+        config = config_manager.get_config()
+
+        total_symbols = len(config.nse) + len(config.bse) + len(config.mcx) + len(config.cds)
+
+        return {
+            "nse": config.nse,
+            "bse": config.bse,
+            "mcx": config.mcx,
+            "cds": config.cds,
+            "total_symbols": total_symbols,
+            "config_path": str(config_manager._config_path),
+            "message": "Watchlist configuration retrieved successfully",
+        }
+    except Exception as exc:
+        _LOGGER.error("Failed to get watchlist config: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to retrieve watchlist configuration: {exc}",
+        ) from exc
+
+
+def _build_watchlist_response(config: WatchlistConfig, config_path: Path) -> dict[str, Any]:
+    """Build watchlist response from configuration.
+
+    Args:
+        config: Watchlist configuration.
+        config_path: Path to config file.
+
+    Returns:
+        Response dictionary with watchlist data.
+    """
+    total_symbols = len(config.nse) + len(config.bse) + len(config.mcx) + len(config.cds)
+
+    return {
+        "nse": config.nse,
+        "bse": config.bse,
+        "mcx": config.mcx,
+        "cds": config.cds,
+        "total_symbols": total_symbols,
+        "config_path": str(config_path),
+        "message": "Watchlist configuration updated successfully",
+    }
+
+
+def _log_watchlist_update(config: WatchlistConfig) -> None:
+    """Log watchlist update event.
+
+    Args:
+        config: Updated watchlist configuration.
+    """
+    _LOGGER.info(
+        "Watchlist updated via API",
+        extra={
+            "nse_count": len(config.nse),
+            "bse_count": len(config.bse),
+            "mcx_count": len(config.mcx),
+            "cds_count": len(config.cds),
+        },
+    )
+
+
+@app.put("/config/watchlist", response_model=WatchlistResponse)
+def update_watchlist_config(request: WatchlistUpdateRequest) -> dict[str, Any]:
+    """Update watchlist configuration.
+
+    Updates the watchlist for one or more exchanges and persists
+    the changes to the configuration file. This allows dynamic
+    watchlist updates without restarting the application.
+
+    Args:
+        request: WatchlistUpdateRequest with optional lists for each exchange.
+
+    Returns:
+        Updated watchlist configuration.
+
+    Raises:
+        HTTPException: If configuration cannot be updated.
+    """
+    try:
+        config_manager = get_config_manager()
+        config = config_manager.update_config(
+            nse=request.nse,
+            bse=request.bse,
+            mcx=request.mcx,
+            cds=request.cds,
+        )
+
+        _log_watchlist_update(config)
+
+        return _build_watchlist_response(config, config_manager._config_path)
+    except ConfigError as exc:
+        _LOGGER.error("Failed to update watchlist config: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuration error: {exc}",
+        ) from exc
+    except Exception as exc:
+        _LOGGER.error("Unexpected error updating watchlist: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update watchlist configuration: {exc}",
+        ) from exc
 
 
 @app.get("/ml/status", response_model=MLStatusResponse)

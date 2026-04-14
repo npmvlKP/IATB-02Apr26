@@ -272,7 +272,7 @@ class TestSSEBroadcaster:
         assert data["order_id"] == "ORDER1"
         assert data["symbol"] == "TCS"
         assert data["side"] == "SELL"
-        assert data["quantity"] == "5.0"
+        assert data["quantity"] == "5"  # Decimal string representation
         assert data["price"] == "3500.75"
         assert data["trade_pnl"] == "500.00"
         assert data["cumulative_pnl"] == "2500.00"

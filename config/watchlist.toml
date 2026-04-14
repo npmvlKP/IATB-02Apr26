@@ -1,0 +1,30 @@
+[nse]
+symbols = [
+    "TEST1",
+]
+
+[bse]
+symbols = [
+    "RELIANCE",
+    "TCS",
+    "INFY",
+    "HDFCBANK",
+    "ICICIBANK",
+]
+
+[mcx]
+symbols = [
+    "CRUDEOIL",
+    "GOLD",
+    "SILVER",
+    "NATURALGAS",
+    "COPPER",
+]
+
+[cds]
+symbols = [
+    "USDINR",
+    "EURINR",
+    "GBPINR",
+    "JPYINR",
+]
