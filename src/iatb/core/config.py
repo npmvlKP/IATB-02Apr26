@@ -43,6 +43,7 @@ class Config(BaseSettings):
     # Trading settings
     default_exchange: str = "NSE"
     default_market_type: str = "SPOT"
+    live_trading_enabled: bool = False
 
     # Paths
     data_dir: Path = Path("data")

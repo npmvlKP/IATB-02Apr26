@@ -86,3 +86,19 @@ class DataProvider(Protocol):
     ) -> TickerSnapshot:
         """Fetch a normalized ticker snapshot for a symbol."""
         ...
+
+    async def get_ohlcv_batch(
+        self,
+        *,
+        symbols: list[str],
+        exchange: Exchange,
+        timeframe: str,
+        since: Timestamp | None = None,
+        limit: int = 500,
+    ) -> dict[str, list[OHLCVBar]]:
+        """Fetch normalized OHLCV bars for multiple symbols.
+
+        This is an optional method for providers that support batch requests.
+        If not implemented, the scanner will fall back to parallel individual requests.
+        """
+        ...

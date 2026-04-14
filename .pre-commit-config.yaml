@@ -24,8 +24,6 @@ repos:
           - pydantic-settings>=2.0.0
           - types-requests
           - types-toml
-          - types-tomli
-          - types-keyring
           - pyotp
           - numpy
           - mlflow
