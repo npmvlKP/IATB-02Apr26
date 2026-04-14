@@ -115,3 +115,41 @@ class RegimeChangeEvent:
         """Validate event at creation-time (fail-closed)."""
         object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
         validate_event(self)
+
+
+@dataclass(frozen=True)
+class ScanUpdateEvent:
+    """Event representing a scanner cycle completion with results."""
+
+    event_id: UUID = field(default_factory=uuid4)
+    timestamp: Timestamp = field(default_factory=_utc_now_timestamp)
+    total_candidates: int = 0
+    approved_candidates: int = 0
+    trades_executed: int = 0
+    duration_ms: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Validate event at creation-time (fail-closed)."""
+        object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
+        validate_event(self)
+
+
+@dataclass(frozen=True)
+class PnLUpdateEvent:
+    """Event representing a PnL update after a trade."""
+
+    event_id: UUID = field(default_factory=uuid4)
+    timestamp: Timestamp = field(default_factory=_utc_now_timestamp)
+    order_id: str = "UNKNOWN"
+    symbol: str = "UNKNOWN"
+    side: str = "UNKNOWN"
+    quantity: Quantity = field(default_factory=lambda: create_quantity("0.0"))
+    price: Price = field(default_factory=lambda: create_price("0.0"))
+    trade_pnl: Decimal = Decimal("0.0")
+    cumulative_pnl: Decimal = Decimal("0.0")
+
+    def __post_init__(self) -> None:
+        """Validate event at creation-time (fail-closed)."""
+        object.__setattr__(self, "timestamp", _enforce_utc_timestamp(self.timestamp))
+        validate_event(self)

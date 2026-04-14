@@ -18,7 +18,9 @@ from iatb.core.event_bus import EventBus
 from iatb.core.events import (
     MarketTickEvent,
     OrderUpdateEvent,
+    PnLUpdateEvent,
     RegimeChangeEvent,
+    ScanUpdateEvent,
     SignalEvent,
 )
 from iatb.core.exceptions import (
@@ -45,7 +47,9 @@ __all__ = [
     # Events
     "MarketTickEvent",
     "OrderUpdateEvent",
+    "PnLUpdateEvent",
     "RegimeChangeEvent",
+    "ScanUpdateEvent",
     "SignalEvent",
     # Infrastructure
     "EventBus",

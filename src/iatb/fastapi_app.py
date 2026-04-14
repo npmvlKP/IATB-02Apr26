@@ -6,13 +6,16 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from starlette.responses import StreamingResponse
 
 from iatb.api import IATBApi, create_api
 from iatb.core.exceptions import ConfigError
+from iatb.core.sse_broadcaster import get_broadcaster
 from iatb.ml.model_registry import get_registry
 
 _LOGGER = logging.getLogger(__name__)
@@ -225,7 +228,46 @@ async def startup_event() -> None:
         _LOGGER.warning("API not configured: %s", exc)
 
 
+@app.get("/events/stream")
+async def events_stream() -> StreamingResponse:
+    """Server-Sent Events endpoint for real-time dashboard updates.
+
+    Provides a persistent SSE connection that pushes scan and PnL updates
+    in real-time as they occur in the trading system.
+
+    Returns:
+        StreamingResponse with SSE-formatted events.
+
+    Example:
+        >>> import requests
+        >>> response = requests.get(
+        ...     "http://localhost:8000/events/stream",
+        ...     stream=True
+        ... )
+        >>> for line in response.iter_lines():
+        ...     if line:
+        ...         _LOGGER.info("SSE line: %s", line.decode())
+    """
+    broadcaster = get_broadcaster()
+
+    async def event_generator() -> AsyncIterator[str]:
+        """Generate SSE events from the broadcaster."""
+        async for message in broadcaster.subscribe():
+            yield message
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
+
+
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     """Cleanup on shutdown."""
     _LOGGER.info("IATB FastAPI app shutting down")
+    await get_broadcaster().stop()

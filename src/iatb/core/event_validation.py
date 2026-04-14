@@ -17,6 +17,8 @@ SUPPORTED_EVENT_TYPES = frozenset(
         "OrderUpdateEvent",
         "SignalEvent",
         "RegimeChangeEvent",
+        "ScanUpdateEvent",
+        "PnLUpdateEvent",
     }
 )
 
@@ -44,6 +46,10 @@ def validate_event(event: object) -> None:
         _validate_order_update_event(event)
     elif event_type_name == "SignalEvent":
         _validate_signal_event(event)
+    elif event_type_name == "ScanUpdateEvent":
+        _validate_scan_update_event(event)
+    elif event_type_name == "PnLUpdateEvent":
+        _validate_pnl_update_event(event)
     else:
         _validate_regime_change_event(event)
 
@@ -165,6 +171,69 @@ def _validate_signal_event(event: object) -> None:
     price = _get_optional_attr(event, "price")
     if price is not None:
         _validate_decimal_range(_as_decimal(price, "price"), "price", Decimal("0"), MAX_PRICE)
+
+
+def _validate_scan_update_event(event: object) -> None:
+    """Validate scan update events for SSE broadcasting."""
+    total_candidates = _get_attr(event, "total_candidates")
+    approved_candidates = _get_attr(event, "approved_candidates")
+    trades_executed = _get_attr(event, "trades_executed")
+    duration_ms = _get_attr(event, "duration_ms")
+    errors = _get_attr(event, "errors")
+
+    if not isinstance(total_candidates, int) or total_candidates < 0:
+        msg = "total_candidates must be a non-negative integer"
+        raise ValidationError(msg)
+
+    if not isinstance(approved_candidates, int) or approved_candidates < 0:
+        msg = "approved_candidates must be a non-negative integer"
+        raise ValidationError(msg)
+
+    if approved_candidates > total_candidates:
+        msg = "approved_candidates cannot exceed total_candidates"
+        raise ValidationError(msg)
+
+    if not isinstance(trades_executed, int) or trades_executed < 0:
+        msg = "trades_executed must be a non-negative integer"
+        raise ValidationError(msg)
+
+    if trades_executed > approved_candidates:
+        msg = "trades_executed cannot exceed approved_candidates"
+        raise ValidationError(msg)
+
+    if not isinstance(duration_ms, int) or duration_ms < 0:
+        msg = "duration_ms must be a non-negative integer"
+        raise ValidationError(msg)
+
+    if not isinstance(errors, list):
+        msg = "errors must be a list of strings"
+        raise ValidationError(msg)
+    for error in errors:
+        if not isinstance(error, str):
+            msg = "errors must contain only strings"
+            raise ValidationError(msg)
+
+
+def _validate_pnl_update_event(event: object) -> None:
+    """Validate PnL update events for SSE broadcasting."""
+    _validate_non_empty_text(_get_attr(event, "order_id"), "order_id", MAX_IDENTIFIER_LENGTH)
+    _validate_non_empty_text(_get_attr(event, "symbol"), "symbol", MAX_SYMBOL_LENGTH)
+    _validate_non_empty_text(_get_attr(event, "side"), "side", 16)
+
+    quantity = _as_decimal(_get_attr(event, "quantity"), "quantity")
+    price = _as_decimal(_get_attr(event, "price"), "price")
+    trade_pnl = _as_decimal(_get_attr(event, "trade_pnl"), "trade_pnl")
+    cumulative_pnl = _as_decimal(_get_attr(event, "cumulative_pnl"), "cumulative_pnl")
+
+    _validate_decimal_range(quantity, "quantity", Decimal("0"), MAX_QUANTITY)
+    _validate_decimal_range(price, "price", Decimal("0"), MAX_PRICE)
+    _validate_decimal_range(trade_pnl, "trade_pnl", Decimal("-1000000000"), MAX_PRICE)
+    _validate_decimal_range(
+        cumulative_pnl,
+        "cumulative_pnl",
+        Decimal("-1000000000"),
+        Decimal("1000000000"),
+    )
 
 
 def _validate_regime_change_event(event: object) -> None:
