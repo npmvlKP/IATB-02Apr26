@@ -49,6 +49,21 @@ class DummyProvider:
             source="dummy",
         )
 
+    async def get_ohlcv_batch(
+        self,
+        *,
+        symbols: list[str],
+        exchange: Exchange,
+        timeframe: str,
+        since: datetime | None = None,
+        limit: int = 500,
+    ) -> dict[str, list[OHLCVBar]]:
+        _ = timeframe, since, limit
+        return {
+            symbol: [OHLCVBar(symbol=symbol, exchange=exchange, source="dummy")]
+            for symbol in symbols
+        }
+
 
 class TestDataContracts:
     """Test normalized data models and provider protocol."""
