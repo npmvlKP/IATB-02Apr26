@@ -393,6 +393,7 @@ class TestVectorBTEngineWalkForward:
         base = datetime(2024, 1, 1, 9, 15, tzinfo=UTC)
         return [base + timedelta(days=i) for i in range(20)]
 
+    @pytest.mark.slow
     def test_walk_forward_basic(
         self,
         mock_engine: VectorBTEngine,
@@ -460,6 +461,7 @@ class TestVectorBTEngineMonteCarlo:
         base = datetime(2024, 1, 1, 9, 15, tzinfo=UTC)
         return [base + timedelta(days=i) for i in range(30)]
 
+    @pytest.mark.slow
     def test_monte_carlo_basic(
         self,
         mock_engine: VectorBTEngine,
@@ -484,6 +486,7 @@ class TestVectorBTEngineMonteCarlo:
         with pytest.raises(ConfigError, match="prices must contain at least 10 points"):
             mock_engine.run_monte_carlo(prices, timestamps)
 
+    @pytest.mark.slow
     def test_monte_carlo_percentiles(
         self,
         mock_engine: VectorBTEngine,

@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, time
 from pathlib import Path
+from typing import Any
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
@@ -71,6 +72,68 @@ class ExchangeCalendar:
         return self.session_for(exchange, trading_date) is not None
 
 
+def _load_config_file(config_path: Path) -> dict[str, Any]:
+    """Load TOML config file.
+
+    Args:
+        config_path: Path to TOML config file.
+
+    Returns:
+        Parsed config as dictionary.
+
+    Raises:
+        ConfigError: If config file cannot be loaded or parsed.
+    """
+    import tomli
+
+    with config_path.open("rb") as f:
+        return tomli.load(f)
+
+
+def _parse_exchange_session_times(
+    config: dict[str, Any], exchange_map: dict[str, Exchange]
+) -> dict[Exchange, SessionWindow]:
+    """Parse session times from config for all exchanges.
+
+    Args:
+        config: Parsed config dictionary.
+        exchange_map: Mapping of exchange names to enums.
+
+    Returns:
+        Dictionary mapping Exchange to SessionWindow.
+
+    Raises:
+        ConfigError: If time format is invalid.
+    """
+    sessions: dict[Exchange, SessionWindow] = {}
+
+    for exchange_name, exchange_enum in exchange_map.items():
+        if exchange_name not in config:
+            continue
+
+        section = config[exchange_name]
+        open_str = section.get("session_open", "09:15")
+        close_str = section.get("session_close", "15:30")
+
+        try:
+            open_time = time.fromisoformat(open_str)
+            close_time = time.fromisoformat(close_str)
+            sessions[exchange_enum] = SessionWindow(open_time=open_time, close_time=close_time)
+            logger.debug(
+                "Loaded session times",
+                extra={
+                    "exchange": exchange_name,
+                    "open": open_str,
+                    "close": close_str,
+                },
+            )
+        except ValueError as e:
+            msg = f"Invalid time format for {exchange_name}: " f"open={open_str}, close={close_str}"
+            raise ConfigError(msg) from e
+
+    return sessions
+
+
 def _load_session_times_from_config(
     config_path: Path = EXCHANGES_CONFIG_PATH,
 ) -> dict[Exchange, SessionWindow]:
@@ -86,10 +149,7 @@ def _load_session_times_from_config(
         ConfigError: If config file cannot be loaded or parsed.
     """
     try:
-        import tomli
-
-        with config_path.open("rb") as f:
-            config = tomli.load(f)
+        config = _load_config_file(config_path)
     except FileNotFoundError:
         logger.warning(
             "Config file not found, using defaults",
@@ -100,7 +160,6 @@ def _load_session_times_from_config(
         msg = f"Failed to load session config from {config_path}: {e}"
         raise ConfigError(msg) from e
 
-    sessions: dict[Exchange, SessionWindow] = {}
     exchange_map = {
         "NSE": Exchange.NSE,
         "BSE": Exchange.BSE,
@@ -108,32 +167,118 @@ def _load_session_times_from_config(
         "CDS": Exchange.CDS,
     }
 
-    for exchange_name, exchange_enum in exchange_map.items():
-        if exchange_name in config:
-            section = config[exchange_name]
-            open_str = section.get("session_open", "09:15")
-            close_str = section.get("session_close", "15:30")
-
-            try:
-                open_time = time.fromisoformat(open_str)
-                close_time = time.fromisoformat(close_str)
-                sessions[exchange_enum] = SessionWindow(open_time=open_time, close_time=close_time)
-                logger.debug(
-                    "Loaded session times",
-                    extra={
-                        "exchange": exchange_name,
-                        "open": open_str,
-                        "close": close_str,
-                    },
-                )
-            except ValueError as e:
-                msg = (
-                    f"Invalid time format for {exchange_name}: "
-                    f"open={open_str}, close={close_str}"
-                )
-                raise ConfigError(msg) from e
-
+    sessions = _parse_exchange_session_times(config, exchange_map)
     return sessions if sessions else _default_regular_sessions()
+
+
+def _parse_nse_cds_holidays(
+    year_config: dict[str, Any], exchange_map: dict[str, Exchange]
+) -> dict[Exchange, set[date]]:
+    """Parse NSE/CDS holidays from year config.
+
+    Args:
+        year_config: Year-specific holiday config.
+        exchange_map: Mapping of exchange names to enums.
+
+    Returns:
+        Dictionary of exchanges to holiday dates.
+    """
+    holidays: dict[Exchange, set[date]] = {
+        Exchange.NSE: set(),
+        Exchange.BSE: set(),
+        Exchange.MCX: set(),
+        Exchange.CDS: set(),
+    }
+
+    if "nse_cds" not in year_config:
+        return holidays
+
+    for holiday in year_config["nse_cds"]:
+        try:
+            holiday_date = date.fromisoformat(holiday["date"])
+            exchanges = holiday.get("exchanges", ["NSE", "CDS"])
+            for exch_name in exchanges:
+                if exch_name in exchange_map:
+                    holidays[exchange_map[exch_name]].add(holiday_date)
+        except (ValueError, KeyError) as e:
+            logger.warning(
+                "Failed to parse NSE/CDS holiday",
+                extra={"holiday": holiday, "error": str(e)},
+            )
+
+    return holidays
+
+
+def _parse_mcx_holidays(year_config: dict[str, Any]) -> set[date]:
+    """Parse MCX holidays from year config.
+
+    Args:
+        year_config: Year-specific holiday config.
+
+    Returns:
+        Set of MCX holiday dates.
+    """
+    holidays: set[date] = set()
+
+    if "mcx" not in year_config:
+        return holidays
+
+    for holiday in year_config["mcx"]:
+        try:
+            holiday_date = date.fromisoformat(holiday["date"])
+            holidays.add(holiday_date)
+        except (ValueError, KeyError) as e:
+            logger.warning(
+                "Failed to parse MCX holiday",
+                extra={"holiday": holiday, "error": str(e)},
+            )
+
+    return holidays
+
+
+def _initialize_holidays_dict() -> dict[Exchange, set[date]]:
+    """Initialize empty holidays dictionary for all exchanges.
+
+    Returns:
+        Dictionary with empty sets for each exchange.
+    """
+    return {
+        Exchange.NSE: set(),
+        Exchange.BSE: set(),
+        Exchange.MCX: set(),
+        Exchange.CDS: set(),
+    }
+
+
+def _get_exchange_map() -> dict[str, Exchange]:
+    """Get mapping of exchange names to Exchange enums.
+
+    Returns:
+        Dictionary mapping string names to Exchange enums.
+    """
+    return {
+        "NSE": Exchange.NSE,
+        "BSE": Exchange.BSE,
+        "MCX": Exchange.MCX,
+        "CDS": Exchange.CDS,
+    }
+
+
+def _log_holidays_summary(holidays: dict[Exchange, set[date]]) -> None:
+    """Log summary of loaded holidays.
+
+    Args:
+        holidays: Dictionary of exchanges to holiday dates.
+    """
+    logger.info(
+        "Loaded holiday calendar",
+        extra={
+            "nse_holidays": len(holidays[Exchange.NSE]),
+            "bse_holidays": len(holidays[Exchange.BSE]),
+            "mcx_holidays": len(holidays[Exchange.MCX]),
+            "cds_holidays": len(holidays[Exchange.CDS]),
+        },
+    )
 
 
 def _load_holidays_from_config(
@@ -151,10 +296,7 @@ def _load_holidays_from_config(
         ConfigError: If config file cannot be loaded or parsed.
     """
     try:
-        import tomli
-
-        with config_path.open("rb") as f:
-            config = tomli.load(f)
+        config = _load_config_file(config_path)
     except FileNotFoundError:
         logger.warning(
             "Holiday config not found, using defaults",
@@ -165,61 +307,23 @@ def _load_holidays_from_config(
         msg = f"Failed to load holiday config from {config_path}: {e}"
         raise ConfigError(msg) from e
 
-    holidays: dict[Exchange, set[date]] = {
-        Exchange.NSE: set(),
-        Exchange.BSE: set(),
-        Exchange.MCX: set(),
-        Exchange.CDS: set(),
-    }
-
-    exchange_map = {
-        "NSE": Exchange.NSE,
-        "BSE": Exchange.BSE,
-        "MCX": Exchange.MCX,
-        "CDS": Exchange.CDS,
-    }
+    holidays = _initialize_holidays_dict()
+    exchange_map = _get_exchange_map()
 
     for year_key, year_config in config.items():
         if not year_key.isdigit():
             continue
 
-        # Load NSE/CDS holidays
-        if "nse_cds" in year_config:
-            for holiday in year_config["nse_cds"]:
-                try:
-                    holiday_date = date.fromisoformat(holiday["date"])
-                    exchanges = holiday.get("exchanges", ["NSE", "CDS"])
-                    for exch_name in exchanges:
-                        if exch_name in exchange_map:
-                            holidays[exchange_map[exch_name]].add(holiday_date)
-                except (ValueError, KeyError) as e:
-                    logger.warning(
-                        "Failed to parse NSE/CDS holiday",
-                        extra={"holiday": holiday, "error": str(e)},
-                    )
+        # Load NSE/CDS holidays and merge
+        nse_cds_holidays = _parse_nse_cds_holidays(year_config, exchange_map)
+        for exch in holidays:
+            holidays[exch].update(nse_cds_holidays[exch])
 
         # Load MCX holidays
-        if "mcx" in year_config:
-            for holiday in year_config["mcx"]:
-                try:
-                    holiday_date = date.fromisoformat(holiday["date"])
-                    holidays[Exchange.MCX].add(holiday_date)
-                except (ValueError, KeyError) as e:
-                    logger.warning(
-                        "Failed to parse MCX holiday",
-                        extra={"holiday": holiday, "error": str(e)},
-                    )
+        mcx_holidays = _parse_mcx_holidays(year_config)
+        holidays[Exchange.MCX].update(mcx_holidays)
 
-    logger.info(
-        "Loaded holiday calendar",
-        extra={
-            "nse_holidays": len(holidays[Exchange.NSE]),
-            "bse_holidays": len(holidays[Exchange.BSE]),
-            "mcx_holidays": len(holidays[Exchange.MCX]),
-            "cds_holidays": len(holidays[Exchange.CDS]),
-        },
-    )
-
+    _log_holidays_summary(holidays)
     return holidays
 
 

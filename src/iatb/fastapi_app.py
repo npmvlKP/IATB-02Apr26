@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from iatb.api import IATBApi, create_api
 from iatb.core.exceptions import ConfigError
+from iatb.ml.model_registry import get_registry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -155,6 +156,62 @@ def ohlcv_chart_endpoint(ticker: str, interval: str = "day") -> dict[str, Any]:
         raise HTTPException(
             status_code=502,
             detail=f"Failed to fetch market data for {ticker}: {exc}",
+        ) from exc
+
+
+class MLStatusResponse(BaseModel):
+    """ML model status response model."""
+
+    timestamp: str
+    total_models: int
+    available_models: int
+    degraded_models: int
+    unavailable_models: int
+    models: dict[str, dict[str, Any]]
+
+
+@app.get("/ml/status", response_model=MLStatusResponse)
+def ml_status_endpoint() -> dict[str, Any]:
+    """Get ML model availability and health status.
+
+    Returns detailed information about all ML models including:
+    - Availability status (available, unavailable, degraded, error)
+    - Last check timestamp
+    - Load time metrics
+    - Error messages if any
+    - Fallback availability
+
+    Returns:
+        ML status dict with model health information.
+    """
+    try:
+        registry = get_registry()
+        status = registry.get_status()
+
+        models = {}
+        for model_name, health in status.model_health.items():
+            models[model_name] = {
+                "status": health.status.value,
+                "last_check": health.last_check.isoformat(),
+                "load_time_ms": str(health.load_time_ms) if health.load_time_ms else None,
+                "dll_loaded": health.dll_loaded,
+                "fallback_available": health.fallback_available,
+                "error_message": health.error_message,
+            }
+
+        return {
+            "timestamp": status.timestamp.isoformat(),
+            "total_models": status.total_models,
+            "available_models": status.available_models,
+            "degraded_models": status.degraded_models,
+            "unavailable_models": status.unavailable_models,
+            "models": models,
+        }
+    except Exception as exc:
+        _LOGGER.error("Failed to get ML status: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to retrieve ML status: {exc}",
         ) from exc
 
 

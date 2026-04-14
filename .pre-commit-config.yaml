@@ -28,6 +28,7 @@ repos:
           - numpy
           - mlflow
           - optuna
+          - tomli
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.6

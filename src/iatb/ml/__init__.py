@@ -7,7 +7,15 @@ from iatb.ml.feature_engine import FeatureEngineer
 from iatb.ml.gnn_model import GNNConfig, GNNModel
 from iatb.ml.hmm_model import HMMConfig, HMMRegimeModel
 from iatb.ml.lstm_model import LSTMConfig, LSTMModel
+from iatb.ml.model_registry import (
+    ModelHealth,
+    ModelRegistry,
+    ModelStatus,
+    RegistryStatus,
+    get_registry,
+)
 from iatb.ml.predictor import EnsemblePredictor
+from iatb.ml.readiness import check_ml_readiness
 from iatb.ml.tracking import (
     ExperimentMetrics,
     ExperimentTracker,
@@ -33,13 +41,19 @@ __all__ = [
     "LSTMConfig",
     "LSTMModel",
     "MLflowConfig",
+    "ModelHealth",
+    "ModelRegistry",
+    "ModelStatus",
     "OptunaConfig",
     "PredictionResult",
     "Predictor",
+    "RegistryStatus",
     "TrainingRunResult",
     "TransformerConfig",
     "TransformerModel",
     "UnifiedTrainer",
+    "check_ml_readiness",
     "create_default_optimizer",
     "create_default_tracking",
+    "get_registry",
 ]

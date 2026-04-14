@@ -11,7 +11,6 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -162,13 +161,13 @@ class MarketDataCache:
         """
         with self._lock:
             total_requests = self._hits + self._misses
-            hit_rate = self._hits / total_requests if total_requests > 0 else Decimal("0")
+            hit_rate = float(self._hits) / float(total_requests) if total_requests > 0 else 0.0
 
             return {
                 "total_entries": len(self._cache),
                 "hits": self._hits,
                 "misses": self._misses,
-                "hit_rate": float(hit_rate),
+                "hit_rate": hit_rate,
                 "default_ttl_seconds": self._default_ttl_seconds,
             }
 
