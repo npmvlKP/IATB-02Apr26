@@ -585,3 +585,48 @@ class TestKiteWebSocketProvider:
 
         assert "RELIANCE" in results
         assert "TCS" in results
+
+    @pytest.mark.asyncio
+    async def test_disconnect_handles_runtime_error(self) -> None:
+        """Test disconnect handles RuntimeError when event loop is closed."""
+        provider = KiteWebSocketProvider(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        await provider.connect()
+
+        # Simulate RuntimeError when event loop is closed
+        original_task = provider._tick_processor_task
+
+        async def mock_await_raises_runtime() -> None:
+            msg = "Event loop is closed"
+            raise RuntimeError(msg)
+
+        # Patch the task's __await__ to raise RuntimeError
+        if original_task:
+            original_task.__await__ = lambda: mock_await_raises_runtime().__await__()
+
+        # Should not raise despite RuntimeError
+        await provider.disconnect()
+        assert not provider._is_connected
+        assert len(provider._tickers) == 0
+        assert len(provider._latest_tickers) == 0
+
+    @pytest.mark.asyncio
+    async def test_disconnect_handles_cancelled_error(self) -> None:
+        """Test disconnect handles CancelledError during task cancellation."""
+        provider = KiteWebSocketProvider(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        await provider.connect()
+
+        # Normal disconnect - task cancellation should work cleanly
+        await provider.disconnect()
+        assert not provider._is_connected
+        assert len(provider._tickers) == 0
+        assert len(provider._latest_tickers) == 0

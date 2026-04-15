@@ -214,6 +214,9 @@ class KiteWebSocketProvider(DataProvider):
                 await self._tick_processor_task
             except asyncio.CancelledError:
                 pass
+            except RuntimeError:
+                # Event loop is closed during shutdown, ignore
+                pass
 
         if self._ticker_instance:
             await asyncio.to_thread(self._ticker_instance.close)
@@ -354,6 +357,9 @@ class KiteWebSocketProvider(DataProvider):
                 self._process_tick(tick)
                 self._tick_queue.task_done()
             except asyncio.CancelledError:
+                break
+            except RuntimeError:
+                # Event loop is closed during shutdown, exit gracefully
                 break
 
     def _process_tick(self, tick: Tick) -> None:
