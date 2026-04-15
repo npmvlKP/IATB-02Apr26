@@ -4,7 +4,7 @@ Tests for FastAPI application endpoints.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -229,8 +229,8 @@ def test_get_api_raises_on_create_failure(mock_api: MagicMock) -> None:
             assert "Connection failed" in exc_info.value.detail
 
 
-def test_startup_event_success(mock_api: MagicMock) -> None:
-    """Test startup event initializes API successfully."""
+def test_lifespan_startup_success(mock_api: MagicMock) -> None:
+    """Test lifespan context manager initializes API successfully on startup."""
     # Reset global _api
     fastapi_app._api = None
 
@@ -240,16 +240,21 @@ def test_startup_event_success(mock_api: MagicMock) -> None:
     ):
         with patch("iatb.fastapi_app.create_api", return_value=mock_api), patch(
             "iatb.fastapi_app.initialize_metrics"
-        ), patch("iatb.fastapi_app.instrument_fastapi_app"):
+        ), patch("iatb.fastapi_app.instrument_fastapi_app"), patch(
+            "iatb.fastapi_app.get_broadcaster"
+        ):
             import asyncio
 
-            asyncio.run(fastapi_app.startup_event())
-            # API should be initialized by get_api() call in startup_event
-            assert fastapi_app._api is not None
+            async def run_lifespan() -> None:
+                async with fastapi_app.lifespan(fastapi_app.app):
+                    # API should be initialized by get_api() call in startup
+                    assert fastapi_app._api is not None
+
+            asyncio.run(run_lifespan())
 
 
-def test_startup_event_config_error() -> None:
-    """Test startup event handles configuration error."""
+def test_lifespan_startup_config_error() -> None:
+    """Test lifespan context manager handles configuration error on startup."""
     # Reset global _api
     fastapi_app._api = None
 
@@ -260,20 +265,44 @@ def test_startup_event_config_error() -> None:
 
         from fastapi import HTTPException
 
+        async def run_lifespan() -> None:
+            async with fastapi_app.lifespan(fastapi_app.app):
+                pass
+
         # Should raise HTTPException
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(fastapi_app.startup_event())
+            asyncio.run(run_lifespan())
 
         assert exc_info.value.status_code == 503
         assert "API initialization failed" in exc_info.value.detail
 
 
-def test_shutdown_event() -> None:
-    """Test shutdown event."""
+def test_lifespan_shutdown() -> None:
+    """Test lifespan context manager shutdown cleanup."""
     import asyncio
 
+    async def run_lifespan() -> None:
+        with patch.dict(
+            "os.environ",
+            {"KITE_API_KEY": "test_key", "KITE_API_SECRET": "test_secret"},
+        ), patch("iatb.fastapi_app.create_api"), patch(
+            "iatb.fastapi_app.initialize_metrics"
+        ), patch("iatb.fastapi_app.instrument_fastapi_app"), patch(
+            "iatb.fastapi_app.get_broadcaster"
+        ) as mock_broadcaster:
+            mock_broadcaster_instance = MagicMock()
+            mock_broadcaster_instance.stop = AsyncMock(return_value=None)
+            mock_broadcaster.return_value = mock_broadcaster_instance
+
+            async with fastapi_app.lifespan(fastapi_app.app):
+                # Application is running
+                pass
+
+            # After context exit, shutdown should have been called
+            mock_broadcaster_instance.stop.assert_called_once()
+
     # Should not raise
-    asyncio.run(fastapi_app.shutdown_event())
+    asyncio.run(run_lifespan())
 
 
 def test_broker_status_response_model_validation() -> None:

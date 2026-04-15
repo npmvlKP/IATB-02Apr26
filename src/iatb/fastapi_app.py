@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +27,54 @@ from iatb.ml.model_registry import get_registry
 
 _LOGGER = get_logger(__name__)
 
-# Create FastAPI app
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Lifespan context manager for startup and shutdown events.
+
+    Manages application lifecycle including:
+    - Initialization of observability stack
+    - API client initialization
+    - Cleanup of SSE broadcaster on shutdown
+
+    Args:
+        app: FastAPI application instance.
+
+    Yields:
+        None: Control is yielded to the application during its lifecycle.
+    """
+    try:
+        # Startup: Initialize observability
+        initialize_metrics(app_version="0.1.0")
+        instrument_fastapi_app(app)
+        _LOGGER.info("Observability stack initialized")
+
+        # Startup: Initialize API
+        get_api()
+        _LOGGER.info("IATB FastAPI app started")
+    except HTTPException:
+        # Re-raise HTTPException from get_api() for proper error handling
+        raise
+    except ConfigError as exc:
+        _LOGGER.warning("API not configured: %s", exc)
+    except Exception as exc:
+        _LOGGER.error("Failed to initialize observability: %s", exc)
+
+    # Application is running
+    yield
+
+    # Shutdown: Cleanup
+    _LOGGER.info("IATB FastAPI app shutting down")
+    broadcaster = await get_broadcaster()
+    await broadcaster.stop()
+
+
+# Create FastAPI app with lifespan context manager
 app = FastAPI(
     title="IATB API",
     description="Indian Automated Trading Bot API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Initialize API client
@@ -374,27 +418,6 @@ def metrics_endpoint() -> str:
     return content
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Initialize API and observability on startup."""
-    try:
-        # Initialize observability
-        initialize_metrics(app_version="0.1.0")
-        instrument_fastapi_app(app)
-        _LOGGER.info("Observability stack initialized")
-
-        # Initialize API
-        get_api()
-        _LOGGER.info("IATB FastAPI app started")
-    except HTTPException:
-        # Re-raise HTTPException from get_api() for proper error handling
-        raise
-    except ConfigError as exc:
-        _LOGGER.warning("API not configured: %s", exc)
-    except Exception as exc:
-        _LOGGER.error("Failed to initialize observability: %s", exc)
-
-
 @app.get("/events/stream")
 async def events_stream() -> StreamingResponse:
     """Server-Sent Events endpoint for real-time dashboard updates.
@@ -431,11 +454,3 @@ async def events_stream() -> StreamingResponse:
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         },
     )
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    """Cleanup on shutdown."""
-    _LOGGER.info("IATB FastAPI app shutting down")
-    broadcaster = await get_broadcaster()
-    await broadcaster.stop()
