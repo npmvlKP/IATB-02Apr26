@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from iatb.core.enums import OrderStatus
+from iatb.core.enums import OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
 from iatb.execution.base import ExecutionResult, Executor, OrderRequest
 
@@ -50,6 +50,8 @@ class OrderManager:
         self._last_prices: dict[str, Decimal] = {}
         self._positions: dict[str, Decimal] = {}
         self._total_exposure = Decimal("0")
+        # Position tracking for PnL: symbol -> (position_qty, avg_entry_price)
+        self._position_state: dict[str, tuple[Decimal, Decimal]] = {}
 
     def update_market_data(
         self,
@@ -110,14 +112,92 @@ class OrderManager:
             )
 
     def _record_pnl(self, request: OrderRequest, result: ExecutionResult) -> None:
-        if self._daily_loss_guard and result.filled_quantity > Decimal("0"):
-            entry_price = request.price or self._last_prices.get(
-                request.symbol,
-                result.average_price,
-            )
-            pnl = (result.average_price - entry_price) * result.filled_quantity
-            now = datetime.now(UTC)
-            self._daily_loss_guard.record_trade(pnl, now)
+        """Record realized PnL only on closing trades.
+
+        For long positions (positive qty):
+        - BUY opens position → no realized PnL
+        - SELL closes position → realized PnL = (exit_price - entry_price) * qty_closed
+
+        For short positions (negative qty):
+        - BUY closes position → realized PnL = (entry_price - exit_price) * qty_closed
+        - SELL opens position → no realized PnL
+        """
+        if not self._daily_loss_guard or result.filled_quantity <= Decimal("0"):
+            return
+
+        symbol = request.symbol
+        fill_qty = result.filled_quantity
+        fill_price = result.average_price
+
+        # Get current position state
+        current_qty, avg_entry_price = self._position_state.get(
+            symbol, (Decimal("0"), Decimal("0"))
+        )
+
+        now = datetime.now(UTC)
+
+        if request.side == OrderSide.BUY:
+            # BUY order
+            if current_qty < Decimal("0"):
+                # Closing short position - realize PnL
+                # For short: PnL = (entry - exit) * qty_closed
+                qty_to_close = min(fill_qty, abs(current_qty))
+                realized_pnl = (avg_entry_price - fill_price) * qty_to_close
+                self._daily_loss_guard.record_trade(realized_pnl, now)
+
+                # Update remaining short position
+                remaining_short = -current_qty - qty_to_close
+                if remaining_short > Decimal("0"):
+                    # Still short, keep avg entry price
+                    self._position_state[symbol] = (-remaining_short, avg_entry_price)
+                else:
+                    # Position closed or flipped to long
+                    qty_opening_long = fill_qty - qty_to_close
+                    if qty_opening_long > Decimal("0"):
+                        # New long position at fill price
+                        self._position_state[symbol] = (qty_opening_long, fill_price)
+                    else:
+                        # Flat position
+                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+            else:
+                # Opening or adding to long position - no realized PnL
+                # Calculate weighted average entry price
+                total_cost = (current_qty * avg_entry_price) + (fill_qty * fill_price)
+                new_qty = current_qty + fill_qty
+                new_avg = total_cost / new_qty
+                self._position_state[symbol] = (new_qty, new_avg)
+
+        elif request.side == OrderSide.SELL:
+            # SELL order
+            if current_qty > Decimal("0"):
+                # Closing long position - realize PnL
+                # For long: PnL = (exit - entry) * qty_closed
+                qty_to_close = min(fill_qty, current_qty)
+                realized_pnl = (fill_price - avg_entry_price) * qty_to_close
+                self._daily_loss_guard.record_trade(realized_pnl, now)
+
+                # Update remaining long position
+                remaining_long = current_qty - qty_to_close
+                if remaining_long > Decimal("0"):
+                    # Still long, keep avg entry price
+                    self._position_state[symbol] = (remaining_long, avg_entry_price)
+                else:
+                    # Position closed or flipped to short
+                    qty_opening_short = fill_qty - qty_to_close
+                    if qty_opening_short > Decimal("0"):
+                        # New short position at fill price
+                        self._position_state[symbol] = (-qty_opening_short, fill_price)
+                    else:
+                        # Flat position
+                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+            else:
+                # Opening or adding to short position - no realized PnL
+                # Calculate weighted average entry price for short
+                abs_current_qty = abs(current_qty)
+                total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
+                new_abs_qty = abs_current_qty + fill_qty
+                new_avg = total_cost / new_abs_qty
+                self._position_state[symbol] = (-new_abs_qty, new_avg)
 
     def _audit(
         self,
