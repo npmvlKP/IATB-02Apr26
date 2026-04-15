@@ -96,3 +96,19 @@ class Config(BaseSettings):
         except Exception as e:
             msg = f"Failed to load configuration: {e}"
             raise ConfigError(msg) from e
+
+
+# Global config instance for easy access
+_config_instance: Config | None = None
+
+
+def get_config() -> Config:
+    """Get or create the global configuration instance.
+
+    Returns:
+        Config instance (singleton).
+    """
+    global _config_instance
+    if _config_instance is None:
+        _config_instance = Config.load()
+    return _config_instance

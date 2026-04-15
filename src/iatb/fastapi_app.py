@@ -4,7 +4,6 @@ FastAPI application for IATB trading bot with REST endpoints.
 
 from __future__ import annotations
 
-import logging
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -17,10 +16,15 @@ from starlette.responses import StreamingResponse
 from iatb.api import IATBApi, create_api
 from iatb.core.config_manager import WatchlistConfig, get_config_manager
 from iatb.core.exceptions import ConfigError
+from iatb.core.observability import (
+    initialize_metrics,
+    instrument_fastapi_app,
+)
+from iatb.core.observability.logging_config import get_logger
 from iatb.core.sse_broadcaster import get_broadcaster
 from iatb.ml.model_registry import get_registry
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -357,14 +361,34 @@ def ml_status_endpoint() -> dict[str, Any]:
         ) from exc
 
 
+@app.get("/metrics")
+def metrics_endpoint() -> str:
+    """Prometheus metrics endpoint.
+
+    Returns:
+        Prometheus metrics in text format.
+    """
+    from prometheus_client import generate_latest
+
+    return generate_latest().decode("utf-8")
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Initialize API on startup."""
+    """Initialize API and observability on startup."""
     try:
+        # Initialize observability
+        initialize_metrics(app_version="0.1.0")
+        instrument_fastapi_app(app)
+        _LOGGER.info("Observability stack initialized")
+
+        # Initialize API
         get_api()
         _LOGGER.info("IATB FastAPI app started")
     except ConfigError as exc:
         _LOGGER.warning("API not configured: %s", exc)
+    except Exception as exc:
+        _LOGGER.error("Failed to initialize observability: %s", exc)
 
 
 @app.get("/events/stream")
