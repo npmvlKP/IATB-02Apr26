@@ -2,6 +2,40 @@
 
 A Python-based algorithmic trading system specifically designed for the Indian market with Zerodha Kite Connect integration, supporting NSE/CDS/MCX exchanges and SEBI-compliant intraday MIS trading.
 
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              IATB SYSTEM ARCHITECTURE                              │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐  │
+│  │   DATA LAYER │────▶│  CORE LAYER  │────▶│ EXECUTION    │────▶│  BROKER API  │  │
+│  │              │     │              │     │   LAYER      │     │   (ZERODHA)  │  │
+│  │ • Sentiment  │     │ • Engine     │     │ • Order Mgr  │     │              │  │
+│  │ • Strength   │     │ • Event Bus  │     │ • Paper/Live │     │ • Kite API   │  │
+│  │ • Volume     │     │ • Clock      │     │ • Risk Guard │     │ • WebSockets │  │
+│  │ • Market Data│     │ • Config     │     │ • Pre-Trade  │     │              │  │
+│  └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘  │
+│         │                     │                     │                                 │
+│         ▼                     ▼                     ▼                                 │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                        │
+│  │   ML/RL LAYER│     │ STRATEGIES   │     │   STORAGE    │                        │
+│  │              │     │              │     │              │                        │
+│  │ • LSTM/GNN   │     │ • Momentum   │     │ • DuckDB     │                        │
+│  │ • HMM/Trans  │     │ • Breakout   │     │ • SQLite     │                        │
+│  │ • PPO/A2C/SAC│     │ • Mean-Rev   │     │ • Parquet    │                        │
+│  │ • Optimizer  │     │ • Ensemble   │     │ • Audit Log  │                        │
+│  └──────────────┘     └──────────────┘     └──────────────┘                        │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐  │
+│  │                        SAFETY & COMPLIANCE LAYER                            │  │
+│  │  • Kill Switch  • Daily Loss Guard  • Circuit Breaker  • SEBI Compliance   │  │
+│  └─────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Features
 
 - **Zerodha Integration**: Full support for Zerodha Kite Connect API
@@ -444,6 +478,30 @@ poetry run pytest tests/risk/ -v --no-cov
 NSE/CDS/MCX holidays are defined in `config/nse_holidays.toml` for 2026-2027.
 The system automatically checks for trading holidays and prevents order placement
 on non-trading days.
+
+## Documentation
+
+### Comprehensive Guides
+
+- **[Architecture Documentation](docs/ARCHITECTURE.md)** - Complete system architecture, data flows, component interactions, and technology stack
+- **[API Reference](docs/API_REFERENCE.md)** - Detailed API documentation for all modules and endpoints
+- **[Strategy Development Guide](docs/STRATEGY_DEVELOPMENT_GUIDE.md)** - Step-by-step guide for creating, testing, and deploying trading strategies
+- **[Deployment Guide](DEPLOYMENT.md)** - Complete deployment checklist and operational procedures
+
+### Quick Start
+
+1. **Read the Architecture** - Understand system design and components
+2. **Review API Reference** - Learn available APIs and usage patterns
+3. **Develop Strategies** - Follow the Strategy Development Guide
+4. **Deploy System** - Use the Deployment Guide for setup
+
+### Developer Onboarding
+
+New developers can get started in under 1 hour by:
+1. Reading the Architecture Documentation (15 min)
+2. Reviewing API Reference for relevant modules (20 min)
+3. Following Strategy Development Guide examples (15 min)
+4. Running the Deployment Guide setup (10 min)
 
 ## License
 

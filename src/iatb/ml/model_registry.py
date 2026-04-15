@@ -387,12 +387,13 @@ class ModelRegistry:
         Returns:
             List of model names in fallback order.
         """
-        fallback_chains = {
+        fallback_chains: dict[str, list[str]] = {
             "finbert": ["vader"],
             "aion": ["vader"],
             "vader": [],
         }
-        return fallback_chains.get(primary_model, [])
+        result: list[str] = fallback_chains.get(primary_model, [])
+        return result
 
 
 # Global registry instance

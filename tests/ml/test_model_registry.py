@@ -249,11 +249,15 @@ class TestModelRegistry:
             assert health.status == ModelStatus.UNAVAILABLE
 
     @patch("iatb.ml.model_registry.ModelRegistry.check_vader_availability")
+    @patch("iatb.ml.model_registry.ModelRegistry.check_transformers_availability")
     def test_check_finbert_availability_fallback_to_vader(
         self,
+        mock_transformers_check: MagicMock,
         mock_vader_check: MagicMock,
     ) -> None:
         """Test FinBERT availability check with VADER fallback."""
+        # Mock transformers as unavailable to trigger fallback
+        mock_transformers_check.return_value = ModelStatus.UNAVAILABLE
         # Mock VADER as available
         mock_vader_check.return_value = ModelHealth(
             model_name="vader",
@@ -334,11 +338,25 @@ class TestModelRegistry:
     def test_is_model_available(self) -> None:
         """Test checking if a specific model is available."""
         registry = ModelRegistry()
-        with patch.object(registry, "check_vader_availability") as mock_vader:
+        with patch.object(registry, "check_vader_availability") as mock_vader, patch.object(
+            registry, "check_finbert_availability"
+        ) as mock_finbert, patch.object(registry, "check_aion_availability") as mock_aion:
             mock_vader.return_value = ModelHealth(
                 model_name="vader",
                 status=ModelStatus.AVAILABLE,
                 last_check=datetime.now(UTC),
+            )
+            mock_finbert.return_value = ModelHealth(
+                model_name="finbert",
+                status=ModelStatus.ERROR,
+                last_check=datetime.now(UTC),
+                error_message="Test error",
+            )
+            mock_aion.return_value = ModelHealth(
+                model_name="aion",
+                status=ModelStatus.ERROR,
+                last_check=datetime.now(UTC),
+                error_message="Test error",
             )
 
             registry.initialize()

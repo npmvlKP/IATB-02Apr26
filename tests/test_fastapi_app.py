@@ -238,10 +238,13 @@ def test_startup_event_success(mock_api: MagicMock) -> None:
         "os.environ",
         {"KITE_API_KEY": "test_key", "KITE_API_SECRET": "test_secret"},
     ):
-        with patch("iatb.fastapi_app.create_api", return_value=mock_api):
+        with patch("iatb.fastapi_app.create_api", return_value=mock_api), patch(
+            "iatb.fastapi_app.initialize_metrics"
+        ), patch("iatb.fastapi_app.instrument_fastapi_app"):
             import asyncio
 
             asyncio.run(fastapi_app.startup_event())
+            # API should be initialized by get_api() call in startup_event
             assert fastapi_app._api is not None
 
 
@@ -250,7 +253,9 @@ def test_startup_event_config_error() -> None:
     # Reset global _api
     fastapi_app._api = None
 
-    with patch.dict("os.environ", {}, clear=True):
+    with patch.dict("os.environ", {}, clear=True), patch(
+        "iatb.fastapi_app.initialize_metrics"
+    ), patch("iatb.fastapi_app.instrument_fastapi_app"):
         import asyncio
 
         from fastapi import HTTPException

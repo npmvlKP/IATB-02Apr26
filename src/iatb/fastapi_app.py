@@ -370,7 +370,8 @@ def metrics_endpoint() -> str:
     """
     from prometheus_client import generate_latest
 
-    return generate_latest().decode("utf-8")
+    content: str = generate_latest().decode("utf-8")
+    return content
 
 
 @app.on_event("startup")
@@ -385,6 +386,9 @@ async def startup_event() -> None:
         # Initialize API
         get_api()
         _LOGGER.info("IATB FastAPI app started")
+    except HTTPException:
+        # Re-raise HTTPException from get_api() for proper error handling
+        raise
     except ConfigError as exc:
         _LOGGER.warning("API not configured: %s", exc)
     except Exception as exc:

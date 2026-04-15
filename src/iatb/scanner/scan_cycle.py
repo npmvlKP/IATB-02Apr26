@@ -122,6 +122,95 @@ def _create_rl_predictor() -> Callable[[list[Decimal]], Decimal]:
     return create_mock_rl_predictor(probability=Decimal("0.6"))
 
 
+def _initialize_sentiment_analyzer(errors: list[str]) -> Callable[[str], tuple[Decimal, bool]]:
+    """Initialize sentiment analyzer.
+
+    Args:
+        errors: List to collect error messages.
+
+    Returns:
+        Sentiment analyzer function.
+    """
+    try:
+        analyzer = _create_sentiment_analyzer()
+        _LOGGER.info("  ✓ Sentiment analyzer ready")
+        return analyzer
+    except Exception as exc:
+        error_msg = f"Failed to initialize sentiment analyzer: {exc}"
+        _LOGGER.error("  ✗ %s", error_msg)
+        errors.append(error_msg)
+        return create_mock_sentiment_analyzer({})
+
+
+def _initialize_rl_predictor(errors: list[str]) -> Callable[[list[Decimal]], Decimal]:
+    """Initialize RL predictor.
+
+    Args:
+        errors: List to collect error messages.
+
+    Returns:
+        RL predictor function.
+    """
+    try:
+        predictor = _create_rl_predictor()
+        _LOGGER.info("  ✓ RL predictor ready")
+        return predictor
+    except Exception as exc:
+        error_msg = f"Failed to initialize RL predictor: {exc}"
+        _LOGGER.error("  ✗ %s", error_msg)
+        errors.append(error_msg)
+        return create_mock_rl_predictor()
+
+
+def _create_order_manager(
+    audit_logger: TradeAuditLogger | None,
+    errors: list[str],
+) -> OrderManager | None:
+    """Create and configure order manager.
+
+    Args:
+        audit_logger: Optional pre-configured TradeAuditLogger.
+        errors: List to collect error messages.
+
+    Returns:
+        OrderManager instance or None if initialization fails.
+    """
+    try:
+        executor = PaperExecutor()
+        kill_switch = KillSwitch(executor)
+        config = PreTradeConfig(
+            max_order_quantity=Decimal("100"),
+            max_order_value=Decimal("500000"),
+            max_price_deviation_pct=Decimal("0.05"),
+            max_position_per_symbol=Decimal("200"),
+            max_portfolio_exposure=Decimal("1000000"),
+        )
+        daily_guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.02"),
+            starting_nav=Decimal("1000000"),
+            kill_switch=kill_switch,
+        )
+        audit = audit_logger or TradeAuditLogger(Path("data/audit/trades.sqlite"))
+        throttle = OrderThrottle(max_ops=10)
+
+        manager = OrderManager(
+            executor=executor,
+            kill_switch=kill_switch,
+            pre_trade_config=config,
+            daily_loss_guard=daily_guard,
+            audit_logger=audit,
+            order_throttle=throttle,
+            algo_id="IATB-SCAN-001",
+        )
+        _LOGGER.info("  ✓ Order manager initialized")
+        return manager
+    except Exception as exc:
+        error_msg = f"Failed to initialize order manager: {exc}"
+        _LOGGER.error("  ✗ %s", error_msg)
+        errors.append(error_msg)
+        return None
+
+
 def _initialize_analyzers_and_order_manager(
     order_manager: OrderManager | None,
     audit_logger: TradeAuditLogger | None,
@@ -142,60 +231,12 @@ def _initialize_analyzers_and_order_manager(
         Tuple of (sentiment_analyzer, rl_predictor, order_manager).
         Returns None for order_manager if initialization fails.
     """
-    # Create sentiment analyzer
-    try:
-        sentiment_analyzer = _create_sentiment_analyzer()
-        _LOGGER.info("  ✓ Sentiment analyzer ready")
-    except Exception as exc:
-        error_msg = f"Failed to initialize sentiment analyzer: {exc}"
-        _LOGGER.error("  ✗ %s", error_msg)
-        errors.append(error_msg)
-        sentiment_analyzer = create_mock_sentiment_analyzer({})
+    sentiment_analyzer = _initialize_sentiment_analyzer(errors)
+    rl_predictor = _initialize_rl_predictor(errors)
 
-    # Create RL predictor
-    try:
-        rl_predictor = _create_rl_predictor()
-        _LOGGER.info("  ✓ RL predictor ready")
-    except Exception as exc:
-        error_msg = f"Failed to initialize RL predictor: {exc}"
-        _LOGGER.error("  ✗ %s", error_msg)
-        errors.append(error_msg)
-        rl_predictor = create_mock_rl_predictor()
-
-    # Initialize order manager if not provided
     if order_manager is None:
-        try:
-            executor = PaperExecutor()
-            kill_switch = KillSwitch(executor)
-            config = PreTradeConfig(
-                max_order_quantity=Decimal("100"),
-                max_order_value=Decimal("500000"),
-                max_price_deviation_pct=Decimal("0.05"),
-                max_position_per_symbol=Decimal("200"),
-                max_portfolio_exposure=Decimal("1000000"),
-            )
-            daily_guard = DailyLossGuard(
-                max_daily_loss_pct=Decimal("0.02"),
-                starting_nav=Decimal("1000000"),
-                kill_switch=kill_switch,
-            )
-            audit = audit_logger or TradeAuditLogger(Path("data/audit/trades.sqlite"))
-            throttle = OrderThrottle(max_ops=10)
-
-            order_manager = OrderManager(
-                executor=executor,
-                kill_switch=kill_switch,
-                pre_trade_config=config,
-                daily_loss_guard=daily_guard,
-                audit_logger=audit,
-                order_throttle=throttle,
-                algo_id="IATB-SCAN-001",
-            )
-            _LOGGER.info("  ✓ Order manager initialized")
-        except Exception as exc:
-            error_msg = f"Failed to initialize order manager: {exc}"
-            _LOGGER.error("  ✗ %s", error_msg)
-            errors.append(error_msg)
+        order_manager = _create_order_manager(audit_logger, errors)
+        if order_manager is None:
             return sentiment_analyzer, rl_predictor, None
 
     return sentiment_analyzer, rl_predictor, order_manager
@@ -252,6 +293,101 @@ def _execute_scanner(
         return None
 
 
+def _calculate_fill_pnl(result: Any) -> tuple[Decimal, bool]:
+    """Calculate PnL from filled order.
+
+    Args:
+        result: Order result from order manager.
+
+    Returns:
+        Tuple of (pnl_value, was_filled).
+    """
+    from iatb.core.enums import OrderStatus
+
+    if result.status == OrderStatus.FILLED and result.filled_quantity > Decimal("0"):
+        fill_value = result.filled_quantity * result.average_price
+        _LOGGER.debug(
+            "  Fill value: %s (qty: %s @ %s)",
+            fill_value,
+            result.filled_quantity,
+            result.average_price,
+        )
+        return fill_value, True
+    return Decimal("0"), False
+
+
+def _log_trade_execution(
+    trade_count: int,
+    side: OrderSide,
+    symbol: str,
+    price: Decimal,
+    status: str,
+) -> None:
+    """Log trade execution details.
+
+    Args:
+        trade_count: Trade number.
+        side: Order side.
+        symbol: Symbol traded.
+        price: Average fill price.
+        status: Order status.
+    """
+    _LOGGER.info(
+        "  ✓ Trade #%d: %s %s %s @ %s → %s",
+        trade_count,
+        side.value,
+        symbol,
+        Decimal("10"),
+        price,
+        status,
+    )
+
+
+def _execute_single_trade(
+    candidate: Any,
+    side: OrderSide,
+    order_manager: OrderManager,
+    errors: list[str],
+    trade_count: int,
+) -> tuple[int, Decimal]:
+    """Execute a single trade for a candidate.
+
+    Args:
+        candidate: ScannerCandidate object.
+        side: Order side (BUY or SELL).
+        order_manager: OrderManager instance.
+        errors: List to collect error messages.
+        trade_count: Current trade count for logging.
+
+    Returns:
+        Tuple of (updated_trade_count, pnl_contribution).
+    """
+    try:
+        request = OrderRequest(
+            exchange=candidate.exchange,
+            symbol=candidate.symbol,
+            side=side,
+            quantity=Decimal("10"),  # Fixed quantity for paper trading
+            price=candidate.close_price,
+        )
+
+        result = order_manager.place_order(request, strategy_id="scan_cycle")
+        trade_count += 1
+
+        pnl, was_filled = _calculate_fill_pnl(result)
+        _log_trade_execution(
+            trade_count, side, candidate.symbol, result.average_price, result.status.value
+        )
+
+        return trade_count, pnl
+
+    except Exception as exc:
+        error_msg = f"Trade failed for {candidate.symbol}: {exc}"
+        _LOGGER.error("  ✗ %s", error_msg)
+        errors.append(error_msg)
+        return trade_count, Decimal("0")
+
+
 def _execute_trades_for_candidates(
     candidates: list[Any],
     side: OrderSide,
@@ -269,52 +405,49 @@ def _execute_trades_for_candidates(
     Returns:
         Tuple of (trades_executed, total_pnl).
     """
-    from iatb.core.enums import OrderStatus
-
     trades_executed = 0
     total_pnl = Decimal("0")
 
     for candidate in candidates:
-        try:
-            request = OrderRequest(
-                exchange=candidate.exchange,
-                symbol=candidate.symbol,
-                side=side,
-                quantity=Decimal("10"),  # Fixed quantity for paper trading
-                price=candidate.close_price,
-            )
-
-            result = order_manager.place_order(request, strategy_id="scan_cycle")
-            trades_executed += 1
-
-            # Track total fill value (capital deployed during scan cycle)
-            if result.status == OrderStatus.FILLED and result.filled_quantity > Decimal("0"):
-                fill_value = result.filled_quantity * result.average_price
-                total_pnl += fill_value
-                _LOGGER.debug(
-                    "  Fill value: %s (qty: %s @ %s)",
-                    fill_value,
-                    result.filled_quantity,
-                    result.average_price,
-                )
-
-            _LOGGER.info(
-                "  ✓ Trade #%d: %s %s %s @ %s → %s",
-                trades_executed,
-                side.value,
-                candidate.symbol,
-                Decimal("10"),
-                result.average_price,
-                result.status.value,
-            )
-
-        except Exception as exc:
-            error_msg = f"Trade failed for {candidate.symbol}: {exc}"
-            _LOGGER.error("  ✗ %s", error_msg)
-            errors.append(error_msg)
-            continue
+        trades_executed, pnl = _execute_single_trade(
+            candidate, side, order_manager, errors, trades_executed
+        )
+        total_pnl += pnl
 
     return trades_executed, total_pnl
+
+
+def _filter_candidates_by_sentiment(
+    candidates: list[Any],
+    min_score: Decimal,
+    max_count: int,
+    side: OrderSide,
+) -> list[Any]:
+    """Filter candidates by sentiment score.
+
+    Args:
+        candidates: List of ScannerCandidate objects.
+        min_score: Minimum sentiment score threshold.
+        max_count: Maximum number of candidates to return.
+        side: Order side (BUY or SELL).
+
+    Returns:
+        Filtered list of candidates.
+    """
+    filtered = []
+    for candidate in candidates[:max_count]:
+        if (side == OrderSide.BUY and candidate.sentiment_score > min_score) or (
+            side == OrderSide.SELL and candidate.sentiment_score < min_score
+        ):
+            filtered.append(candidate)
+        else:
+            _LOGGER.debug(
+                "  Skipping %s %s with sentiment: %s",
+                "gainer" if side == OrderSide.BUY else "loser",
+                candidate.symbol,
+                candidate.sentiment_score,
+            )
+    return filtered
 
 
 def _execute_paper_trades(
@@ -342,16 +475,9 @@ def _execute_paper_trades(
     max_loser_trades = max_trades // 2
 
     # Process gainers: BUY only if sentiment is positive
-    gainers_to_trade = []
-    for candidate in scanner_result.gainers[:max_gainer_trades]:
-        if candidate.sentiment_score > Decimal("0"):
-            gainers_to_trade.append(candidate)
-        else:
-            _LOGGER.debug(
-                "  Skipping gainer %s with non-positive sentiment: %s",
-                candidate.symbol,
-                candidate.sentiment_score,
-            )
+    gainers_to_trade = _filter_candidates_by_sentiment(
+        scanner_result.gainers, Decimal("0"), max_gainer_trades, OrderSide.BUY
+    )
 
     gainer_trades, gainer_pnl = _execute_trades_for_candidates(
         gainers_to_trade, OrderSide.BUY, order_manager, errors
@@ -360,16 +486,9 @@ def _execute_paper_trades(
     total_pnl += gainer_pnl
 
     # Process losers: SELL only if sentiment is negative
-    losers_to_trade = []
-    for candidate in scanner_result.losers[:max_loser_trades]:
-        if candidate.sentiment_score < Decimal("0"):
-            losers_to_trade.append(candidate)
-        else:
-            _LOGGER.debug(
-                "  Skipping loser %s with non-negative sentiment: %s",
-                candidate.symbol,
-                candidate.sentiment_score,
-            )
+    losers_to_trade = _filter_candidates_by_sentiment(
+        scanner_result.losers, Decimal("0"), max_loser_trades, OrderSide.SELL
+    )
 
     loser_trades, loser_pnl = _execute_trades_for_candidates(
         losers_to_trade, OrderSide.SELL, order_manager, errors
@@ -380,6 +499,237 @@ def _execute_paper_trades(
     return trades_executed, total_pnl
 
 
+def _get_default_symbols() -> list[str]:
+    """Get default list of NIFTY50 symbols to scan.
+
+    Returns:
+        List of default symbols.
+    """
+    return [
+        "RELIANCE",
+        "TCS",
+        "INFY",
+        "HDFCBANK",
+        "ICICIBANK",
+        "SBIN",
+        "BHARTIARTL",
+        "ITC",
+        "KOTAKBANK",
+        "LT",
+    ]
+
+
+def _log_scan_cycle_start(
+    timestamp_utc: datetime,
+    symbols: Sequence[str] | None,
+    max_trades: int,
+) -> None:
+    """Log scan cycle start information.
+
+    Args:
+        timestamp_utc: Current UTC timestamp.
+        symbols: List of symbols to scan.
+        max_trades: Maximum number of trades.
+    """
+    _LOGGER.info("=" * 70)
+    _LOGGER.info("Starting Scan Cycle")
+    _LOGGER.info("  Timestamp: %s UTC", timestamp_utc.isoformat())
+    _LOGGER.info("  Symbols to scan: %s", len(symbols or []))
+    _LOGGER.info("  Max trades: %d", max_trades)
+    _LOGGER.info("=" * 70)
+
+
+def _log_scan_cycle_complete(
+    trades_executed: int,
+    total_pnl: Decimal,
+    error_count: int,
+) -> None:
+    """Log scan cycle completion summary.
+
+    Args:
+        trades_executed: Number of trades executed.
+        total_pnl: Total PnL from trades.
+        error_count: Number of errors encountered.
+    """
+    _LOGGER.info("Step 4: Audit summary...")
+    _LOGGER.info("  Trades executed: %d", trades_executed)
+    _LOGGER.info("  Total PnL: %s", total_pnl)
+    _LOGGER.info("  Errors: %d", error_count)
+    _LOGGER.info("=" * 70)
+    _LOGGER.info("Scan Cycle Complete")
+    _LOGGER.info("=" * 70)
+
+
+def _prepare_scan_symbols(symbols: Sequence[str] | None) -> Sequence[str]:
+    """Prepare symbols for scanning, using defaults if none provided.
+
+    Args:
+        symbols: Optional list of symbols.
+
+    Returns:
+        List of symbols to scan.
+    """
+    if not symbols:
+        symbols = _get_default_symbols()
+        _LOGGER.info("Using default NIFTY50 symbols")
+    return symbols
+
+
+def _initialize_scan_components(
+    order_manager: OrderManager | None,
+    audit_logger: TradeAuditLogger | None,
+    errors: list[str],
+) -> tuple[
+    Callable[[str], tuple[Decimal, bool]],
+    Callable[[list[Decimal]], Decimal],
+    OrderManager | None,
+]:
+    """Initialize all scan cycle components.
+
+    Args:
+        order_manager: Optional pre-configured OrderManager.
+        audit_logger: Optional pre-configured TradeAuditLogger.
+        errors: List to collect error messages.
+
+    Returns:
+        Tuple of (sentiment_analyzer, rl_predictor, order_manager).
+    """
+    _LOGGER.info("Step 1: Initializing components...")
+    return _initialize_analyzers_and_order_manager(order_manager, audit_logger, errors)
+
+
+def _create_early_return_result(
+    errors: list[str],
+    timestamp_utc: datetime,
+) -> ScanCycleResult:
+    """Create early return result for failed initialization.
+
+    Args:
+        errors: List of error messages.
+        timestamp_utc: UTC timestamp.
+
+    Returns:
+        ScanCycleResult with failure state.
+    """
+    return ScanCycleResult(
+        scanner_result=None,
+        trades_executed=0,
+        total_pnl=Decimal("0"),
+        errors=errors,
+        timestamp_utc=timestamp_utc,
+    )
+
+
+def _execute_scan_pipeline(
+    symbols: Sequence[str],
+    scanner_config: ScannerConfig | None,
+    sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
+    rl_predictor: Callable[[list[Decimal]], Decimal],
+    order_manager: OrderManager,
+    max_trades: int,
+    errors: list[str],
+) -> tuple[ScannerResult | None, int, Decimal]:
+    """Execute the main scan and trade pipeline.
+
+    Args:
+        symbols: List of symbols to scan.
+        scanner_config: Scanner configuration.
+        sentiment_analyzer: Sentiment analysis function.
+        rl_predictor: RL predictor function.
+        order_manager: OrderManager instance.
+        max_trades: Maximum trades to execute.
+        errors: List to collect error messages.
+
+    Returns:
+        Tuple of (scanner_result, trades_executed, total_pnl).
+    """
+    # Step 2: Execute scanner
+    _LOGGER.info("Step 2: Running scanner...")
+    scanner_result = _execute_scanner(
+        symbols, scanner_config, sentiment_analyzer, rl_predictor, errors
+    )
+
+    if scanner_result is None:
+        return None, 0, Decimal("0")
+
+    # Step 3: Execute paper trades
+    _LOGGER.info("Step 3: Executing paper trades...")
+    trades_executed, total_pnl = _execute_paper_trades(
+        scanner_result, max_trades, order_manager, errors
+    )
+
+    return scanner_result, trades_executed, total_pnl
+
+
+def _initialize_scan_cycle(
+    symbols: Sequence[str] | None,
+    max_trades: int,
+    order_manager: OrderManager | None,
+    audit_logger: TradeAuditLogger | None,
+    scanner_config: ScannerConfig | None,
+) -> tuple[
+    datetime,
+    Sequence[str],
+    Callable[[str], tuple[Decimal, bool]],
+    Callable[[list[Decimal]], Decimal],
+    OrderManager | None,
+    list[str],
+]:
+    """Initialize scan cycle components and prepare symbols.
+
+    Args:
+        symbols: Optional list of symbols.
+        max_trades: Maximum trades.
+        order_manager: Optional OrderManager.
+        audit_logger: Optional TradeAuditLogger.
+        scanner_config: Scanner configuration.
+
+    Returns:
+        Tuple of (timestamp, symbols, sentiment_analyzer, rl_predictor, order_manager, errors).
+    """
+    timestamp_utc = datetime.now(UTC)
+    errors: list[str] = []
+
+    _log_scan_cycle_start(timestamp_utc, symbols, max_trades)
+    _check_ml_readiness_and_log(errors)
+
+    symbols = _prepare_scan_symbols(symbols)
+    sentiment_analyzer, rl_predictor, order_manager = _initialize_scan_components(
+        order_manager, audit_logger, errors
+    )
+
+    return timestamp_utc, symbols, sentiment_analyzer, rl_predictor, order_manager, errors
+
+
+def _create_final_result(
+    scanner_result: ScannerResult,
+    trades_executed: int,
+    total_pnl: Decimal,
+    errors: list[str],
+    timestamp_utc: datetime,
+) -> ScanCycleResult:
+    """Create final scan cycle result.
+
+    Args:
+        scanner_result: Scanner result.
+        trades_executed: Number of trades.
+        total_pnl: Total PnL.
+        errors: Error list.
+        timestamp_utc: UTC timestamp.
+
+    Returns:
+        ScanCycleResult.
+    """
+    _log_scan_cycle_complete(trades_executed, total_pnl, len(errors))
+    return ScanCycleResult(
+        scanner_result=scanner_result,
+        trades_executed=trades_executed,
+        total_pnl=total_pnl,
+        errors=errors,
+        timestamp_utc=timestamp_utc,
+    )
+
+
 def run_scan_cycle(
     *,
     symbols: Sequence[str] | None = None,
@@ -388,114 +738,43 @@ def run_scan_cycle(
     audit_logger: TradeAuditLogger | None = None,
     scanner_config: ScannerConfig | None = None,
 ) -> ScanCycleResult:
-    """
-    Execute a complete scan cycle: fetch → sentiment → score → scan → paper-execute → audit.
+    """Execute scan cycle: fetch → sentiment → score → scan → paper-execute → audit.
 
-    This is the main entry point for automated trading. It runs the full pipeline:
-      1. Fetches market data for configured symbols
-      2. Analyzes sentiment using FinBERT + AION ensemble
-      3. Scores candidates using strength scorer
-      4. Runs scanner to filter top gainers/losers
-      5. Executes paper trades on top candidates
-      6. Logs all trades to audit database
-      7. Returns comprehensive results
+    Main entry point for automated trading. Runs full pipeline:
+      1. Fetches market data
+      2. Analyzes sentiment (FinBERT + AION)
+      3. Scores candidates
+      4. Filters top gainers/losers
+      5. Executes paper trades
+      6. Logs to audit DB
 
     Args:
-        symbols: List of symbols to scan. If None, uses default NIFTY50 stocks.
-        max_trades: Maximum number of trades to execute per cycle.
-        order_manager: Optional pre-configured OrderManager. If None, creates new.
-        audit_logger: Optional pre-configured TradeAuditLogger. If None, creates new.
-        scanner_config: Optional scanner configuration. If None, uses defaults.
+        symbols: Symbols to scan (default: NIFTY50).
+        max_trades: Max trades per cycle.
+        order_manager: Optional OrderManager.
+        audit_logger: Optional TradeAuditLogger.
+        scanner_config: Optional scanner config.
 
     Returns:
-        ScanCycleResult with scanner results, trades executed, PnL, and errors.
-
-    Example:
-        >>> result = run_scan_cycle(symbols=["RELIANCE", "TCS", "INFY"], max_trades=3)
-        >>> # Access result.trades_executed and result.total_pnl
+        ScanCycleResult with results, trades, PnL, errors.
     """
-    timestamp_utc = datetime.now(UTC)
-    errors: list[str] = []
+    (
+        timestamp_utc,
+        symbols,
+        sentiment_analyzer,
+        rl_predictor,
+        order_manager,
+        errors,
+    ) = _initialize_scan_cycle(symbols, max_trades, order_manager, audit_logger, scanner_config)
 
-    _LOGGER.info("=" * 70)
-    _LOGGER.info("Starting Scan Cycle")
-    _LOGGER.info("  Timestamp: %s UTC", timestamp_utc.isoformat())
-    _LOGGER.info("  Symbols to scan: %s", len(symbols or []))
-    _LOGGER.info("  Max trades: %d", max_trades)
-    _LOGGER.info("=" * 70)
-
-    # Step 0: Check ML model readiness
-    _check_ml_readiness_and_log(errors)
-
-    # Default symbols if none provided
-    if not symbols:
-        symbols = [
-            "RELIANCE",
-            "TCS",
-            "INFY",
-            "HDFCBANK",
-            "ICICIBANK",
-            "SBIN",
-            "BHARTIARTL",
-            "ITC",
-            "KOTAKBANK",
-            "LT",
-        ]
-        _LOGGER.info("Using default NIFTY50 symbols")
-
-    # Step 1: Initialize analyzers and order manager
-    _LOGGER.info("Step 1: Initializing components...")
-
-    sentiment_analyzer, rl_predictor, order_manager = _initialize_analyzers_and_order_manager(
-        order_manager, audit_logger, errors
-    )
-
-    # Early return if order manager initialization failed
     if order_manager is None:
-        return ScanCycleResult(
-            scanner_result=None,
-            trades_executed=0,
-            total_pnl=Decimal("0"),
-            errors=errors,
-            timestamp_utc=timestamp_utc,
-        )
+        return _create_early_return_result(errors, timestamp_utc)
 
-    # Step 2: Execute scanner
-    _LOGGER.info("Step 2: Running scanner...")
-    scanner_result = _execute_scanner(
-        symbols, scanner_config, sentiment_analyzer, rl_predictor, errors
+    scanner_result, trades_executed, total_pnl = _execute_scan_pipeline(
+        symbols, scanner_config, sentiment_analyzer, rl_predictor, order_manager, max_trades, errors
     )
 
-    # Early return if scanner failed
     if scanner_result is None:
-        return ScanCycleResult(
-            scanner_result=None,
-            trades_executed=0,
-            total_pnl=Decimal("0"),
-            errors=errors,
-            timestamp_utc=timestamp_utc,
-        )
+        return _create_early_return_result(errors, timestamp_utc)
 
-    # Step 3: Execute paper trades
-    _LOGGER.info("Step 3: Executing paper trades...")
-    trades_executed, total_pnl = _execute_paper_trades(
-        scanner_result, max_trades, order_manager, errors
-    )
-
-    # Step 4: Audit summary
-    _LOGGER.info("Step 4: Audit summary...")
-    _LOGGER.info("  Trades executed: %d", trades_executed)
-    _LOGGER.info("  Total PnL: %s", total_pnl)
-    _LOGGER.info("  Errors: %d", len(errors))
-
-    _LOGGER.info("=" * 70)
-    _LOGGER.info("Scan Cycle Complete")
-    _LOGGER.info("=" * 70)
-
-    return ScanCycleResult(
-        scanner_result=scanner_result,
-        trades_executed=trades_executed,
-        total_pnl=total_pnl,
-        errors=errors,
-        timestamp_utc=timestamp_utc,
-    )
+    return _create_final_result(scanner_result, trades_executed, total_pnl, errors, timestamp_utc)

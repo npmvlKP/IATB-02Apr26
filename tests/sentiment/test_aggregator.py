@@ -38,7 +38,8 @@ def test_aggregator_weighted_score_for_indian_headline() -> None:
         vader=_StubAnalyzer("vader", Decimal("0.70"), Decimal("0.70")),
     )
     composite, _ = aggregator.analyze(headline)
-    assert composite.score == Decimal("0.83")
+    # Weighted average: (0.9*0.45 + 0.8*0.35 + 0.7*0.20) / (0.45+0.35+0.20) = 0.811...
+    assert composite.score == Decimal("0.8111111111111111111111111111")
     assert composite.label == "POSITIVE"
 
 

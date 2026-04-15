@@ -267,26 +267,22 @@ class TestTelegramAlerter:
 class TestGetAlerter:
     """Test cases for get_alerter function."""
 
-    @patch("iatb.core.observability.alerting.TelegramAlerter")
-    def test_get_alerter_returns_instance(
-        self,
-        mock_alerter_class: MagicMock,
-    ) -> None:
+    def test_get_alerter_returns_instance(self) -> None:
         """Test that get_alerter returns alerter instance."""
-        mock_alerter = MagicMock()
-        mock_alerter_class.return_value = mock_alerter
+        # Clear global instance
+        import iatb.core.observability.alerting as alerting_module
+
+        alerting_module._alerter = None
 
         alerter = get_alerter()
-        assert alerter is mock_alerter
+        assert isinstance(alerter, TelegramAlerter)
 
-    @patch("iatb.core.observability.alerting.TelegramAlerter")
-    def test_get_alerter_returns_same_instance(
-        self,
-        mock_alerter_class: MagicMock,
-    ) -> None:
+    def test_get_alerter_returns_same_instance(self) -> None:
         """Test that get_alerter returns same instance on subsequent calls."""
-        mock_alerter = MagicMock()
-        mock_alerter_class.return_value = mock_alerter
+        # Clear global instance
+        import iatb.core.observability.alerting as alerting_module
+
+        alerting_module._alerter = None
 
         alerter1 = get_alerter()
         alerter2 = get_alerter()

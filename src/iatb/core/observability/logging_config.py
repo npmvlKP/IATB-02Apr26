@@ -45,24 +45,13 @@ class JsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc,name-defined
             log_record["exception"] = self.formatException(record.exc_info)
 
 
-def setup_structured_logging(level: str = "INFO") -> logging.Logger:
-    """Configure structured JSON logging for the application.
-
-    Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+def _create_console_handler() -> logging.StreamHandler[Any]:
+    """Create console handler with JSON formatter.
 
     Returns:
-        Configured root logger.
+        Configured console handler.
     """
-    # Get root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
-
-    # Remove existing handlers
-    root_logger.handlers.clear()
-
-    # Create console handler with JSON formatter
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler[Any](sys.stdout)
     console_handler.setLevel(logging.DEBUG)
 
     formatter = JsonFormatter(
@@ -71,10 +60,17 @@ def setup_structured_logging(level: str = "INFO") -> logging.Logger:
     )
     console_handler.setFormatter(formatter)
 
-    # Add handler to root logger
-    root_logger.addHandler(console_handler)
+    return console_handler
 
-    # Configure logging from config file if exists
+
+def _configure_logging_format(
+    console_handler: logging.StreamHandler[Any],
+) -> None:
+    """Configure logging format based on config file.
+
+    Args:
+        console_handler: Console handler to configure.
+    """
     try:
         config = get_config()
         logging_config = getattr(config, "logging", None)
@@ -97,6 +93,32 @@ def setup_structured_logging(level: str = "INFO") -> logging.Logger:
             "Failed to load logging config: %s",
             exc,
         )
+
+
+def setup_structured_logging(level: str = "INFO") -> logging.Logger:
+    """Configure structured JSON logging for the application.
+
+    Args:
+        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+
+    Returns:
+        Configured root logger.
+    """
+    # Get root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+
+    # Remove existing handlers
+    root_logger.handlers.clear()
+
+    # Create console handler with JSON formatter
+    console_handler = _create_console_handler()
+
+    # Add handler to root logger
+    root_logger.addHandler(console_handler)
+
+    # Configure logging from config file if exists
+    _configure_logging_format(console_handler)
 
     return root_logger
 
