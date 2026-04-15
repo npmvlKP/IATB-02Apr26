@@ -415,7 +415,7 @@ async def events_stream() -> StreamingResponse:
         ...     if line:
         ...         _LOGGER.info("SSE line: %s", line.decode())
     """
-    broadcaster = get_broadcaster()
+    broadcaster = await get_broadcaster()
 
     async def event_generator() -> AsyncIterator[str]:
         """Generate SSE events from the broadcaster."""
@@ -437,4 +437,5 @@ async def events_stream() -> StreamingResponse:
 async def shutdown_event() -> None:
     """Cleanup on shutdown."""
     _LOGGER.info("IATB FastAPI app shutting down")
-    await get_broadcaster().stop()
+    broadcaster = await get_broadcaster()
+    await broadcaster.stop()

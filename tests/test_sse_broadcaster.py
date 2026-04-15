@@ -21,6 +21,23 @@ from iatb.core.events import PnLUpdateEvent, ScanUpdateEvent
 from iatb.core.sse_broadcaster import SSEBroadcaster, get_broadcaster
 from iatb.core.types import create_price, create_quantity
 
+# Module-level broadcaster instance for tests
+_test_broadcaster: SSEBroadcaster | None = None
+
+
+async def _get_test_broadcaster() -> SSEBroadcaster:
+    """Get or create test broadcaster instance.
+
+    This is a helper for tests that need a broadcaster instance.
+
+    Returns:
+        SSE broadcaster instance.
+    """
+    global _test_broadcaster
+    if _test_broadcaster is None:
+        _test_broadcaster = SSEBroadcaster()
+    return _test_broadcaster
+
 
 @pytest.fixture
 async def event_bus() -> EventBus:
@@ -71,10 +88,44 @@ class TestSSEBroadcaster:
 
     @pytest.mark.asyncio
     async def test_broadcaster_singleton(self) -> None:
-        """Test that broadcaster is a singleton."""
-        b1 = get_broadcaster()
-        b2 = get_broadcaster()
+        """Test that broadcaster is a singleton via async factory."""
+        b1 = await get_broadcaster()
+        b2 = await get_broadcaster()
         assert b1 is b2
+
+    @pytest.mark.asyncio
+    async def test_concurrent_singleton_access(self) -> None:
+        """Test that concurrent access to get_broadcaster is thread-safe."""
+
+        # Create multiple coroutines that call get_broadcaster concurrently
+        async def get_and_check() -> SSEBroadcaster:
+            """Get broadcaster and verify it's the same instance."""
+            broadcaster = await get_broadcaster()
+            assert isinstance(broadcaster, SSEBroadcaster)
+            return broadcaster
+
+        # Run multiple concurrent calls
+        tasks = [get_and_check() for _ in range(10)]
+        broadcasters = await asyncio.gather(*tasks)
+
+        # All should be the same instance
+        first = broadcasters[0]
+        for b in broadcasters[1:]:
+            assert b is first
+
+    @pytest.mark.asyncio
+    async def test_lock_created_in_event_loop(self) -> None:
+        """Test that the lock is created lazily inside the event loop."""
+        from iatb.core.sse_broadcaster import _broadcaster_lock, _get_broadcaster_lock
+
+        # Get the lock (may already be created by other tests)
+        lock1 = _get_broadcaster_lock()
+        assert _broadcaster_lock is not None
+        assert lock1 is _broadcaster_lock
+
+        # Subsequent calls should return the same lock
+        lock2 = _get_broadcaster_lock()
+        assert lock1 is lock2
 
     @pytest.mark.asyncio
     async def test_broadcaster_lifecycle(self, event_bus: EventBus) -> None:
@@ -359,5 +410,5 @@ class TestFastAPISSEEndpoint:
         """Test that broadcaster is available after app startup."""
         from iatb.fastapi_app import get_broadcaster
 
-        broadcaster = get_broadcaster()
+        broadcaster = await get_broadcaster()
         assert isinstance(broadcaster, SSEBroadcaster)

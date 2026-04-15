@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any, Optional
+from typing import Any
 
 from iatb.core.event_bus import EventBus
 from iatb.core.events import (
@@ -23,25 +23,13 @@ _LOGGER = logging.getLogger(__name__)
 class SSEBroadcaster:
     """Manages SSE client connections and event broadcasting."""
 
-    _instance: Optional["SSEBroadcaster"] = None
-    _lock: asyncio.Lock = asyncio.Lock()
-
-    def __new__(cls: type["SSEBroadcaster"]) -> "SSEBroadcaster":  # noqa: PYI019
-        """Singleton pattern to ensure single broadcaster instance."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
     def __init__(self) -> None:
         """Initialize the SSE broadcaster."""
-        if hasattr(self, "_initialized"):
-            return
         self._event_bus: EventBus | None = None
         self._subscribers: list[asyncio.Queue[dict[str, str] | None]] = []
         self._forwarding_tasks: list[asyncio.Task[None]] = []
         self._running = False
         self._lock = asyncio.Lock()
-        self._initialized = True
 
     async def start(self, event_bus: EventBus) -> None:
         """Start the broadcaster and subscribe to event bus topics.
@@ -237,10 +225,42 @@ class SSEBroadcaster:
         return f"event: {event}\ndata: {data}\n\n"
 
 
-def get_broadcaster() -> SSEBroadcaster:
+# Module-level singleton state (created lazily in async context)
+_broadcaster: SSEBroadcaster | None = None
+_broadcaster_lock: asyncio.Lock | None = None
+
+
+def _get_broadcaster_lock() -> asyncio.Lock:
+    """Get or create the module-level lock in the current event loop.
+
+    This ensures the lock is created inside a running event loop,
+    avoiding the deprecation warning in Python 3.12+.
+
+    Returns:
+        The module-level asyncio.Lock.
+    """
+    global _broadcaster_lock
+    if _broadcaster_lock is None:
+        _broadcaster_lock = asyncio.Lock()
+    return _broadcaster_lock
+
+
+async def get_broadcaster() -> SSEBroadcaster:
     """Get the singleton SSE broadcaster instance.
+
+    This function uses async locks to ensure thread-safe singleton
+    initialization in concurrent asyncio contexts. The lock is created
+    lazily inside the running event loop to avoid Python 3.12+
+    deprecation warnings.
 
     Returns:
         The SSE broadcaster instance.
     """
-    return SSEBroadcaster()
+    global _broadcaster
+
+    lock = _get_broadcaster_lock()
+
+    async with lock:
+        if _broadcaster is None:
+            _broadcaster = SSEBroadcaster()
+        return _broadcaster
