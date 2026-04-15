@@ -137,67 +137,142 @@ class OrderManager:
         now = datetime.now(UTC)
 
         if request.side == OrderSide.BUY:
-            # BUY order
-            if current_qty < Decimal("0"):
-                # Closing short position - realize PnL
-                # For short: PnL = (entry - exit) * qty_closed
-                qty_to_close = min(fill_qty, abs(current_qty))
-                realized_pnl = (avg_entry_price - fill_price) * qty_to_close
-                self._daily_loss_guard.record_trade(realized_pnl, now)
-
-                # Update remaining short position
-                remaining_short = -current_qty - qty_to_close
-                if remaining_short > Decimal("0"):
-                    # Still short, keep avg entry price
-                    self._position_state[symbol] = (-remaining_short, avg_entry_price)
-                else:
-                    # Position closed or flipped to long
-                    qty_opening_long = fill_qty - qty_to_close
-                    if qty_opening_long > Decimal("0"):
-                        # New long position at fill price
-                        self._position_state[symbol] = (qty_opening_long, fill_price)
-                    else:
-                        # Flat position
-                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
-            else:
-                # Opening or adding to long position - no realized PnL
-                # Calculate weighted average entry price
-                total_cost = (current_qty * avg_entry_price) + (fill_qty * fill_price)
-                new_qty = current_qty + fill_qty
-                new_avg = total_cost / new_qty
-                self._position_state[symbol] = (new_qty, new_avg)
-
+            self._process_buy_order(symbol, fill_qty, fill_price, current_qty, avg_entry_price, now)
         elif request.side == OrderSide.SELL:
-            # SELL order
-            if current_qty > Decimal("0"):
-                # Closing long position - realize PnL
-                # For long: PnL = (exit - entry) * qty_closed
-                qty_to_close = min(fill_qty, current_qty)
-                realized_pnl = (fill_price - avg_entry_price) * qty_to_close
-                self._daily_loss_guard.record_trade(realized_pnl, now)
+            self._process_sell_order(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price, now
+            )
 
-                # Update remaining long position
-                remaining_long = current_qty - qty_to_close
-                if remaining_long > Decimal("0"):
-                    # Still long, keep avg entry price
-                    self._position_state[symbol] = (remaining_long, avg_entry_price)
-                else:
-                    # Position closed or flipped to short
-                    qty_opening_short = fill_qty - qty_to_close
-                    if qty_opening_short > Decimal("0"):
-                        # New short position at fill price
-                        self._position_state[symbol] = (-qty_opening_short, fill_price)
-                    else:
-                        # Flat position
-                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+    def _process_buy_order(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+        now: datetime,
+    ) -> None:
+        """Process BUY order for PnL recording."""
+        if current_qty < Decimal("0"):
+            # Closing short position - realize PnL
+            self._realize_short_pnl(symbol, fill_qty, fill_price, current_qty, avg_entry_price, now)
+        else:
+            # Opening or adding to long position - no realized PnL
+            self._add_to_long_position(symbol, fill_qty, fill_price, current_qty, avg_entry_price)
+
+    def _process_sell_order(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+        now: datetime,
+    ) -> None:
+        """Process SELL order for PnL recording."""
+        if current_qty > Decimal("0"):
+            # Closing long position - realize PnL
+            self._realize_long_pnl(symbol, fill_qty, fill_price, current_qty, avg_entry_price, now)
+        else:
+            # Opening or adding to short position - no realized PnL
+            self._add_to_short_position(symbol, fill_qty, fill_price, current_qty, avg_entry_price)
+
+    def _realize_short_pnl(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+        now: datetime,
+    ) -> None:
+        """Realize PnL when closing a short position."""
+        # Type guard: daily_loss_guard is guaranteed to be set when this is called
+        assert self._daily_loss_guard is not None  # nosec B101
+
+        # For short: PnL = (entry - exit) * qty_closed
+        qty_to_close = min(fill_qty, abs(current_qty))
+        realized_pnl = (avg_entry_price - fill_price) * qty_to_close
+        self._daily_loss_guard.record_trade(realized_pnl, now)
+
+        # Update remaining short position
+        remaining_short = -current_qty - qty_to_close
+        if remaining_short > Decimal("0"):
+            # Still short, keep avg entry price
+            self._position_state[symbol] = (-remaining_short, avg_entry_price)
+        else:
+            # Position closed or flipped to long
+            qty_opening_long = fill_qty - qty_to_close
+            if qty_opening_long > Decimal("0"):
+                # New long position at fill price
+                self._position_state[symbol] = (qty_opening_long, fill_price)
             else:
-                # Opening or adding to short position - no realized PnL
-                # Calculate weighted average entry price for short
-                abs_current_qty = abs(current_qty)
-                total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
-                new_abs_qty = abs_current_qty + fill_qty
-                new_avg = total_cost / new_abs_qty
-                self._position_state[symbol] = (-new_abs_qty, new_avg)
+                # Flat position
+                self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+
+    def _realize_long_pnl(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+        now: datetime,
+    ) -> None:
+        """Realize PnL when closing a long position."""
+        # Type guard: daily_loss_guard is guaranteed to be set when this is called
+        assert self._daily_loss_guard is not None  # nosec B101
+
+        # For long: PnL = (exit - entry) * qty_closed
+        qty_to_close = min(fill_qty, current_qty)
+        realized_pnl = (fill_price - avg_entry_price) * qty_to_close
+        self._daily_loss_guard.record_trade(realized_pnl, now)
+
+        # Update remaining long position
+        remaining_long = current_qty - qty_to_close
+        if remaining_long > Decimal("0"):
+            # Still long, keep avg entry price
+            self._position_state[symbol] = (remaining_long, avg_entry_price)
+        else:
+            # Position closed or flipped to short
+            qty_opening_short = fill_qty - qty_to_close
+            if qty_opening_short > Decimal("0"):
+                # New short position at fill price
+                self._position_state[symbol] = (-qty_opening_short, fill_price)
+            else:
+                # Flat position
+                self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+
+    def _add_to_long_position(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+    ) -> None:
+        """Add to or open a long position."""
+        # Calculate weighted average entry price
+        total_cost = (current_qty * avg_entry_price) + (fill_qty * fill_price)
+        new_qty = current_qty + fill_qty
+        new_avg = total_cost / new_qty
+        self._position_state[symbol] = (new_qty, new_avg)
+
+    def _add_to_short_position(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+    ) -> None:
+        """Add to or open a short position."""
+        # Calculate weighted average entry price for short
+        abs_current_qty = abs(current_qty)
+        total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
+        new_abs_qty = abs_current_qty + fill_qty
+        new_avg = total_cost / new_abs_qty
+        self._position_state[symbol] = (-new_abs_qty, new_avg)
 
     def _audit(
         self,
