@@ -12,8 +12,10 @@ from iatb.data.instrument import (
 )
 from iatb.data.instrument_master import InstrumentMaster
 from iatb.data.jugaad_provider import JugaadProvider
+from iatb.data.kite_provider import KiteProvider
 from iatb.data.normalizer import normalize_ohlcv_batch, normalize_ohlcv_record
 from iatb.data.openalgo_provider import OpenAlgoProvider
+from iatb.data.token_resolver import SymbolTokenResolver
 from iatb.data.validator import (
     validate_ohlcv_bar,
     validate_ohlcv_series,
@@ -29,6 +31,7 @@ __all__ = [
     "JugaadProvider",
     "CCXTProvider",
     "OpenAlgoProvider",
+    "KiteProvider",
     "normalize_ohlcv_record",
     "normalize_ohlcv_batch",
     "validate_ohlcv_bar",
@@ -39,4 +42,5 @@ __all__ = [
     "InstrumentProvider",
     "InstrumentMaster",
     "map_kite_instrument_type",
+    "SymbolTokenResolver",
 ]

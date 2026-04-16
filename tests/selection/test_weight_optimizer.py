@@ -286,3 +286,198 @@ class TestOptimizeWeightsForRegime:
             assert result.trials == 5
             assert result.best_ic == Decimal("0.05")
             assert result.improved is True  # IC >= 0.03 threshold
+
+    def test_optimize_weights_below_threshold_not_improved(self) -> None:
+        """Test that IC below threshold marks as not improved."""
+        from unittest.mock import MagicMock, patch
+
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
+
+        with patch("iatb.selection.weight_optimizer._load_optuna") as mock_load:
+            mock_optuna = MagicMock()
+            mock_load.return_value = mock_optuna
+
+            mock_study = MagicMock()
+            mock_study.best_params = {
+                "sentiment": 25,
+                "strength": 25,
+                "volume_profile": 25,
+                "drl": 25,
+            }
+            mock_study.best_value = 0.02  # Below 0.03 threshold
+            mock_optuna.create_study.return_value = mock_study
+            mock_optuna.samplers.TPESampler.return_value = MagicMock()
+
+            result = optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5)
+
+            assert result.regime == MarketRegime.BULL
+            assert result.best_ic == Decimal("0.02")
+            assert result.improved is False  # IC < 0.03 threshold
+
+    def test_optimize_weights_uses_seed_reproducibly(self) -> None:
+        """Test that seed produces reproducible results."""
+        from unittest.mock import MagicMock, patch
+
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
+
+        with patch("iatb.selection.weight_optimizer._load_optuna") as mock_load:
+            mock_optuna = MagicMock()
+            mock_load.return_value = mock_optuna
+
+            mock_study = MagicMock()
+            mock_study.best_params = {
+                "sentiment": 25,
+                "strength": 25,
+                "volume_profile": 25,
+                "drl": 25,
+            }
+            mock_study.best_value = 0.05
+            mock_optuna.create_study.return_value = mock_study
+            mock_optuna.samplers.TPESampler.return_value = MagicMock()
+
+            # Run with same seed twice
+            optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5, seed=42)
+            optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5, seed=42)
+
+            # Verify sampler was called with seed
+            mock_optuna.samplers.TPESampler.assert_called_with(seed=42)
+
+    def test_optimize_weights_handles_all_regimes(self) -> None:
+        """Test that optimization works for all market regimes."""
+        from unittest.mock import MagicMock, patch
+
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
+
+        for regime in [MarketRegime.BULL, MarketRegime.BEAR, MarketRegime.SIDEWAYS]:
+            with patch("iatb.selection.weight_optimizer._load_optuna") as mock_load:
+                mock_optuna = MagicMock()
+                mock_load.return_value = mock_optuna
+
+                mock_study = MagicMock()
+                mock_study.best_params = {
+                    "sentiment": 25,
+                    "strength": 25,
+                    "volume_profile": 25,
+                    "drl": 25,
+                }
+                mock_study.best_value = 0.05
+                mock_optuna.create_study.return_value = mock_study
+                mock_optuna.samplers.TPESampler.return_value = MagicMock()
+
+                result = optimize_weights_for_regime(regime, history, returns, n_trials=5)
+
+                assert result.regime == regime
+                assert result.trials == 5
+
+    def test_suggest_weights_normalizes_correctly(self) -> None:
+        """Test that suggested weights are normalized to sum to 1."""
+        from unittest.mock import MagicMock
+
+        mock_trial = MagicMock()
+        mock_trial.suggest_int.side_effect = [10, 20, 30, 40]
+
+        weights = _suggest_weights(mock_trial)
+
+        # Verify normalization: total = 10+20+30+40 = 100
+        assert weights.sentiment == Decimal("0.10")
+        assert weights.strength == Decimal("0.20")
+        assert weights.volume_profile == Decimal("0.30")
+        assert weights.drl == Decimal("0.40")
+
+        # Verify sum is 1.0
+        total = weights.sentiment + weights.strength + weights.volume_profile + weights.drl
+        assert total == Decimal("1.0")
+
+    def test_suggest_weights_calls_trial_methods(self) -> None:
+        """Test that suggest_weights calls trial.suggest_int correctly."""
+        from unittest.mock import MagicMock
+
+        mock_trial = MagicMock()
+        mock_trial.suggest_int.side_effect = [15, 25, 30, 30]
+
+        _suggest_weights(mock_trial)
+
+        # Verify suggest_int was called 4 times with correct params
+        assert mock_trial.suggest_int.call_count == 4
+        calls = mock_trial.suggest_int.call_args_list
+
+        # Check first call for sentiment
+        assert calls[0][0][0] == "sentiment"
+        assert calls[0][0][1] == 5
+        assert calls[0][0][2] == 50
+
+        # Check other parameters
+        assert calls[1][0][0] == "strength"
+        assert calls[2][0][0] == "volume_profile"
+        assert calls[3][0][0] == "drl"
+
+    def test_compute_composites_handles_empty_history(self) -> None:
+        """Test that empty history returns empty list."""
+        history: list[dict[str, Decimal]] = []
+        weights = type(
+            "W",
+            (),
+            {
+                "sentiment": Decimal("0.25"),
+                "strength": Decimal("0.25"),
+                "volume_profile": Decimal("0.25"),
+                "drl": Decimal("0.25"),
+            },
+        )()
+        composites = _compute_composites(history, weights)
+        assert composites == []
+
+    def test_compute_composites_handles_negative_values(self) -> None:
+        """Test that negative signal values are handled correctly."""
+        history = [
+            {"sentiment": Decimal("-0.5"), "strength": Decimal("0.8")},
+            {"sentiment": Decimal("0.3"), "strength": Decimal("-0.2")},
+        ]
+        weights = type(
+            "W",
+            (),
+            {
+                "sentiment": Decimal("0.5"),
+                "strength": Decimal("0.5"),
+                "volume_profile": Decimal("0.0"),
+                "drl": Decimal("0.0"),
+            },
+        )()
+        composites = _compute_composites(history, weights)
+        # Negative values should be clamped to 0
+        assert composites[0] == Decimal("0.15")  # max(0.5*-0.5 + 0.5*0.8, 0) = 0.15
+        assert composites[1] == Decimal("0.05")  # max(0.5*0.3 + 0.5*-0.2, 0) = 0.05
+
+    def test_optimize_weights_default_trials(self) -> None:
+        """Test that default n_trials is used when not specified."""
+        from unittest.mock import MagicMock, patch
+
+        history = [{"sentiment": Decimal("0.8")}] * 10
+        returns: Sequence[Decimal] = [Decimal("0.1")] * 10
+
+        with patch("iatb.selection.weight_optimizer._load_optuna") as mock_load:
+            mock_optuna = MagicMock()
+            mock_load.return_value = mock_optuna
+
+            mock_study = MagicMock()
+            mock_study.best_params = {
+                "sentiment": 25,
+                "strength": 25,
+                "volume_profile": 25,
+                "drl": 25,
+            }
+            mock_study.best_value = 0.05
+            mock_optuna.create_study.return_value = mock_study
+            mock_optuna.samplers.TPESampler.return_value = MagicMock()
+
+            # Call without specifying n_trials (should default to 50)
+            result = optimize_weights_for_regime(MarketRegime.BULL, history, returns)
+
+            # Verify optimize was called with default 50 trials
+            mock_study.optimize.assert_called_once()
+            call_kwargs = mock_study.optimize.call_args[1]
+            assert call_kwargs["n_trials"] == 50
+            assert result.trials == 50

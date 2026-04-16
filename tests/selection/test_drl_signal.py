@@ -454,3 +454,209 @@ class TestComputeDRLSignal:
         assert isinstance(output.robust, bool)
         assert "oos_sharpe" in output.metadata
         assert "win_rate" in output.metadata
+
+    def test_compute_drl_signal_robust_flag_true_when_both_robust(self) -> None:
+        """Test that robust flag is True when MC robust and no overfit."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        assert output.robust is True
+
+    def test_compute_drl_signal_robust_flag_false_when_mc_not_robust(self) -> None:
+        """Test that robust flag is False when MC not robust."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=False,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        assert output.robust is False
+
+    def test_compute_drl_signal_robust_flag_false_when_overfit_detected(self) -> None:
+        """Test that robust flag is False when overfit detected."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=True,
+            mean_overfit_ratio=Decimal("2.5"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        assert output.robust is False
+
+    def test_compute_drl_signal_metadata_contains_all_fields(self) -> None:
+        """Test that metadata contains all expected fields."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="RELIANCE",
+            out_of_sample_sharpe=Decimal("2.5"),
+            max_drawdown_pct=Decimal("8.5"),
+            win_rate=Decimal("0.65"),
+            total_trades=150,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.1"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+
+        expected_keys = {
+            "oos_sharpe",
+            "max_drawdown_pct",
+            "win_rate",
+            "total_trades",
+            "mc_robust",
+            "wf_overfit",
+        }
+        assert set(output.metadata.keys()) == expected_keys
+        assert output.metadata["oos_sharpe"] == "2.5"
+        assert output.metadata["max_drawdown_pct"] == "8.5"
+        assert output.metadata["win_rate"] == "0.65"
+        assert output.metadata["total_trades"] == "150"
+        assert output.metadata["mc_robust"] == "1"
+        assert output.metadata["wf_overfit"] == "0"
+
+    def test_compute_drl_signal_applies_temporal_decay(self) -> None:
+        """Test that signal score decays over time."""
+        from datetime import timedelta
+
+        # Old conclusion (30 days ago)
+        old_time = datetime.now(UTC) - timedelta(days=30)
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("2.0"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.7"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=old_time,
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        # Score should be significantly reduced due to decay
+        assert output.score < Decimal("0.5")
+
+    def test_compute_drl_signal_no_decay_when_recent(self) -> None:
+        """Test that recent signal has minimal decay."""
+        from datetime import timedelta
+
+        # Recent conclusion (1 hour ago)
+        recent_time = datetime.now(UTC) - timedelta(hours=1)
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("2.0"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.7"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=recent_time,
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        # Recent signal should have good score (minimal decay)
+        assert output.score > Decimal("0.5")
+
+    def test_compute_drl_signal_zero_sharpe(self) -> None:
+        """Test zero Sharpe ratio."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("0"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.5"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        # Zero Sharpe: sigmoid(0)=0.5, robust=1.0, drawdown=0.75, score=0.5*1.0*0.75=0.375
+        assert output.score == Decimal("0.3750")
+
+    def test_compute_drl_signal_very_high_sharpe(self) -> None:
+        """Test very high Sharpe ratio."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("10"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.8"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        output = compute_drl_signal(conclusion, datetime.now(UTC))
+        # High Sharpe gives good score
+        assert output.score > Decimal("0.6")
+
+    def test_derive_confidence_overfit_halves(self) -> None:
+        """Test that overfit detection halves confidence."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=True,
+            mean_overfit_ratio=Decimal("2.5"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        confidence = _derive_confidence(conclusion, Decimal("1.0"))
+        # Confidence should be halved due to overfit
+        assert confidence < Decimal("0.6")
+
+    def test_derive_confidence_both_not_robust_quarters(self) -> None:
+        """Test that both not robust quarters confidence."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=False,
+            walk_forward_overfit_detected=True,
+            mean_overfit_ratio=Decimal("2.5"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        confidence = _derive_confidence(conclusion, Decimal("1.0"))
+        # Confidence should be quartered (0.5 * 0.5)
+        assert confidence < Decimal("0.3")
+
+    def test_derive_confidence_applies_decay(self) -> None:
+        """Test that confidence is affected by decay."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        confidence_with_decay = _derive_confidence(conclusion, Decimal("0.5"))
+        confidence_no_decay = _derive_confidence(conclusion, Decimal("1.0"))
+        assert confidence_with_decay < confidence_no_decay

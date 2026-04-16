@@ -61,6 +61,7 @@ def valid_market_data(utc_timestamp):
         adx=Decimal("25.0"),
         atr_pct=Decimal("0.025"),
         breadth_ratio=Decimal("1.5"),
+        data_source="test",
     )
 
 
@@ -638,11 +639,11 @@ class TestInstrumentScannerEdgeCases:
         assert result.losers == []
         assert result.total_scanned == 0
 
-    def test_no_data_provider_returns_empty(self):
-        """Test scanner without data provider returns empty."""
+    def test_no_data_provider_raises(self):
+        """Test scanner without data provider raises ConfigError."""
         scanner = InstrumentScanner()
-        result = scanner.scan()
-        assert result.total_scanned == 0
+        with pytest.raises(ConfigError, match="DataProvider not configured"):
+            scanner.scan()
 
     def test_zero_pct_change_not_in_gainers_or_losers(
         self, mock_sentiment_strong, mock_rl_positive, utc_timestamp
@@ -709,6 +710,12 @@ class TestInstrumentScannerEdgeCases:
 
 class TestInstrumentScannerErrors:
     """Error handling tests for InstrumentScanner."""
+
+    def test_scan_without_provider_or_custom_data_raises(self):
+        """Test scan raises ConfigError when no provider and no custom_data."""
+        scanner = InstrumentScanner()
+        with pytest.raises(ConfigError, match="DataProvider not configured"):
+            scanner.scan()
 
     def test_invalid_exchange_in_data_handled(self, utc_timestamp):
         """Test invalid exchange in market data is handled."""

@@ -1,25 +1,29 @@
 """
 Instrument scanner for auto-selecting tradable Stocks/Options/Futures.
 
-Uses jugaad-data + pandas-ta (proven blueprint components) to scan NSE/CDS/MCX
+Uses DataProvider abstraction + indicator module to scan NSE/CDS/MCX
 and rank top gainers/losers by % change with multi-factor filtering.
 """
 
 import asyncio
-import importlib
-from collections.abc import Callable, Iterable, Mapping, Sequence
+import logging
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Any, cast
+from typing import cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
+from iatb.core.types import create_timestamp
+from iatb.data.base import DataProvider
 from iatb.data.market_data_cache import MarketDataCache
-from iatb.market_strength.indicators import IndicatorSnapshot
+from iatb.market_strength.indicators import IndicatorSnapshot, PandasTaIndicators
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class InstrumentCategory(StrEnum):
@@ -91,6 +95,7 @@ class MarketData:
     adx: Decimal
     atr_pct: Decimal
     breadth_ratio: Decimal
+    data_source: str = "unknown"
 
     @property
     def pct_change(self) -> Decimal:
@@ -177,50 +182,9 @@ def _last_decimal(values: object, field_name: str) -> Decimal:
     raise ConfigError(msg)
 
 
-def _iter_dataframe_rows(frame: Any) -> Iterable[Mapping[str, object]]:
-    """Iterate over jugaad-data DataFrame rows."""
-    if hasattr(frame, "iterrows"):
-        for _, payload in frame.iterrows():
-            if not isinstance(payload, Mapping):
-                msg = "jugaad dataframe rows must be mapping-like"
-                raise ConfigError(msg)
-            yield payload
-        return
-    if isinstance(frame, list):
-        for payload in frame:
-            if not isinstance(payload, Mapping):
-                msg = "jugaad list rows must be mapping-like"
-                raise ConfigError(msg)
-            yield payload
-        return
-    msg = "Unsupported jugaad history response type"
-    raise ConfigError(msg)
-
-
-def _coerce_datetime(value: object) -> datetime:
-    """Convert value to UTC datetime."""
-    if isinstance(value, datetime):
-        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-    if isinstance(value, str):
-        normalized = value.strip()
-        parsed = datetime.fromisoformat(normalized)
-        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
-    msg = f"Unsupported timestamp value from jugaad payload: {type(value).__name__}"
-    raise ConfigError(msg)
-
-
-def _extract_value(payload: Mapping[str, object], keys: tuple[str, ...]) -> object:
-    """Extract value from payload using fallback keys."""
-    for key in keys:
-        if key in payload and payload[key] is not None:
-            return payload[key]
-    msg = f"Missing required OHLCV key from jugaad payload: {keys}"
-    raise ConfigError(msg)
-
-
 class InstrumentScanner:
     """
-    Multi-factor instrument scanner using jugaad-data + pandas-ta.
+    Multi-factor instrument scanner using DataProvider abstraction.
 
     Filters instruments by:
     - VERY_STRONG sentiment (|score| >= 0.75)
@@ -234,6 +198,7 @@ class InstrumentScanner:
     def __init__(
         self,
         config: ScannerConfig | None = None,
+        data_provider: DataProvider | None = None,
         strength_scorer: StrengthScorer | None = None,
         sentiment_analyzer: Callable[[str], tuple[Decimal, bool]] | None = None,
         rl_predictor: Callable[[list[Decimal]], Decimal] | None = None,
@@ -241,35 +206,14 @@ class InstrumentScanner:
         cache_ttl_seconds: int = 60,
     ) -> None:
         self._config = config or ScannerConfig()
+        self._data_provider = data_provider
+
         self._strength_scorer = strength_scorer or StrengthScorer()
         self._sentiment_analyzer = sentiment_analyzer
         self._rl_predictor = rl_predictor
         self._symbols = symbols or []
-        self._pandas_ta = self._load_pandas_ta()
-        self._jugaad_nse = self._load_jugaad_nse()
         self._cache = MarketDataCache(default_ttl_seconds=cache_ttl_seconds)
-
-    @staticmethod
-    def _load_pandas_ta() -> object:
-        """Load pandas-ta module."""
-        try:
-            return importlib.import_module("pandas_ta_classic")
-        except ModuleNotFoundError as exc:
-            msg = "pandas-ta-classic dependency is required for InstrumentScanner"
-            raise ConfigError(msg) from exc
-
-    @staticmethod
-    def _load_jugaad_nse() -> Callable[..., object]:
-        """Load jugaad-data.nse.stock_df function."""
-        try:
-            module = importlib.import_module("jugaad_data.nse")
-        except ModuleNotFoundError as exc:
-            msg = "jugaad-data dependency is required for InstrumentScanner"
-            raise ConfigError(msg) from exc
-        if not hasattr(module, "stock_df"):
-            msg = "jugaad_data.nse.stock_df is not available"
-            raise ConfigError(msg)
-        return cast(Callable[..., object], module.stock_df)
+        self._indicators: PandasTaIndicators | None = None
 
     def scan(
         self,
@@ -277,19 +221,28 @@ class InstrumentScanner:
         custom_data: Iterable[MarketData] | None = None,
     ) -> ScannerResult:
         """
-        Scan instruments using jugaad-data + pandas-ta.
+        Scan instruments using DataProvider abstraction.
 
         Args:
             direction: Sort by gainers or losers
-            custom_data: Optional custom market data for testing (bypasses jugaad-data fetch)
+            custom_data: Optional custom market data for testing (bypasses provider fetch)
 
         Returns:
             ScannerResult with ranked gainers/losers
+
+        Raises:
+            ConfigError: If DataProvider is not configured and custom_data not provided.
         """
         scan_timestamp = datetime.now(UTC)
         if custom_data is not None:
             all_candidates = list(custom_data)
         else:
+            if self._data_provider is None:
+                msg = (
+                    "DataProvider not configured; provide custom_data or "
+                    "initialize with data_provider"
+                )
+                raise ConfigError(msg)
             all_candidates = self._fetch_market_data()
         scored = self._score_candidates(all_candidates)
         filtered = self._apply_filters(scored)
@@ -307,203 +260,163 @@ class InstrumentScanner:
         if not self._symbols:
             return []
 
-        start_date, end_date = self._get_date_range()
-        start_date_str = start_date.isoformat()
-        end_date_str = end_date.isoformat()
-
         # Run parallel fetch using asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            results = loop.run_until_complete(
-                self._fetch_symbols_parallel(start_date_str, end_date_str)
-            )
+            results = loop.run_until_complete(self._fetch_symbols_parallel())
         finally:
             loop.close()
 
         return [r for r in results if r is not None]
 
-    async def _fetch_symbols_parallel(
-        self, start_date_str: str, end_date_str: str
-    ) -> list[MarketData | None]:
+    async def _fetch_symbols_parallel(self) -> list[MarketData | None]:
         """
         Fetch all symbols in parallel using asyncio.gather().
 
-        Note: While batch OHLCV APIs would be ideal, jugaad-data doesn't provide
-        a batch fetch method. The asyncio.gather() approach achieves similar
-        performance benefits by fetching all symbols concurrently.
+        Note: While batch OHLCV APIs would be ideal, this approach achieves
+        similar performance benefits by fetching all symbols concurrently.
         """
-        tasks = [
-            self._fetch_single_symbol_async(symbol, start_date_str, end_date_str)
-            for symbol in self._symbols
-        ]
+        tasks = [self._fetch_single_symbol_async(symbol) for symbol in self._symbols]
         return await asyncio.gather(*tasks, return_exceptions=False)
 
-    async def _fetch_single_symbol_async(
-        self, symbol: str, start_date_str: str, end_date_str: str
-    ) -> MarketData | None:
+    async def _fetch_single_symbol_async(self, symbol: str) -> MarketData | None:
         """Async wrapper for fetching single symbol with cache check."""
         try:
-            cached_data = cast(
-                MarketData | None, self._cache.get(symbol, start_date_str, end_date_str)
-            )
+            # Check cache first
+            cache_key = f"{symbol}_{datetime.now(UTC).date()}"
+            cached_data = cast(MarketData | None, self._cache.get(symbol, cache_key, cache_key))
             if cached_data is not None:
                 return cached_data
 
             # Cache miss - fetch fresh data
-            start_date = date.fromisoformat(start_date_str)
-            end_date = date.fromisoformat(end_date_str)
-            market_data = self._fetch_single_symbol(symbol, start_date, end_date)
+            market_data = await self._fetch_single_symbol(symbol)
 
             if market_data is not None:
-                self._cache.put(symbol, start_date_str, end_date_str, market_data)
+                self._cache.put(symbol, cache_key, cache_key, market_data)
 
             return market_data
-        except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
+        except Exception as exc:  # nosec - B112: scanner continues on individual failures  # noqa: S112
+            _LOGGER.warning("Failed to fetch symbol %s: %s", symbol, exc)
             return None
 
-    def _get_date_range(self) -> tuple[date, date]:
-        """Get start and end dates for data fetch."""
-        end_date = datetime.now(UTC).date()
-        start_date = (datetime.now(UTC) - timedelta(days=self._config.lookback_days)).date()
-        return start_date, end_date
+    async def _fetch_single_symbol(self, symbol: str) -> MarketData | None:
+        """Fetch and process data for a single symbol using DataProvider."""
+        if self._data_provider is None:
+            msg = "DataProvider not configured"
+            raise ConfigError(msg)
 
-    def _fetch_single_symbol(
-        self, symbol: str, start_date: date, end_date: date
-    ) -> MarketData | None:
-        """Fetch and process data for a single symbol."""
-        frame = self._jugaad_nse(
+        # Determine exchange from symbol or config
+        exchange = self._determine_exchange(symbol)
+        category = self._determine_category(symbol)
+
+        # Fetch OHLCV data
+        since_timestamp = create_timestamp(
+            datetime.now(UTC) - timedelta(days=self._config.lookback_days)
+        )
+        bars = await self._data_provider.get_ohlcv(
             symbol=symbol,
-            from_date=start_date,
-            to_date=end_date,
+            exchange=exchange,
+            timeframe="1d",
+            since=since_timestamp,
+            limit=self._config.lookback_days,
         )
 
-        if frame is None or len(frame) == 0:  # type: ignore[arg-type]
+        if not bars:
             return None
 
-        indicators = self._calculate_indicators(frame)
-        latest_row = self._get_latest_row(frame)
-        if latest_row is None:
-            return None
-
-        return self._build_market_data(symbol, frame, indicators, latest_row)
-
-    def _get_latest_row(self, frame: Any) -> dict[str, object] | None:
-        """Extract the latest (most recent) row from frame."""
-        latest_row: dict[str, object] | None = None
-        latest_timestamp: datetime | None = None
-
-        for row in _iter_dataframe_rows(frame):
-            row_dict = dict(row)
-            row_timestamp = _coerce_datetime(
-                _extract_value(row_dict, ("timestamp", "TIMESTAMP", "date", "DATE"))
-            )
-            if latest_timestamp is None or row_timestamp > latest_timestamp:
-                latest_timestamp = row_timestamp
-                latest_row = {
-                    "timestamp": row_timestamp,
-                    "open": _to_decimal(_extract_value(row_dict, ("open", "OPEN")), "open"),
-                    "high": _to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"),
-                    "low": _to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"),
-                    "close": _to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close"),
-                    "volume": _to_decimal(
-                        _extract_value(
-                            row_dict,
-                            ("volume", "VOLUME", "TOTTRDQTY", "TTL_TRD_QNT"),
-                        ),
-                        "volume",
-                    ),
-                }
-
-        return latest_row
-
-    def _build_market_data(
-        self,
-        symbol: str,
-        frame: Any,
-        indicators: "IndicatorSnapshot",
-        latest_row: dict[str, object],
-    ) -> MarketData:
-        """Build MarketData object from components."""
-        avg_volume = self._calculate_average_volume(frame)
-        close_price = cast(Decimal, latest_row["close"])
-
-        return MarketData(
-            symbol=symbol,
-            exchange=Exchange.NSE,
-            category=self._determine_category(symbol),
-            close_price=close_price,
-            prev_close_price=self._get_previous_close(frame),
-            volume=cast(Decimal, latest_row["volume"]),
-            avg_volume=avg_volume,
-            timestamp_utc=cast(datetime, latest_row["timestamp"]),
-            high_price=cast(Decimal, latest_row["high"]),
-            low_price=cast(Decimal, latest_row["low"]),
-            adx=indicators.adx,
-            atr_pct=(indicators.atr / close_price if close_price > Decimal("0") else Decimal("0")),
-            breadth_ratio=Decimal("1.5"),
-        )
-
-    def _calculate_indicators(self, frame: Any) -> "IndicatorSnapshot":
-        """Calculate technical indicators using pandas-ta."""
+        # Extract price/volume data
         closes: list[Decimal] = []
         highs: list[Decimal] = []
         lows: list[Decimal] = []
+        volumes: list[Decimal] = []
+        timestamps: list[datetime] = []
 
-        for row in _iter_dataframe_rows(frame):
-            row_dict = dict(row)
-            try:
-                closes.append(_to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close"))
-                highs.append(_to_decimal(_extract_value(row_dict, ("high", "HIGH")), "high"))
-                lows.append(_to_decimal(_extract_value(row_dict, ("low", "LOW")), "low"))
-            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
-                continue
+        for bar in bars:
+            closes.append(Decimal(str(bar.close)))
+            highs.append(Decimal(str(bar.high)))
+            lows.append(Decimal(str(bar.low)))
+            volumes.append(Decimal(str(bar.volume)))
+            timestamps.append(bar.timestamp)
 
+        if len(closes) < 2:
+            return None
+
+        # Calculate indicators using indicator module
+        indicators = self._calculate_indicators(closes, highs, lows)
+
+        # Get latest and previous data
+        latest_close = closes[-1]
+        prev_close = closes[-2]
+        latest_high = highs[-1]
+        latest_low = lows[-1]
+        latest_volume = volumes[-1]
+        latest_timestamp = timestamps[-1]
+
+        # Calculate average volume
+        avg_volume = sum(volumes) / Decimal(str(len(volumes)))
+
+        # Calculate breadth ratio from price action (simplified)
+        breadth_ratio = self._calculate_breadth_ratio(closes, volumes)
+
+        # Calculate ATR percentage
+        atr_pct = indicators.atr / latest_close if latest_close > Decimal("0") else Decimal("0")
+
+        return MarketData(
+            symbol=symbol,
+            exchange=exchange,
+            category=category,
+            close_price=latest_close,
+            prev_close_price=prev_close,
+            volume=latest_volume,
+            avg_volume=avg_volume,
+            timestamp_utc=latest_timestamp,
+            high_price=latest_high,
+            low_price=latest_low,
+            adx=indicators.adx,
+            atr_pct=atr_pct,
+            breadth_ratio=breadth_ratio,
+            data_source=bars[0].source if bars else "unknown",
+        )
+
+    def _calculate_indicators(
+        self, closes: list[Decimal], highs: list[Decimal], lows: list[Decimal]
+    ) -> IndicatorSnapshot:
+        """Calculate technical indicators using indicator module."""
         if len(closes) < 14:
             return self._default_indicators()
 
         try:
-            rsi_result = self._pandas_ta.rsi(closes, length=14)  # type: ignore[attr-defined]
-            adx_payload = self._pandas_ta.adx(high=highs, low=lows, close=closes, length=14)  # type: ignore[attr-defined]
-            atr_result = self._pandas_ta.atr(high=highs, low=lows, close=closes, length=14)  # type: ignore[attr-defined]
-            macd_payload = self._pandas_ta.macd(closes, fast=12, slow=26, signal=9)  # type: ignore[attr-defined]  # noqa: F841
-            bb_payload = self._pandas_ta.bbands(closes, length=20, std=2.0)  # type: ignore[attr-defined]
-
-            adx_col = self._extract_from_payload(adx_payload, "ADX_14")
-            atr_val = _last_decimal(atr_result, "atr")
-            bb_upper = self._extract_from_payload(bb_payload, "BBU_20_2.0")
-            bb_middle = self._extract_from_payload(bb_payload, "BBM_20_2.0")
-            bb_lower = self._extract_from_payload(bb_payload, "BBL_20_2.0")
-
-            return IndicatorSnapshot(
-                rsi=_last_decimal(rsi_result, "rsi"),
-                adx=_last_decimal(adx_col, "adx"),
-                atr=atr_val,
-                macd_histogram=Decimal("0"),  # Simplified
-                bollinger_upper=_last_decimal(bb_upper, "bb_upper"),
-                bollinger_middle=_last_decimal(bb_middle, "bb_middle"),
-                bollinger_lower=_last_decimal(bb_lower, "bb_lower"),
-            )
-        except Exception:
+            if self._indicators is None:
+                self._indicators = PandasTaIndicators()
+            return self._indicators.snapshot(close=closes, high=highs, low=lows)
+        except Exception as exc:  # nosec - B112: fallback to defaults on calculation error  # noqa: S112
+            _LOGGER.debug("Indicator calculation failed, using defaults: %s", exc)
             return self._default_indicators()
 
-    def _extract_from_payload(self, payload: object, column_name: str) -> object:
-        """Extract column from pandas-ta payload."""
-        if isinstance(payload, dict):
-            if column_name not in payload:
-                msg = f"indicator payload missing column: {column_name}"
-                raise ConfigError(msg)
-            return payload[column_name]
-        if hasattr(payload, "__getitem__"):
-            try:
-                return payload[column_name]
-            except Exception as exc:
-                msg = f"indicator payload missing column: {column_name}"
-                raise ConfigError(msg) from exc
-        msg = "indicator payload must support named column access"
-        raise ConfigError(msg)
+    def _calculate_breadth_ratio(self, closes: list[Decimal], volumes: list[Decimal]) -> Decimal:
+        """Calculate breadth ratio from price and volume data."""
+        if len(closes) < 2:
+            return Decimal("1.0")
 
-    def _default_indicators(self) -> "IndicatorSnapshot":
+        # Simple breadth: ratio of positive to negative price changes over lookback period
+        positive_changes = Decimal("0")
+        negative_changes = Decimal("0")
+
+        for i in range(1, min(len(closes), 21)):  # Use last 20 days
+            change = closes[i] - closes[i - 1]
+            if change > Decimal("0"):
+                positive_changes += change
+            else:
+                negative_changes += abs(change)
+
+        if negative_changes == Decimal("0"):
+            return Decimal("2.0")  # Cap at reasonable maximum
+
+        ratio = positive_changes / negative_changes
+        return min(Decimal("2.0"), max(Decimal("0.5"), ratio))
+
+    def _default_indicators(self) -> IndicatorSnapshot:
         """Return default indicator values when calculation fails."""
         return IndicatorSnapshot(
             rsi=Decimal("50"),
@@ -515,38 +428,20 @@ class InstrumentScanner:
             bollinger_lower=Decimal("0"),
         )
 
-    def _calculate_average_volume(self, frame: Any) -> Decimal:
-        """Calculate average volume over the period."""
-        volumes: list[Decimal] = []
-        for row in _iter_dataframe_rows(frame):
-            row_dict = dict(row)
-            try:
-                vol = _to_decimal(
-                    _extract_value(row_dict, ("volume", "VOLUME", "TOTTRDQTY", "TTL_TRD_QNT")),
-                    "volume",
-                )
-                volumes.append(vol)
-            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
-                continue
+    def _determine_exchange(self, symbol: str) -> Exchange:
+        """Determine exchange from symbol name or config."""
+        symbol_upper = symbol.upper()
 
-        if not volumes:
-            return Decimal("0")
-        return sum(volumes) / Decimal(str(len(volumes)))
+        # Check for exchange prefixes or suffixes
+        if any(prefix in symbol_upper for prefix in ("NIFTY", "BANKNIFTY")):
+            return Exchange.NSE
+        if "MCX" in symbol_upper:
+            return Exchange.MCX
+        if "NIFTY" in symbol_upper or any(x in symbol_upper for x in ("CE", "PE", "FUT")):
+            return Exchange.NSE
 
-    def _get_previous_close(self, frame: Any) -> Decimal:
-        """Get previous close price from frame."""
-        closes: list[Decimal] = []
-        for row in _iter_dataframe_rows(frame):
-            row_dict = dict(row)
-            try:
-                close = _to_decimal(_extract_value(row_dict, ("close", "CLOSE")), "close")
-                closes.append(close)
-            except Exception:  # nosec - B112: scanner continues on individual failures  # noqa: S112
-                continue
-
-        if len(closes) < 2:
-            return Decimal("0")
-        return closes[-2]
+        # Default to first configured exchange
+        return self._config.exchanges[0] if self._config.exchanges else Exchange.NSE
 
     @staticmethod
     def _determine_category(symbol: str) -> InstrumentCategory:
