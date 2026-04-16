@@ -1,13 +1,15 @@
 """
-Zerodha token management with day-scoped validity and keyring persistence.
+Zerodha token management with day-scoped validity and dual persistence (keyring + .env).
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, time, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
@@ -145,12 +147,176 @@ class ZerodhaTokenManager:
         return self._generate_totp()
 
     def clear_token(self) -> None:
-        """Clear stored token from keyring."""
+        """Clear stored token from keyring and .env file."""
         try:
             keyring.delete_password(_KEYRING_SERVICE, _KEYRING_TOKEN_KEY)
             keyring.delete_password(_KEYRING_SERVICE, _KEYRING_TIMESTAMP_KEY)
         except keyring.errors.PasswordDeleteError:
             pass
+
+        # Clear from .env file if it exists
+        env_path = self._resolve_env_path()
+        if env_path and env_path.exists():
+            self._clear_env_token(env_path)
+
+    def get_access_token(
+        self,
+        *,
+        use_env_fallback: bool = True,
+        refresh_if_expired: bool = False,
+    ) -> str | None:
+        """Get access token with automatic fallback strategies.
+
+        Priority order:
+        1. Fresh token from keyring
+        2. Token from environment variables (ZERODHA_ACCESS_TOKEN or KITE_ACCESS_TOKEN)
+        3. Token from .env file
+
+        Args:
+            use_env_fallback: If True, check environment and .env file as fallback.
+            refresh_if_expired: If True, attempt to refresh expired tokens.
+
+        Returns:
+            Access token string if available, None otherwise.
+
+        Raises:
+            ValueError: If token exists but is expired and refresh_if_expired is False.
+        """
+        # Check keyring first
+        if self.is_token_fresh():
+            token = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TOKEN_KEY)
+            if token:
+                _LOGGER.debug("Retrieved fresh token from keyring")
+                return str(token)
+
+        # Check environment variables (with alias support)
+        if use_env_fallback:
+            env_token = os.getenv("ZERODHA_ACCESS_TOKEN") or os.getenv("KITE_ACCESS_TOKEN")
+            if env_token:
+                _LOGGER.debug("Retrieved token from environment variable")
+                return str(env_token)
+
+            # Check .env file
+            env_path = self._resolve_env_path()
+            if env_path and env_path.exists():
+                env_values = self._load_env_file(env_path)
+                env_token = env_values.get("ZERODHA_ACCESS_TOKEN") or env_values.get(
+                    "KITE_ACCESS_TOKEN"
+                )
+                if env_token:
+                    _LOGGER.debug("Retrieved token from .env file")
+                    return str(env_token)
+
+        return None
+
+    def get_kite_client(self, *, access_token: str | None = None) -> Any:
+        """Create and return a KiteConnect client instance.
+
+        This is a factory method for creating KiteConnect clients with
+        proper authentication.
+
+        Args:
+            access_token: Optional access token. If not provided, will
+                attempt to retrieve using get_access_token().
+
+        Returns:
+            Configured KiteConnect client instance.
+
+        Raises:
+            ValueError: If access token cannot be obtained.
+            ImportError: If kiteconnect module is not available.
+        """
+        token = access_token or self.get_access_token()
+        if not token:
+            msg = "Access token not available. Please authenticate first."
+            raise ValueError(msg)
+
+        try:
+            import kiteconnect  # type: ignore[import-untyped]  # noqa: PLC0415
+        except ModuleNotFoundError as exc:
+            msg = "kiteconnect module is required. Install with: pip install kiteconnect"
+            raise ImportError(msg) from exc
+
+        client = kiteconnect.KiteConnect(api_key=self._api_key, access_token=token)
+        _LOGGER.debug("Created KiteConnect client with API key %s", self._api_key[:8] + "...")
+        return client
+
+    @staticmethod
+    def _resolve_env_path(env_file: str = ".env") -> Path | None:
+        """Resolve .env file path from current directory or project root.
+
+        Args:
+            env_file: Name of the environment file.
+
+        Returns:
+            Path to .env file if found, None otherwise.
+        """
+        # Check current directory
+        current_path = Path(env_file)
+        if current_path.exists():
+            return current_path
+
+        # Check common parent directories
+        for parent in [Path.cwd()] + list(Path.cwd().parents):
+            candidate = parent / env_file
+            if candidate.exists():
+                return candidate
+
+        return None
+
+    @staticmethod
+    def _load_env_file(env_path: Path) -> dict[str, str]:
+        """Load environment variables from a .env file.
+
+        Args:
+            env_path: Path to .env file.
+
+        Returns:
+            Dictionary of environment variables.
+        """
+        values: dict[str, str] = {}
+        if not env_path.exists():
+            return values
+
+        try:
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+                key, value = stripped.split("=", maxsplit=1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+        except OSError as exc:
+            _LOGGER.warning("Failed to read env file %s: %s", env_path, exc)
+
+        return values
+
+    def _clear_env_token(self, env_path: Path) -> None:
+        """Remove access token from .env file.
+
+        Args:
+            env_path: Path to .env file.
+        """
+        try:
+            original_lines = env_path.read_text(encoding="utf-8").splitlines()
+            rewritten: list[str] = []
+            for line in original_lines:
+                stripped = line.strip()
+                # Skip lines that set access tokens
+                if (
+                    stripped
+                    and not stripped.startswith("#")
+                    and "=" in stripped
+                    and any(
+                        key in stripped for key in ("ZERODHA_ACCESS_TOKEN", "KITE_ACCESS_TOKEN")
+                    )
+                ):
+                    continue
+                rewritten.append(line)
+
+            env_path.write_text("\n".join(rewritten).rstrip() + "\n", encoding="utf-8")
+            _LOGGER.debug("Cleared access token from %s", env_path)
+        except OSError as exc:
+            _LOGGER.warning("Failed to clear token from env file %s: %s", env_path, exc)
 
 
 def _get_next_expiry_utc(token_time: datetime) -> datetime:

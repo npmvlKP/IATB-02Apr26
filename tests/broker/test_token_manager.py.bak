@@ -310,7 +310,7 @@ def test_exchange_request_token_body_is_bytes() -> None:
         http_post=mock_http_post,
     )
 
-    manager.exchange_request_token("test_token")
+    manager.exchange_request_token("test_token")  # noqa: S105
 
     # Get the body
     call_args = mock_http_post.call_args
@@ -325,7 +325,6 @@ def test_exchange_request_token_body_is_bytes() -> None:
 
 
 # Tests for new methods added in unification
-
 
 def test_get_access_token_from_keyring(token_manager: ZerodhaTokenManager) -> None:
     """Test get_access_token retrieves fresh token from keyring."""
@@ -415,6 +414,28 @@ def test_get_access_token_precedence_keyring_first() -> None:
                 )
                 token = manager.get_access_token()
                 assert token == "keyring_token"  # noqa: S105
+-------
+            client = manager.get_kite_client(access_token="provided_token")
+
+            assert client == mock_kite
+            mock_module.KiteConnect.assert_called_once_with(
+                api_key="test_key",
+                access_token="provided_token",
+            client = manager.get_kite_client(access_token="provided_token")  # noqa: S106
+
+            assert client == mock_kite
+            mock_module.KiteConnect.assert_called_once_with(
+                api_key="test_key",
+                access_token="provided_token",  # noqa: S106
+-------
+            assert client == mock_kite
+            mock_module.KiteConnect.assert_called_once_with(
+                api_key="test_key",
+                access_token="auto_token",
+            assert client == mock_kite
+            mock_module.KiteConnect.assert_called_once_with(
+                api_key="test_key",
+                access_token="auto_token",  # noqa: S106
 
 
 def test_get_kite_client_with_provided_token() -> None:
@@ -435,7 +456,7 @@ def test_get_kite_client_with_provided_token() -> None:
         assert client == mock_kite
         mock_module.KiteConnect.assert_called_once_with(
             api_key="test_key",
-            access_token="provided_token",  # noqa: S106
+            access_token="provided_token",
         )
 
 
@@ -458,7 +479,7 @@ def test_get_kite_client_auto_retrieves_token() -> None:
             assert client == mock_kite
             mock_module.KiteConnect.assert_called_once_with(
                 api_key="test_key",
-                access_token="auto_token",  # noqa: S106
+                access_token="auto_token",
             )
 
 
@@ -521,15 +542,13 @@ def test_resolve_env_path_not_found(tmp_path: Path) -> None:
 def test_load_env_file_success(tmp_path: Path) -> None:
     """Test _load_env_file parses .env file correctly."""
     env_file = tmp_path / ".env"
-    env_file.write_text(
-        """
+    env_file.write_text("""
 # Comment
 KEY1=value1
 KEY2="value2"
 KEY3='value3'
 KEY4=value with spaces
-"""
-    )
+""")
 
     result = ZerodhaTokenManager._load_env_file(env_file)
 
@@ -551,13 +570,11 @@ def test_load_env_file_empty(tmp_path: Path) -> None:
 def test_clear_env_token(tmp_path: Path) -> None:
     """Test _clear_env_token removes access token from .env file."""
     env_file = tmp_path / ".env"
-    env_file.write_text(
-        """
+    env_file.write_text("""
 ZERODHA_API_KEY=test_key
 ZERODHA_ACCESS_TOKEN=secret_token
 ZERODHA_API_SECRET=test_secret
-"""
-    )
+""")
 
     manager = ZerodhaTokenManager(
         api_key="test_key",
@@ -574,13 +591,11 @@ ZERODHA_API_SECRET=test_secret
 def test_clear_env_token_kite_alias(tmp_path: Path) -> None:
     """Test _clear_env_token removes KITE_ACCESS_TOKEN from .env file."""
     env_file = tmp_path / ".env"
-    env_file.write_text(
-        """
+    env_file.write_text("""
 KITE_API_KEY=test_key
 KITE_ACCESS_TOKEN=secret_token
 KITE_API_SECRET=test_secret
-"""
-    )
+""")
 
     manager = ZerodhaTokenManager(
         api_key="test_key",

@@ -263,6 +263,57 @@ def update_ml_model_status(model_name: str, available: bool) -> None:
     ml_model_status.labels(model_name=model_name).set(1 if available else 0)
 
 
+# Data provider metrics
+data_source_switches = Counter(
+    "iatb_data_source_switches_total",
+    "Total number of data source switches",
+    ["from_provider", "to_provider", "method_name"],
+)
+
+data_source_latency = Histogram(
+    "iatb_data_source_latency_seconds",
+    "Data provider request latency",
+    ["provider_name", "method_name"],
+)
+
+
+def record_data_source_switch(
+    from_provider: str,
+    to_provider: str,
+    method_name: str,
+) -> None:
+    """Record a data source switch event.
+
+    Args:
+        from_provider: Name of the provider that failed.
+        to_provider: Name of the provider being switched to.
+        method_name: Name of the method being called.
+    """
+    data_source_switches.labels(
+        from_provider=from_provider,
+        to_provider=to_provider,
+        method_name=method_name,
+    ).inc()
+
+
+def record_data_source_latency(
+    provider_name: str,
+    method_name: str,
+    latency_seconds: float,
+) -> None:
+    """Record data provider request latency.
+
+    Args:
+        provider_name: Name of the provider.
+        method_name: Name of the method called.
+        latency_seconds: Latency in seconds.
+    """
+    data_source_latency.labels(
+        provider_name=provider_name,
+        method_name=method_name,
+    ).observe(latency_seconds)
+
+
 def track_execution_time(metric: Histogram | Summary, labels: dict[str, str]) -> Callable[..., Any]:
     """Decorator to track execution time of a function.
 

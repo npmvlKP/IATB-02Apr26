@@ -11,21 +11,18 @@ import socket
 import sys
 import time
 import webbrowser
+from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from queue import Empty, Full, Queue
 from urllib.parse import urlparse
 
+from iatb.broker.token_manager import ZerodhaTokenManager
 from iatb.core.exceptions import ConfigError
 from iatb.execution.zerodha_connection import (
     ZerodhaConnection,
     ZerodhaSession,
     extract_request_token_from_text,
-)
-from iatb.execution.zerodha_token_manager import (
-    ZerodhaTokenManager,
-    apply_env_defaults,
-    load_env_file,
 )
 
 _REDIRECT_URL_ENV = "ZERODHA_REDIRECT_URL"
@@ -120,6 +117,43 @@ def _configure_logger(log_file: Path, level_name: str) -> logging.Logger:
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     return logger
+
+
+def _load_env_file(env_path: Path) -> dict[str, str]:
+    """Load environment variables from .env file.
+
+    Args:
+        env_path: Path to .env file.
+
+    Returns:
+        Dictionary of environment variables.
+    """
+    values: dict[str, str] = {}
+    if not env_path.exists():
+        return values
+
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", maxsplit=1)
+            values[key.strip()] = value.strip().strip('"').strip("'")
+    except OSError as exc:
+        logging.getLogger(_LOGGER_NAME).warning("Failed to read env file %s: %s", env_path, exc)
+
+    return values
+
+
+def _apply_env_defaults(values: Mapping[str, str]) -> None:
+    """Apply default environment variables from a mapping.
+
+    Args:
+        values: Dictionary of environment variable key-value pairs.
+    """
+    for key, value in values.items():
+        if value and key not in os.environ:
+            os.environ[key] = value
 
 
 def _read_env_text(name: str) -> str:
@@ -365,11 +399,25 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         env_path = Path(args.env_file)
-        env_values = load_env_file(env_path)
-        apply_env_defaults(env_values)
+        env_values = _load_env_file(env_path)
+        _apply_env_defaults(env_values)
+
+        # Get API credentials from environment (support both ZERODHA_* and KITE_* aliases)
+        api_key = os.getenv("ZERODHA_API_KEY") or os.getenv("KITE_API_KEY", "").strip()
+        api_secret = os.getenv("ZERODHA_API_SECRET") or os.getenv("KITE_API_SECRET", "").strip()
+        totp_secret = os.getenv("ZERODHA_TOTP_SECRET") or os.getenv("KITE_TOTP_SECRET") or None
+
+        if not api_key:
+            msg = "ZERODHA_API_KEY or KITE_API_KEY environment variable is required"
+            raise ConfigError(msg)
+        if not api_secret:
+            msg = "ZERODHA_API_SECRET or KITE_API_SECRET environment variable is required"
+            raise ConfigError(msg)
+
         token_manager = ZerodhaTokenManager(
-            env_path=env_path,
-            env_values=env_values,
+            api_key=api_key,
+            api_secret=api_secret,
+            totp_secret=totp_secret,
         )
         connection = ZerodhaConnection.from_env()
     except (ConfigError, OSError) as exc:
@@ -380,8 +428,9 @@ def main(argv: list[str] | None = None) -> int:
         logger.exception("unexpected failure during bootstrap initialization")
         _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
         return 1
+
     try:
-        saved_access_token = token_manager.resolve_saved_access_token()
+        saved_access_token = token_manager.get_access_token()
         logger.info("saved access token available=%s", bool(saved_access_token))
         if saved_access_token:
             session = _establish_session_with_reconnect(
@@ -395,12 +444,9 @@ def main(argv: list[str] | None = None) -> int:
             _emit_connected(session)
             logger.info("session established using saved access token user_id=%s", session.user_id)
             if args.save_access_token:
-                persisted_path = token_manager.persist_session_tokens(
-                    access_token=session.access_token,
-                    request_token=None,
-                )
-                _emit(f"ZERODHA_TOKEN_SAVED={persisted_path}")
-                logger.info("session token metadata persisted path=%s", persisted_path)
+                token_manager.store_access_token(session.access_token)
+                _emit("ZERODHA_TOKEN_SAVED=keyring")
+                logger.info("session token persisted to keyring")
             logger.info("zerodha bootstrap finished status=CONNECTED")
             return 0
     except ConfigError as exc:
@@ -413,11 +459,10 @@ def main(argv: list[str] | None = None) -> int:
         logger.exception("unexpected failure during access-token bootstrap")
         _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
         return 1
+
     try:
         redirect_url = _resolve_redirect_url(args.redirect_url)
         request_token = _resolve_request_token(args.request_token, args.redirect_url)
-        if request_token is None:
-            request_token = token_manager.resolve_saved_request_token()
         logger.info("request token available=%s", bool(request_token))
         if request_token is None and args.auto_login:
             logger.info("starting auto-login callback capture")
@@ -430,10 +475,13 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning("login required because request token is unavailable")
             _print_login_required(connection)
             return 2
+
+        # Exchange request token for access token
+        access_token = token_manager.exchange_request_token(request_token)
         session = _establish_session_with_reconnect(
             connection,
-            request_token=request_token,
-            access_token=None,
+            request_token=None,
+            access_token=access_token,
             max_attempts=args.max_reconnect_attempts,
             delay_seconds=args.reconnect_delay_seconds,
             logger=logger,
@@ -446,15 +494,13 @@ def main(argv: list[str] | None = None) -> int:
         logger.exception("unexpected failure during request-token bootstrap")
         _emit(f"ZERODHA_STATUS=BLOCKED reason={_UNEXPECTED_INTERNAL_ERROR}")
         return 1
+
     _emit_connected(session)
     logger.info("session established user_id=%s", session.user_id)
     if args.save_access_token:
-        persisted_path = token_manager.persist_session_tokens(
-            access_token=session.access_token,
-            request_token=request_token,
-        )
-        _emit(f"ZERODHA_TOKEN_SAVED={persisted_path}")
-        logger.info("session token metadata persisted path=%s", persisted_path)
+        token_manager.store_access_token(session.access_token)
+        _emit("ZERODHA_TOKEN_SAVED=keyring")
+        logger.info("session token persisted to keyring")
     logger.info("zerodha bootstrap finished status=CONNECTED")
     return 0
 
