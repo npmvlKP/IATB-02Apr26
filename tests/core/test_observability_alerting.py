@@ -389,6 +389,110 @@ class TestTelegramAlerter:
 
     @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
     @patch("iatb.core.observability.alerting.Bot")
+    def test_send_data_source_failure_alert(self, mock_bot_class: MagicMock) -> None:
+        """Test that send_data_source_failure_alert works."""
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_bot_class.return_value = mock_bot
+
+        with patch("iatb.core.observability.alerting.asyncio.run"):
+            alerter = TelegramAlerter()
+            result = alerter.send_data_source_failure_alert(
+                source="KiteProvider",
+                failure_count=5,
+                time_window="5 minutes",
+            )
+            assert result is True
+
+    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch("iatb.core.observability.alerting.Bot")
+    def test_send_data_source_failure_alert_default_window(
+        self,
+        mock_bot_class: MagicMock,
+    ) -> None:
+        """Test that send_data_source_failure_alert uses default time window."""
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_bot_class.return_value = mock_bot
+
+        with patch("iatb.core.observability.alerting.asyncio.run"):
+            alerter = TelegramAlerter()
+            result = alerter.send_data_source_failure_alert(
+                source="KiteProvider",
+                failure_count=3,
+            )
+            assert result is True
+
+    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch("iatb.core.observability.alerting.Bot")
+    def test_send_fallback_source_alert(self, mock_bot_class: MagicMock) -> None:
+        """Test that send_fallback_source_alert works."""
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_bot_class.return_value = mock_bot
+
+        with patch("iatb.core.observability.alerting.asyncio.run"):
+            alerter = TelegramAlerter()
+            result = alerter.send_fallback_source_alert(
+                from_source="KiteProvider",
+                to_source="YFinanceProvider",
+                reason="Connection timeout",
+            )
+            assert result is True
+
+    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch("iatb.core.observability.alerting.Bot")
+    def test_send_fallback_source_alert_without_reason(
+        self,
+        mock_bot_class: MagicMock,
+    ) -> None:
+        """Test that send_fallback_source_alert works without reason."""
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_bot_class.return_value = mock_bot
+
+        with patch("iatb.core.observability.alerting.asyncio.run"):
+            alerter = TelegramAlerter()
+            result = alerter.send_fallback_source_alert(
+                from_source="KiteProvider",
+                to_source="PolygonProvider",
+            )
+            assert result is True
+
+    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch("iatb.core.observability.alerting.Bot")
+    def test_send_token_expiry_alert_critical(self, mock_bot_class: MagicMock) -> None:
+        """Test that send_token_expiry_alert works for critical expiry."""
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_bot_class.return_value = mock_bot
+
+        with patch("iatb.core.observability.alerting.asyncio.run"):
+            alerter = TelegramAlerter()
+            result = alerter.send_token_expiry_alert(
+                token_type="Kite",
+                minutes_remaining=3,
+            )
+            assert result is True
+
+    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch("iatb.core.observability.alerting.Bot")
+    def test_send_token_expiry_alert_warning(self, mock_bot_class: MagicMock) -> None:
+        """Test that send_token_expiry_alert works for warning expiry."""
+        mock_bot = MagicMock()
+        mock_bot.send_message = AsyncMock()
+        mock_bot_class.return_value = mock_bot
+
+        with patch("iatb.core.observability.alerting.asyncio.run"):
+            alerter = TelegramAlerter()
+            result = alerter.send_token_expiry_alert(
+                token_type="Kite",
+                minutes_remaining=25,
+            )
+            assert result is True
+
+    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch("iatb.core.observability.alerting.Bot")
     @patch("iatb.core.observability.alerting.InlineKeyboardMarkup")
     @patch("iatb.core.observability.alerting.InlineKeyboardButton")
     def test_send_with_actions(

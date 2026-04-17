@@ -283,6 +283,91 @@ class TelegramAlerter:
 
         return self.send_alert(message, level)
 
+    def send_data_source_failure_alert(
+        self,
+        source: str,
+        failure_count: int,
+        time_window: str = "5 minutes",
+    ) -> bool:
+        """Send alert when data source fails multiple times.
+
+        Args:
+            source: Data source name (e.g., "KiteProvider").
+            failure_count: Number of failures in the time window.
+            time_window: Time window for failure count.
+
+        Returns:
+            True if alert was sent successfully, False otherwise.
+        """
+        message = f"""
+🔴 *Data Source Failure Alert*
+
+*Source:* {source}
+*Failures:* {failure_count} in {time_window}
+*Severity:* CRITICAL
+
+Immediate attention required. Check connection and logs.
+"""
+        return self.send_alert(message, TelegramAlertLevel.CRITICAL)
+
+    def send_fallback_source_alert(
+        self,
+        from_source: str,
+        to_source: str,
+        reason: str | None = None,
+    ) -> bool:
+        """Send alert when fallback data source is used.
+
+        Args:
+            from_source: Primary source that failed.
+            to_source: Fallback source being used.
+            reason: Reason for fallback (optional).
+
+        Returns:
+            True if alert was sent successfully, False otherwise.
+        """
+        message = f"""
+⚠️ *Data Source Fallback Alert*
+
+*From:* {from_source}
+*To:* {to_source}
+"""
+        if reason:
+            message += f"*Reason:* {reason}\n"
+
+        message += "\nSystem is operating on fallback source."
+
+        return self.send_alert(message, TelegramAlertLevel.WARNING)
+
+    def send_token_expiry_alert(
+        self,
+        token_type: str,
+        minutes_remaining: int,
+    ) -> bool:
+        """Send alert when token is about to expire.
+
+        Args:
+            token_type: Type of token (e.g., "Kite").
+            minutes_remaining: Minutes until expiry.
+
+        Returns:
+            True if alert was sent successfully, False otherwise.
+        """
+        emoji = "🚨" if minutes_remaining <= 5 else "⚠️"
+        message = f"""
+{emoji} *Token Expiry Alert*
+
+*Token Type:* {token_type}
+*Expires in:* {minutes_remaining} minutes
+
+Action required: Refresh token immediately to avoid service disruption.
+"""
+        level = (
+            TelegramAlertLevel.CRITICAL if minutes_remaining <= 5 else TelegramAlertLevel.WARNING
+        )
+
+        return self.send_alert(message, level)
+
     def send_with_actions(
         self,
         message: str,

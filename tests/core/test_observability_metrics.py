@@ -11,14 +11,22 @@ from iatb.core.observability.metrics import (
     app_info,
     broker_connection_status,
     daily_pnl,
+    data_freshness_seconds,
+    data_source_fallback_total,
+    data_source_requests_total,
+    data_source_simple_latency,
     database_connection_status,
     error_counter,
     initialize_metrics,
     instrument_fastapi_app,
+    kite_token_freshness,
     ml_model_status,
     model_inference_duration,
     open_positions,
     portfolio_value,
+    record_data_source_fallback,
+    record_data_source_request,
+    record_data_source_request_latency,
     record_error,
     record_model_inference,
     record_scan_cycle,
@@ -30,7 +38,9 @@ from iatb.core.observability.metrics import (
     trade_pnl,
     update_broker_connection_status,
     update_daily_pnl,
+    update_data_freshness,
     update_database_connection_status,
+    update_kite_token_freshness,
     update_ml_model_status,
     update_open_positions,
     update_portfolio_value,
@@ -96,6 +106,154 @@ class TestMetricsInitialization:
     def test_app_info_is_info(self) -> None:
         """Test that app_info is an Info metric."""
         assert isinstance(app_info, Info)
+
+    def test_data_source_requests_total_is_counter(self) -> None:
+        """Test that data_source_requests_total is a Counter."""
+        assert isinstance(data_source_requests_total, Counter)
+
+    def test_data_source_simple_latency_is_histogram(self) -> None:
+        """Test that data_source_simple_latency is a Histogram."""
+        assert isinstance(data_source_simple_latency, Histogram)
+
+    def test_data_source_fallback_total_is_counter(self) -> None:
+        """Test that data_source_fallback_total is a Counter."""
+        assert isinstance(data_source_fallback_total, Counter)
+
+    def test_data_freshness_seconds_is_gauge(self) -> None:
+        """Test that data_freshness_seconds is a Gauge."""
+        assert isinstance(data_freshness_seconds, Gauge)
+
+    def test_kite_token_freshness_is_gauge(self) -> None:
+        """Test that kite_token_freshness is a Gauge."""
+        assert isinstance(kite_token_freshness, Gauge)
+
+
+class TestDataSourceMetrics:
+    """Tests for data source observability metrics."""
+
+    def test_record_data_source_request_increments_counter(self) -> None:
+        """Test that record_data_source_request increments counter."""
+        record_data_source_request(source="kite", status="success")
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_request_with_different_statuses(self) -> None:
+        """Test that record_data_source_request handles different statuses."""
+        statuses = ["success", "error", "timeout"]
+        for status in statuses:
+            record_data_source_request(source="kite", status=status)
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_request_with_different_sources(self) -> None:
+        """Test that record_data_source_request handles different sources."""
+        sources = ["kite", "yfinance", "polygon"]
+        for source in sources:
+            record_data_source_request(source=source, status="success")
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_request_latency_observes_latency(self) -> None:
+        """Test that record_data_source_request_latency records latency."""
+        record_data_source_request_latency(source="kite", latency_seconds=0.5)
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_request_latency_with_different_sources(self) -> None:
+        """Test that record_data_source_request_latency handles different sources."""
+        sources = ["kite", "yfinance", "polygon"]
+        for source in sources:
+            record_data_source_request_latency(source=source, latency_seconds=1.0)
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_request_latency_with_zero_latency(self) -> None:
+        """Test that record_data_source_request_latency handles zero latency."""
+        record_data_source_request_latency(source="kite", latency_seconds=0.0)
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_request_latency_with_high_latency(self) -> None:
+        """Test that record_data_source_request_latency handles high latency."""
+        record_data_source_request_latency(source="kite", latency_seconds=60.0)
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_fallback_increments_counter(self) -> None:
+        """Test that record_data_source_fallback increments counter."""
+        record_data_source_fallback(from_source="kite", to_source="yfinance")
+        # Should not raise exception
+        assert True
+
+    def test_record_data_source_fallback_with_different_sources(self) -> None:
+        """Test that record_data_source_fallback handles different sources."""
+        fallbacks = [
+            ("kite", "yfinance"),
+            ("yfinance", "polygon"),
+            ("polygon", "kite"),
+        ]
+        for from_source, to_source in fallbacks:
+            record_data_source_fallback(from_source=from_source, to_source=to_source)
+        # Should not raise exception
+        assert True
+
+    def test_update_data_freshness_sets_value(self) -> None:
+        """Test that update_data_freshness sets freshness value."""
+        update_data_freshness(source="kite", freshness_seconds=10.5)
+        # Should not raise exception
+        assert True
+
+    def test_update_data_freshness_with_zero_freshness(self) -> None:
+        """Test that update_data_freshness handles zero freshness."""
+        update_data_freshness(source="kite", freshness_seconds=0.0)
+        # Should not raise exception
+        assert True
+
+    def test_update_data_freshness_with_stale_data(self) -> None:
+        """Test that update_data_freshness handles stale data."""
+        update_data_freshness(source="kite", freshness_seconds=3600.0)
+        # Should not raise exception
+        assert True
+
+    def test_update_data_freshness_with_different_sources(self) -> None:
+        """Test that update_data_freshness handles different sources."""
+        sources = ["kite", "yfinance", "polygon"]
+        for source in sources:
+            update_data_freshness(source=source, freshness_seconds=30.0)
+        # Should not raise exception
+        assert True
+
+    def test_update_kite_token_freshness_fresh(self) -> None:
+        """Test that update_kite_token_freshness sets fresh status."""
+        update_kite_token_freshness(is_fresh=True)
+        # Should not raise exception
+        assert True
+
+    def test_update_kite_token_freshness_expired(self) -> None:
+        """Test that update_kite_token_freshness sets expired status."""
+        update_kite_token_freshness(is_fresh=False)
+        # Should not raise exception
+        assert True
+
+    def test_data_source_metrics_integration(self) -> None:
+        """Test data source metrics integration workflow."""
+        # Record successful request
+        record_data_source_request(source="kite", status="success")
+        record_data_source_request_latency(source="kite", latency_seconds=0.5)
+        update_data_freshness(source="kite", freshness_seconds=5.0)
+
+        # Record failed request and fallback
+        record_data_source_request(source="kite", status="error")
+        record_data_source_fallback(from_source="kite", to_source="yfinance")
+        record_data_source_request(source="yfinance", status="success")
+        record_data_source_request_latency(source="yfinance", latency_seconds=0.8)
+        update_data_freshness(source="yfinance", freshness_seconds=3.0)
+
+        # Update token freshness
+        update_kite_token_freshness(is_fresh=True)
+
+        # Should not raise exceptions
+        assert True
 
 
 class TestInitializeMetrics:

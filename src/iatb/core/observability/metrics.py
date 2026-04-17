@@ -333,3 +333,83 @@ def track_execution_time(metric: Histogram | Summary, labels: dict[str, str]) ->
         return wrapper
 
     return decorator
+
+
+# Data source observability metrics
+data_source_requests_total = Counter(
+    "iatb_data_source_requests_total",
+    "Total number of data source requests",
+    ["source", "status"],
+)
+
+data_source_simple_latency = Histogram(
+    "iatb_data_source_simple_latency_seconds",
+    "Data source request latency in seconds (simple)",
+    ["source"],
+)
+
+data_source_fallback_total = Counter(
+    "iatb_data_source_fallback_total",
+    "Total number of data source fallbacks",
+    ["from_source", "to_source"],
+)
+
+data_freshness_seconds = Gauge(
+    "iatb_data_freshness_seconds",
+    "Data freshness in seconds since last update",
+    ["source"],
+)
+
+kite_token_freshness = Gauge(
+    "iatb_kite_token_freshness",
+    "Kite token freshness (1=fresh, 0=expired)",
+)
+
+
+def record_data_source_request(source: str, status: str) -> None:
+    """Record a data source request.
+
+    Args:
+        source: Data source name (e.g., "kite", "yfinance", "polygon").
+        status: Request status (e.g., "success", "error", "timeout").
+    """
+    data_source_requests_total.labels(source=source, status=status).inc()
+
+
+def record_data_source_request_latency(source: str, latency_seconds: float) -> None:
+    """Record data source request latency.
+
+    Args:
+        source: Data source name.
+        latency_seconds: Latency in seconds.
+    """
+    data_source_simple_latency.labels(source=source).observe(latency_seconds)
+
+
+def record_data_source_fallback(from_source: str, to_source: str) -> None:
+    """Record a data source fallback event.
+
+    Args:
+        from_source: Source that failed.
+        to_source: Fallback source being used.
+    """
+    data_source_fallback_total.labels(from_source=from_source, to_source=to_source).inc()
+
+
+def update_data_freshness(source: str, freshness_seconds: float) -> None:
+    """Update data freshness for a source.
+
+    Args:
+        source: Data source name.
+        freshness_seconds: Seconds since last data update.
+    """
+    data_freshness_seconds.labels(source=source).set(freshness_seconds)
+
+
+def update_kite_token_freshness(is_fresh: bool) -> None:
+    """Update Kite token freshness status.
+
+    Args:
+        is_fresh: True if token is fresh, False if expired.
+    """
+    kite_token_freshness.set(1 if is_fresh else 0)
