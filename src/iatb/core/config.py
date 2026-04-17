@@ -33,6 +33,13 @@ class Config(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    # Zerodha (Kite Connect) Configuration
+    zerodha_api_key: str = ""
+    zerodha_api_secret: str = ""
+
+    # Data Provider Configuration
+    data_provider_default: str = "kite"
+
     # Event bus settings
     event_bus_max_queue_size: int = 1000
     event_bus_batch_size: int = 100

@@ -30,6 +30,10 @@ class TestConfig:
         assert config.log_level == "INFO"
         assert config.default_exchange == "NSE"
         assert config.default_market_type == "SPOT"
+        # Zerodha fields may be loaded from .env file, so just check they're strings
+        assert isinstance(config.zerodha_api_key, str)
+        assert isinstance(config.zerodha_api_secret, str)
+        assert config.data_provider_default == "kite"
 
     def test_custom_values(self) -> None:
         """Test config with custom values."""

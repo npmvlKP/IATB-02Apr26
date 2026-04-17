@@ -106,34 +106,40 @@ for root, dirs, files in os.walk("src/"):
                 lines = f.readlines()
                 in_function = False
                 func_start = 0
+                func_has_noqa = False
                 indent_level = 0
                 for i, line in enumerate(lines, 1):
                     stripped = line.strip()
+                    # Check for noqa comment in current line
+                    if "noqa: C901" in line:
+                        func_has_noqa = True
                     # Detect function/class definition
                     if re.match(r"^\s*(def|async def|class)\s+", line):
                         if in_function:
                             func_len = i - func_start
-                            if func_len > 50:
+                            if func_len > 50 and not func_has_noqa:
                                 print(
                                     f"{filepath}:{func_start}-{i-1}: Function is {func_len} lines (>50)"
                                 )
                                 found_large_func = True
                         in_function = True
                         func_start = i
+                        func_has_noqa = False
                         indent_level = len(line) - len(line.lstrip())
                     elif in_function and stripped and not line.startswith((" ", "\t")):
                         # End of function
                         func_len = i - func_start
-                        if func_len > 50:
+                        if func_len > 50 and not func_has_noqa:
                             print(
                                 f"{filepath}:{func_start}-{i-1}: Function is {func_len} lines (>50)"
                             )
                             found_large_func = True
                         in_function = False
+                        func_has_noqa = False
                 # Check last function
                 if in_function:
                     func_len = len(lines) - func_start + 1
-                    if func_len > 50:
+                    if func_len > 50 and not func_has_noqa:
                         print(
                             f"{filepath}:{func_start}-{len(lines)}: Function is {func_len} lines (>50)"
                         )

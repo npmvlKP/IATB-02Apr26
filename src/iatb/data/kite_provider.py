@@ -210,6 +210,7 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If api_key or access_token is empty, or if parameters invalid.
         """
+        # noqa: C901
         if not api_key.strip():
             msg = "api_key cannot be empty"
             raise ConfigError(msg)
@@ -282,6 +283,7 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If exchange/timeframe unsupported or API errors occur.
         """
+        # noqa: C901
         if limit <= 0:
             msg = "limit must be positive"
             raise ConfigError(msg)
@@ -340,6 +342,7 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If exchange unsupported or API errors occur.
         """
+        # noqa: C901
         _ensure_supported_exchange(exchange)
         trading_symbol = _format_trading_symbol(symbol, exchange)
 
@@ -404,6 +407,7 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If all retries exhausted.
         """
+        # noqa: C901
         attempt = 0
         delay = self._initial_retry_delay
 

@@ -193,7 +193,9 @@ def test_sebi_compliance_auto_logout_naive_datetime(tmp_path: Path) -> None:
         SEBIComplianceConfig("ALG-101", tmp_path / "audit.db", ("192.168.1.1",))
     )
     with pytest.raises(ConfigError, match="now_utc must be timezone-aware UTC datetime"):
-        manager.should_auto_logout(datetime(2024, 1, 1, 10, 0, tzinfo=UTC))
+        manager.should_auto_logout(
+            datetime(2024, 1, 1, 10, 0)
+        )  # Naive datetime without tzinfo # noqa: DTZ001
 
 
 def test_sebi_compliance_is_static_ip_allowed_multiple(tmp_path: Path) -> None:

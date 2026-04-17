@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import cast
+from typing import Any, cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
@@ -306,15 +306,33 @@ class InstrumentScanner:
             msg = "DataProvider not configured"
             raise ConfigError(msg)
 
-        # Determine exchange from symbol or config
         exchange = self._determine_exchange(symbol)
         category = self._determine_category(symbol)
 
-        # Fetch OHLCV data
+        bars = await self._fetch_ohlcv_bars(symbol, exchange)
+        if not bars:
+            return None
+
+        price_data = self._extract_price_data(bars)
+        if len(price_data.closes) < 2:
+            return None
+
+        indicators = self._calculate_indicators(
+            price_data.closes, price_data.highs, price_data.lows
+        )
+        return self._build_market_data(
+            symbol, exchange, category, price_data, indicators, bars[0].source
+        )
+
+    async def _fetch_ohlcv_bars(self, symbol: str, exchange: Exchange) -> list[Any]:
+        """Fetch OHLCV bars from data provider."""
+        if self._data_provider is None:
+            msg = "DataProvider not configured"
+            raise ConfigError(msg)
         since_timestamp = create_timestamp(
             datetime.now(UTC) - timedelta(days=self._config.lookback_days)
         )
-        bars = await self._data_provider.get_ohlcv(
+        return await self._data_provider.get_ohlcv(
             symbol=symbol,
             exchange=exchange,
             timeframe="1d",
@@ -322,10 +340,18 @@ class InstrumentScanner:
             limit=self._config.lookback_days,
         )
 
-        if not bars:
-            return None
+    @dataclass
+    class _PriceData:
+        """Container for extracted price data."""
 
-        # Extract price/volume data
+        closes: list[Decimal]
+        highs: list[Decimal]
+        lows: list[Decimal]
+        volumes: list[Decimal]
+        timestamps: list[datetime]
+
+    def _extract_price_data(self, bars: list[Any]) -> _PriceData:
+        """Extract price and volume data from OHLCV bars."""
         closes: list[Decimal] = []
         highs: list[Decimal] = []
         lows: list[Decimal] = []
@@ -339,27 +365,22 @@ class InstrumentScanner:
             volumes.append(Decimal(str(bar.volume)))
             timestamps.append(bar.timestamp)
 
-        if len(closes) < 2:
-            return None
+        return self._PriceData(closes, highs, lows, volumes, timestamps)
 
-        # Calculate indicators using indicator module
-        indicators = self._calculate_indicators(closes, highs, lows)
-
-        # Get latest and previous data
-        latest_close = closes[-1]
-        prev_close = closes[-2]
-        latest_high = highs[-1]
-        latest_low = lows[-1]
-        latest_volume = volumes[-1]
-        latest_timestamp = timestamps[-1]
-
-        # Calculate average volume
-        avg_volume = sum(volumes) / Decimal(str(len(volumes)))
-
-        # Calculate breadth ratio from price action (simplified)
-        breadth_ratio = self._calculate_breadth_ratio(closes, volumes)
-
-        # Calculate ATR percentage
+    def _build_market_data(
+        self,
+        symbol: str,
+        exchange: Exchange,
+        category: InstrumentCategory,
+        price_data: _PriceData,
+        indicators: IndicatorSnapshot,
+        data_source: str,
+    ) -> MarketData:
+        """Build MarketData object from price data and indicators."""
+        latest_close = price_data.closes[-1]
+        prev_close = price_data.closes[-2]
+        avg_volume = sum(price_data.volumes) / Decimal(str(len(price_data.volumes)))
+        breadth_ratio = self._calculate_breadth_ratio(price_data.closes, price_data.volumes)
         atr_pct = indicators.atr / latest_close if latest_close > Decimal("0") else Decimal("0")
 
         return MarketData(
@@ -368,15 +389,15 @@ class InstrumentScanner:
             category=category,
             close_price=latest_close,
             prev_close_price=prev_close,
-            volume=latest_volume,
+            volume=price_data.volumes[-1],
             avg_volume=avg_volume,
-            timestamp_utc=latest_timestamp,
-            high_price=latest_high,
-            low_price=latest_low,
+            timestamp_utc=price_data.timestamps[-1],
+            high_price=price_data.highs[-1],
+            low_price=price_data.lows[-1],
             adx=indicators.adx,
             atr_pct=atr_pct,
             breadth_ratio=breadth_ratio,
-            data_source=bars[0].source if bars else "unknown",
+            data_source=data_source,
         )
 
     def _calculate_indicators(

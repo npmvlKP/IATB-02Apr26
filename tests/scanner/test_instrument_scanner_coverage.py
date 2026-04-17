@@ -13,8 +13,6 @@ from iatb.scanner.instrument_scanner import (
     InstrumentCategory,
     InstrumentScanner,
     MarketData,
-    _extract_value,
-    _iter_dataframe_rows,
     _to_decimal,
     create_mock_rl_predictor,
     create_mock_sentiment_analyzer,
@@ -24,71 +22,6 @@ from iatb.scanner.instrument_scanner import (
 random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
-
-
-def test_iter_dataframe_rows_with_dataframe():
-    """Test iteration over pandas-like DataFrame."""
-
-    # Mock pandas DataFrame with iterrows method
-    class MockFrame:
-        def iterrows(self):
-            mock_row1 = {"close": 100, "open": 95, "high": 105, "low": 94, "volume": 1000}
-            mock_row2 = {"close": 102, "open": 100, "high": 106, "low": 99, "volume": 1200}
-            return [(0, mock_row1), (1, mock_row2)]
-
-    mock_frame = MockFrame()
-    rows = list(_iter_dataframe_rows(mock_frame))
-    assert len(rows) == 2
-    assert rows[0]["close"] == 100
-    assert rows[1]["close"] == 102
-
-
-def test_iter_dataframe_rows_with_list():
-    """Test iteration over list of dicts."""
-    data = [
-        {"close": 100, "open": 95, "high": 105, "low": 94, "volume": 1000},
-        {"close": 102, "open": 100, "high": 106, "low": 99, "volume": 1200},
-    ]
-    rows = list(_iter_dataframe_rows(data))
-    assert len(rows) == 2
-    assert rows[0]["close"] == 100
-
-
-def test_iter_dataframe_rows_empty_dataframe():
-    """Test iteration over empty DataFrame."""
-
-    class MockFrame:
-        def iterrows(self):
-            return []
-
-    mock_frame = MockFrame()
-    rows = list(_iter_dataframe_rows(mock_frame))
-    assert len(rows) == 0
-
-
-def test_iter_dataframe_rows_non_mapping_dataframe_row():
-    """Test that non-mapping DataFrame rows raise error."""
-
-    class MockFrame:
-        def iterrows(self):
-            return [(0, "not_a_mapping")]
-
-    mock_frame = MockFrame()
-    with pytest.raises(ConfigError, match="jugaad dataframe rows must be mapping-like"):
-        list(_iter_dataframe_rows(mock_frame))
-
-
-def test_iter_dataframe_rows_non_mapping_list_row():
-    """Test that non-mapping list rows raise error."""
-    data = ["not_a_mapping", "also_not_a_mapping"]
-    with pytest.raises(ConfigError, match="jugaad list rows must be mapping-like"):
-        list(_iter_dataframe_rows(data))
-
-
-def test_iter_dataframe_rows_unsupported_type():
-    """Test that unsupported types raise error."""
-    with pytest.raises(ConfigError, match="Unsupported jugaad history response type"):
-        list(_iter_dataframe_rows(123))
 
 
 def test_to_decimal_with_none():
@@ -127,20 +60,6 @@ def test_to_decimal_with_valid_types():
     assert _to_decimal(100, "test") == Decimal("100")
     assert _to_decimal(50.75, "test") == Decimal("50.75")
     assert _to_decimal(Decimal("99.99"), "test") == Decimal("99.99")
-
-
-def test_extract_value_all_keys_none():
-    """Test that all None keys raise error."""
-    payload = {"close": None, "CLOSE": None}
-    with pytest.raises(ConfigError, match="Missing required OHLCV key"):
-        _extract_value(payload, ("close", "CLOSE"))
-
-
-def test_extract_value_all_keys_missing():
-    """Test that missing keys raise error."""
-    payload = {"open": 100, "high": 105}
-    with pytest.raises(ConfigError, match="Missing required OHLCV key"):
-        _extract_value(payload, ("close", "CLOSE"))
 
 
 def test_scanner_apply_filters_all_filtered():
@@ -283,3 +202,374 @@ def test_scanner_determine_category_edge_cases():
     assert InstrumentScanner._determine_category("NIFTYPE") == InstrumentCategory.OPTION
     # Long symbol name (>10 chars) should be OPTION
     assert InstrumentScanner._determine_category("VERYLONGOPTION") == InstrumentCategory.OPTION
+
+
+# ============================================================================
+# InstrumentScanner._apply_filters Tests
+# ============================================================================
+
+
+def test_apply_filters_all_pass():
+    """Test _apply_filters when all candidates pass."""
+    scanner = InstrumentScanner(
+        sentiment_analyzer=create_mock_sentiment_analyzer({"TEST": (Decimal("0.8"), True)}),
+        rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+    )
+
+    custom_data = [
+        MarketData(
+            symbol="TEST",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        )
+    ]
+
+    result = scanner.scan(custom_data=custom_data)
+    assert len(result.gainers) == 1
+    assert result.filtered_count == 0
+
+
+def test_apply_filters_mixed_results():
+    """Test _apply_filters with mixed passing/failing candidates."""
+    scanner = InstrumentScanner(
+        sentiment_analyzer=create_mock_sentiment_analyzer(
+            {
+                "PASS1": (Decimal("0.8"), True),
+                "PASS2": (Decimal("0.8"), True),
+                "FAIL1": (Decimal("0.3"), False),
+                "FAIL2": (Decimal("0.3"), False),
+            }
+        ),
+        rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+    )
+
+    custom_data = [
+        MarketData(
+            symbol="PASS1",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        ),
+        MarketData(
+            symbol="PASS2",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        ),
+        MarketData(
+            symbol="FAIL1",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("100"),  # Low volume
+            avg_volume=Decimal("500000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        ),
+        MarketData(
+            symbol="FAIL2",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("100"),  # Low volume
+            avg_volume=Decimal("500000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        ),
+    ]
+
+    result = scanner.scan(custom_data=custom_data)
+    assert len(result.gainers) == 2
+    assert result.filtered_count == 2
+
+
+# ============================================================================
+# InstrumentScanner._rank_and_split Tests
+# ============================================================================
+
+
+def test_rank_and_split_with_positive_changes():
+    """Test _rank_and_split with positive percentage changes."""
+    scanner = InstrumentScanner()
+    from iatb.scanner.instrument_scanner import _CandidateScores
+
+    candidates = [
+        _CandidateScores(
+            market_data=MarketData(
+                symbol="A",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("105"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("10000"),
+                avg_volume=Decimal("2000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("110"),
+                low_price=Decimal("100"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            sentiment_score=Decimal("0.8"),
+            is_very_strong=True,
+            strength_score=Decimal("0.7"),
+            is_strength_tradable=True,
+            exit_probability=Decimal("0.6"),
+        ),
+        _CandidateScores(
+            market_data=MarketData(
+                symbol="B",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("110"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("10000"),
+                avg_volume=Decimal("2000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("115"),
+                low_price=Decimal("100"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            sentiment_score=Decimal("0.8"),
+            is_very_strong=True,
+            strength_score=Decimal("0.7"),
+            is_strength_tradable=True,
+            exit_probability=Decimal("0.6"),
+        ),
+    ]
+
+    gainers, losers = scanner._rank_and_split(candidates)
+    assert len(gainers) == 2
+    assert len(losers) == 0
+    assert gainers[0].symbol == "B"  # Higher % change
+    assert gainers[1].symbol == "A"
+
+
+def test_rank_and_split_with_negative_changes():
+    """Test _rank_and_split with negative percentage changes."""
+    scanner = InstrumentScanner()
+    from iatb.scanner.instrument_scanner import _CandidateScores
+
+    candidates = [
+        _CandidateScores(
+            market_data=MarketData(
+                symbol="A",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("95"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("10000"),
+                avg_volume=Decimal("2000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("100"),
+                low_price=Decimal("90"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            sentiment_score=Decimal("-0.8"),
+            is_very_strong=True,
+            strength_score=Decimal("0.7"),
+            is_strength_tradable=True,
+            exit_probability=Decimal("0.6"),
+        ),
+        _CandidateScores(
+            market_data=MarketData(
+                symbol="B",
+                exchange=Exchange.NSE,
+                category=InstrumentCategory.STOCK,
+                close_price=Decimal("90"),
+                prev_close_price=Decimal("100"),
+                volume=Decimal("10000"),
+                avg_volume=Decimal("2000"),
+                timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                high_price=Decimal("100"),
+                low_price=Decimal("85"),
+                adx=Decimal("30"),
+                atr_pct=Decimal("0.02"),
+                breadth_ratio=Decimal("1.5"),
+            ),
+            sentiment_score=Decimal("-0.8"),
+            is_very_strong=True,
+            strength_score=Decimal("0.7"),
+            is_strength_tradable=True,
+            exit_probability=Decimal("0.6"),
+        ),
+    ]
+
+    gainers, losers = scanner._rank_and_split(candidates)
+    assert len(gainers) == 0
+    assert len(losers) == 2
+    assert losers[0].symbol == "B"  # Lower % change (more negative)
+    assert losers[1].symbol == "A"
+
+
+# ============================================================================
+# ScannerResult Tests
+# ============================================================================
+
+
+def test_scan_result_total_scanned():
+    """Test ScanResult.total_scanned is correct."""
+    scanner = InstrumentScanner(
+        sentiment_analyzer=create_mock_sentiment_analyzer(
+            {
+                "A": (Decimal("0.8"), True),
+                "B": (Decimal("-0.8"), True),
+            }
+        ),
+        rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+    )
+
+    custom_data = [
+        MarketData(
+            symbol="A",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        ),
+        MarketData(
+            symbol="B",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("95"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("100"),
+            low_price=Decimal("90"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        ),
+    ]
+
+    result = scanner.scan(custom_data=custom_data)
+    assert result.total_scanned == 2
+
+
+# ============================================================================
+# Additional edge case tests
+# ============================================================================
+
+
+def test_scanner_with_zero_exit_probability():
+    """Test scanner with zero exit probability."""
+    scanner = InstrumentScanner(
+        sentiment_analyzer=create_mock_sentiment_analyzer(
+            {
+                "TEST": (Decimal("0.8"), True),
+            }
+        ),
+        rl_predictor=lambda _obs: Decimal("0"),  # Zero exit probability
+    )
+
+    custom_data = [
+        MarketData(
+            symbol="TEST",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        )
+    ]
+
+    result = scanner.scan(custom_data=custom_data)
+    # Should be filtered out due to zero exit probability
+    assert len(result.gainers) == 0
+
+
+def test_scanner_cache_behavior():
+    """Test scanner cache behavior with multiple scans."""
+    scanner = InstrumentScanner(
+        sentiment_analyzer=create_mock_sentiment_analyzer(
+            {
+                "TEST": (Decimal("0.8"), True),
+            }
+        ),
+        rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+    )
+
+    custom_data = [
+        MarketData(
+            symbol="TEST",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("105"),
+            prev_close_price=Decimal("100"),
+            volume=Decimal("10000"),
+            avg_volume=Decimal("2000"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("110"),
+            low_price=Decimal("100"),
+            adx=Decimal("30"),
+            atr_pct=Decimal("0.02"),
+            breadth_ratio=Decimal("1.5"),
+        )
+    ]
+
+    # First scan
+    result1 = scanner.scan(custom_data=custom_data)
+    assert len(result1.gainers) == 1
+
+    # Second scan with same data
+    result2 = scanner.scan(custom_data=custom_data)
+    assert len(result2.gainers) == 1

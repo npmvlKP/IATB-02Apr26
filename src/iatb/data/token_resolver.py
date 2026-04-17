@@ -310,11 +310,27 @@ class SymbolTokenResolver:
         Returns:
             Number of instruments loaded.
         """
-        # Convert to Instrument objects and load via InstrumentMaster
+        instruments = self._build_instruments_list(raw_instruments, exchange)
+        now_utc = datetime.now(UTC).isoformat()
+        return self._load_instruments_to_cache(instruments, now_utc)
+
+    def _build_instruments_list(
+        self,
+        raw_instruments: list[Mapping[str, Any]],
+        exchange: Exchange,
+    ) -> list[Instrument]:
+        """Build list of Instrument objects from raw API data.
+
+        Args:
+            raw_instruments: List of raw instrument dicts from Kite API.
+            exchange: Exchange for these instruments.
+
+        Returns:
+            List of Instrument objects.
+        """
         from iatb.data.instrument import Instrument
 
         instruments: list[Instrument] = []
-        now_utc = datetime.now(UTC).isoformat()
 
         for raw in raw_instruments:
             extracted = _extract_instrument_from_api(raw, exchange)
@@ -341,11 +357,7 @@ class SymbolTokenResolver:
             )
             instruments.append(instrument)
 
-        # Load instruments into cache
-        # We need to access private method or create a public one
-        # For now, we'll use load_from_provider pattern
-        # Since we don't have a provider instance, we'll load manually
-        return self._load_instruments_to_cache(instruments, now_utc)
+        return instruments
 
     def _load_instruments_to_cache(
         self,

@@ -333,12 +333,13 @@ def test_get_access_token_from_keyring(token_manager: ZerodhaTokenManager) -> No
     with patch.object(
         keyring,
         "get_password",
-        side_effect=["fresh_token", token_time.isoformat()],
+        side_effect=["fresh_token", token_time.isoformat(), "fresh_token"],
     ):
         with patch("iatb.broker.token_manager.datetime") as mock_dt:
             now_time = datetime(2026, 4, 16, 0, 20, 0, tzinfo=UTC)
             mock_dt.now.return_value = now_time
             mock_dt.fromisoformat = datetime.fromisoformat
+            mock_dt.combine = datetime.combine
 
             token = token_manager.get_access_token()
             assert token == "fresh_token"  # noqa: S105
@@ -373,8 +374,8 @@ def test_get_access_token_from_env_file(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("ZERODHA_ACCESS_TOKEN=env_file_token\n")  # noqa: S105
 
-    with patch.object(keyring, "get_password", return_value=None):
-        with patch("iatb.broker.token_manager.Path.cwd", return_value=tmp_path):
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        with patch.object(keyring, "get_password", return_value=None):
             manager = ZerodhaTokenManager(
                 api_key="test_key",
                 api_secret="test_secret",  # noqa: S106
@@ -401,13 +402,14 @@ def test_get_access_token_precedence_keyring_first() -> None:
     with patch.object(
         keyring,
         "get_password",
-        side_effect=["keyring_token", token_time.isoformat()],
+        side_effect=["keyring_token", token_time.isoformat(), "keyring_token"],
     ):
         with patch.dict(os.environ, {"ZERODHA_ACCESS_TOKEN": "env_token"}):
             with patch("iatb.broker.token_manager.datetime") as mock_dt:
                 now_time = datetime(2026, 4, 16, 0, 20, 0, tzinfo=UTC)
                 mock_dt.now.return_value = now_time
                 mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.combine = datetime.combine
 
                 manager = ZerodhaTokenManager(
                     api_key="test_key",
@@ -425,7 +427,7 @@ def test_get_kite_client_with_provided_token() -> None:
     )
 
     mock_kite = MagicMock()
-    with patch("iatb.broker.token_manager.importlib.import_module") as mock_import:
+    with patch("builtins.__import__") as mock_import:
         mock_module = MagicMock()
         mock_module.KiteConnect = MagicMock(return_value=mock_kite)
         mock_import.return_value = mock_module
@@ -448,18 +450,19 @@ def test_get_kite_client_auto_retrieves_token() -> None:
 
     mock_kite = MagicMock()
     with patch.dict(os.environ, {"ZERODHA_ACCESS_TOKEN": "auto_token"}):
-        with patch("iatb.broker.token_manager.importlib.import_module") as mock_import:
-            mock_module = MagicMock()
-            mock_module.KiteConnect = MagicMock(return_value=mock_kite)
-            mock_import.return_value = mock_module
+        with patch.object(keyring, "get_password", return_value=None):
+            with patch("builtins.__import__") as mock_import:
+                mock_module = MagicMock()
+                mock_module.KiteConnect = MagicMock(return_value=mock_kite)
+                mock_import.return_value = mock_module
 
-            client = manager.get_kite_client()
+                client = manager.get_kite_client()
 
-            assert client == mock_kite
-            mock_module.KiteConnect.assert_called_once_with(
-                api_key="test_key",
-                access_token="auto_token",  # noqa: S106
-            )
+                assert client == mock_kite
+                mock_module.KiteConnect.assert_called_once_with(
+                    api_key="test_key",
+                    access_token="auto_token",  # noqa: S106
+                )
 
 
 def test_get_kite_client_no_token_available() -> None:
@@ -482,7 +485,7 @@ def test_get_kite_client_kiteconnect_not_installed() -> None:
         api_secret="test_secret",  # noqa: S106
     )
 
-    with patch("iatb.broker.token_manager.importlib.import_module") as mock_import:
+    with patch("builtins.__import__") as mock_import:
         mock_import.side_effect = ModuleNotFoundError("kiteconnect")
 
         with pytest.raises(ImportError, match="kiteconnect module is required"):
@@ -494,7 +497,7 @@ def test_resolve_env_path_current_dir(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("TEST=value\n")
 
-    with patch("iatb.broker.token_manager.Path.cwd", return_value=tmp_path):
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
         result = ZerodhaTokenManager._resolve_env_path()
         assert result == env_file
 
@@ -506,14 +509,14 @@ def test_resolve_env_path_parent_dir(tmp_path: Path) -> None:
     child_dir = tmp_path / "child"
     child_dir.mkdir()
 
-    with patch("iatb.broker.token_manager.Path.cwd", return_value=child_dir):
+    with patch("pathlib.Path.cwd", return_value=child_dir):
         result = ZerodhaTokenManager._resolve_env_path()
         assert result == env_file
 
 
 def test_resolve_env_path_not_found(tmp_path: Path) -> None:
     """Test _resolve_env_path returns None when .env not found."""
-    with patch("iatb.broker.token_manager.Path.cwd", return_value=tmp_path):
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
         result = ZerodhaTokenManager._resolve_env_path()
         assert result is None
 
@@ -599,7 +602,7 @@ def test_clear_token_removes_from_env_file(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("ZERODHA_ACCESS_TOKEN=secret_token\n")
 
-    with patch("iatb.broker.token_manager.Path.cwd", return_value=tmp_path):
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
         manager = ZerodhaTokenManager(
             api_key="test_key",
             api_secret="test_secret",  # noqa: S106

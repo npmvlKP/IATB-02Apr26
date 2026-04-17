@@ -5,6 +5,7 @@ import random
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -92,6 +93,40 @@ def test_main_persists_to_dotenv_when_env_file_is_example(
     )
     session = _session("token-persisted")
 
+    class FakeTokenManager:
+        def __init__(
+            self,
+            *,
+            api_key: str,
+            api_secret: str,
+            totp_secret: str | None = None,
+            http_post: Any = None,
+        ) -> None:
+            _ = api_key, api_secret, totp_secret, http_post
+            self._saved_access_token: str | None = None
+            self._saved_request_token: str | None = None
+            self._exchange_calls: list[str] = []
+            self._store_calls: list[str] = []
+
+        def is_token_fresh(self) -> bool:
+            return False
+
+        def get_access_token(
+            self, *, use_env_fallback: bool = True, refresh_if_expired: bool = False
+        ) -> str | None:
+            return self._saved_access_token
+
+        def exchange_request_token(self, request_token: str) -> str:
+            assert request_token == "req-fresh"  # noqa: S105
+            self._exchange_calls.append(request_token)
+            self._saved_access_token = "token-persisted"
+            self._saved_request_token = request_token
+            return "token-persisted"
+
+        def store_access_token(self, token: str) -> None:
+            self._store_calls.append(token)
+            self._saved_access_token = token
+
     class FakeConnection:
         @classmethod
         def from_env(cls) -> FakeConnection:
@@ -106,10 +141,15 @@ def test_main_persists_to_dotenv_when_env_file_is_example(
             request_token: str | None = None,
             access_token: str | None = None,
         ) -> ZerodhaSession:
-            _ = access_token
-            assert request_token == "req-fresh"  # noqa: S105
+            assert request_token is None
+            assert access_token == "token-persisted"
             return session
 
+    fake_token_manager = FakeTokenManager(
+        api_key="kite-key",
+        api_secret="kite-secret",
+    )
+    monkeypatch.setattr(module, "ZerodhaTokenManager", lambda **kwargs: fake_token_manager)
     monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
     exit_code = module.main(
         [
@@ -122,12 +162,10 @@ def test_main_persists_to_dotenv_when_env_file_is_example(
         ],
     )
     assert exit_code == 0
-    persisted_path = tmp_path / ".env"
-    persisted = persisted_path.read_text(encoding="utf-8")
-    assert "ZERODHA_ACCESS_TOKEN=token-persisted" in persisted
-    assert "ZERODHA_REQUEST_TOKEN=req-fresh" in persisted
-    assert "BROKER_OAUTH_2FA_VERIFIED=true" in persisted
-    assert "token-persisted" not in env_example_path.read_text(encoding="utf-8")
+    # Verify token was exchanged
+    assert fake_token_manager._exchange_calls == ["req-fresh"]
+    # Verify token was stored (to keyring in actual implementation)
+    assert fake_token_manager._store_calls == ["token-persisted"]
 
 
 def test_main_uses_valid_same_day_access_token(
@@ -197,6 +235,32 @@ def test_main_uses_auto_login_when_saved_token_stale(
     )
     calls: list[tuple[str | None, str | None]] = []
     session = _session("token-new")
+    store_calls: list[str] = []
+
+    class FakeTokenManager:
+        def __init__(
+            self,
+            *,
+            api_key: str,
+            api_secret: str,
+            totp_secret: str | None = None,
+            http_post: Any = None,
+        ) -> None:
+            _ = api_key, api_secret, totp_secret, http_post
+
+        def is_token_fresh(self) -> bool:
+            return False
+
+        def get_access_token(
+            self, *, use_env_fallback: bool = True, refresh_if_expired: bool = False
+        ) -> str | None:
+            return "token-old"
+
+        def exchange_request_token(self, request_token: str) -> str:
+            return "token-new"
+
+        def store_access_token(self, token: str) -> None:
+            store_calls.append(token)
 
     class FakeConnection:
         @classmethod
@@ -213,10 +277,13 @@ def test_main_uses_auto_login_when_saved_token_stale(
             access_token: str | None = None,
         ) -> ZerodhaSession:
             calls.append((request_token, access_token))
-            if access_token is not None:
+            # Only raise 403 for the old token, not the new token
+            if access_token == "token-old":
                 raise ConfigError("HTTP Error 403: Forbidden")
             return session
 
+    fake_token_manager = FakeTokenManager(api_key="kite-key", api_secret="kite-secret")
+    monkeypatch.setattr(module, "ZerodhaTokenManager", lambda **kwargs: fake_token_manager)
     monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
     monkeypatch.setattr(
         module,
@@ -225,11 +292,9 @@ def test_main_uses_auto_login_when_saved_token_stale(
     )
     exit_code = module.main(["--env-file", str(env_path), "--save-access-token", "--auto-login"])
     assert exit_code == 0
-    assert calls == [("req-fresh", None)]
-    persisted = env_path.read_text(encoding="utf-8")
-    assert "ZERODHA_ACCESS_TOKEN=token-new" in persisted
-    assert "ZERODHA_REQUEST_TOKEN=req-fresh" in persisted
-    assert "BROKER_OAUTH_2FA_VERIFIED=true" in persisted
+    # First call with old token (fails with 403), second call with new token (succeeds)
+    assert calls == [(None, "token-old"), (None, "token-new")]
+    assert store_calls == ["token-new"]
 
 
 def test_main_returns_login_required_when_auto_capture_times_out(
@@ -243,6 +308,25 @@ def test_main_returns_login_required_when_auto_capture_times_out(
         "ZERODHA_API_KEY=kite-key\nZERODHA_API_SECRET=kite-secret\n",
         encoding="utf-8",
     )
+
+    class FakeTokenManager:
+        def __init__(
+            self,
+            *,
+            api_key: str,
+            api_secret: str,
+            totp_secret: str | None = None,
+            http_post: Any = None,
+        ) -> None:
+            _ = api_key, api_secret, totp_secret, http_post
+
+        def is_token_fresh(self) -> bool:
+            return False
+
+        def get_access_token(
+            self, *, use_env_fallback: bool = True, refresh_if_expired: bool = False
+        ) -> str | None:
+            return None
 
     class FakeConnection:
         @classmethod
@@ -262,6 +346,7 @@ def test_main_returns_login_required_when_auto_capture_times_out(
             msg = "should not be called"
             raise AssertionError(msg)
 
+    monkeypatch.setattr(module, "ZerodhaTokenManager", FakeTokenManager)
     monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
     monkeypatch.setattr(module, "_auto_acquire_request_token", lambda *args, **kwargs: None)
     exit_code = module.main(["--env-file", str(env_path), "--auto-login"])
@@ -494,24 +579,24 @@ def test_main_returns_blocked_on_unexpected_access_token_exception(
     log_path = tmp_path / "zerodha_connect.log"
 
     class FakeTokenManager:
-        def __init__(self, *, env_path: Path, env_values: dict[str, str]) -> None:
-            _ = env_path, env_values
-
-        def resolve_saved_access_token(self) -> str | None:
-            msg = "unhandled token manager failure"
-            raise RuntimeError(msg)
-
-        def resolve_saved_request_token(self) -> str | None:
-            return None
-
-        def persist_session_tokens(
+        def __init__(
             self,
             *,
-            access_token: str,
-            request_token: str | None,
-        ) -> Path:
-            _ = access_token, request_token
-            return Path(".env")
+            api_key: str,
+            api_secret: str,
+            totp_secret: str | None = None,
+            http_post: Any = None,
+        ) -> None:
+            _ = api_key, api_secret, totp_secret, http_post
+
+        def is_token_fresh(self) -> bool:
+            return False
+
+        def get_access_token(
+            self, *, use_env_fallback: bool = True, refresh_if_expired: bool = False
+        ) -> str | None:
+            msg = "unhandled token manager failure"
+            raise RuntimeError(msg)
 
     class FakeConnection:
         @classmethod

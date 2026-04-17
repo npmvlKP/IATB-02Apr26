@@ -252,12 +252,12 @@ class ZerodhaTokenManager:
             Path to .env file if found, None otherwise.
         """
         # Check current directory
-        current_path = Path(env_file)
+        current_path = Path.cwd() / env_file
         if current_path.exists():
             return current_path
 
         # Check common parent directories
-        for parent in [Path.cwd()] + list(Path.cwd().parents):
+        for parent in Path.cwd().parents:
             candidate = parent / env_file
             if candidate.exists():
                 return candidate

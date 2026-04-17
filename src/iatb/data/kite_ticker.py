@@ -136,7 +136,6 @@ class KiteTickerFeed:
             api_key: Kite Connect API key.
             access_token: Kite Connect access token.
             kite_ticker_factory: Optional factory for creating KiteTicker instance.
-                Useful for testing/mocking.
             max_reconnect_attempts: Maximum number of reconnection attempts.
             initial_reconnect_delay: Initial delay in seconds before first reconnect.
             max_reconnect_delay: Maximum delay in seconds between reconnects.
@@ -147,12 +146,104 @@ class KiteTickerFeed:
         Raises:
             ConfigError: If parameters are invalid.
         """
+        self._validate_and_initialize(
+            api_key,
+            access_token,
+            kite_ticker_factory,
+            max_reconnect_attempts,
+            initial_reconnect_delay,
+            max_reconnect_delay,
+            reconnect_backoff_multiplier,
+            heartbeat_interval,
+            tick_buffer_size,
+        )
+
+    def _validate_and_initialize(
+        self,
+        api_key: str,
+        access_token: str,
+        kite_ticker_factory: Callable[[str, str], Any] | None,
+        max_reconnect_attempts: int,
+        initial_reconnect_delay: float,
+        max_reconnect_delay: float,
+        reconnect_backoff_multiplier: float,
+        heartbeat_interval: float,
+        tick_buffer_size: int,
+    ) -> None:
+        """Validate parameters and initialize state."""
+        self._validate_init_params(
+            api_key,
+            access_token,
+            max_reconnect_attempts,
+            initial_reconnect_delay,
+            max_reconnect_delay,
+            reconnect_backoff_multiplier,
+            heartbeat_interval,
+            tick_buffer_size,
+        )
+        self._initialize_state(
+            api_key,
+            access_token,
+            kite_ticker_factory,
+            max_reconnect_attempts,
+            initial_reconnect_delay,
+            max_reconnect_delay,
+            reconnect_backoff_multiplier,
+            heartbeat_interval,
+            tick_buffer_size,
+        )
+
+    @staticmethod
+    def _validate_init_params(
+        api_key: str,
+        access_token: str,
+        max_reconnect_attempts: int,
+        initial_reconnect_delay: float,
+        max_reconnect_delay: float,
+        reconnect_backoff_multiplier: float,
+        heartbeat_interval: float,
+        tick_buffer_size: int,
+    ) -> None:
+        """Validate initialization parameters.
+
+        Raises:
+            ConfigError: If parameters are invalid.
+        """
+        KiteTickerFeed._validate_credentials(api_key, access_token)
+        KiteTickerFeed._validate_reconnect_params(
+            max_reconnect_attempts,
+            initial_reconnect_delay,
+            max_reconnect_delay,
+            reconnect_backoff_multiplier,
+        )
+        KiteTickerFeed._validate_runtime_params(heartbeat_interval, tick_buffer_size)
+
+    @staticmethod
+    def _validate_credentials(api_key: str, access_token: str) -> None:
+        """Validate API credentials.
+
+        Raises:
+            ConfigError: If credentials are invalid.
+        """
         if not api_key.strip():
             msg = "api_key cannot be empty"
             raise ConfigError(msg)
         if not access_token.strip():
             msg = "access_token cannot be empty"
             raise ConfigError(msg)
+
+    @staticmethod
+    def _validate_reconnect_params(
+        max_reconnect_attempts: int,
+        initial_reconnect_delay: float,
+        max_reconnect_delay: float,
+        reconnect_backoff_multiplier: float,
+    ) -> None:
+        """Validate reconnection parameters.
+
+        Raises:
+            ConfigError: If parameters are invalid.
+        """
         if max_reconnect_attempts <= 0:
             msg = "max_reconnect_attempts must be positive"
             raise ConfigError(msg)
@@ -165,6 +256,14 @@ class KiteTickerFeed:
         if reconnect_backoff_multiplier <= 1.0:
             msg = "reconnect_backoff_multiplier must be greater than 1.0"
             raise ConfigError(msg)
+
+    @staticmethod
+    def _validate_runtime_params(heartbeat_interval: float, tick_buffer_size: int) -> None:
+        """Validate runtime parameters.
+
+        Raises:
+            ConfigError: If parameters are invalid.
+        """
         if heartbeat_interval <= 0:
             msg = "heartbeat_interval must be positive"
             raise ConfigError(msg)
@@ -172,6 +271,44 @@ class KiteTickerFeed:
             msg = "tick_buffer_size must be positive"
             raise ConfigError(msg)
 
+    def _initialize_state(
+        self,
+        api_key: str,
+        access_token: str,
+        kite_ticker_factory: Callable[[str, str], Any] | None,
+        max_reconnect_attempts: int,
+        initial_reconnect_delay: float,
+        max_reconnect_delay: float,
+        reconnect_backoff_multiplier: float,
+        heartbeat_interval: float,
+        tick_buffer_size: int,
+    ) -> None:
+        """Initialize instance state."""
+        self._init_config(
+            api_key,
+            access_token,
+            kite_ticker_factory,
+            max_reconnect_attempts,
+            initial_reconnect_delay,
+            max_reconnect_delay,
+            reconnect_backoff_multiplier,
+            heartbeat_interval,
+        )
+        self._init_buffers(tick_buffer_size)
+        self._init_connection_state()
+
+    def _init_config(
+        self,
+        api_key: str,
+        access_token: str,
+        kite_ticker_factory: Callable[[str, str], Any] | None,
+        max_reconnect_attempts: int,
+        initial_reconnect_delay: float,
+        max_reconnect_delay: float,
+        reconnect_backoff_multiplier: float,
+        heartbeat_interval: float,
+    ) -> None:
+        """Initialize configuration parameters."""
         self._api_key = api_key
         self._access_token = access_token
         self._max_reconnect_attempts = max_reconnect_attempts
@@ -181,13 +318,17 @@ class KiteTickerFeed:
         self._heartbeat_interval = heartbeat_interval
         self._kite_ticker_factory = kite_ticker_factory or self._default_ticker_factory
 
-        self._ticker_instance: Any = None
-        self._is_connected = False
-        self._is_running = False
+    def _init_buffers(self, tick_buffer_size: int) -> None:
+        """Initialize buffers and queues."""
         self._subscriptions: set[tuple[str, Exchange]] = set()
         self._tick_buffer = TickBuffer(max_size=tick_buffer_size)
         self._tick_queue: asyncio.Queue[TickerSnapshot] = asyncio.Queue()
 
+    def _init_connection_state(self) -> None:
+        """Initialize connection state variables."""
+        self._ticker_instance: Any = None
+        self._is_connected = False
+        self._is_running = False
         self._callback: Callable[[TickerSnapshot], None] | None = None
         self._stats = ConnectionStats()
         self._reconnect_task: asyncio.Task[None] | None = None
@@ -612,6 +753,33 @@ class KiteTickerFeed:
         Raises:
             ConfigError: If required environment variables not set.
         """
+        api_key, access_token = cls._load_env_vars(api_key_env_var, access_token_env_var)
+
+        return cls(
+            api_key=api_key,
+            access_token=access_token,
+            max_reconnect_attempts=max_reconnect_attempts,
+            initial_reconnect_delay=initial_reconnect_delay,
+            max_reconnect_delay=max_reconnect_delay,
+            reconnect_backoff_multiplier=reconnect_backoff_multiplier,
+            heartbeat_interval=heartbeat_interval,
+            tick_buffer_size=tick_buffer_size,
+        )
+
+    @staticmethod
+    def _load_env_vars(api_key_env_var: str, access_token_env_var: str) -> tuple[str, str]:
+        """Load and validate environment variables.
+
+        Args:
+            api_key_env_var: Environment variable name for API key.
+            access_token_env_var: Environment variable name for access token.
+
+        Returns:
+            Tuple of (api_key, access_token).
+
+        Raises:
+            ConfigError: If required environment variables not set.
+        """
         import os
 
         api_key = os.getenv(api_key_env_var, "").strip()
@@ -624,13 +792,4 @@ class KiteTickerFeed:
             msg = f"{access_token_env_var} environment variable is required"
             raise ConfigError(msg)
 
-        return cls(
-            api_key=api_key,
-            access_token=access_token,
-            max_reconnect_attempts=max_reconnect_attempts,
-            initial_reconnect_delay=initial_reconnect_delay,
-            max_reconnect_delay=max_reconnect_delay,
-            reconnect_backoff_multiplier=reconnect_backoff_multiplier,
-            heartbeat_interval=heartbeat_interval,
-            tick_buffer_size=tick_buffer_size,
-        )
+        return api_key, access_token
