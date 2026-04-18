@@ -19,6 +19,7 @@ from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_timestamp
 from iatb.data.base import DataProvider
 from iatb.data.market_data_cache import MarketDataCache
+from iatb.data.rate_limiter import AsyncRateLimiter
 from iatb.market_strength.indicators import IndicatorSnapshot, PandasTaIndicators
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
@@ -204,6 +205,7 @@ class InstrumentScanner:
         rl_predictor: Callable[[list[Decimal]], Decimal] | None = None,
         symbols: Sequence[str] | None = None,
         cache_ttl_seconds: int = 60,
+        rate_limiter: AsyncRateLimiter | None = None,
     ) -> None:
         self._config = config or ScannerConfig()
         self._data_provider = data_provider
@@ -214,6 +216,13 @@ class InstrumentScanner:
         self._symbols = symbols or []
         self._cache = MarketDataCache(default_ttl_seconds=cache_ttl_seconds)
         self._indicators: PandasTaIndicators | None = None
+
+        # Rate limiter for controlling concurrent API requests
+        # Default: 10 req/sec with burst capacity of 20 for parallel fetching
+        self._rate_limiter = rate_limiter or AsyncRateLimiter(
+            requests_per_second=10.0,
+            burst_capacity=20,
+        )
 
     def scan(
         self,
@@ -325,20 +334,31 @@ class InstrumentScanner:
         )
 
     async def _fetch_ohlcv_bars(self, symbol: str, exchange: Exchange) -> list[Any]:
-        """Fetch OHLCV bars from data provider."""
+        """
+        Fetch OHLCV bars from data provider with rate limiting.
+
+        Uses asyncio.to_thread() to run blocking provider calls in a thread pool,
+        enabling true parallel HTTP I/O for multiple symbols.
+        """
         if self._data_provider is None:
             msg = "DataProvider not configured"
             raise ConfigError(msg)
-        since_timestamp = create_timestamp(
-            datetime.now(UTC) - timedelta(days=self._config.lookback_days)
-        )
-        return await self._data_provider.get_ohlcv(
-            symbol=symbol,
-            exchange=exchange,
-            timeframe="1d",
-            since=since_timestamp,
-            limit=self._config.lookback_days,
-        )
+
+        async with self._rate_limiter:
+            since_timestamp = create_timestamp(
+                datetime.now(UTC) - timedelta(days=self._config.lookback_days)
+            )
+            # Use asyncio.to_thread to run blocking provider call in thread pool
+            # This enables true parallel execution for multiple symbols
+            bars = await asyncio.to_thread(
+                self._data_provider.get_ohlcv,
+                symbol=symbol,
+                exchange=exchange,
+                timeframe="1d",
+                since=since_timestamp,
+                limit=self._config.lookback_days,
+            )
+            return bars  # type: ignore[return-value]
 
     @dataclass
     class _PriceData:

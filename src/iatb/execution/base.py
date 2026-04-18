@@ -59,3 +59,6 @@ class Executor(Protocol):
 
     def cancel_all(self) -> int:
         ...
+
+    def close_order(self, order_id: str) -> bool:
+        ...

@@ -84,6 +84,32 @@ class OpenAlgoExecutor(Executor):
         )
         return cancelled_count
 
+    def close_order(self, order_id: str) -> bool:
+        """Close a specific order by ID.
+
+        Args:
+            order_id: The order ID to close.
+
+        Returns:
+            True if order was found and closed, False otherwise.
+
+        Note:
+            OpenAlgo order cancellation is handled via cancel_all in this implementation.
+            Individual order cancellation requires additional OpenAlgo API integration.
+        """
+        _assert_live_enabled()
+        _assert_zerodha_credentials(self._broker)
+        # For now, OpenAlgo executor only supports cancel_all
+        # Individual order cancellation would require cancel_order callable
+        _LOGGER.warning(
+            "Individual order cancellation not supported",
+            extra={
+                "order_id": order_id,
+                "timestamp_utc": datetime.now(UTC).isoformat(),
+            },
+        )
+        return False
+
     @property
     def broker(self) -> str:
         """Return configured broker identifier."""

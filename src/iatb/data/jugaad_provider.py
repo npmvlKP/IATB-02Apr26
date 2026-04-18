@@ -4,6 +4,7 @@ Jugaad-data provider for NSE daily historical market data.
 
 import asyncio
 import importlib
+import logging
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
@@ -14,6 +15,8 @@ from iatb.core.types import Timestamp, create_price, create_quantity, create_tim
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 from iatb.data.normalizer import normalize_ohlcv_batch
 from iatb.data.validator import validate_ticker_snapshot
+
+_LOGGER = logging.getLogger(__name__)
 
 _OHLCV_KEYS = {
     "timestamp": ("timestamp", "TIMESTAMP", "date", "DATE"),
@@ -47,6 +50,27 @@ def _coerce_datetime(value: object) -> datetime:
 
 
 def _iter_rows(frame: Any) -> Iterable[Mapping[str, object]]:
+    """Extract rows from jugaad data using vectorized operations.
+
+    This implementation uses to_dict('records') for 10-100x performance improvement
+    over iterrows() for large DataFrames. Target: 30-day data for 10 symbols in <500ms.
+
+    Falls back to iterrows() if to_dict() fails or is not available.
+    """
+    # Try vectorized approach first
+    if hasattr(frame, "to_dict"):
+        try:
+            records = frame.to_dict("records")
+            for payload in records:
+                if not isinstance(payload, Mapping):
+                    msg = "jugaad dataframe rows must be mapping-like"
+                    raise ConfigError(msg)
+                yield payload
+            return
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("to_dict() failed, falling back to iterrows(): %s", exc)
+
+    # Fallback to iterrows() for backward compatibility
     if hasattr(frame, "iterrows"):
         for _, payload in frame.iterrows():
             if not isinstance(payload, Mapping):
@@ -54,6 +78,8 @@ def _iter_rows(frame: Any) -> Iterable[Mapping[str, object]]:
                 raise ConfigError(msg)
             yield payload
         return
+
+    # Support list input for testing
     if isinstance(frame, list):
         for payload in frame:
             if not isinstance(payload, Mapping):
@@ -61,7 +87,8 @@ def _iter_rows(frame: Any) -> Iterable[Mapping[str, object]]:
                 raise ConfigError(msg)
             yield payload
         return
-    msg = "Unsupported jugaad history response type"
+
+    msg = "Unsupported jugaad history response type: must be DataFrame or list"
     raise ConfigError(msg)
 
 

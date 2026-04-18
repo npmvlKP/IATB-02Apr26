@@ -112,7 +112,10 @@ def verify_enums() -> bool:
         print_error(f"Enum verification failed: {e}")
         return False
 
-def _build_sample_events() -> tuple[MarketTickEvent, OrderUpdateEvent, SignalEvent, RegimeChangeEvent]:
+
+def _build_sample_events() -> (
+    tuple[MarketTickEvent, OrderUpdateEvent, SignalEvent, RegimeChangeEvent]
+):
     """Create sample events used by verification checks."""
     tick = MarketTickEvent(
         exchange=Exchange.NSE,
@@ -186,6 +189,7 @@ def verify_event_bus() -> bool:
     print_section("4. Verifying Event Bus")
 
     try:
+
         async def test_event_bus():
             bus = EventBus()
             await bus.start()
@@ -227,6 +231,7 @@ def verify_engine() -> bool:
     print_section("5. Verifying Engine Orchestrator")
 
     try:
+
         async def test_engine():
             engine = Engine()
 

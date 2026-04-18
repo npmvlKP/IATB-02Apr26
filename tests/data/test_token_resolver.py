@@ -163,6 +163,137 @@ class TestSymbolTokenResolverInit:
         assert resolver._kite_provider is mock_kite_provider
 
 
+class TestTokenResolutionScenarios:
+    """Tests for specific token resolution scenarios."""
+
+    @pytest.mark.asyncio
+    async def test_resolve_known_symbol(
+        self, resolver_no_api: SymbolTokenResolver, sample_instrument: Instrument
+    ) -> None:
+        """Test: 'RELIANCE' → instrument_token via cache.
+
+        This test verifies that a known symbol in the cache resolves
+        directly to its instrument_token without API calls.
+        """
+        # Pre-populate cache with RELIANCE
+        _insert_instrument(resolver_no_api._instrument_master, sample_instrument)
+
+        # Resolve symbol - should use cache, not API
+        token = await resolver_no_api.resolve_token("RELIANCE", Exchange.NSE)
+
+        # Verify correct token returned
+        assert token == 408065
+
+        # Verify no API fallback was used (kite_provider is None)
+        assert resolver_no_api._kite_provider is None
+
+    @pytest.mark.asyncio
+    async def test_resolve_unknown_symbol_falls_back_to_api(
+        self, resolver_with_api: SymbolTokenResolver
+    ) -> None:
+        """Test: Cache miss → kite.instruments().
+
+        This test verifies that when a symbol is not in cache,
+        the resolver falls back to kite.instruments() API.
+        """
+        # Ensure symbol is NOT in cache
+        with pytest.raises(ConfigError, match="Instrument not found"):
+            resolver_with_api._instrument_master.get_instrument("INFY", Exchange.NSE)
+
+        # Resolve symbol - should trigger API fallback
+        token = await resolver_with_api.resolve_token("INFY", Exchange.NSE)
+
+        # Verify correct token returned from API
+        assert token == 779521
+
+        # Verify API was called
+        assert resolver_with_api._kite_provider is not None
+        mock_client = resolver_with_api._kite_provider._get_client()
+        assert mock_client.instruments.called
+
+    @pytest.mark.asyncio
+    async def test_resolve_invalid_symbol_raises(
+        self, resolver_no_api: SymbolTokenResolver
+    ) -> None:
+        """Test: 'INVALID' → ConfigError.
+
+        This test verifies that an invalid symbol raises ConfigError
+        when not found in cache and no API fallback available.
+        """
+        # Try to resolve invalid symbol
+        with pytest.raises(ConfigError, match="not found in cache and no kite_provider"):
+            await resolver_no_api.resolve_token("INVALID", Exchange.NSE)
+
+    @pytest.mark.asyncio
+    async def test_resolve_invalid_symbol_with_api_fails(
+        self, resolver_with_api: SymbolTokenResolver
+    ) -> None:
+        """Test: Invalid symbol with API fallback also raises ConfigError.
+
+        This test verifies that even with API fallback, an invalid
+        symbol that doesn't exist in the API response raises ConfigError.
+        """
+        # Mock API returns no instruments
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_client.instruments = MagicMock(return_value=[])
+        resolver_with_api._kite_provider._get_client = MagicMock(return_value=mock_client)
+
+        # Try to resolve invalid symbol
+        with pytest.raises(ConfigError, match="not found even after API refresh"):
+            await resolver_with_api.resolve_token("INVALID", Exchange.NSE)
+
+    @pytest.mark.asyncio
+    async def test_cache_ttl_24h(
+        self,
+        resolver_with_api: SymbolTokenResolver,
+        sample_instrument: Instrument,
+    ) -> None:
+        """Test: Verify stale cache triggers re-fetch.
+
+        This test verifies that when cache is older than 24h TTL,
+        the resolver triggers a re-fetch from API.
+        """
+        # Insert instrument with old timestamp (> 24h ago)
+        now_utc = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
+        with resolver_with_api._instrument_master._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO instruments "
+                "(instrument_token, exchange_token, trading_symbol, name, "
+                "exchange, segment, instrument_type, lot_size, tick_size, "
+                "strike, expiry, fetched_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    sample_instrument.instrument_token,
+                    sample_instrument.exchange_token,
+                    sample_instrument.trading_symbol,
+                    sample_instrument.name,
+                    sample_instrument.exchange.value,
+                    sample_instrument.segment,
+                    sample_instrument.instrument_type.value,
+                    str(sample_instrument.lot_size),
+                    str(sample_instrument.tick_size),
+                    str(sample_instrument.strike) if sample_instrument.strike is not None else None,
+                    sample_instrument.expiry.isoformat()
+                    if sample_instrument.expiry is not None
+                    else None,
+                    now_utc,  # Old timestamp
+                ),
+            )
+            conn.commit()
+
+        # Resolve with force_refresh to bypass cache check
+        # This simulates the behavior when cache is stale
+        token = await resolver_with_api.resolve_token("RELIANCE", Exchange.NSE, force_refresh=True)
+
+        # Verify correct token returned
+        assert token == 408065
+
+        # Verify API was called for refresh
+        mock_client = resolver_with_api._kite_provider._get_client()
+        assert mock_client.instruments.called
+
+
 class TestResolveToken:
     """Tests for resolve_token method."""
 

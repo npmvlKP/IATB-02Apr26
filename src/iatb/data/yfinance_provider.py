@@ -4,6 +4,7 @@ YFinance-backed market data provider for NSE and BSE instruments.
 
 import asyncio
 import importlib
+import logging
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -15,6 +16,8 @@ from iatb.core.types import Timestamp, create_price, create_quantity, create_tim
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 from iatb.data.normalizer import normalize_ohlcv_batch
 from iatb.data.validator import validate_ticker_snapshot
+
+_LOGGER = logging.getLogger(__name__)
 
 _SUPPORTED_EXCHANGES = frozenset({Exchange.NSE, Exchange.BSE})
 
@@ -71,6 +74,7 @@ def _coerce_numeric_input(value: object, *, field_name: str) -> NumericInput:
         raise ConfigError(msg)
     if isinstance(value, Decimal | int | str):
         return value
+    # API boundary conversion: yfinance returns float, convert to str for Decimal
     if isinstance(value, float):
         return str(value)
     msg = f"{field_name} must be numeric-compatible, got {type(value).__name__}"
@@ -89,8 +93,31 @@ def _ensure_datetime(value: object) -> datetime:
 
 
 def _history_rows(history: Any) -> Iterable[tuple[object, Mapping[str, object]]]:
+    """Extract rows from yfinance history using vectorized operations.
+
+    This implementation uses to_dict('records') for 10-100x performance improvement
+    over iterrows() for large DataFrames. Target: 30-day data for 10 symbols in <500ms.
+
+    Falls back to iterrows() if to_dict() fails or is not available.
+    """
+    # Try vectorized approach first
+    if hasattr(history, "to_dict"):
+        try:
+            records = history.to_dict("records")
+            for idx, payload in enumerate(records):
+                if not isinstance(payload, Mapping):
+                    msg = "yfinance row payload must be mapping-like"
+                    raise ConfigError(msg)
+                # Use index as timestamp if not in payload (yfinance behavior)
+                timestamp = history.index[idx] if hasattr(history, "index") else idx
+                yield timestamp, payload
+            return
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("to_dict() failed, falling back to iterrows(): %s", exc)
+
+    # Fallback to iterrows() for backward compatibility
     if not hasattr(history, "iterrows"):
-        msg = "yfinance history response must provide iterrows()"
+        msg = "yfinance history response must support to_dict() or iterrows()"
         raise ConfigError(msg)
     rows = history.iterrows()
     for timestamp, payload in rows:

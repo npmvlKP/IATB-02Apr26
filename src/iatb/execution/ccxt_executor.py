@@ -35,6 +35,24 @@ class CCXTExecutor(Executor):
         _assert_live_enabled()
         return int(self._cancel_all_orders())
 
+    def close_order(self, order_id: str) -> bool:
+        """Close a specific order by ID.
+
+        Args:
+            order_id: The order ID to close.
+
+        Returns:
+            True if order was found and closed, False otherwise.
+
+        Note:
+            CCXT order cancellation is handled via cancel_all in this implementation.
+            Individual order cancellation requires additional CCXT API integration.
+        """
+        _assert_live_enabled()
+        # For now, CCXT executor only supports cancel_all
+        # Individual order cancellation would require cancel_order callable
+        return False
+
 
 def _assert_live_enabled() -> None:
     if os.getenv(_LIVE_GATE_ENV, "").strip().lower() != "true":
