@@ -10,7 +10,7 @@ Tests cover:
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from iatb.core.enums import Exchange
@@ -34,20 +34,6 @@ class MockDataProvider(DataProvider):
     def __init__(self, data: dict[str, list[OHLCVBar]]) -> None:
         self._data = data
         self.get_ohlcv_calls: list[tuple[str, Exchange, str]] = []
-        self._get_ohlcv_async = AsyncMock(side_effect=self._get_ohlcv_impl)
-
-    async def _get_ohlcv_impl(
-        self,
-        *,
-        symbol: str,
-        exchange: Exchange,
-        timeframe: str,
-        since: object = None,
-        limit: int = 500,
-    ) -> list[OHLCVBar]:
-        """Implementation of get_ohlcv."""
-        self.get_ohlcv_calls.append((symbol, exchange, timeframe))
-        return self._data.get(symbol, [])
 
     async def get_ohlcv(
         self,
@@ -58,10 +44,9 @@ class MockDataProvider(DataProvider):
         since: object = None,
         limit: int = 500,
     ) -> list[OHLCVBar]:
-        """Async wrapper."""
-        return await self._get_ohlcv_async(
-            symbol=symbol, exchange=exchange, timeframe=timeframe, since=since, limit=limit
-        )
+        """Async implementation for testing."""
+        self.get_ohlcv_calls.append((symbol, exchange, timeframe))
+        return self._data.get(symbol, [])
 
     async def get_ticker(self, *, symbol: str, exchange: Exchange) -> object:
         """Mock ticker fetch."""

@@ -16,10 +16,15 @@ from typing import Any, cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
-from iatb.core.types import create_timestamp
+from iatb.core.types import Timestamp, create_timestamp
 from iatb.data.base import DataProvider
 from iatb.data.market_data_cache import MarketDataCache
-from iatb.data.rate_limiter import AsyncRateLimiter
+from iatb.data.rate_limiter import (
+    AsyncRateLimiter,
+    CircuitBreaker,
+    RetryConfig,
+    retry_with_backoff,
+)
 from iatb.market_strength.indicators import IndicatorSnapshot, PandasTaIndicators
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
@@ -206,6 +211,8 @@ class InstrumentScanner:
         symbols: Sequence[str] | None = None,
         cache_ttl_seconds: int = 60,
         rate_limiter: AsyncRateLimiter | None = None,
+        retry_config: RetryConfig | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         self._config = config or ScannerConfig()
         self._data_provider = data_provider
@@ -222,6 +229,21 @@ class InstrumentScanner:
         self._rate_limiter = rate_limiter or AsyncRateLimiter(
             requests_per_second=10.0,
             burst_capacity=20,
+        )
+
+        # Retry configuration for API resilience
+        # Default: 3 retries with exponential backoff (1s, 2s, 4s)
+        self._retry_config = retry_config or RetryConfig(
+            max_retries=3,
+            initial_delay=1.0,
+            backoff_multiplier=2.0,
+            jitter_seconds=0.5,
+        )
+
+        # Circuit breaker to prevent cascading failures
+        # Opens after 5 consecutive failures, resets after 60 seconds
+        self._circuit_breaker = circuit_breaker or CircuitBreaker(
+            failure_threshold=5, reset_timeout=60.0, name="instrument_scanner"
         )
 
     def scan(
@@ -269,13 +291,18 @@ class InstrumentScanner:
         if not self._symbols:
             return []
 
-        # Run parallel fetch using asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Check if there's already a running event loop
         try:
-            results = loop.run_until_complete(self._fetch_symbols_parallel())
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+            # We're in an async context, need to run in thread to avoid blocking
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, self._fetch_symbols_parallel())
+                results = future.result()
+        except RuntimeError:
+            # No running loop, safe to use asyncio.run()
+            results = asyncio.run(self._fetch_symbols_parallel())
 
         return [r for r in results if r is not None]
 
@@ -333,12 +360,35 @@ class InstrumentScanner:
             symbol, exchange, category, price_data, indicators, bars[0].source
         )
 
+    async def _fetch_ohlcv_bars_raw(
+        self,
+        symbol: str,
+        exchange: Exchange,
+        since_timestamp: Timestamp | None,
+    ) -> list[Any]:
+        """
+        Raw OHLCV fetch without retry/backoff (for retry wrapper).
+        """
+        if self._data_provider is None:
+            msg = "DataProvider not configured"
+            raise ConfigError(msg)
+
+        # get_ohlcv() is async, no need for asyncio.to_thread wrapper
+        bars = await self._data_provider.get_ohlcv(
+            symbol=symbol,
+            exchange=exchange,
+            timeframe="1d",
+            since=since_timestamp,
+            limit=self._config.lookback_days,
+        )
+        return bars
+
     async def _fetch_ohlcv_bars(self, symbol: str, exchange: Exchange) -> list[Any]:
         """
-        Fetch OHLCV bars from data provider with rate limiting.
+        Fetch OHLCV bars from data provider with rate limiting and retry/backoff.
 
-        Uses asyncio.to_thread() to run blocking provider calls in a thread pool,
-        enabling true parallel HTTP I/O for multiple symbols.
+        Uses exponential backoff (1s, 2s, 4s) with jitter and circuit breaker
+        to handle transient failures and prevent cascading failures.
         """
         if self._data_provider is None:
             msg = "DataProvider not configured"
@@ -348,17 +398,16 @@ class InstrumentScanner:
             since_timestamp = create_timestamp(
                 datetime.now(UTC) - timedelta(days=self._config.lookback_days)
             )
-            # Use asyncio.to_thread to run blocking provider call in thread pool
-            # This enables true parallel execution for multiple symbols
-            bars = await asyncio.to_thread(
-                self._data_provider.get_ohlcv,
+            # Use retry wrapper with exponential backoff and circuit breaker
+            bars: list[Any] = await retry_with_backoff(
+                self._fetch_ohlcv_bars_raw,
+                config=self._retry_config,
+                circuit_breaker=self._circuit_breaker,
                 symbol=symbol,
                 exchange=exchange,
-                timeframe="1d",
-                since=since_timestamp,
-                limit=self._config.lookback_days,
+                since_timestamp=since_timestamp,
             )
-            return bars  # type: ignore[return-value]
+            return bars
 
     @dataclass
     class _PriceData:

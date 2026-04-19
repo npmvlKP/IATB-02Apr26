@@ -1,8 +1,11 @@
-"""Tests for instrument_scanner.py - focused on uncovered lines."""
+"""Tests for instrument_scanner.py - focused on uncovered lines and event loop management."""
 
+import asyncio
 import random
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -188,3 +191,140 @@ class TestMarketData:
             breadth_ratio=Decimal("1.2"),
         )
         assert data.volume_ratio == Decimal("0")
+
+
+class TestEventLoopManagement:
+    """Test event loop handling in _fetch_market_data."""
+
+    def _create_mock_data_provider(self):
+        """Create a mock data provider."""
+
+        @dataclass
+        class MockBar:
+            timestamp: datetime
+            open: Decimal
+            high: Decimal
+            low: Decimal
+            close: Decimal
+            volume: Decimal
+            source: str = "mock"
+
+        provider = MagicMock()
+        # Create 30 days of mock data
+        bars = []
+        for i in range(30):
+            bars.append(
+                MockBar(
+                    timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=UTC) - timedelta(days=i),
+                    open=Decimal("100") + Decimal(str(i)),
+                    high=Decimal("105") + Decimal(str(i)),
+                    low=Decimal("95") + Decimal(str(i)),
+                    close=Decimal("100") + Decimal(str(i)),
+                    volume=Decimal("1000000"),
+                    source="mock",
+                )
+            )
+        provider.get_ohlcv.return_value = bars
+        return provider
+
+    def test_fetch_market_data_no_running_loop(self):
+        """Test _fetch_market_data when no event loop is running."""
+        mock_data_provider = self._create_mock_data_provider()
+        scanner = InstrumentScanner(
+            symbols=["TEST1", "TEST2"],
+            data_provider=mock_data_provider,
+        )
+        # This should work without any existing event loop
+        result = scanner._fetch_market_data()
+        assert isinstance(result, list)
+        # Provider should be called for each symbol
+        assert mock_data_provider.get_ohlcv.call_count == 2
+
+    def test_fetch_market_data_with_running_loop(self):
+        """Test _fetch_market_data when called from within an async context."""
+        mock_data_provider = self._create_mock_data_provider()
+        scanner = InstrumentScanner(
+            symbols=["TEST1", "TEST2"],
+            data_provider=mock_data_provider,
+        )
+
+        async def call_from_async():
+            # This is called from within an async context
+            return scanner._fetch_market_data()
+
+        # Run from within an event loop
+        result = asyncio.run(call_from_async())
+        assert isinstance(result, list)
+        assert mock_data_provider.get_ohlcv.call_count == 2
+
+    def test_fetch_market_data_concurrent_calls(self):
+        """Test multiple concurrent calls to _fetch_market_data."""
+        mock_data_provider = self._create_mock_data_provider()
+        scanner = InstrumentScanner(
+            symbols=["TEST1"],
+            data_provider=mock_data_provider,
+        )
+
+        async def concurrent_fetch():
+            # Simulate multiple concurrent scans
+            tasks = [asyncio.to_thread(scanner._fetch_market_data) for _ in range(3)]
+            results = await asyncio.gather(*tasks)
+            return results
+
+        results = asyncio.run(concurrent_fetch())
+        assert len(results) == 3
+        for result in results:
+            assert isinstance(result, list)
+
+    def test_fetch_market_data_empty_symbols(self):
+        """Test _fetch_market_data with empty symbols list."""
+        scanner = InstrumentScanner(symbols=[])
+        result = scanner._fetch_market_data()
+        assert result == []
+
+    def test_fetch_market_data_handles_exceptions_gracefully(self):
+        """Test that _fetch_market_data handles individual symbol failures."""
+        # Mock provider that raises exception for one symbol
+        provider = MagicMock()
+        provider.get_ohlcv.side_effect = Exception("API error")
+
+        scanner = InstrumentScanner(
+            symbols=["FAIL1", "FAIL2"],
+            data_provider=provider,
+        )
+
+        # Should return empty list since all symbols fail
+        result = scanner._fetch_market_data()
+        assert result == []
+
+    def test_async_fetch_single_symbol_with_cache(self):
+        """Test _fetch_single_symbol_async with cache hit."""
+        cache = MagicMock()
+        cache.get.return_value = MarketData(
+            symbol="CACHED",
+            exchange=Exchange.NSE,
+            category=InstrumentCategory.STOCK,
+            close_price=Decimal("100"),
+            prev_close_price=Decimal("95"),
+            volume=Decimal("1000"),
+            avg_volume=Decimal("500"),
+            timestamp_utc=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            high_price=Decimal("105"),
+            low_price=Decimal("98"),
+            adx=Decimal("25"),
+            atr_pct=Decimal("0.01"),
+            breadth_ratio=Decimal("1.2"),
+        )
+
+        scanner = InstrumentScanner()
+        scanner._cache = cache
+
+        async def test_cache_hit():
+            result = await scanner._fetch_single_symbol_async("CACHED")
+            return result
+
+        result = asyncio.run(test_cache_hit())
+        assert result is not None
+        assert result.symbol == "CACHED"
+        # Should not call provider if cache hit
+        cache.get.assert_called_once()
