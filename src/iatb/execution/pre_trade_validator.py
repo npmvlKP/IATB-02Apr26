@@ -1,11 +1,24 @@
 """
-Pre-trade order validation with five risk gates.
+Pre-trade order validation with five risk gates + price reconciliation.
+
+MITIGATION OF RISK 1 (Data Inconsistency):
+- Scanner and execution both use KiteProvider as single source of truth
+- Price reconciliation validates timestamp consistency, not cross-source discrepancies
+- Eliminates 0.1-2% price discrepancies from multi-source architecture
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 
 from iatb.core.exceptions import ConfigError
+from iatb.core.types import Price
+from iatb.data.price_reconciler import (
+    PriceDataPoint,
+    PriceReconciler,
+    ReconciliationConfig,
+    ReconciliationResult,
+)
 from iatb.execution.base import OrderRequest
 
 
@@ -110,3 +123,133 @@ def _check_exposure(
     if projected > config.max_portfolio_exposure:
         msg = f"exposure {projected} exceeds max {config.max_portfolio_exposure}"
         raise ConfigError(msg)
+
+
+def _create_price_data_points(
+    scanner_price: Decimal,
+    execution_price: Decimal,
+    scanner_timestamp: datetime,
+    execution_timestamp: datetime,
+    symbol: str,
+    prev_close_price: Decimal | None,
+) -> tuple[PriceDataPoint, PriceDataPoint, Price | None]:
+    """Create price data points for scanner and execution."""
+    scanner_data = _create_scanner_data_point(scanner_price, scanner_timestamp, symbol)
+    execution_data = _create_execution_data_point(execution_price, execution_timestamp, symbol)
+    prev_close = Price(prev_close_price) if prev_close_price else None
+    return scanner_data, execution_data, prev_close
+
+
+def _perform_reconciliation(
+    scanner_data: PriceDataPoint,
+    execution_data: PriceDataPoint,
+    prev_close: Price | None,
+    config: ReconciliationConfig,
+) -> ReconciliationResult:
+    """Perform price reconciliation using PriceReconciler."""
+    reconciler = PriceReconciler(config)
+    return reconciler.reconcile_prices(
+        scanner_price=scanner_data,
+        execution_price=execution_data,
+        prev_close_price=prev_close,
+    )
+
+
+def validate_with_price_reconciliation(
+    scanner_price: Decimal,
+    execution_price: Decimal,
+    scanner_timestamp: datetime,
+    execution_timestamp: datetime,
+    symbol: str,
+    prev_close_price: Decimal | None = None,
+    reconciler_config: ReconciliationConfig | None = None,
+) -> ReconciliationResult:
+    """
+    Validate prices between scanner and execution sources (both from Kite).
+
+    MITIGATION OF RISK 1: Single-source architecture eliminates 0.1-2% discrepancies.
+    Validates timestamp consistency, symbol mapping, data freshness, and CA detection.
+
+    Args:
+        scanner_price: Price from scanner (Kite, via DataProvider)
+        execution_price: Price from execution (Kite, real-time)
+        scanner_timestamp: Timestamp of scanner price data
+        execution_timestamp: Timestamp of execution price data
+        symbol: Trading symbol
+        prev_close_price: Previous day's close price for CA detection
+        reconciler_config: Configuration for reconciliation (uses defaults if None)
+
+    Returns:
+        ReconciliationResult with pass/fail status and detailed reason
+
+    Raises:
+        ConfigError: If timestamps are not UTC-aware or invalid
+    """
+    config = reconciler_config or ReconciliationConfig()
+    scanner_data, execution_data, prev_close = _create_price_data_points(
+        scanner_price,
+        execution_price,
+        scanner_timestamp,
+        execution_timestamp,
+        symbol,
+        prev_close_price,
+    )
+    return _perform_reconciliation(scanner_data, execution_data, prev_close, config)
+
+
+def _create_scanner_data_point(price: Decimal, timestamp: datetime, symbol: str) -> PriceDataPoint:
+    """Create PriceDataPoint for scanner (Kite via DataProvider) source."""
+    return PriceDataPoint(
+        price=Price(price),
+        timestamp=timestamp,
+        source="kite",
+        symbol=symbol,
+        data_type="day",
+    )
+
+
+def _create_execution_data_point(
+    price: Decimal, timestamp: datetime, symbol: str
+) -> PriceDataPoint:
+    """Create PriceDataPoint for execution (Kite) source."""
+    return PriceDataPoint(
+        price=Price(price),
+        timestamp=timestamp,
+        source="kite",
+        symbol=symbol,
+        data_type="tick",
+    )
+
+
+def create_reconciliation_config(
+    max_price_deviation_pct: Decimal = Decimal("0.02"),
+    max_timestamp_drift_seconds: int = 60,
+    strict_eod_alignment: bool = True,
+    detect_corporate_actions: bool = True,
+    validate_symbol_mapping: bool = True,
+    max_price_jump_pct: Decimal = Decimal("0.20"),
+) -> ReconciliationConfig:
+    """
+    Create a ReconciliationConfig with specified parameters.
+
+    Helper function to create configuration with production-safe defaults.
+
+    Args:
+        max_price_deviation_pct: Maximum allowed price deviation (default 2%)
+        max_timestamp_drift_seconds: Maximum timestamp drift in seconds (default 60s)
+        strict_eod_alignment: Enable strict EOD timestamp alignment (default True)
+        detect_corporate_actions: Enable corporate action detection (default True)
+        validate_symbol_mapping: Enable symbol mapping validation (default True)
+        max_price_jump_pct: Maximum price jump before CA detection (default 20%)
+
+    Returns:
+        ReconciliationConfig instance
+    """
+    return ReconciliationConfig(
+        max_price_deviation_pct=max_price_deviation_pct,
+        max_timestamp_drift_seconds=max_timestamp_drift_seconds,
+        strict_eod_alignment=strict_eod_alignment,
+        detect_corporate_actions=detect_corporate_actions,
+        validate_symbol_mapping=validate_symbol_mapping,
+        max_price_jump_pct=max_price_jump_pct,
+    )
