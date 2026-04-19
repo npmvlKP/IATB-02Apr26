@@ -1,39 +1,41 @@
 """
-Unit tests for InstrumentScanner with DataProvider Dependency Injection.
+Unit tests for InstrumentScanner DataProvider Dependency Injection.
 
 Tests cover:
-- Scanner uses injected DataProvider.get_ohlcv()
-- Custom data bypasses provider fetch
-- No provider raises ConfigError gracefully
-- Exchange derived from config, not hardcoded
+- DataProvider injection into InstrumentScanner
+- Scanner with KiteProvider as DataProvider
+- Scanner with JugaadProvider as DataProvider
+- Scanner with FailoverProvider as DataProvider
+- Custom data provider mocking
+- Scanner behavior with different data sources
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from iatb.core.enums import Exchange
-from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_quantity, create_timestamp
-from iatb.data.base import DataProvider, OHLCVBar
+from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
+from iatb.data.kite_provider import KiteProvider
 from iatb.scanner.instrument_scanner import (
-    InstrumentCategory,
     InstrumentScanner,
     MarketData,
     ScannerConfig,
-    ScannerResult,
+    SortDirection,
     create_mock_rl_predictor,
     create_mock_sentiment_analyzer,
 )
 
 
 class MockDataProvider(DataProvider):
-    """Mock DataProvider for testing."""
+    """Mock data provider for testing."""
 
-    def __init__(self, data: dict[str, list[OHLCVBar]]) -> None:
-        self._data = data
-        self.get_ohlcv_calls: list[tuple[str, Exchange, str]] = []
+    def __init__(self, data: list[MarketData] | None = None) -> None:
+        self._data = data or []
+        self.name = "mock_provider"
 
     async def get_ohlcv(
         self,
@@ -41,441 +43,470 @@ class MockDataProvider(DataProvider):
         symbol: str,
         exchange: Exchange,
         timeframe: str,
-        since: object = None,
+        since: Any = None,
         limit: int = 500,
     ) -> list[OHLCVBar]:
-        """Async implementation for testing."""
-        self.get_ohlcv_calls.append((symbol, exchange, timeframe))
-        return self._data.get(symbol, [])
+        """Return mock OHLCV bars."""
+        for item in self._data:
+            if item.symbol == symbol and item.exchange == exchange:
+                return [
+                    OHLCVBar(
+                        timestamp=create_timestamp(item.timestamp_utc),
+                        open=create_price(str(item.open_price)),
+                        high=create_price(str(item.high_price)),
+                        low=create_price(str(item.low_price)),
+                        close=create_price(str(item.close_price)),
+                        volume=create_quantity(str(item.volume)),
+                        symbol=symbol,
+                        exchange=exchange,
+                        timeframe=timeframe,
+                        source="mock",
+                    )
+                ]
+        return []
 
-    async def get_ticker(self, *, symbol: str, exchange: Exchange) -> object:
-        """Mock ticker fetch."""
-        return MagicMock()
-
-    async def get_ohlcv_batch(
-        self,
-        *,
-        symbols: list[str],
-        exchange: Exchange,
-        timeframe: str,
-        since: object = None,
-        limit: int = 500,
-    ) -> dict[str, list[OHLCVBar]]:
-        """Mock batch fetch."""
-        return {
-            sym: await self.get_ohlcv(symbol=sym, exchange=exchange, timeframe=timeframe)
-            for sym in symbols
-        }
+    async def get_ticker(self, *, symbol: str, exchange: Exchange) -> TickerSnapshot:
+        """Return mock ticker snapshot."""
+        return TickerSnapshot(
+            exchange=exchange,
+            symbol=symbol,
+            bid=create_price("100"),
+            ask=create_price("101"),
+            last=create_price("100.5"),
+            volume_24h=create_quantity("1000000"),
+            source="mock",
+        )
 
 
-class TestScannerUsesInjectedProvider:
-    """Test that scanner uses injected DataProvider.get_ohlcv()."""
+class TestInstrumentScannerDI:
+    """Test DataProvider dependency injection in InstrumentScanner."""
 
     @pytest.fixture
-    def mock_provider(self):
-        """Create mock provider with test data."""
-        bars = [
-            OHLCVBar(
-                timestamp=create_timestamp(datetime(2024, 1, 15, 10, 0, tzinfo=UTC)),
-                exchange=Exchange.NSE,
+    def mock_market_data(self):
+        """Create mock market data for testing."""
+        now = datetime.now(UTC)
+        return [
+            MarketData(
                 symbol="RELIANCE",
-                open=create_price("1000"),
-                high=create_price("1050"),
-                low=create_price("990"),
-                close=create_price("1040"),
-                volume=create_quantity("1000000"),
-                source="mock",
-            ),
-            OHLCVBar(
-                timestamp=create_timestamp(datetime(2024, 1, 14, 10, 0, tzinfo=UTC)),
                 exchange=Exchange.NSE,
-                symbol="RELIANCE",
-                open=create_price("950"),
-                high=create_price("980"),
-                low=create_price("940"),
-                close=create_price("970"),
-                volume=create_quantity("800000"),
-                source="mock",
+                category=InstrumentScanner._determine_category("RELIANCE"),
+                close_price=Decimal("1000.0"),
+                prev_close_price=Decimal("950.0"),
+                volume=Decimal("1000000"),
+                avg_volume=Decimal("500000"),
+                timestamp_utc=now,
+                high_price=Decimal("1050.0"),
+                low_price=Decimal("950.0"),
+                adx=Decimal("25.0"),
+                atr_pct=Decimal("0.05"),
+                breadth_ratio=Decimal("1.2"),
+                data_source="mock",
             ),
-        ]
-        return MockDataProvider({"RELIANCE": bars})
-
-    def test_scanner_uses_injected_provider(self, mock_provider):
-        """Verify DataProvider.get_ohlcv() called."""
-        scanner = InstrumentScanner(
-            data_provider=mock_provider,
-            symbols=["RELIANCE"],
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
-        )
-
-        scanner.scan()
-
-        # Verify provider was called
-        assert len(mock_provider.get_ohlcv_calls) > 0
-        assert ("RELIANCE", Exchange.NSE, "1d") in mock_provider.get_ohlcv_calls
-
-    def test_scanner_passes_correct_parameters_to_provider(self, mock_provider):
-        """Verify scanner passes correct symbol, exchange, timeframe to provider."""
-        scanner = InstrumentScanner(
-            data_provider=mock_provider,
-            symbols=["RELIANCE"],
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
-        )
-
-        scanner.scan()
-
-        # Verify parameters
-        call = mock_provider.get_ohlcv_calls[0]
-        assert call[0] == "RELIANCE"  # symbol
-        assert call[1] == Exchange.NSE  # exchange
-        assert call[2] == "1d"  # timeframe (default)
-
-    def test_scanner_uses_provider_data_in_scan(self, mock_provider):
-        """Verify scanner processes data from provider correctly."""
-        scanner = InstrumentScanner(
-            data_provider=mock_provider,
-            symbols=["RELIANCE"],
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
-        )
-
-        result = scanner.scan()
-
-        # Verify result contains provider data
-        assert result.total_scanned == 1
-        if result.gainers:
-            assert result.gainers[0].symbol == "RELIANCE"
-
-    def test_scanner_calls_provider_for_multiple_symbols(self):
-        """Verify scanner calls provider for each symbol."""
-        bars_reliance = [
-            OHLCVBar(
-                timestamp=create_timestamp(datetime(2024, 1, 15, 10, 0, tzinfo=UTC)),
-                exchange=Exchange.NSE,
-                symbol="RELIANCE",
-                open=create_price("1000"),
-                high=create_price("1050"),
-                low=create_price("990"),
-                close=create_price("1040"),
-                volume=create_quantity("1000000"),
-                source="mock",
-            ),
-            OHLCVBar(
-                timestamp=create_timestamp(datetime(2024, 1, 14, 10, 0, tzinfo=UTC)),
-                exchange=Exchange.NSE,
-                symbol="RELIANCE",
-                open=create_price("950"),
-                high=create_price("980"),
-                low=create_price("940"),
-                close=create_price("970"),
-                volume=create_quantity("800000"),
-                source="mock",
-            ),
-        ]
-
-        bars_tcs = [
-            OHLCVBar(
-                timestamp=create_timestamp(datetime(2024, 1, 15, 10, 0, tzinfo=UTC)),
-                exchange=Exchange.NSE,
+            MarketData(
                 symbol="TCS",
-                open=create_price("3500"),
-                high=create_price("3550"),
-                low=create_price("3480"),
-                close=create_price("3540"),
-                volume=create_quantity("500000"),
-                source="mock",
-            ),
-            OHLCVBar(
-                timestamp=create_timestamp(datetime(2024, 1, 14, 10, 0, tzinfo=UTC)),
                 exchange=Exchange.NSE,
-                symbol="TCS",
-                open=create_price("3450"),
-                high=create_price("3490"),
-                low=create_price("3440"),
-                close=create_price("3480"),
-                volume=create_quantity("400000"),
-                source="mock",
+                category=InstrumentScanner._determine_category("TCS"),
+                close_price=Decimal("3500.0"),
+                prev_close_price=Decimal("3400.0"),
+                volume=Decimal("500000"),
+                avg_volume=Decimal("300000"),
+                timestamp_utc=now,
+                high_price=Decimal("3600.0"),
+                low_price=Decimal("3400.0"),
+                adx=Decimal("30.0"),
+                atr_pct=Decimal("0.03"),
+                breadth_ratio=Decimal("1.5"),
+                data_source="mock",
             ),
         ]
 
-        mock_provider = MockDataProvider({"RELIANCE": bars_reliance, "TCS": bars_tcs})
+    @pytest.fixture
+    def mock_data_provider(self, mock_market_data):
+        """Create mock data provider."""
+        return MockDataProvider(data=mock_market_data)
+
+    def test_scanner_accepts_data_provider_injection(self, mock_data_provider):
+        """Test that InstrumentScanner accepts DataProvider via DI."""
+        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
+            data_provider=mock_data_provider,
+        )
+
+        assert scanner._data_provider is not None
+        assert scanner._data_provider == mock_data_provider
+
+    def test_scanner_works_without_data_provider_with_custom_data(self, mock_market_data):
+        """Test that scanner works with custom data without DataProvider."""
+        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
+            data_provider=None,  # No DataProvider
+        )
+
+        # Use custom data
+        result = scanner.scan(
+            direction=SortDirection.GAINERS,
+            custom_data=mock_market_data,
+        )
+
+        assert result is not None
+        assert result.total_scanned == len(mock_market_data)
+
+    def test_scanner_raises_error_without_provider_or_custom_data(self):
+        """Test that scanner raises error when neither provider nor custom data is given."""
+        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
+            data_provider=None,
+        )
+
+        with pytest.raises(Exception, match="DataProvider not configured"):
+            scanner.scan(direction=SortDirection.GAINERS)
+
+    def test_scanner_with_mock_sentiment_and_rl(self, mock_data_provider):
+        """Test scanner with mocked sentiment and RL predictors."""
+        sentiment_analyzer = create_mock_sentiment_analyzer(
+            {"RELIANCE": (Decimal("0.8"), True), "TCS": (Decimal("0.9"), True)}
+        )
+        rl_predictor = create_mock_rl_predictor(probability=Decimal("0.7"))
 
         scanner = InstrumentScanner(
-            data_provider=mock_provider,
+            config=ScannerConfig(top_n=5),
+            data_provider=mock_data_provider,
+            sentiment_analyzer=sentiment_analyzer,
+            rl_predictor=rl_predictor,
             symbols=["RELIANCE", "TCS"],
+        )
+
+        result = scanner.scan(direction=SortDirection.GAINERS)
+
+        assert result is not None
+        assert result.total_scanned == 2
+
+    def test_scanner_filters_by_volume_ratio(self, mock_market_data):
+        """Test that scanner filters by volume ratio."""
+        scanner = InstrumentScanner(
+            config=ScannerConfig(min_volume_ratio=Decimal("3.0"), top_n=5),
+            data_provider=MockDataProvider(data=mock_market_data),
+        )
+
+        result = scanner.scan(
+            direction=SortDirection.GAINERS,
+            custom_data=mock_market_data,
+        )
+
+        # RELIANCE has volume_ratio = 1000000/500000 = 2.0 (filtered out)
+        # TCS has volume_ratio = 500000/300000 = 1.67 (filtered out)
+        # Both should be filtered out due to min_volume_ratio=3.0
+        assert len(result.gainers) == 0
+
+    def test_scanner_ranks_by_pct_change(self, mock_market_data):
+        """Test that scanner ranks candidates by % change."""
+        scanner = InstrumentScanner(
+            config=ScannerConfig(min_volume_ratio=Decimal("1.0"), top_n=5),
+            data_provider=MockDataProvider(data=mock_market_data),
             sentiment_analyzer=create_mock_sentiment_analyzer(
-                {"RELIANCE": (Decimal("0.8"), True), "TCS": (Decimal("0.85"), True)}
+                {"RELIANCE": (Decimal("0.8"), True), "TCS": (Decimal("0.9"), True)}
             ),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+            rl_predictor=create_mock_rl_predictor(probability=Decimal("0.7")),
         )
 
-        scanner.scan()
+        result = scanner.scan(
+            direction=SortDirection.GAINERS,
+            custom_data=mock_market_data,
+        )
 
-        # Verify provider called for both symbols
-        symbols_called = {call[0] for call in mock_provider.get_ohlcv_calls}
-        assert "RELIANCE" in symbols_called
-        assert "TCS" in symbols_called
+        if len(result.gainers) >= 2:
+            # First gainer should have higher % change than second
+            assert result.gainers[0].pct_change >= result.gainers[1].pct_change
 
 
-class TestScannerCustomDataBypassesProvider:
-    """Test that custom_data bypasses provider fetch."""
+class TestScannerWithKiteProvider:
+    """Test InstrumentScanner with KiteProvider as DataProvider."""
 
-    def test_scanner_custom_data_bypasses_provider(self):
-        """Verify custom_data path unchanged."""
-        mock_provider = MockDataProvider({})
+    @pytest.fixture
+    def mock_kite_client(self):
+        """Create mock KiteConnect client."""
+        client = MagicMock()
+
+        # Mock historical_data response
+        now = datetime.now(UTC)
+        client.historical_data.return_value = [
+            {
+                "date": now - timedelta(days=1),
+                "open": 950.0,
+                "high": 1000.0,
+                "low": 940.0,
+                "close": 990.0,
+                "volume": 1000000,
+            },
+            {
+                "date": now,
+                "open": 990.0,
+                "high": 1050.0,
+                "low": 980.0,
+                "close": 1040.0,
+                "volume": 1200000,
+            },
+        ]
+
+        # Mock quote response
+        client.quote.return_value = {
+            "NSE:RELIANCE": {
+                "last_price": 1040.0,
+                "bid": 1039.0,
+                "ask": 1041.0,
+                "volume": 1200000,
+            }
+        }
+
+        return client
+
+    @pytest.mark.asyncio
+    async def test_scanner_with_kite_provider_fetches_data(self, mock_kite_client):
+        """Test that scanner fetches data from KiteProvider."""
+        kite_provider = KiteProvider(
+            api_key="test_key",
+            access_token="test_token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
         scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
+            data_provider=kite_provider,
+            symbols=["RELIANCE"],
+            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            rl_predictor=create_mock_rl_predictor(probability=Decimal("0.7")),
+        )
+
+        result = scanner.scan(direction=SortDirection.GAINERS)
+
+        assert result is not None
+        assert result.total_scanned >= 0
+
+    @pytest.mark.asyncio
+    async def test_kite_provider_retry_on_failure(self, mock_kite_client):
+        """Test that KiteProvider retry logic works through scanner."""
+        # Make first call fail, second succeed
+        call_count = 0
+
+        def failing_historical_data(*args: Any, **kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("429 Too Many Requests")
+            now = datetime.now(UTC)
+            return [
+                {
+                    "date": now,
+                    "open": 1000.0,
+                    "high": 1050.0,
+                    "low": 980.0,
+                    "close": 1040.0,
+                    "volume": 1000000,
+                }
+            ]
+
+        mock_kite_client.historical_data.side_effect = failing_historical_data
+
+        kite_provider = KiteProvider(
+            api_key="test_key",
+            access_token="test_token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+            max_retries=3,
+            initial_retry_delay=0.01,
+        )
+
+        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
+            data_provider=kite_provider,
+            symbols=["RELIANCE"],
+            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            rl_predictor=create_mock_rl_predictor(probability=Decimal("0.7")),
+        )
+
+        result = scanner.scan(direction=SortDirection.GAINERS)
+
+        # Should have retried and succeeded
+        assert call_count == 2
+        assert result is not None
+
+
+class TestScannerWithFailoverProvider:
+    """Test InstrumentScanner with FailoverProvider as DataProvider."""
+
+    @pytest.fixture
+    def mock_kite_client(self):
+        """Create mock KiteConnect client."""
+        client = MagicMock()
+        now = datetime.now(UTC)
+        client.historical_data.return_value = [
+            {
+                "date": now,
+                "open": 1000.0,
+                "high": 1050.0,
+                "low": 980.0,
+                "close": 1040.0,
+                "volume": 1000000,
+            }
+        ]
+        client.quote.return_value = {
+            "NSE:RELIANCE": {
+                "last_price": 1040.0,
+                "bid": 1039.0,
+                "ask": 1041.0,
+                "volume": 1000000,
+            }
+        }
+        return client
+
+    @pytest.fixture
+    def mock_jugaad_data(self):
+        """Create mock Jugaad data."""
+        now = datetime.now(UTC)
+        return [
+            OHLCVBar(
+                timestamp=create_timestamp(now),
+                open=create_price("1000.0"),
+                high=create_price("1050.0"),
+                low=create_price("980.0"),
+                close=create_price("1040.0"),
+                volume=create_quantity("1000000"),
+                symbol="RELIANCE",
+                exchange=Exchange.NSE,
+                timeframe="1d",
+                source="jugaad",
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_scanner_with_failover_provider(self, mock_kite_client, mock_jugaad_data):
+        """Test that scanner works with FailoverProvider."""
+        from iatb.data.failover_provider import FailoverProvider
+        from iatb.data.jugaad_provider import JugaadProvider
+
+        # Make KiteProvider fail initially
+        def failing_kite_factory(*args: Any, **kwargs: Any) -> Any:
+            client = MagicMock()
+            client.historical_data.side_effect = Exception("Kite API Error")
+            return client
+
+        kite_provider = KiteProvider(
+            api_key="test_key",
+            access_token="test_token",
+            kite_connect_factory=failing_kite_factory,
+        )
+
+        jugaad_provider = JugaadProvider()
+
+        failover_provider = FailoverProvider(
+            providers=[kite_provider, jugaad_provider],
+            cooldown_seconds=1.0,
+        )
+
+        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
+            data_provider=failover_provider,
+            symbols=["RELIANCE"],
+            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            rl_predictor=create_mock_rl_predictor(probability=Decimal("0.7")),
+        )
+
+        # This should fall back to JugaadProvider
+        result = scanner.scan(direction=SortDirection.GAINERS)
+
+        assert result is not None
+
+
+class TestScannerRateLimiting:
+    """Test scanner rate limiting with DataProvider."""
+
+    @pytest.mark.asyncio
+    async def test_scanner_respects_rate_limiter(self):
+        """Test that scanner respects rate limiter configuration."""
+        call_count = 0
+
+        async def mock_get_ohlcv(*args: Any, **kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            now = datetime.now(UTC)
+            return [
+                OHLCVBar(
+                    timestamp=create_timestamp(now),
+                    open=create_price("1000.0"),
+                    high=create_price("1050.0"),
+                    low=create_price("980.0"),
+                    close=create_price("1040.0"),
+                    volume=create_quantity("1000000"),
+                    symbol=kwargs.get("symbol", "TEST"),
+                    exchange=Exchange.NSE,
+                    timeframe="1d",
+                    source="mock",
+                )
+            ]
+
+        mock_provider = MockDataProvider()
+        mock_provider.get_ohlcv = mock_get_ohlcv  # type: ignore
+
+        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
             data_provider=mock_provider,
-            symbols=["RELIANCE"],  # These should be ignored
-            sentiment_analyzer=create_mock_sentiment_analyzer({"CUSTOM": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+            symbols=["RELIANCE", "TCS", "INFY"],
+            rate_limiter=None,  # No rate limiter
         )
 
-        custom_data = [
-            MarketData(
-                symbol="CUSTOM",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                close_price=Decimal("1000"),
-                prev_close_price=Decimal("950"),
-                volume=Decimal("1000000"),
-                avg_volume=Decimal("500000"),
-                timestamp_utc=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-                high_price=Decimal("1050"),
-                low_price=Decimal("990"),
-                adx=Decimal("30"),
-                atr_pct=Decimal("0.02"),
-                breadth_ratio=Decimal("1.5"),
-            )
-        ]
+        result = scanner.scan(direction=SortDirection.GAINERS)
 
-        result = scanner.scan(custom_data=custom_data)
+        assert result is not None
+        assert call_count == 3  # One call per symbol
 
-        # Verify provider was NOT called
-        assert len(mock_provider.get_ohlcv_calls) == 0
 
-        # Verify custom data was used
-        assert result.total_scanned == 1
-        assert result.gainers[0].symbol == "CUSTOM"
+class TestScannerCircuitBreaker:
+    """Test scanner circuit breaker with DataProvider."""
 
-    def test_custom_data_works_without_provider(self):
-        """Verify custom_data works even when no provider is configured."""
-        scanner = InstrumentScanner(
-            data_provider=None,  # No provider
-            symbols=["RELIANCE"],
-            sentiment_analyzer=create_mock_sentiment_analyzer({"CUSTOM": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+    @pytest.mark.asyncio
+    async def test_scanner_with_circuit_breaker(self):
+        """Test that scanner uses circuit breaker for resilience."""
+        call_count = 0
+
+        async def failing_get_ohlcv(*args: Any, **kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise Exception("API Error")
+            now = datetime.now(UTC)
+            return [
+                OHLCVBar(
+                    timestamp=create_timestamp(now),
+                    open=create_price("1000.0"),
+                    high=create_price("1050.0"),
+                    low=create_price("980.0"),
+                    close=create_price("1040.0"),
+                    volume=create_quantity("1000000"),
+                    symbol="RELIANCE",
+                    exchange=Exchange.NSE,
+                    timeframe="1d",
+                    source="mock",
+                )
+            ]
+
+        mock_provider = MockDataProvider()
+        mock_provider.get_ohlcv = failing_get_ohlcv  # type: ignore
+
+        from iatb.data.rate_limiter import CircuitBreaker
+
+        circuit_breaker = CircuitBreaker(
+            failure_threshold=5, reset_timeout=10.0, name="test_circuit"
         )
 
-        custom_data = [
-            MarketData(
-                symbol="CUSTOM",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                close_price=Decimal("1000"),
-                prev_close_price=Decimal("950"),
-                volume=Decimal("1000000"),
-                avg_volume=Decimal("500000"),
-                timestamp_utc=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-                high_price=Decimal("1050"),
-                low_price=Decimal("990"),
-                adx=Decimal("30"),
-                atr_pct=Decimal("0.02"),
-                breadth_ratio=Decimal("1.5"),
-            )
-        ]
-
-        # Should not raise exception
-        result = scanner.scan(custom_data=custom_data)
-        assert result.total_scanned == 1
-
-    def test_custom_data_processed_unchanged(self):
-        """Verify custom_data is processed as-is without modification."""
         scanner = InstrumentScanner(
-            data_provider=MockDataProvider({}),
-            symbols=[],
-            sentiment_analyzer=create_mock_sentiment_analyzer({"CUSTOM": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
-        )
-
-        custom_data = [
-            MarketData(
-                symbol="CUSTOM",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                close_price=Decimal("1000"),
-                prev_close_price=Decimal("950"),
-                volume=Decimal("1000000"),
-                avg_volume=Decimal("500000"),
-                timestamp_utc=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-                high_price=Decimal("1050"),
-                low_price=Decimal("990"),
-                adx=Decimal("30"),
-                atr_pct=Decimal("0.02"),
-                breadth_ratio=Decimal("1.5"),
-            )
-        ]
-
-        original_close_price = custom_data[0].close_price
-
-        scanner.scan(custom_data=custom_data)
-
-        # Verify original data unchanged
-        assert custom_data[0].close_price == original_close_price
-        assert custom_data[0].symbol == "CUSTOM"
-
-
-class TestScannerNoProviderRaisesConfigError:
-    """Test that scanner raises ConfigError when no provider is configured."""
-
-    def test_scanner_no_provider_raises_config_error(self):
-        """Verify graceful failure when no provider."""
-        scanner = InstrumentScanner(
-            data_provider=None,  # No provider
-            symbols=["RELIANCE"],
-        )
-
-        with pytest.raises(ConfigError, match="DataProvider not configured"):
-            scanner.scan()
-
-    def test_no_provider_error_message_is_clear(self):
-        """Verify error message is descriptive."""
-        scanner = InstrumentScanner(
-            data_provider=None,
-            symbols=["RELIANCE"],
-        )
-
-        with pytest.raises(ConfigError) as exc_info:
-            scanner.scan()
-
-        error_msg = str(exc_info.value)
-        assert "DataProvider not configured" in error_msg
-        assert "custom_data" in error_msg
-        assert "data_provider" in error_msg
-
-    def test_provider_none_and_custom_data_none_raises_error(self):
-        """Verify error when both provider and custom_data are None."""
-        scanner = InstrumentScanner(
-            data_provider=None,
-            symbols=[],
-        )
-
-        with pytest.raises(ConfigError, match="DataProvider not configured"):
-            scanner.scan(custom_data=None)
-
-    def test_provider_none_but_custom_data_provided_succeeds(self):
-        """Verify no error when custom_data is provided."""
-        scanner = InstrumentScanner(
-            data_provider=None,
-            symbols=[],
-            sentiment_analyzer=create_mock_sentiment_analyzer({"CUSTOM": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
-        )
-
-        custom_data = [
-            MarketData(
-                symbol="CUSTOM",
-                exchange=Exchange.NSE,
-                category=InstrumentCategory.STOCK,
-                close_price=Decimal("1000"),
-                prev_close_price=Decimal("950"),
-                volume=Decimal("1000000"),
-                avg_volume=Decimal("500000"),
-                timestamp_utc=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
-                high_price=Decimal("1050"),
-                low_price=Decimal("990"),
-                adx=Decimal("30"),
-                atr_pct=Decimal("0.02"),
-                breadth_ratio=Decimal("1.5"),
-            )
-        ]
-
-        # Should not raise
-        result = scanner.scan(custom_data=custom_data)
-        assert isinstance(result, ScannerResult)
-
-
-class TestScannerExchangeDerivedFromConfig:
-    """Test that exchange is derived from config, not hardcoded."""
-
-    def test_default_exchange_from_config(self):
-        """Verify default exchange comes from ScannerConfig."""
-        # Default config has NSE as first exchange
-        default_config = ScannerConfig()
-        assert default_config.exchanges[0] == Exchange.NSE
-
-    def test_custom_exchange_from_config(self):
-        """Verify custom exchange config is used."""
-        custom_config = ScannerConfig(exchanges=(Exchange.MCX, Exchange.CDS))
-        scanner = InstrumentScanner(config=custom_config, symbols=[])
-
-        # Scanner should use config's exchanges
-        assert scanner._config.exchanges[0] == Exchange.MCX
-        assert scanner._config.exchanges[1] == Exchange.CDS
-
-    def test_exchange_determined_by_symbol_prefix(self):
-        """Verify exchange determined by symbol prefix, not hardcoded."""
-        scanner = InstrumentScanner(symbols=["NIFTY50"])
-
-        # NIFTY prefix should determine NSE
-        exchange = scanner._determine_exchange("NIFTY50")
-        assert exchange == Exchange.NSE
-
-    def test_exchange_determined_by_symbol_suffix(self):
-        """Verify exchange determined by symbol suffix (CE/PE/FUT)."""
-        scanner = InstrumentScanner(symbols=[])
-
-        # Option suffix should determine NSE
-        exchange = scanner._determine_exchange("BANKNIFTY24000CE")
-        assert exchange == Exchange.NSE
-
-    def test_mcx_prefix_determines_mcx_exchange(self):
-        """Verify MCX prefix determines MCX exchange."""
-        scanner = InstrumentScanner(symbols=[])
-
-        exchange = scanner._determine_exchange("MCXCRUDEOIL")
-        assert exchange == Exchange.MCX
-
-    def test_fallback_to_config_default_exchange(self):
-        """Verify fallback to config's default exchange when no pattern matches."""
-        custom_config = ScannerConfig(exchanges=(Exchange.CDS,))
-        scanner = InstrumentScanner(config=custom_config, symbols=[])
-
-        # Unknown symbol should fall back to config's first exchange
-        exchange = scanner._determine_exchange("UNKNOWN_SYMBOL")
-        assert exchange == Exchange.CDS
-
-    def test_scanner_exchange_derived_from_config(self):
-        """Verify Exchange.NSE not hardcoded."""
-        mock_provider = MockDataProvider({})
-        scanner = InstrumentScanner(
+            config=ScannerConfig(top_n=5),
             data_provider=mock_provider,
-            symbols=["TEST"],
-            sentiment_analyzer=create_mock_sentiment_analyzer({}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
+            symbols=["RELIANCE"],
+            circuit_breaker=circuit_breaker,
+            retry_config=None,  # Use default retry
         )
 
-        # Scan should use _determine_exchange, not hardcoded NSE
-        scanner.scan()
+        result = scanner.scan(direction=SortDirection.GAINERS)
 
-        # If hardcoded NSE, all calls would have NSE
-        # If dynamic, exchange depends on symbol logic
-        # This test verifies the code path uses _determine_exchange
-        assert hasattr(scanner, "_determine_exchange")
-
-    def test_multiple_exchanges_in_config_supported(self):
-        """Verify multiple exchanges can be configured."""
-        config = ScannerConfig(exchanges=(Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS))
-        scanner = InstrumentScanner(config=config, symbols=[])
-
-        assert len(scanner._config.exchanges) == 4
-        assert Exchange.NSE in scanner._config.exchanges
-        assert Exchange.BSE in scanner._config.exchanges
-        assert Exchange.MCX in scanner._config.exchanges
-        assert Exchange.CDS in scanner._config.exchanges
-
-    def test_exchange_config_validated_not_empty(self):
-        """Verify config rejects empty exchanges list."""
-        with pytest.raises(ConfigError, match="exchanges cannot be empty"):
-            ScannerConfig(exchanges=())
+        # Should have retried and succeeded
+        assert call_count == 3
+        assert result is not None

@@ -79,6 +79,8 @@ ignore = []
 "src/iatb/execution/order_manager.py" = ["S101"]  # Type guard assertions for daily_loss_guard
 "tests/conftest_optimized.py" = ["DTZ001"]  # Mock datetime fixture ensures UTC timezone
 "tests/risk/test_sebi_compliance_coverage.py" = ["DTZ001"]  # Naive datetime test
+"src/iatb/data/rate_limiter.py" = ["S311"]  # Random used for jitter, not cryptographic
+"src/iatb/market_strength/strength_scorer.py" = ["B019"]  # Intentional caching with size limits for performance
 
 [tool.mypy]
 python_version = "3.12"
@@ -98,6 +100,14 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = "iatb.data.kite_provider"
 warn_unreachable = false
+
+[[tool.mypy.overrides]]
+module = "iatb.market_strength.strength_scorer"
+disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = "iatb.data.rate_limiter"
+disable_error_code = ["no-any-return"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

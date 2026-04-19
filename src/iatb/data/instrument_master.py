@@ -3,6 +3,8 @@ Instrument master service with SQLite-cached instrument lookups.
 
 Parses Kite-format instrument CSV dumps and provides typed queries
 for lot size, option chains, available instrument types, and expiry dates.
+
+Memory optimization: Enforces 50MB max cache size with auto-vacuum.
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ from iatb.data.instrument import (
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = timedelta(hours=24)
+_MAX_CACHE_SIZE_MB = 50
+_BYTES_PER_MB = 1024 * 1024
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS instruments (
@@ -55,7 +59,10 @@ INSERT OR REPLACE INTO instruments (
 
 
 class InstrumentMaster:
-    """Cached instrument lookup service backed by SQLite."""
+    """Cached instrument lookup service backed by SQLite.
+
+    Enforces 50MB max cache size with auto-vacuum to minimize memory footprint.
+    """
 
     def __init__(self, cache_dir: Path) -> None:
         self._db_path = cache_dir / "instruments.sqlite"
@@ -69,6 +76,9 @@ class InstrumentMaster:
 
     def _initialize_db(self) -> None:
         with self._connect() as conn:
+            # Enable auto-vacuum to reclaim space after deletions
+            conn.execute("PRAGMA auto_vacuum = FULL;")
+            conn.execute("PRAGMA page_size = 4096;")
             conn.execute(_CREATE_TABLE_SQL)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_inst_exchange "
@@ -77,6 +87,59 @@ class InstrumentMaster:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_inst_name " "ON instruments (name, exchange)"
             )
+            conn.commit()
+
+    def _get_db_size_mb(self) -> Decimal:
+        """Get current database size in megabytes."""
+        try:
+            size_bytes = self._db_path.stat().st_size
+            return Decimal(str(size_bytes)) / Decimal(str(_BYTES_PER_MB))
+        except FileNotFoundError:
+            return Decimal("0")
+
+    def _enforce_cache_size_limit(self) -> None:
+        """Enforce 50MB cache size limit by pruning oldest entries."""
+        current_size_mb = self._get_db_size_mb()
+        if current_size_mb <= Decimal(str(_MAX_CACHE_SIZE_MB)):
+            return
+
+        logger.warning(
+            "Cache size %.2fMB exceeds limit %dMB, pruning oldest entries",
+            current_size_mb,
+            _MAX_CACHE_SIZE_MB,
+        )
+
+        with self._connect() as conn:
+            # Delete oldest 20% of entries to reduce size
+            conn.execute(
+                """
+                DELETE FROM instruments
+                WHERE instrument_token IN (
+                    SELECT instrument_token
+                    FROM instruments
+                    ORDER BY fetched_at_utc ASC
+                    LIMIT (SELECT CAST(COUNT(*) * 0.2 AS INTEGER) FROM instruments)
+                )
+            """
+            )
+            conn.commit()
+            logger.info("Pruned oldest instrument entries to enforce cache size limit")
+
+        # Run VACUUM to reclaim space (auto-vacuum will handle this automatically)
+        self._vacuum_if_needed()
+
+    def _vacuum_if_needed(self) -> None:
+        """Run VACUUM if database size is significantly above limit."""
+        current_size_mb = self._get_db_size_mb()
+        if current_size_mb > Decimal(str(_MAX_CACHE_SIZE_MB * 0.8)):
+            logger.info("Running VACUUM to reclaim database space")
+            try:
+                conn = sqlite3.connect(self._db_path)
+                conn.execute("VACUUM;")
+                conn.close()
+                logger.info("VACUUM completed successfully")
+            except Exception as exc:
+                logger.error("VACUUM failed: %s", exc)
 
     def load_from_csv(self, csv_path: Path, exchange: Exchange) -> int:
         """Parse Kite-format instrument CSV and cache. Returns count loaded."""
@@ -94,7 +157,11 @@ class InstrumentMaster:
                     loaded += 1
                 except (ValidationError, KeyError, InvalidOperation, ValueError, TypeError) as exc:
                     logger.warning("Skipping invalid CSV row: %s", exc)
+        conn.commit()
         logger.info("Loaded %d instruments for %s from %s", loaded, exchange.value, csv_path)
+
+        # Enforce cache size limit after loading
+        self._enforce_cache_size_limit()
         return loaded
 
     async def load_from_provider(self, provider: InstrumentProvider, exchange: Exchange) -> int:
@@ -107,7 +174,11 @@ class InstrumentMaster:
             for inst in instruments:
                 conn.execute(_INSERT_SQL, _instrument_to_db_tuple(inst, now_utc))
                 loaded += 1
+        conn.commit()
         logger.info("Loaded %d instruments for %s from provider", loaded, exchange.value)
+
+        # Enforce cache size limit after loading
+        self._enforce_cache_size_limit()
         return loaded
 
     def get_instrument(
@@ -186,8 +257,20 @@ class InstrumentMaster:
             deleted = conn.execute(
                 "DELETE FROM instruments WHERE fetched_at_utc < ?", (cutoff,)
             ).rowcount
+            conn.commit()
         if deleted:
             logger.info("Purged %d stale instrument records", deleted)
+
+    def get_cache_stats(self) -> dict[str, Decimal]:
+        """Get cache statistics including current size in MB."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) as count FROM instruments").fetchone()
+            count = int(row["count"])
+        return {
+            "count": Decimal(str(count)),
+            "size_mb": self._get_db_size_mb(),
+            "max_size_mb": Decimal(str(_MAX_CACHE_SIZE_MB)),
+        }
 
 
 def _csv_row_to_db_tuple(

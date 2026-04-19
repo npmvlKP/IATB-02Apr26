@@ -434,7 +434,7 @@ class RetryConfig:
 
 
 async def retry_with_backoff(
-    func: Any,
+    func: Any,  # noqa: ANN401
     *,
     config: RetryConfig | None = None,
     circuit_breaker: CircuitBreaker | None = None,
@@ -484,7 +484,7 @@ async def retry_with_backoff(
 
         try:
             # Call the function with kwargs to get a new coroutine each attempt
-            result = await func(**kwargs)  # type: ignore[no-any-return]
+            result = await func(**kwargs)
             await circuit_breaker.record_success()
             return result
         except Exception as e:
