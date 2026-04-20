@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs
@@ -615,3 +615,266 @@ def test_clear_token_removes_from_env_file(tmp_path: Path) -> None:
         # Verify .env file was updated
         content = env_file.read_text()
         assert "ZERODHA_ACCESS_TOKEN" not in content
+
+
+def test_token_store_path_property(tmp_path: Path) -> None:
+    """Test token_store_path property returns configured path."""
+    env_file = tmp_path / ".env.example"
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+        env_path=env_file,
+    )
+    # Should return .env path when .example is provided
+    assert manager.token_store_path == tmp_path / ".env"
+
+
+def test_clear_token_no_env_file() -> None:
+    """Test clear_token when no .env file exists."""
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+    )
+
+    with patch.object(keyring, "delete_password") as mock_delete:
+        manager.clear_token()
+        assert mock_delete.call_count == 2  # Two keyring deletes
+
+
+def test_get_access_token_expired_keyring_falls_back_to_env() -> None:
+    """Test get_access_token falls back to env when keyring token is expired."""
+    # Old expired token in keyring
+    old_time = datetime.now(UTC) - timedelta(days=2)
+    with patch.object(
+        keyring,
+        "get_password",
+        side_effect=["expired_token", old_time.isoformat()],
+    ):
+        with patch.dict(os.environ, {"ZERODHA_ACCESS_TOKEN": "env_token"}):
+            manager = ZerodhaTokenManager(
+                api_key="test_key",
+                api_secret="test_secret",  # noqa: S106
+            )
+            token = manager.get_access_token()
+            assert token == "env_token"  # noqa: S105
+
+
+def test_get_access_token_no_env_fallback() -> None:
+    """Test get_access_token with use_env_fallback=False."""
+    token_time = datetime(2026, 4, 16, 0, 0, 0, tzinfo=UTC)
+    with patch.object(
+        keyring,
+        "get_password",
+        side_effect=["fresh_token", token_time.isoformat(), "fresh_token"],
+    ):
+        with patch.dict(os.environ, {"ZERODHA_ACCESS_TOKEN": "env_token"}):
+            with patch("iatb.broker.token_manager.datetime") as mock_dt:
+                now_time = datetime(2026, 4, 16, 0, 20, 0, tzinfo=UTC)
+                mock_dt.now.return_value = now_time
+                mock_dt.fromisoformat = datetime.fromisoformat
+                mock_dt.combine = datetime.combine
+
+                manager = ZerodhaTokenManager(
+                    api_key="test_key",
+                    api_secret="test_secret",  # noqa: S106
+                )
+                token = manager.get_access_token(use_env_fallback=False)
+                # Should get from keyring, not env
+                assert token == "fresh_token"  # noqa: S105
+
+
+def test_get_access_token_no_env_file_found() -> None:
+    """Test get_access_token when .env file doesn't exist."""
+    tmp_path = Path("nonexistent_path")
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        with patch.object(keyring, "get_password", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                manager = ZerodhaTokenManager(
+                    api_key="test_key",
+                    api_secret="test_secret",  # noqa: S106
+                )
+                token = manager.get_access_token()
+                assert token is None
+
+
+def test_resolve_saved_access_token_keyring_fresh(tmp_path: Path) -> None:
+    """Test resolve_saved_access_token with fresh token in keyring."""
+    token_time = datetime(2026, 4, 16, 0, 0, 0, tzinfo=UTC)
+    with patch.object(
+        keyring,
+        "get_password",
+        side_effect=["fresh_token", token_time.isoformat(), "fresh_token"],
+    ):
+        with patch("iatb.broker.token_manager.datetime") as mock_dt:
+            now_time = datetime(2026, 4, 16, 0, 20, 0, tzinfo=UTC)
+            mock_dt.now.return_value = now_time
+            mock_dt.fromisoformat = datetime.fromisoformat
+            mock_dt.combine = datetime.combine
+
+            env_file = tmp_path / ".env"
+            manager = ZerodhaTokenManager(
+                api_key="test_key",
+                api_secret="test_secret",  # noqa: S106
+                env_path=env_file,
+            )
+            token = manager.resolve_saved_access_token()
+            assert token == "fresh_token"  # noqa: S105
+
+
+def test_resolve_saved_access_token_env_file_stale(tmp_path: Path) -> None:
+    """Test resolve_saved_access_token rejects stale token from .env file."""
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "ZERODHA_ACCESS_TOKEN=stale_token\n"
+        "ZERODHA_ACCESS_TOKEN_DATE_UTC=2026-04-01\n"  # Old date
+    )
+
+    # Keyring returns None, so it should check .env file
+    with patch.object(keyring, "get_password", return_value=None):
+        manager = ZerodhaTokenManager(
+            api_key="test_key",
+            api_secret="test_secret",  # noqa: S106
+            env_path=env_file,
+            today_utc=date(2026, 4, 16),
+        )
+        token = manager.resolve_saved_access_token()
+        assert token is None  # Should reject stale token
+
+
+def test_resolve_saved_access_token_no_token_in_env(tmp_path: Path) -> None:
+    """Test resolve_saved_access_token when .env file has no token."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("ZERODHA_API_KEY=test_key\n")
+
+    with patch.object(keyring, "get_password", return_value=None):
+        manager = ZerodhaTokenManager(
+            api_key="test_key",
+            api_secret="test_secret",  # noqa: S106
+            env_path=env_file,
+        )
+        token = manager.resolve_saved_access_token()
+        assert token is None
+
+
+def test_resolve_saved_request_token_keyring_valid() -> None:
+    """Test resolve_saved_request_token with valid token in keyring."""
+    today = date(2026, 4, 16)
+    with patch.object(
+        keyring,
+        "get_password",
+        side_effect=["request_token", today.isoformat()],
+    ):
+        manager = ZerodhaTokenManager(
+            api_key="test_key",
+            api_secret="test_secret",  # noqa: S106
+            today_utc=today,
+        )
+        token = manager.resolve_saved_request_token()
+        assert token == "request_token"  # noqa: S105
+
+
+def test_resolve_saved_request_token_env_file_stale(tmp_path: Path) -> None:
+    """Test resolve_saved_request_token rejects stale token from .env file."""
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "ZERODHA_REQUEST_TOKEN=stale_token\n"
+        "ZERODHA_REQUEST_TOKEN_DATE_UTC=2026-04-01\n"  # Old date
+    )
+
+    with patch.object(keyring, "get_password", return_value=None):
+        manager = ZerodhaTokenManager(
+            api_key="test_key",
+            api_secret="test_secret",  # noqa: S106
+            env_path=env_file,
+            today_utc=date(2026, 4, 16),
+        )
+        token = manager.resolve_saved_request_token()
+        assert token is None
+
+
+def test_persist_session_tokens_without_request_token(tmp_path: Path) -> None:
+    """Test persist_session_tokens without request_token."""
+    env_file = tmp_path / ".env"
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+        env_path=env_file,
+    )
+
+    with patch.object(keyring, "set_password") as mock_set:
+        result = manager.persist_session_tokens(access_token="access_token")  # noqa: S106
+        # store_access_token makes 2 calls (token + timestamp)
+        # persist_session_tokens makes 1 more call (broker_verified)
+        assert mock_set.call_count == 3
+        assert result == env_file
+
+
+def test_persist_session_tokens_no_env_path() -> None:
+    """Test persist_session_tokens without env_path configured."""
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+    )
+
+    with patch.object(keyring, "set_password") as mock_set:
+        result = manager.persist_session_tokens(access_token="access_token")  # noqa: S106
+        # store_access_token makes 2 calls (token + timestamp)
+        # persist_session_tokens makes 1 more call (broker_verified)
+        assert mock_set.call_count == 3
+        assert result is None  # No .env file written
+
+
+def test_is_today_with_empty_string() -> None:
+    """Test _is_today with empty string."""
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+        today_utc=date(2026, 4, 16),
+    )
+    assert manager._is_today("") is False
+
+
+def test_is_today_with_invalid_date() -> None:
+    """Test _is_today with invalid date string."""
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+        today_utc=date(2026, 4, 16),
+    )
+    assert manager._is_today("invalid-date") is False
+
+
+def test_is_today_with_whitespace() -> None:
+    """Test _is_today with whitespace."""
+    manager = ZerodhaTokenManager(
+        api_key="test_key",
+        api_secret="test_secret",  # noqa: S106
+        today_utc=date(2026, 4, 16),
+    )
+    assert manager._is_today("  ") is False
+
+
+def test_persist_env_updates_appends_new_keys(tmp_path: Path) -> None:
+    """Test _persist_env_updates appends new keys at the end."""
+    from iatb.broker.token_manager import _persist_env_updates
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("EXISTING_KEY=existing_value\n")
+
+    _persist_env_updates(env_file, {"NEW_KEY": "new_value"})
+
+    content = env_file.read_text()
+    assert "EXISTING_KEY=existing_value" in content
+    assert "NEW_KEY=new_value" in content
+
+
+def test_default_http_post_non_https_url() -> None:
+    """Test _default_http_post rejects non-HTTPS URLs."""
+    from iatb.broker.token_manager import _default_http_post
+
+    with pytest.raises(ValueError, match="Only HTTPS URLs are allowed"):
+        _default_http_post(
+            "http://insecure.com",  # Not HTTPS
+            {"Content-Type": "application/json"},
+            b"test_body",
+        )
