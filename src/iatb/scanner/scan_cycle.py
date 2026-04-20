@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any
 
 from iatb.core.enums import OrderSide
+from iatb.core.exceptions import ConfigError
+from iatb.data.base import DataProvider
+from iatb.data.kite_provider import KiteProvider
 from iatb.execution.base import OrderRequest
 from iatb.execution.order_manager import OrderManager
 from iatb.execution.order_throttle import OrderThrottle
@@ -211,6 +214,36 @@ def _create_order_manager(
         return None
 
 
+def _initialize_data_provider(
+    data_provider: DataProvider | None,
+    errors: list[str],
+) -> DataProvider | None:
+    """Initialize or validate data provider.
+
+    Args:
+        data_provider: Optional pre-configured DataProvider.
+        errors: List to collect error messages.
+
+    Returns:
+        Configured DataProvider or None if initialization fails.
+    """
+    if data_provider is not None:
+        _LOGGER.info("  ✓ Using provided data provider: %s", type(data_provider).__name__)
+        return data_provider
+
+    # Try to create KiteProvider from environment variables
+    try:
+        provider = KiteProvider.from_env()
+        _LOGGER.info("  ✓ KiteProvider initialized from environment")
+        return provider
+    except ConfigError as exc:
+        error_msg = f"KiteProvider initialization failed: {exc}"
+        _LOGGER.warning("  ⚠ %s", error_msg)
+        _LOGGER.warning("  ⚠ Scanner will require custom_data or explicit data_provider")
+        errors.append(error_msg)
+        return None
+
+
 def _initialize_analyzers_and_order_manager(
     order_manager: OrderManager | None,
     audit_logger: TradeAuditLogger | None,
@@ -247,6 +280,7 @@ def _execute_scanner(
     scanner_config: ScannerConfig | None,
     sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
     rl_predictor: Callable[[list[Decimal]], Decimal],
+    data_provider: DataProvider | None,
     errors: list[str],
 ) -> ScannerResult | None:
     """Execute the instrument scanner.
@@ -256,6 +290,7 @@ def _execute_scanner(
         scanner_config: Optional scanner configuration.
         sentiment_analyzer: Sentiment analysis function.
         rl_predictor: RL predictor function.
+        data_provider: DataProvider for market data.
         errors: List to collect error messages.
 
     Returns:
@@ -266,6 +301,7 @@ def _execute_scanner(
 
         scanner = InstrumentScanner(
             config=scanner_config,
+            data_provider=data_provider,
             sentiment_analyzer=sentiment_analyzer,
             rl_predictor=rl_predictor,
             symbols=list(symbols),
@@ -578,24 +614,34 @@ def _prepare_scan_symbols(symbols: Sequence[str] | None) -> Sequence[str]:
 def _initialize_scan_components(
     order_manager: OrderManager | None,
     audit_logger: TradeAuditLogger | None,
+    data_provider: DataProvider | None,
     errors: list[str],
 ) -> tuple[
     Callable[[str], tuple[Decimal, bool]],
     Callable[[list[Decimal]], Decimal],
     OrderManager | None,
+    DataProvider | None,
 ]:
     """Initialize all scan cycle components.
 
     Args:
         order_manager: Optional pre-configured OrderManager.
         audit_logger: Optional pre-configured TradeAuditLogger.
+        data_provider: Optional pre-configured DataProvider.
         errors: List to collect error messages.
 
     Returns:
-        Tuple of (sentiment_analyzer, rl_predictor, order_manager).
+        Tuple of (sentiment_analyzer, rl_predictor, order_manager, data_provider).
     """
     _LOGGER.info("Step 1: Initializing components...")
-    return _initialize_analyzers_and_order_manager(order_manager, audit_logger, errors)
+
+    sentiment_analyzer, rl_predictor, order_manager = _initialize_analyzers_and_order_manager(
+        order_manager, audit_logger, errors
+    )
+
+    data_provider = _initialize_data_provider(data_provider, errors)
+
+    return sentiment_analyzer, rl_predictor, order_manager, data_provider
 
 
 def _create_early_return_result(
@@ -626,6 +672,7 @@ def _execute_scan_pipeline(
     sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
     rl_predictor: Callable[[list[Decimal]], Decimal],
     order_manager: OrderManager,
+    data_provider: DataProvider | None,
     max_trades: int,
     errors: list[str],
 ) -> tuple[ScannerResult | None, int, Decimal]:
@@ -637,6 +684,7 @@ def _execute_scan_pipeline(
         sentiment_analyzer: Sentiment analysis function.
         rl_predictor: RL predictor function.
         order_manager: OrderManager instance.
+        data_provider: DataProvider for market data.
         max_trades: Maximum trades to execute.
         errors: List to collect error messages.
 
@@ -646,7 +694,7 @@ def _execute_scan_pipeline(
     # Step 2: Execute scanner
     _LOGGER.info("Step 2: Running scanner...")
     scanner_result = _execute_scanner(
-        symbols, scanner_config, sentiment_analyzer, rl_predictor, errors
+        symbols, scanner_config, sentiment_analyzer, rl_predictor, data_provider, errors
     )
 
     if scanner_result is None:
@@ -666,6 +714,7 @@ def _initialize_scan_cycle(
     max_trades: int,
     order_manager: OrderManager | None,
     audit_logger: TradeAuditLogger | None,
+    data_provider: DataProvider | None,
     scanner_config: ScannerConfig | None,
 ) -> tuple[
     datetime,
@@ -673,6 +722,7 @@ def _initialize_scan_cycle(
     Callable[[str], tuple[Decimal, bool]],
     Callable[[list[Decimal]], Decimal],
     OrderManager | None,
+    DataProvider | None,
     list[str],
 ]:
     """Initialize scan cycle components and prepare symbols.
@@ -682,10 +732,12 @@ def _initialize_scan_cycle(
         max_trades: Maximum trades.
         order_manager: Optional OrderManager.
         audit_logger: Optional TradeAuditLogger.
+        data_provider: Optional DataProvider.
         scanner_config: Scanner configuration.
 
     Returns:
-        Tuple of (timestamp, symbols, sentiment_analyzer, rl_predictor, order_manager, errors).
+        Tuple of (timestamp, symbols, sentiment_analyzer, rl_predictor,
+        order_manager, data_provider, errors).
     """
     timestamp_utc = datetime.now(UTC)
     errors: list[str] = []
@@ -694,11 +746,19 @@ def _initialize_scan_cycle(
     _check_ml_readiness_and_log(errors)
 
     symbols = _prepare_scan_symbols(symbols)
-    sentiment_analyzer, rl_predictor, order_manager = _initialize_scan_components(
-        order_manager, audit_logger, errors
+    sentiment_analyzer, rl_predictor, order_manager, data_provider = _initialize_scan_components(
+        order_manager, audit_logger, data_provider, errors
     )
 
-    return timestamp_utc, symbols, sentiment_analyzer, rl_predictor, order_manager, errors
+    return (
+        timestamp_utc,
+        symbols,
+        sentiment_analyzer,
+        rl_predictor,
+        order_manager,
+        data_provider,
+        errors,
+    )
 
 
 def _create_final_result(
@@ -736,12 +796,13 @@ def run_scan_cycle(
     max_trades: int = 5,
     order_manager: OrderManager | None = None,
     audit_logger: TradeAuditLogger | None = None,
+    data_provider: DataProvider | None = None,
     scanner_config: ScannerConfig | None = None,
 ) -> ScanCycleResult:
     """Execute scan cycle: fetch → sentiment → score → scan → paper-execute → audit.
 
     Main entry point for automated trading. Runs full pipeline:
-      1. Fetches market data
+      1. Fetches market data via DataProvider (KiteProvider or custom)
       2. Analyzes sentiment (FinBERT + AION)
       3. Scores candidates
       4. Filters top gainers/losers
@@ -753,6 +814,9 @@ def run_scan_cycle(
         max_trades: Max trades per cycle.
         order_manager: Optional OrderManager.
         audit_logger: Optional TradeAuditLogger.
+        data_provider: Optional DataProvider for market data.
+            If None, attempts to create KiteProvider from environment variables.
+            If environment variables not set, scanner will require custom_data.
         scanner_config: Optional scanner config.
 
     Returns:
@@ -764,14 +828,24 @@ def run_scan_cycle(
         sentiment_analyzer,
         rl_predictor,
         order_manager,
+        data_provider,
         errors,
-    ) = _initialize_scan_cycle(symbols, max_trades, order_manager, audit_logger, scanner_config)
+    ) = _initialize_scan_cycle(
+        symbols, max_trades, order_manager, audit_logger, data_provider, scanner_config
+    )
 
     if order_manager is None:
         return _create_early_return_result(errors, timestamp_utc)
 
     scanner_result, trades_executed, total_pnl = _execute_scan_pipeline(
-        symbols, scanner_config, sentiment_analyzer, rl_predictor, order_manager, max_trades, errors
+        symbols,
+        scanner_config,
+        sentiment_analyzer,
+        rl_predictor,
+        order_manager,
+        data_provider,
+        max_trades,
+        errors,
     )
 
     if scanner_result is None:

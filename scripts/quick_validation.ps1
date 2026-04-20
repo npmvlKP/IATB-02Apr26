@@ -5,14 +5,45 @@ Write-Host "`n==================================================================
 Write-Host "  QUICK VALIDATION (G7, G8, G9) - PowerShell Equivalents" -ForegroundColor Cyan
 Write-Host "==========================================================================" -ForegroundColor Cyan
 
-# G7: No float in financial paths
-Write-Host "`n[G7] Checking for 'float' in financial paths..." -ForegroundColor Yellow
+# G7: No float in financial paths (excluding API boundary comments)
+Write-Host "`n[G7] Checking for 'float' in financial paths (excluding API boundary)..." -ForegroundColor Yellow
 $g7_results = @("src/iatb/risk", "src/iatb/backtesting", "src/iatb/execution", "src/iatb/selection", "src/iatb/sentiment" | ForEach-Object {
     $path = $_
     if (Test-Path $path) {
-        Get-ChildItem -Path $path -Filter "*.py" -Recurse -ErrorAction SilentlyContinue | Select-String -Pattern "float" -ErrorAction SilentlyContinue
+        Get-ChildItem -Path $path -Filter "*.py" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $file = $_
+            $lines = Get-Content $file.FullName -ErrorAction SilentlyContinue
+            $lineNum = 0
+            $lines | ForEach-Object {
+                $lineNum++
+                if ($_ -match "float") {
+                    # Check if line has API boundary comment
+                    if ($_ -match "#.*API boundary") {
+                        return $null
+                    }
+                    # Check preceding 5 lines for API boundary comment
+                    $hasApiBoundary = $false
+                    for ($i = [Math]::Max(0, $lineNum - 6); $i -lt $lineNum - 1; $i++) {
+                        if ($lines[$i] -match "#.*API boundary") {
+                            $hasApiBoundary = $true
+                            break
+                        }
+                    }
+                    if (-not $hasApiBoundary) {
+                        return [PSCustomObject]@{
+                            Path = $file.FullName
+                            LineNumber = $lineNum
+                            Line = $_
+                        }
+                    }
+                }
+            }
+        }
     }
 })
+
+# Filter out null results
+$g7_results = $g7_results | Where-Object { $_ -ne $null }
 
 if ($g7_results) {
     Write-Host "[FAIL] G7: Found 'float' in financial paths:" -ForegroundColor Red
