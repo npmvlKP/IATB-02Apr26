@@ -18,3 +18,19 @@ algo_id = "iatb-algo-001"
 event_bus_max_queue_size = 1000
 event_bus_batch_size = 100
 max_tasks = 100
+
+[data]
+# Default data provider: "jugaad" | "kite" | "openalgo" | "yfinance"
+# Risk 4 Migration: Feature flag for incremental DataProvider migration
+data_provider_default = "jugaad"
+
+# Enable dual-path A/B testing for migration validation
+# When true, runs both default and fallback providers in parallel
+enable_ab_testing = false
+
+# Fallback provider for A/B testing (different from default)
+data_provider_fallback = "kite"
+
+# Maximum acceptable difference between providers (percentage)
+# Exceeding this threshold will log warnings
+ab_testing_max_diff_pct = 5.0

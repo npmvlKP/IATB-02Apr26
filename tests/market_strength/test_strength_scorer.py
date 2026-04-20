@@ -75,9 +75,10 @@ def test_strength_scorer_rejects_exchange_not_in_threshold_map(
 
 
 def test_strength_scorer_helper_branches() -> None:
-    assert StrengthScorer._normalize(Decimal("2"), cap=Decimal("0")) == Decimal("0")
-    assert StrengthScorer._regime_score(MarketRegime.SIDEWAYS) == Decimal("0.55")
-    assert StrengthScorer._regime_score(MarketRegime.BEAR) == Decimal("0.15")
+    scorer = StrengthScorer(cache_enabled=True)
+    assert scorer._normalize(Decimal("2"), cap=Decimal("0")) == Decimal("0")
+    assert scorer._regime_score(MarketRegime.SIDEWAYS) == Decimal("0.55")
+    assert scorer._regime_score(MarketRegime.BEAR) == Decimal("0.15")
     assert StrengthScorer._volatility_penalty(Decimal("0.02")) == Decimal("0")
     assert StrengthScorer._volatility_penalty(Decimal("0.04")) == Decimal("0.05")
     assert StrengthScorer._volatility_penalty(Decimal("0.07")) == Decimal("0.12")
