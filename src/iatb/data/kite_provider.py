@@ -210,7 +210,31 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If api_key or access_token is empty, or if parameters invalid.
         """
-        # noqa: C901
+        self._validate_init_params(
+            api_key, access_token, max_retries, initial_retry_delay, requests_per_second
+        )
+        self._api_key = api_key
+        self._access_token = access_token
+        self._max_retries = max_retries
+        self._initial_retry_delay = initial_retry_delay
+        self._kite_connect_factory = kite_connect_factory or self._default_kite_factory
+
+        self._rate_limiter = _RateLimiter(
+            requests_per_window=requests_per_second,
+            window_seconds=1.0,
+        )
+
+        self._kite_client: Any = None
+
+    @staticmethod
+    def _validate_init_params(
+        api_key: str,
+        access_token: str,
+        max_retries: int,
+        initial_retry_delay: float,
+        requests_per_second: int,
+    ) -> None:
+        """Validate initialization parameters."""
         if not api_key.strip():
             msg = "api_key cannot be empty"
             raise ConfigError(msg)
@@ -226,19 +250,6 @@ class KiteProvider(DataProvider):
         if requests_per_second <= 0:
             msg = "requests_per_second must be positive"
             raise ConfigError(msg)
-
-        self._api_key = api_key
-        self._access_token = access_token
-        self._max_retries = max_retries
-        self._initial_retry_delay = initial_retry_delay
-        self._kite_connect_factory = kite_connect_factory or self._default_kite_factory
-
-        self._rate_limiter = _RateLimiter(
-            requests_per_window=requests_per_second,
-            window_seconds=1.0,
-        )
-
-        self._kite_client: Any = None
 
     @staticmethod
     def _default_kite_factory(api_key: str, access_token: str) -> Any:
@@ -283,7 +294,6 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If exchange/timeframe unsupported or API errors occur.
         """
-        # noqa: C901
         if limit <= 0:
             msg = "limit must be positive"
             raise ConfigError(msg)
@@ -292,18 +302,9 @@ class KiteProvider(DataProvider):
         kite_interval = _map_timeframe(timeframe)
         trading_symbol = _format_trading_symbol(symbol, exchange)
 
-        # Calculate date range
-        end_date = datetime.now(UTC)
-        if since is not None:
-            start_date = datetime(since.year, since.month, since.day, tzinfo=UTC)
-        else:
-            # Default: fetch enough data to satisfy limit
-            # Approximate: 500 days for daily, adjust for intraday
-            start_date = end_date - timedelta(days=limit)
-
+        start_date, end_date = self._calculate_date_range(since, limit)
         client = self._get_client()
 
-        # Fetch historical data with retry logic
         data = await self._retry_with_backoff(
             self._fetch_historical_data,
             client,
@@ -313,10 +314,30 @@ class KiteProvider(DataProvider):
             end_date,
         )
 
-        # Convert to normalized records
+        return self._process_ohlcv_data(data, symbol, exchange, since, limit)
+
+    def _calculate_date_range(
+        self, since: Timestamp | None, limit: int
+    ) -> tuple[datetime, datetime]:
+        """Calculate start and end dates for historical data fetch."""
+        end_date = datetime.now(UTC)
+        if since is not None:
+            start_date = datetime(since.year, since.month, since.day, tzinfo=UTC)
+        else:
+            start_date = end_date - timedelta(days=limit)
+        return start_date, end_date
+
+    def _process_ohlcv_data(
+        self,
+        data: list[dict[str, object]],
+        symbol: str,
+        exchange: Exchange,
+        since: Timestamp | None,
+        limit: int,
+    ) -> list[OHLCVBar]:
+        """Process and normalize OHLCV data from Kite API."""
         records = self._build_ohlcv_records(data, since=since)
         clipped = records[-limit:] if len(records) > limit else records
-
         return normalize_ohlcv_batch(
             clipped,
             symbol=symbol,
@@ -342,20 +363,26 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If exchange unsupported or API errors occur.
         """
-        # noqa: C901
         _ensure_supported_exchange(exchange)
         trading_symbol = _format_trading_symbol(symbol, exchange)
 
         client = self._get_client()
-
-        # Fetch quote data with retry logic
         quote_data = await self._retry_with_backoff(
             self._fetch_quote,
             client,
             trading_symbol,
         )
 
-        # Extract values from quote response
+        return self._build_ticker_snapshot(symbol, exchange, quote_data, trading_symbol)
+
+    def _build_ticker_snapshot(
+        self,
+        symbol: str,
+        exchange: Exchange,
+        quote_data: dict[str, Any],
+        trading_symbol: str,
+    ) -> TickerSnapshot:
+        """Build ticker snapshot from quote data."""
         quote = quote_data.get(trading_symbol, {})
 
         bid = _coerce_numeric_input(
@@ -407,40 +434,30 @@ class KiteProvider(DataProvider):
         Raises:
             ConfigError: If all retries exhausted.
         """
-        # noqa: C901
-        attempt = 0
         delay = self._initial_retry_delay
 
         for attempt in range(self._max_retries + 1):
             try:
-                # Respect rate limit
                 await self._rate_limiter.acquire()
-
-                # Execute function
                 result = await func(*args)
                 return result
             except Exception as exc:
-                # Check if error is retryable
-                error_str = str(exc).lower()
-                is_rate_limit = "429" in error_str or "rate limit" in error_str
-                is_server_error = any(code in error_str for code in ("500", "502", "503", "504"))
-
-                if not (is_rate_limit or is_server_error):
-                    # Non-retryable error, raise immediately
+                if not self._is_retryable_error(exc):
                     raise ConfigError(f"Kite API error: {exc}") from exc
-
-                # Check if we should retry
                 if attempt >= self._max_retries:
-                    # Exhausted retries
                     msg = f"Kite API failed after {self._max_retries} retries: {exc}"
                     raise ConfigError(msg) from exc
-
-                # Retry after delay
                 await asyncio.sleep(delay)
                 delay *= _RETRY_BACKOFF_MULTIPLIER
 
-        # This is unreachable but required for type safety
         raise ConfigError("Kite API error")
+
+    def _is_retryable_error(self, exc: Exception) -> bool:
+        """Check if an exception is retryable."""
+        error_str = str(exc).lower()
+        is_rate_limit = "429" in error_str or "rate limit" in error_str
+        is_server_error = any(code in error_str for code in ("500", "502", "503", "504"))
+        return is_rate_limit or is_server_error
 
     async def _fetch_historical_data(
         self,

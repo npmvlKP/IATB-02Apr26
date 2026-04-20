@@ -50,6 +50,30 @@ class RateLimiter:
         Raises:
             ValueError: If parameters are invalid.
         """
+        self._validate_params(requests_per_second, burst_capacity)
+        self._requests_per_second = requests_per_second
+        self._requests_per_minute = requests_per_minute
+        self._burst_capacity = burst_capacity
+
+        self._tokens = float(burst_capacity)
+        self._last_refill = datetime.now(UTC)
+        self._bucket_capacity = float(burst_capacity)
+
+        self._minute_count = 0
+        self._minute_start = datetime.now(UTC)
+        self._minute_limit: int | None = None
+
+        self._concurrent_count = 0
+        self._concurrent_lock = asyncio.Lock()
+        self._semaphore = asyncio.Semaphore(burst_capacity)
+
+        self._refill_rate, self._minute_limit = self._calculate_refill_rate(
+            requests_per_second, requests_per_minute
+        )
+
+    @staticmethod
+    def _validate_params(requests_per_second: float, burst_capacity: int) -> None:
+        """Validate rate limiter parameters."""
         if requests_per_second <= 0:
             msg = "requests_per_second must be positive"
             raise ValueError(msg)
@@ -57,34 +81,14 @@ class RateLimiter:
             msg = "burst_capacity must be positive"
             raise ValueError(msg)
 
-        self._requests_per_second = requests_per_second
-        self._requests_per_minute = requests_per_minute
-        self._burst_capacity = burst_capacity
-
-        # Token bucket state
-        self._tokens = float(burst_capacity)
-        self._last_refill = datetime.now(UTC)
-        self._bucket_capacity = float(burst_capacity)
-
-        # Per-minute tracking (if enabled)
-        self._minute_count = 0
-        self._minute_start = datetime.now(UTC)
-        self._minute_limit: int | None = None
-
-        # Current concurrent requests count
-        self._concurrent_count = 0
-        self._concurrent_lock = asyncio.Lock()
-
-        # Semaphore for burst capacity
-        self._semaphore = asyncio.Semaphore(burst_capacity)
-
-        # Calculate token refill rate
+    @staticmethod
+    def _calculate_refill_rate(
+        requests_per_second: float, requests_per_minute: int | None
+    ) -> tuple[float, int | None]:
+        """Calculate token refill rate and minute limit."""
         if requests_per_minute is not None:
-            self._refill_rate = requests_per_minute / 60.0
-            self._minute_limit = requests_per_minute
-        else:
-            self._refill_rate = requests_per_second
-            self._minute_limit = None
+            return requests_per_minute / 60.0, requests_per_minute
+        return requests_per_second, None
 
     async def acquire(self) -> None:
         """Acquire permission to make a request.
@@ -402,6 +406,35 @@ class RetryConfig:
         Raises:
             ValueError: If parameters are invalid.
         """
+        self._validate_retry_config(
+            max_retries,
+            initial_delay,
+            max_delay,
+            backoff_multiplier,
+            jitter_seconds,
+            circuit_failure_threshold,
+            circuit_reset_timeout,
+        )
+
+        self.max_retries = max_retries
+        self.initial_delay = initial_delay
+        self.max_delay = max_delay
+        self.backoff_multiplier = backoff_multiplier
+        self.jitter_seconds = jitter_seconds
+        self.circuit_failure_threshold = circuit_failure_threshold
+        self.circuit_reset_timeout = circuit_reset_timeout
+
+    @staticmethod
+    def _validate_retry_config(
+        max_retries: int,
+        initial_delay: float,
+        max_delay: float,
+        backoff_multiplier: float,
+        jitter_seconds: float,
+        circuit_failure_threshold: int,
+        circuit_reset_timeout: float,
+    ) -> None:
+        """Validate retry configuration parameters."""
         if max_retries < 0:
             msg = "max_retries must be non-negative"
             raise ValueError(msg)
@@ -423,14 +456,6 @@ class RetryConfig:
         if circuit_reset_timeout <= 0:
             msg = "circuit_reset_timeout must be positive"
             raise ValueError(msg)
-
-        self.max_retries = max_retries
-        self.initial_delay = initial_delay
-        self.max_delay = max_delay
-        self.backoff_multiplier = backoff_multiplier
-        self.jitter_seconds = jitter_seconds
-        self.circuit_failure_threshold = circuit_failure_threshold
-        self.circuit_reset_timeout = circuit_reset_timeout
 
 
 async def retry_with_backoff(
@@ -463,84 +488,98 @@ async def retry_with_backoff(
             circuit_breaker=breaker
         )
     """
-    if config is None:
-        config = RetryConfig()
-
-    if circuit_breaker is None:
-        circuit_breaker = CircuitBreaker(
-            failure_threshold=config.circuit_failure_threshold,
-            reset_timeout=config.circuit_reset_timeout,
-        )
-
+    config = config or RetryConfig()
+    circuit_breaker = circuit_breaker or CircuitBreaker(
+        failure_threshold=config.circuit_failure_threshold,
+        reset_timeout=config.circuit_reset_timeout,
+    )
     logger = __import__("logging").getLogger(__name__)
 
     for attempt in range(config.max_retries + 1):
-        # Check circuit breaker before attempting
+        await _check_circuit_breaker(circuit_breaker, logger)
         try:
-            await circuit_breaker.acquire()
-        except CircuitOpenError:
-            logger.warning(f"Circuit '{circuit_breaker._name}' is open, blocking request")
-            raise
-
-        try:
-            # Call the function with kwargs to get a new coroutine each attempt
             result = await func(**kwargs)
             await circuit_breaker.record_success()
             return result
         except Exception as e:
-            error_msg = str(e)
+            if await _handle_error(e, circuit_breaker, config, attempt, logger):
+                continue
+            raise
 
-            # Check if error is non-retryable
-            if "401" in error_msg or "Unauthorized" in error_msg:
-                logger.error("Non-retryable error: 401 Unauthorized")
-                await circuit_breaker.record_failure()
-                msg = "Non-retryable error: 401 Unauthorized"
-                raise ConfigError(msg) from e
-            if "403" in error_msg or "Forbidden" in error_msg:
-                logger.error("Non-retryable error: 403 Forbidden")
-                await circuit_breaker.record_failure()
-                msg = "Non-retryable error: 403 Forbidden"
-                raise ConfigError(msg) from e
+    raise ConfigError("All retries exhausted")
 
-            # Check if this is a retryable error
-            is_retryable = any(
-                code in error_msg
-                for code in ["429", "500", "502", "503", "Rate Limit", "Server Error"]
-            )
 
-            if not is_retryable:
-                logger.error(f"Non-retryable error: {error_msg}")
-                await circuit_breaker.record_failure()
-                msg = f"Non-retryable error: {error_msg}"
-                raise ConfigError(msg) from e
+async def _check_circuit_breaker(circuit_breaker: CircuitBreaker, logger: Any) -> None:
+    """Check if circuit breaker allows request."""
+    try:
+        await circuit_breaker.acquire()
+    except CircuitOpenError:
+        logger.warning(f"Circuit '{circuit_breaker._name}' is open, blocking request")
+        raise
 
-            # Check if we have retries remaining
-            if attempt >= config.max_retries:
-                logger.error(f"All {config.max_retries} retries exhausted. Last error: {error_msg}")
-                await circuit_breaker.record_failure()
-                msg = f"failed after {config.max_retries} retries: {error_msg}"
-                raise ConfigError(msg) from e
 
-            # Record failure and wait before retry
-            await circuit_breaker.record_failure()
+async def _handle_error(
+    exc: Exception,
+    circuit_breaker: CircuitBreaker,
+    config: RetryConfig,
+    attempt: int,
+    logger: Any,
+) -> bool:
+    """Handle error and determine if retry should continue.
 
-            # Calculate delay with exponential backoff
-            delay = min(
-                config.initial_delay * (config.backoff_multiplier**attempt),
-                config.max_delay,
-            )
+    Returns True if retry should continue, False if error should be raised.
+    """
+    error_msg = str(exc)
 
-            # Add random jitter to prevent thundering herd
-            # nosec B311 - Using random.uniform is acceptable for jitter, not cryptographic
-            jitter = random.uniform(0, config.jitter_seconds)
-            total_delay = delay + jitter
+    if await _is_non_retryable_auth_error(exc, error_msg, circuit_breaker, logger):
+        return False
+    if not _is_retryable_error(error_msg):
+        await circuit_breaker.record_failure()
+        logger.error(f"Non-retryable error: {error_msg}")
+        raise ConfigError(f"Non-retryable error: {error_msg}") from exc
+    if attempt >= config.max_retries:
+        await circuit_breaker.record_failure()
+        logger.error(f"All {config.max_retries} retries exhausted. Last error: {error_msg}")
+        raise ConfigError(f"failed after {config.max_retries} retries: {error_msg}") from exc
 
-            logger.warning(
-                f"Attempt {attempt + 1}/{config.max_retries + 1} failed: {error_msg}. "
-                f"Retrying in {total_delay:.2f}s..."
-            )
-            await asyncio.sleep(total_delay)
+    await circuit_breaker.record_failure()
+    delay = _calculate_retry_delay(config, attempt)
+    logger.warning(
+        f"Attempt {attempt + 1}/{config.max_retries + 1} failed: {error_msg}. "
+        f"Retrying in {delay:.2f}s..."
+    )
+    await asyncio.sleep(delay)
+    return True
 
-    # This should never be reached, but type checker needs it
-    msg = "All retries exhausted"
-    raise ConfigError(msg)
+
+async def _is_non_retryable_auth_error(
+    exc: Exception, error_msg: str, circuit_breaker: CircuitBreaker, logger: Any
+) -> bool:
+    """Check if error is non-retryable auth error."""
+    if "401" in error_msg or "Unauthorized" in error_msg:
+        logger.error("Non-retryable error: 401 Unauthorized")
+        await circuit_breaker.record_failure()
+        raise ConfigError("Non-retryable error: 401 Unauthorized") from exc
+    if "403" in error_msg or "Forbidden" in error_msg:
+        logger.error("Non-retryable error: 403 Forbidden")
+        await circuit_breaker.record_failure()
+        raise ConfigError("Non-retryable error: 403 Forbidden") from exc
+    return False
+
+
+def _is_retryable_error(error_msg: str) -> bool:
+    """Check if error message indicates a retryable error."""
+    return any(
+        code in error_msg for code in ["429", "500", "502", "503", "Rate Limit", "Server Error"]
+    )
+
+
+def _calculate_retry_delay(config: RetryConfig, attempt: int) -> float:
+    """Calculate delay with exponential backoff and jitter."""
+    delay = min(
+        config.initial_delay * (config.backoff_multiplier**attempt),
+        config.max_delay,
+    )
+    # nosec B311 - Using random.uniform is acceptable for jitter, not cryptographic
+    jitter = random.uniform(0, config.jitter_seconds)  # noqa: S311
+    return delay + jitter

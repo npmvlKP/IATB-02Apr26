@@ -177,7 +177,17 @@ class MigrationProvider(DataProvider):
                 limit=limit,
             )
 
-        # Single-path execution
+        return await self._get_ohlcv_single_path(symbol, exchange, timeframe, since, limit)
+
+    async def _get_ohlcv_single_path(
+        self,
+        symbol: str,
+        exchange: Exchange,
+        timeframe: str,
+        since: Timestamp | None,
+        limit: int,
+    ) -> list[OHLCVBar]:
+        """Fetch OHLCV data from default provider with fallback."""
         try:
             return await self._default_provider.get_ohlcv(
                 symbol=symbol,
@@ -192,17 +202,29 @@ class MigrationProvider(DataProvider):
                 symbol,
                 exc,
             )
-            try:
-                return await self._fallback_provider.get_ohlcv(
-                    symbol=symbol,
-                    exchange=exchange,
-                    timeframe=timeframe,
-                    since=since,
-                    limit=limit,
-                )
-            except Exception as fallback_exc:  # noqa: BLE001
-                msg = f"Both providers failed for {symbol}: {exc}, {fallback_exc}"
-                raise ConfigError(msg) from fallback_exc
+            return await self._try_fallback_provider(symbol, exchange, timeframe, since, limit, exc)
+
+    async def _try_fallback_provider(
+        self,
+        symbol: str,
+        exchange: Exchange,
+        timeframe: str,
+        since: Timestamp | None,
+        limit: int,
+        primary_exc: Exception,
+    ) -> list[OHLCVBar]:
+        """Try fetching from fallback provider if default fails."""
+        try:
+            return await self._fallback_provider.get_ohlcv(
+                symbol=symbol,
+                exchange=exchange,
+                timeframe=timeframe,
+                since=since,
+                limit=limit,
+            )
+        except Exception as fallback_exc:  # noqa: BLE001
+            msg = f"Both providers failed for {symbol}: {primary_exc}, {fallback_exc}"
+            raise ConfigError(msg) from fallback_exc
 
     async def _get_ohlcv_with_ab_testing(
         self,
