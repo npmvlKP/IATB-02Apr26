@@ -1075,13 +1075,15 @@ class TestADXSqrtNormalization:
     def test_concave_normalize_at_zero(self) -> None:
         from iatb.market_strength.strength_scorer import StrengthScorer
 
-        result = StrengthScorer._normalize_concave(Decimal("0"), cap=Decimal("40"))
+        scorer = StrengthScorer(cache_enabled=False)
+        result = scorer._normalize_concave(Decimal("0"), cap=Decimal("40"))
         assert result == Decimal("0")
 
     def test_concave_normalize_at_cap(self) -> None:
         from iatb.market_strength.strength_scorer import StrengthScorer
 
-        result = StrengthScorer._normalize_concave(Decimal("40"), cap=Decimal("40"))
+        scorer = StrengthScorer(cache_enabled=False)
+        result = scorer._normalize_concave(Decimal("40"), cap=Decimal("40"))
         assert result == Decimal("1")
 
 
@@ -1175,6 +1177,7 @@ class TestSelectionBridge:
         rank1 = scale_quantity_by_rank(Decimal("100"), rank=1, total_selected=3)
         rank3 = scale_quantity_by_rank(Decimal("100"), rank=3, total_selected=3)
         assert rank1 == Decimal("100")
+
         assert rank3 < rank1
         assert rank3 > Decimal("0")
 

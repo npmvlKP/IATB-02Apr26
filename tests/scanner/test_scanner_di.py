@@ -49,19 +49,31 @@ class MockDataProvider(DataProvider):
         """Return mock OHLCV bars."""
         for item in self._data:
             if item.symbol == symbol and item.exchange == exchange:
+                # Return 2 bars: previous close and current close
+                prev_close_time = item.timestamp_utc - timedelta(days=1)
                 return [
                     OHLCVBar(
+                        timestamp=create_timestamp(prev_close_time),
+                        open=create_price(str(item.prev_close_price)),
+                        high=create_price(str(item.prev_close_price)),
+                        low=create_price(str(item.prev_close_price)),
+                        close=create_price(str(item.prev_close_price)),
+                        volume=create_quantity(str(item.avg_volume)),
+                        symbol=symbol,
+                        exchange=exchange,
+                        source="mock",
+                    ),
+                    OHLCVBar(
                         timestamp=create_timestamp(item.timestamp_utc),
-                        open=create_price(str(item.open_price)),
+                        open=create_price(str(item.close_price)),
                         high=create_price(str(item.high_price)),
                         low=create_price(str(item.low_price)),
                         close=create_price(str(item.close_price)),
                         volume=create_quantity(str(item.volume)),
                         symbol=symbol,
                         exchange=exchange,
-                        timeframe=timeframe,
                         source="mock",
-                    )
+                    ),
                 ]
         return []
 
@@ -90,7 +102,6 @@ class TestInstrumentScannerDI:
                 symbol="RELIANCE",
                 exchange=Exchange.NSE,
                 category=InstrumentScanner._determine_category("RELIANCE"),
-                open_price=Decimal("970.0"),
                 close_price=Decimal("1000.0"),
                 prev_close_price=Decimal("950.0"),
                 volume=Decimal("1000000"),
@@ -107,7 +118,6 @@ class TestInstrumentScannerDI:
                 symbol="TCS",
                 exchange=Exchange.NSE,
                 category=InstrumentScanner._determine_category("TCS"),
-                open_price=Decimal("3450.0"),
                 close_price=Decimal("3500.0"),
                 prev_close_price=Decimal("3400.0"),
                 volume=Decimal("500000"),
@@ -374,7 +384,6 @@ class TestScannerWithFailoverProvider:
                 volume=create_quantity("1000000"),
                 symbol="RELIANCE",
                 exchange=Exchange.NSE,
-                timeframe="1d",
                 source="jugaad",
             )
         ]
@@ -440,7 +449,6 @@ class TestScannerRateLimiting:
                     volume=create_quantity("1000000"),
                     symbol=kwargs.get("symbol", "TEST"),
                     exchange=Exchange.NSE,
-                    timeframe="1d",
                     source="mock",
                 )
             ]
@@ -473,7 +481,8 @@ class TestScannerCircuitBreaker:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise Exception("API Error")
+                # Use retryable error to trigger retry logic
+                raise Exception("429 Too Many Requests")
             now = datetime.now(UTC)
             return [
                 OHLCVBar(
@@ -485,7 +494,6 @@ class TestScannerCircuitBreaker:
                     volume=create_quantity("1000000"),
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
-                    timeframe="1d",
                     source="mock",
                 )
             ]
