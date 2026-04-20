@@ -580,6 +580,6 @@ def _calculate_retry_delay(config: RetryConfig, attempt: int) -> float:
         config.initial_delay * (config.backoff_multiplier**attempt),
         config.max_delay,
     )
-    # nosec B311 - Using random.uniform is acceptable for jitter, not cryptographic
-    jitter = random.uniform(0, config.jitter_seconds)  # noqa: S311
+    # Using random.uniform is acceptable for jitter, not cryptographic
+    jitter = random.uniform(0, config.jitter_seconds)  # nosec B311
     return delay + jitter
