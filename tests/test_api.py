@@ -368,3 +368,195 @@ def test_get_ohlcv_uses_cached_instrument_token(api_instance: IATBApi) -> None:
             assert result2["status"] == "success"
             # instruments() should not be called again
             assert mock_kite.instruments.call_count == 1
+
+
+def test_get_ohlcv_with_custom_date_range(api_instance: IATBApi) -> None:
+    """Test get_ohlcv with custom date range."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+    ]
+    mock_kite.historical_data.return_value = [
+        {
+            "date": "2026-01-01",
+            "open": 1000,
+            "high": 1100,
+            "low": 950,
+            "close": 1050,
+            "volume": 100000,
+        }
+    ]
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.get_ohlcv(
+                "RELIANCE",
+                from_date="2026-01-01",
+                to_date="2026-01-31",
+            )
+            assert result["status"] == "success"
+            mock_kite.historical_data.assert_called_once_with(
+                instrument_token="123456",
+                from_date="2026-01-01",
+                to_date="2026-01-31",
+                interval="day",
+            )
+
+
+def test_get_ohlcv_with_instrument_token_provided(api_instance: IATBApi) -> None:
+    """Test get_ohlcv when instrument token is provided directly."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.historical_data.return_value = [
+        {
+            "date": "2026-01-01",
+            "open": 1000,
+            "high": 1100,
+            "low": 950,
+            "close": 1050,
+            "volume": 100000,
+        }
+    ]
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            # Provide token directly - should not call instruments()
+            result = api_instance.get_ohlcv("RELIANCE", instrument_token="789012")
+            assert result["status"] == "success"
+            mock_kite.instruments.assert_not_called()
+            mock_kite.historical_data.assert_called_once()
+
+
+def test_get_ohlcv_with_different_intervals(api_instance: IATBApi) -> None:
+    """Test get_ohlcv with different candle intervals."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+    ]
+    mock_kite.historical_data.return_value = []
+
+    intervals = ["day", "5minute", "15minute", "30minute", "60minute", "week"]
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            for interval in intervals:
+                result = api_instance.get_ohlcv("RELIANCE", interval=interval)
+                assert result["status"] == "success"
+                # Verify interval was passed correctly
+                call_kwargs = mock_kite.historical_data.call_args[1]
+                assert call_kwargs["interval"] == interval
+
+
+def test_broker_status_with_no_margin_data(api_instance: IATBApi) -> None:
+    """Test broker_status when margins returns None."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.profile.return_value = {"user_id": "ABC123"}
+    mock_kite.margins.return_value = None
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.broker_status()
+            assert result["status"] == "connected"
+            assert result["uid"] == "ABC123"
+            # Should handle None margins gracefully
+            assert result["balance"] is None
+
+
+def test_broker_status_with_empty_margins(api_instance: IATBApi) -> None:
+    """Test broker_status when margins returns empty dict."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.profile.return_value = {"user_id": "ABC123"}
+    mock_kite.margins.return_value = {}
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.broker_status()
+            assert result["status"] == "connected"
+            assert result["uid"] == "ABC123"
+            assert result["balance"] == 0  # Default value when empty
+
+
+def test_get_ohlcv_empty_data_response(api_instance: IATBApi) -> None:
+    """Test get_ohlcv when historical_data returns empty list."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+    ]
+    mock_kite.historical_data.return_value = None
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            result = api_instance.get_ohlcv("RELIANCE")
+            assert result["status"] == "success"
+            assert result["data"] == []
+            assert result["count"] == 0
+
+
+def test_default_date_range_uses_utc(api_instance: IATBApi) -> None:
+    """Test that _default_date_range uses UTC for dates."""
+    from datetime import UTC, datetime
+
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+    ]
+    mock_kite.historical_data.return_value = []
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            with patch("iatb.api.datetime.now") as mock_now:
+                # Mock datetime.now(UTC) to return a specific time
+                mock_now.return_value = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+
+                api_instance.get_ohlcv("RELIANCE")
+
+                # Verify dates were generated correctly
+                call_kwargs = mock_kite.historical_data.call_args[1]
+                assert call_kwargs["from_date"] == "2025-12-16"  # 30 days ago
+                assert call_kwargs["to_date"] == "2026-01-15"  # Today
+
+
+def test_instrument_cache_case_sensitive(api_instance: IATBApi) -> None:
+    """Test that instrument cache is case-sensitive."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+        {"tradingsymbol": "reliance", "instrument_token": "789012"},  # Different case
+    ]
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            api_instance._kite_client = mock_kite
+
+            # Uppercase lookup
+            token1 = api_instance._ensure_instrument_token(mock_kite, "RELIANCE", None)
+            assert token1 == "123456"
+
+            # Lowercase lookup - should get different token
+            token2 = api_instance._ensure_instrument_token(mock_kite, "reliance", None)
+            assert token2 == "789012"
+
+
+def test_get_ohlcv_with_ticker_whitespace(api_instance: IATBApi) -> None:
+    """Test get_ohlcv handles ticker with leading/trailing whitespace."""
+    api_instance._token_manager.is_token_fresh.return_value = True
+    mock_kite = MagicMock()
+    mock_kite.instruments.return_value = [
+        {"tradingsymbol": "RELIANCE", "instrument_token": "123456"},
+    ]
+    mock_kite.historical_data.return_value = []
+
+    with patch("keyring.get_password", return_value="test_token"):
+        with patch("kiteconnect.KiteConnect", return_value=mock_kite):
+            # Ticker with whitespace should not be trimmed
+            result = api_instance.get_ohlcv("  RELIANCE  ")
+            assert result["status"] == "error"
+            # Should not find instrument with whitespace
+            assert "not found" in result["message"].lower()

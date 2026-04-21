@@ -4,6 +4,7 @@ Tests for FastAPI application endpoints.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -440,7 +441,7 @@ def test_broker_status_with_relogin_required(client: TestClient, mock_api: Magic
         assert data["balance"] is None
 
 
-def test_ohlvarious_intervals(client: TestClient, mock_api: MagicMock) -> None:
+def test_ohlcv_various_intervals(client: TestClient, mock_api: MagicMock) -> None:
     """Test OHLCV chart endpoint with various intervals."""
     intervals = ["day", "5minute", "15minute", "30minute", "60minute"]
 
@@ -449,3 +450,264 @@ def test_ohlvarious_intervals(client: TestClient, mock_api: MagicMock) -> None:
             response = client.get(f"/charts/ohlcv/RELIANCE?interval={interval}")
             assert response.status_code == 200
             mock_api.get_ohlcv.assert_called_with(ticker="RELIANCE", interval=interval)
+
+
+def test_get_watchlist_config_success(client: TestClient) -> None:
+    """Test getting watchlist configuration."""
+    with patch("iatb.fastapi_app.get_config_manager") as mock_get_manager:
+        mock_manager = MagicMock()
+        mock_config = MagicMock()
+        mock_config.nse = ["RELIANCE", "TCS"]
+        mock_config.bse = ["SBIN"]
+        mock_config.mcx = []
+        mock_config.cds = []
+        mock_manager.get_config.return_value = mock_config
+        mock_manager._config_path = Path("config/watchlist.toml")
+        mock_get_manager.return_value = mock_manager
+
+        response = client.get("/config/watchlist")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["nse"] == ["RELIANCE", "TCS"]
+        assert data["bse"] == ["SBIN"]
+        assert data["mcx"] == []
+        assert data["cds"] == []
+        assert data["total_symbols"] == 3
+        assert data["config_path"] == "config/watchlist.toml"
+
+
+def test_get_watchlist_config_error(client: TestClient) -> None:
+    """Test getting watchlist configuration with error."""
+    with patch("iatb.fastapi_app.get_config_manager") as mock_get_manager:
+        mock_get_manager.side_effect = Exception("Config error")
+
+        response = client.get("/config/watchlist")
+        assert response.status_code == 503
+        data = response.json()
+        assert "Failed to retrieve watchlist configuration" in data["detail"]
+
+
+def test_update_watchlist_config_success(client: TestClient) -> None:
+    """Test updating watchlist configuration."""
+    with patch("iatb.fastapi_app.get_config_manager") as mock_get_manager:
+        mock_manager = MagicMock()
+        mock_config = MagicMock()
+        mock_config.nse = ["INFY", "WIPRO"]
+        mock_config.bse = []
+        mock_config.mcx = []
+        mock_config.cds = []
+        mock_manager.update_config.return_value = mock_config
+        mock_manager._config_path = Path("config/watchlist.toml")
+        mock_get_manager.return_value = mock_manager
+
+        request_data = {"nse": ["INFY", "WIPRO"]}
+        response = client.put("/config/watchlist", json=request_data)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["nse"] == ["INFY", "WIPRO"]
+        mock_manager.update_config.assert_called_once_with(
+            nse=["INFY", "WIPRO"], bse=None, mcx=None, cds=None
+        )
+
+
+def test_update_watchlist_config_multiple_exchanges(client: TestClient) -> None:
+    """Test updating watchlist configuration for multiple exchanges."""
+    with patch("iatb.fastapi_app.get_config_manager") as mock_get_manager:
+        mock_manager = MagicMock()
+        mock_config = MagicMock()
+        mock_config.nse = ["RELIANCE"]
+        mock_config.bse = ["TCS"]
+        mock_config.mcx = ["GOLD"]
+        mock_config.cds = ["USDINR"]
+        mock_manager.update_config.return_value = mock_config
+        mock_manager._config_path = Path("config/watchlist.toml")
+        mock_get_manager.return_value = mock_manager
+
+        request_data = {
+            "nse": ["RELIANCE"],
+            "bse": ["TCS"],
+            "mcx": ["GOLD"],
+            "cds": ["USDINR"],
+        }
+        response = client.put("/config/watchlist", json=request_data)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["nse"] == ["RELIANCE"]
+        assert data["bse"] == ["TCS"]
+        assert data["mcx"] == ["GOLD"]
+        assert data["cds"] == ["USDINR"]
+
+
+def test_update_watchlist_config_config_error(client: TestClient) -> None:
+    """Test updating watchlist configuration with ConfigError."""
+    from iatb.core.exceptions import ConfigError
+
+    with patch("iatb.fastapi_app.get_config_manager") as mock_get_manager:
+        mock_manager = MagicMock()
+        mock_manager.update_config.side_effect = ConfigError("Write failed")
+        mock_get_manager.return_value = mock_manager
+
+        request_data = {"nse": ["RELIANCE"]}
+        response = client.put("/config/watchlist", json=request_data)
+        assert response.status_code == 500
+        data = response.json()
+        assert "Configuration error" in data["detail"]
+
+
+def test_update_watchlist_config_general_error(client: TestClient) -> None:
+    """Test updating watchlist configuration with general error."""
+    with patch("iatb.fastapi_app.get_config_manager") as mock_get_manager:
+        mock_manager = MagicMock()
+        mock_manager.update_config.side_effect = Exception("Unexpected error")
+        mock_get_manager.return_value = mock_manager
+
+        request_data = {"nse": ["RELIANCE"]}
+        response = client.put("/config/watchlist", json=request_data)
+        assert response.status_code == 500
+        data = response.json()
+        assert "Failed to update watchlist configuration" in data["detail"]
+
+
+def test_ml_status_endpoint_success(client: TestClient) -> None:
+    """Test ML status endpoint with successful response."""
+    from datetime import UTC, datetime
+
+    from iatb.ml.model_registry import ModelStatus
+
+    with patch("iatb.fastapi_app.get_registry") as mock_get_registry:
+        mock_registry = MagicMock()
+        mock_health = MagicMock()
+        mock_health.status = ModelStatus.AVAILABLE
+        mock_health.last_check = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        mock_health.load_time_ms = 100
+        mock_health.dll_loaded = True
+        mock_health.fallback_available = True
+        mock_health.error_message = None
+
+        mock_status = MagicMock()
+        mock_status.timestamp = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        mock_status.total_models = 3
+        mock_status.available_models = 2
+        mock_status.degraded_models = 1
+        mock_status.unavailable_models = 0
+        mock_status.model_health = {
+            "lstm": mock_health,
+            "transformer": mock_health,
+        }
+
+        mock_registry.get_status.return_value = mock_status
+        mock_get_registry.return_value = mock_registry
+
+        response = client.get("/ml/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_models"] == 3
+        assert data["available_models"] == 2
+        assert data["degraded_models"] == 1
+        assert data["unavailable_models"] == 0
+        assert "lstm" in data["models"]
+        assert "transformer" in data["models"]
+        assert data["models"]["lstm"]["status"] == "available"
+
+
+def test_ml_status_endpoint_error(client: TestClient) -> None:
+    """Test ML status endpoint with error."""
+    with patch("iatb.fastapi_app.get_registry") as mock_get_registry:
+        mock_get_registry.side_effect = Exception("Registry error")
+
+        response = client.get("/ml/status")
+        assert response.status_code == 503
+        data = response.json()
+        assert "Failed to retrieve ML status" in data["detail"]
+
+
+def test_metrics_endpoint(client: TestClient) -> None:
+    """Test Prometheus metrics endpoint."""
+    with patch("iatb.fastapi_app.generate_latest") as mock_generate:
+        mock_metrics = b"# HELP test_metric Test metric\n"
+        mock_generate.return_value = mock_metrics
+
+        response = client.get("/metrics")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+        mock_generate.assert_called_once()
+
+
+def test_events_stream_endpoint(client: TestClient) -> None:
+    """Test SSE events stream endpoint."""
+    with patch("iatb.fastapi_app.get_broadcaster") as mock_get_broadcaster:
+
+        async def mock_subscribe():
+            yield 'data: {"type": "test", "data": {}}\n\n'
+
+        mock_broadcaster = MagicMock()
+        mock_broadcaster.subscribe = mock_subscribe
+        mock_get_broadcaster.return_value = mock_broadcaster
+
+        response = client.get("/events/stream")
+        assert response.status_code == 200
+        assert response.headers["media-type"] == "text/event-stream"
+        assert response.headers["cache-control"] == "no-cache"
+        assert response.headers["connection"] == "keep-alive"
+
+
+def test_watchlist_response_model_validation() -> None:
+    """Test WatchlistResponse model validation."""
+    from iatb.fastapi_app import WatchlistResponse
+
+    response = WatchlistResponse(
+        nse=["RELIANCE", "TCS"],
+        bse=["SBIN"],
+        mcx=[],
+        cds=["USDINR"],
+        total_symbols=4,
+        config_path="config/watchlist.toml",
+        message="Success",
+    )
+    assert response.nse == ["RELIANCE", "TCS"]
+    assert response.total_symbols == 4
+    assert response.config_path == "config/watchlist.toml"
+
+
+def test_watchlist_update_request_model_validation() -> None:
+    """Test WatchlistUpdateRequest model validation."""
+    from iatb.fastapi_app import WatchlistUpdateRequest
+
+    # All fields None (valid)
+    request1 = WatchlistUpdateRequest()
+    assert request1.nse is None
+    assert request1.bse is None
+
+    # Some fields provided
+    request2 = WatchlistUpdateRequest(nse=["RELIANCE"])
+    assert request2.nse == ["RELIANCE"]
+    assert request2.bse is None
+
+    # All fields provided
+    request3 = WatchlistUpdateRequest(
+        nse=["RELIANCE"],
+        bse=["TCS"],
+        mcx=["GOLD"],
+        cds=["USDINR"],
+    )
+    assert len(request3.nse) == 1
+    assert len(request3.bse) == 1
+    assert len(request3.mcx) == 1
+    assert len(request3.cds) == 1
+
+
+def test_ml_status_response_model_validation() -> None:
+    """Test MLStatusResponse model validation."""
+    from iatb.fastapi_app import MLStatusResponse
+
+    response = MLStatusResponse(
+        timestamp="2026-01-01T12:00:00",
+        total_models=5,
+        available_models=3,
+        degraded_models=1,
+        unavailable_models=1,
+        models={"lstm": {"status": "available", "load_time_ms": "100"}},
+    )
+    assert response.total_models == 5
+    assert response.available_models == 3
+    assert "lstm" in response.models

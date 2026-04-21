@@ -4,6 +4,8 @@ Tests for engine orchestrator.
 
 import asyncio
 import random
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -187,3 +189,356 @@ class TestEngineProperties:
 
         with pytest.raises(EngineError, match="no kill switch configured"):
             engine.disengage_kill_switch()
+
+
+class TestEngineSelectionCycle:
+    """Test engine selection cycle functionality."""
+
+    def test_select_instruments_calls_scorer(self) -> None:
+        """Test that select_instruments delegates to scorer."""
+        from iatb.core.enums import Exchange
+        from iatb.market_strength.regime_detector import MarketRegime
+        from iatb.selection.instrument_scorer import InstrumentSignals, SelectionResult
+
+        engine = Engine()
+
+        # Create mock signals with correct structure
+        from iatb.market_strength.strength_scorer import StrengthInputs
+        from iatb.selection.drl_signal import DRLSignalOutput
+        from iatb.selection.sentiment_signal import SentimentSignalOutput
+        from iatb.selection.strength_signal import StrengthSignalOutput
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+
+        mock_sentiment = MagicMock(spec=SentimentSignalOutput)
+        mock_sentiment.score = Decimal("0.6")
+        mock_sentiment.confidence = Decimal("0.8")
+
+        mock_strength = MagicMock(spec=StrengthSignalOutput)
+        mock_strength.score = Decimal("0.75")
+        mock_strength.confidence = Decimal("0.7")
+
+        mock_volume_profile = MagicMock(spec=VolumeProfileSignalOutput)
+        mock_volume_profile.score = Decimal("0.7")
+        mock_volume_profile.confidence = Decimal("0.75")
+
+        mock_drl = MagicMock(spec=DRLSignalOutput)
+        mock_drl.score = Decimal("0.8")
+        mock_drl.confidence = Decimal("0.9")
+
+        mock_strength_inputs = MagicMock(spec=StrengthInputs)
+
+        signals = [
+            InstrumentSignals(
+                symbol="RELIANCE",
+                exchange=Exchange.NSE,
+                sentiment=mock_sentiment,
+                strength=mock_strength,
+                volume_profile=mock_volume_profile,
+                drl=mock_drl,
+                strength_inputs=mock_strength_inputs,
+            )
+        ]
+
+        regime = MarketRegime.BULL
+        correlations = {}
+
+        # Mock the scorer's return value
+        mock_result = MagicMock(spec=SelectionResult)
+        mock_result.selected = []
+        mock_result.filtered_count = 0
+        mock_result.total_candidates = 1
+        engine._scorer.score_and_select = MagicMock(return_value=mock_result)
+
+        result = engine.select_instruments(signals, regime, correlations)
+
+        assert result == mock_result
+        engine._scorer.score_and_select.assert_called_once_with(signals, regime, correlations)
+
+    def test_run_selection_cycle_full_pipeline(self) -> None:
+        """Test full selection cycle pipeline."""
+        from iatb.core.enums import Exchange, OrderSide
+        from iatb.market_strength.regime_detector import MarketRegime
+        from iatb.market_strength.strength_scorer import StrengthInputs
+        from iatb.selection.drl_signal import DRLSignalOutput
+        from iatb.selection.instrument_scorer import (
+            InstrumentSignals,
+            SelectionResult,
+        )
+        from iatb.selection.sentiment_signal import SentimentSignalOutput
+        from iatb.selection.strength_signal import StrengthSignalOutput
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+
+        engine = Engine()
+
+        # Create mock signals with correct structure
+        mock_sentiment = MagicMock(spec=SentimentSignalOutput)
+        mock_sentiment.score = Decimal("0.6")
+        mock_sentiment.confidence = Decimal("0.8")
+
+        mock_strength = MagicMock(spec=StrengthSignalOutput)
+        mock_strength.score = Decimal("0.75")
+        mock_strength.confidence = Decimal("0.7")
+
+        mock_volume_profile = MagicMock(spec=VolumeProfileSignalOutput)
+        mock_volume_profile.score = Decimal("0.7")
+        mock_volume_profile.confidence = Decimal("0.75")
+
+        mock_drl = MagicMock(spec=DRLSignalOutput)
+        mock_drl.score = Decimal("0.8")
+        mock_drl.confidence = Decimal("0.9")
+
+        mock_strength_inputs = MagicMock(spec=StrengthInputs)
+
+        signals = [
+            InstrumentSignals(
+                symbol="RELIANCE",
+                exchange=Exchange.NSE,
+                sentiment=mock_sentiment,
+                strength=mock_strength,
+                volume_profile=mock_volume_profile,
+                drl=mock_drl,
+                strength_inputs=mock_strength_inputs,
+            )
+        ]
+
+        # Create strength inputs
+        strength_by_symbol = {"RELIANCE": MagicMock(spec=StrengthInputs)}
+
+        regime = MarketRegime.BULL
+        side = OrderSide.BUY
+
+        # Mock the scorer's return value
+        mock_selection = MagicMock(spec=SelectionResult)
+        mock_selection.selected = []
+        mock_selection.filtered_count = 0
+        mock_selection.total_candidates = 1
+        engine._scorer.score_and_select = MagicMock(return_value=mock_selection)
+
+        # Mock build_strategy_contexts
+        mock_contexts = [MagicMock()]
+        with patch(
+            "iatb.core.engine.build_strategy_contexts",
+            return_value=mock_contexts,
+        ) as mock_build:
+            result = engine.run_selection_cycle(
+                signals=signals,
+                regime=regime,
+                strength_by_symbol=strength_by_symbol,
+                side=side,
+            )
+
+        assert result == mock_contexts
+        engine._scorer.score_and_select.assert_called_once()
+        mock_build.assert_called_once()
+
+    def test_run_selection_cycle_async(self) -> None:
+        """Test async variant of selection cycle."""
+        import asyncio
+
+        from iatb.core.enums import Exchange, OrderSide
+        from iatb.market_strength.regime_detector import MarketRegime
+        from iatb.market_strength.strength_scorer import StrengthInputs
+        from iatb.selection.drl_signal import DRLSignalOutput
+        from iatb.selection.instrument_scorer import (
+            InstrumentSignals,
+            SelectionResult,
+        )
+        from iatb.selection.sentiment_signal import SentimentSignalOutput
+        from iatb.selection.strength_signal import StrengthSignalOutput
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+
+        async def async_test() -> None:
+            engine = Engine()
+
+            # Create mock signals with correct structure
+            mock_sentiment = MagicMock(spec=SentimentSignalOutput)
+            mock_sentiment.score = Decimal("0.6")
+            mock_sentiment.confidence = Decimal("0.8")
+
+            mock_strength = MagicMock(spec=StrengthSignalOutput)
+            mock_strength.score = Decimal("0.75")
+            mock_strength.confidence = Decimal("0.7")
+
+            mock_volume_profile = MagicMock(spec=VolumeProfileSignalOutput)
+            mock_volume_profile.score = Decimal("0.7")
+            mock_volume_profile.confidence = Decimal("0.75")
+
+            mock_drl = MagicMock(spec=DRLSignalOutput)
+            mock_drl.score = Decimal("0.8")
+            mock_drl.confidence = Decimal("0.9")
+
+            mock_strength_inputs = MagicMock(spec=StrengthInputs)
+
+            signals = [
+                InstrumentSignals(
+                    symbol="RELIANCE",
+                    exchange=Exchange.NSE,
+                    sentiment=mock_sentiment,
+                    strength=mock_strength,
+                    volume_profile=mock_volume_profile,
+                    drl=mock_drl,
+                    strength_inputs=mock_strength_inputs,
+                )
+            ]
+
+            strength_by_symbol = {"RELIANCE": MagicMock(spec=StrengthInputs)}
+
+            regime = MarketRegime.BULL
+            side = OrderSide.BUY
+
+            mock_selection = MagicMock(spec=SelectionResult)
+            mock_selection.selected = []
+            mock_selection.filtered_count = 0
+            mock_selection.total_candidates = 1
+            engine._scorer.score_and_select = MagicMock(return_value=mock_selection)
+
+            with patch("iatb.core.engine.build_strategy_contexts") as mock_build:
+                mock_contexts = [MagicMock()]
+                mock_build.return_value = mock_contexts
+
+                result = await engine.run_selection_cycle_async(
+                    signals=signals,
+                    regime=regime,
+                    strength_by_symbol=strength_by_symbol,
+                    side=side,
+                )
+
+            assert result == mock_contexts
+            engine._scorer.score_and_select.assert_called_once()
+
+        asyncio.run(async_test())
+
+    def test_run_selection_cycle_with_correlations(self) -> None:
+        """Test selection cycle with correlation filtering."""
+        from iatb.core.enums import Exchange, OrderSide
+        from iatb.market_strength.regime_detector import MarketRegime
+        from iatb.market_strength.strength_scorer import StrengthInputs
+        from iatb.selection.drl_signal import DRLSignalOutput
+        from iatb.selection.instrument_scorer import (
+            InstrumentSignals,
+            SelectionResult,
+        )
+        from iatb.selection.sentiment_signal import SentimentSignalOutput
+        from iatb.selection.strength_signal import StrengthSignalOutput
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+
+        engine = Engine()
+
+        # Create mock signals for two instruments
+        def create_mock_signals(
+            symbol: str,
+            scores: tuple[Decimal, Decimal, Decimal, Decimal],
+        ) -> InstrumentSignals:
+            mock_sentiment = MagicMock(spec=SentimentSignalOutput)
+            mock_sentiment.score = scores[0]
+            mock_sentiment.confidence = Decimal("0.8")
+
+            mock_strength = MagicMock(spec=StrengthSignalOutput)
+            mock_strength.score = scores[1]
+            mock_strength.confidence = Decimal("0.7")
+
+            mock_volume_profile = MagicMock(spec=VolumeProfileSignalOutput)
+            mock_volume_profile.score = scores[2]
+            mock_volume_profile.confidence = Decimal("0.75")
+
+            mock_drl = MagicMock(spec=DRLSignalOutput)
+            mock_drl.score = scores[3]
+            mock_drl.confidence = Decimal("0.9")
+
+            mock_strength_inputs = MagicMock(spec=StrengthInputs)
+
+            return InstrumentSignals(
+                symbol=symbol,
+                exchange=Exchange.NSE,
+                sentiment=mock_sentiment,
+                strength=mock_strength,
+                volume_profile=mock_volume_profile,
+                drl=mock_drl,
+                strength_inputs=mock_strength_inputs,
+            )
+
+        signals = [
+            create_mock_signals(
+                "RELIANCE",
+                (Decimal("0.8"), Decimal("0.7"), Decimal("0.6"), Decimal("0.75")),
+            ),
+            create_mock_signals(
+                "TCS",
+                (Decimal("0.85"), Decimal("0.75"), Decimal("0.65"), Decimal("0.78")),
+            ),
+        ]
+
+        regime = MarketRegime.BULL
+        side = OrderSide.BUY
+        correlations = {("RELIANCE", "TCS"): Decimal("0.9")}  # High correlation
+
+        mock_selection = MagicMock(spec=SelectionResult)
+        mock_selection.selected = []
+        mock_selection.filtered_count = 2
+        mock_selection.total_candidates = 2
+        engine._scorer.score_and_select = MagicMock(return_value=mock_selection)
+
+        with patch("iatb.core.engine.build_strategy_contexts") as mock_build:
+            mock_contexts = [MagicMock()]
+            mock_build.return_value = mock_contexts
+
+            result = engine.run_selection_cycle(
+                signals=signals,
+                regime=regime,
+                side=side,
+                correlations=correlations,
+            )
+
+        assert len(result) == 1
+        engine._scorer.score_and_select.assert_called_once_with(signals, regime, correlations)
+
+    def test_run_selection_cycle_empty_signals(self) -> None:
+        """Test selection cycle with empty signals."""
+        from iatb.market_strength.regime_detector import MarketRegime
+        from iatb.selection.instrument_scorer import SelectionResult
+
+        engine = Engine()
+
+        signals: list = []
+        regime = MarketRegime.BULL
+
+        mock_selection = MagicMock(spec=SelectionResult)
+        mock_selection.selected = []
+        mock_selection.filtered_count = 0
+        mock_selection.total_candidates = 0
+        engine._scorer.score_and_select = MagicMock(return_value=mock_selection)
+
+        with patch("iatb.core.engine.build_strategy_contexts") as mock_build:
+            mock_build.return_value = []
+
+            result = engine.run_selection_cycle(signals=signals, regime=regime)
+
+        assert result == []
+        engine._scorer.score_and_select.assert_called_once()
+
+    def test_engage_kill_switch_with_config(self) -> None:
+        """Test engaging kill switch when configured."""
+        from iatb.risk.kill_switch import KillSwitch
+
+        mock_kill_switch = MagicMock(spec=KillSwitch)
+        engine = Engine(kill_switch=mock_kill_switch)
+
+        engine.engage_kill_switch("Test reason")
+
+        mock_kill_switch.engage.assert_called_once()
+        # Verify the timestamp argument is a datetime
+        assert mock_kill_switch.engage.call_args[0][0] == "Test reason"
+        assert mock_kill_switch.engage.call_args[0][1] is not None
+
+    def test_disengage_kill_switch_with_config(self) -> None:
+        """Test disengaging kill switch when configured."""
+        from iatb.risk.kill_switch import KillSwitch
+
+        mock_kill_switch = MagicMock(spec=KillSwitch)
+        engine = Engine(kill_switch=mock_kill_switch)
+
+        engine.disengage_kill_switch()
+
+        mock_kill_switch.disengage.assert_called_once()
+        # Verify the timestamp argument is a datetime
+        assert mock_kill_switch.disengage.call_args[0][0] is not None
