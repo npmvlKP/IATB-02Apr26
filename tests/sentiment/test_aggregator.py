@@ -333,3 +333,31 @@ def test_aggregator_component_scores_are_decimals() -> None:
     result = aggregator.evaluate_instrument("Test news", Decimal("1.8"))
     for score in result.component_scores.values():
         assert isinstance(score, Decimal)
+
+
+def test_aggregator_get_analyzer_instance_unknown_raises() -> None:
+    """Test that unknown analyzer name raises error."""
+    from iatb.core.exceptions import ConfigError
+
+    aggregator = SentimentAggregator(
+        finbert=_StubAnalyzer("finbert", Decimal("0.80"), Decimal("0.80")),
+        aion=_StubAnalyzer("aion", Decimal("0.70"), Decimal("0.70")),
+        vader=_StubAnalyzer("vader", Decimal("0.60"), Decimal("0.60")),
+        enable_graceful_fallback=False,
+    )
+    with pytest.raises(ConfigError, match="Unknown analyzer"):
+        aggregator._get_analyzer_instance("unknown")
+
+
+def test_aggregator_get_analyzer_weight_unknown_raises() -> None:
+    """Test that unknown analyzer weight raises error."""
+    from iatb.core.exceptions import ConfigError
+
+    aggregator = SentimentAggregator(
+        finbert=_StubAnalyzer("finbert", Decimal("0.80"), Decimal("0.80")),
+        aion=_StubAnalyzer("aion", Decimal("0.70"), Decimal("0.70")),
+        vader=_StubAnalyzer("vader", Decimal("0.60"), Decimal("0.60")),
+        enable_graceful_fallback=False,
+    )
+    with pytest.raises(ConfigError, match="Unknown analyzer"):
+        aggregator._get_analyzer_weight("unknown")
