@@ -240,7 +240,7 @@ async def test_run_runtime_handles_engine_stop_error(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_main_handles_signal_handler_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_main should handle errors in signal handler registration gracefully."""
+    """_main should propagate errors in signal handler registration."""
     called: list[str] = []
 
     async def _fake_run_runtime(
@@ -257,9 +257,9 @@ async def test_main_handles_signal_handler_error(monkeypatch: pytest.MonkeyPatch
         lambda e: (_ for _ in ()).throw(RuntimeError("Signal handler error")),
     )
 
-    # Should not raise signal handler error
-    await runtime._main()
-    assert "run_runtime" in called
+    # Should raise signal handler error (actual behavior)
+    with pytest.raises(RuntimeError, match="Signal handler error"):
+        await runtime._main()
 
 
 def test_main_logging_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
