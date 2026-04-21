@@ -779,3 +779,214 @@ class TestFailoverProviderNaming:
         states = failover.get_circuit_states()
         # Should use class name with index as fallback
         assert "nonameprovider_0" in states
+
+    @pytest.mark.asyncio
+    async def test_provider_name_from_kite_provider_class(self) -> None:
+        """Test provider name extraction for KiteProvider class name."""
+
+        # Create a provider with class name "KiteProvider" but no name attribute
+        class KiteProvider(DataProvider):
+            async def get_ohlcv(  # type: ignore[override]
+                self,
+                *,
+                symbol: str,
+                exchange: Exchange,
+                timeframe: str,
+                since: Any | None = None,
+                limit: int = 500,
+            ) -> list[OHLCVBar]:
+                return [
+                    OHLCVBar(
+                        exchange=exchange,
+                        symbol=symbol,
+                        open=create_price("100"),
+                        high=create_price("110"),
+                        low=create_price("95"),
+                        close=create_price("105"),
+                        volume=create_quantity("1000"),
+                        source="kiteconnect",
+                    )
+                ]
+
+            async def get_ticker(  # type: ignore[override]
+                self,
+                *,
+                symbol: str,
+                exchange: Exchange,
+            ) -> TickerSnapshot:
+                return TickerSnapshot(
+                    exchange=exchange,
+                    symbol=symbol,
+                    bid=create_price("104"),
+                    ask=create_price("106"),
+                    last=create_price("105"),
+                    volume_24h=create_quantity("10000"),
+                    source="kiteconnect",
+                )
+
+            async def get_ohlcv_batch(  # type: ignore[override]
+                self,
+                *,
+                symbols: list[str],
+                exchange: Exchange,
+                timeframe: str,
+                since: Any | None = None,
+                limit: int = 500,
+            ) -> dict[str, list[OHLCVBar]]:
+                return {}
+
+        provider = KiteProvider()
+        failover = FailoverProvider(providers=[provider])
+
+        states = failover.get_circuit_states()
+        # Should use "kiteconnect" from class name mapping
+        assert "kiteconnect" in states
+
+    @pytest.mark.asyncio
+    async def test_provider_name_from_jugaad_provider_class(self) -> None:
+        """Test provider name extraction for JugaadProvider class name."""
+
+        # Create a provider with class name "JugaadProvider" but no name attribute
+        class JugaadProvider(DataProvider):
+            async def get_ohlcv(  # type: ignore[override]
+                self,
+                *,
+                symbol: str,
+                exchange: Exchange,
+                timeframe: str,
+                since: Any | None = None,
+                limit: int = 500,
+            ) -> list[OHLCVBar]:
+                return [
+                    OHLCVBar(
+                        exchange=exchange,
+                        symbol=symbol,
+                        open=create_price("100"),
+                        high=create_price("110"),
+                        low=create_price("95"),
+                        close=create_price("105"),
+                        volume=create_quantity("1000"),
+                        source="jugaad",
+                    )
+                ]
+
+            async def get_ticker(  # type: ignore[override]
+                self,
+                *,
+                symbol: str,
+                exchange: Exchange,
+            ) -> TickerSnapshot:
+                return TickerSnapshot(
+                    exchange=exchange,
+                    symbol=symbol,
+                    bid=create_price("104"),
+                    ask=create_price("106"),
+                    last=create_price("105"),
+                    volume_24h=create_quantity("10000"),
+                    source="jugaad",
+                )
+
+            async def get_ohlcv_batch(  # type: ignore[override]
+                self,
+                *,
+                symbols: list[str],
+                exchange: Exchange,
+                timeframe: str,
+                since: Any | None = None,
+                limit: int = 500,
+            ) -> dict[str, list[OHLCVBar]]:
+                return {}
+
+        provider = JugaadProvider()
+        failover = FailoverProvider(providers=[provider])
+
+        states = failover.get_circuit_states()
+        # Should use "jugaad" from class name mapping
+        assert "jugaad" in states
+
+    @pytest.mark.asyncio
+    async def test_provider_name_from_yfinance_provider_class(self) -> None:
+        """Test provider name extraction for YFinanceProvider class name."""
+
+        # Create a provider with class name "YFinanceProvider" but no name attribute
+        class YFinanceProvider(DataProvider):
+            async def get_ohlcv(  # type: ignore[override]
+                self,
+                *,
+                symbol: str,
+                exchange: Exchange,
+                timeframe: str,
+                since: Any | None = None,
+                limit: int = 500,
+            ) -> list[OHLCVBar]:
+                return [
+                    OHLCVBar(
+                        exchange=exchange,
+                        symbol=symbol,
+                        open=create_price("100"),
+                        high=create_price("110"),
+                        low=create_price("95"),
+                        close=create_price("105"),
+                        volume=create_quantity("1000"),
+                        source="yfinance",
+                    )
+                ]
+
+            async def get_ticker(  # type: ignore[override]
+                self,
+                *,
+                symbol: str,
+                exchange: Exchange,
+            ) -> TickerSnapshot:
+                return TickerSnapshot(
+                    exchange=exchange,
+                    symbol=symbol,
+                    bid=create_price("104"),
+                    ask=create_price("106"),
+                    last=create_price("105"),
+                    volume_24h=create_quantity("10000"),
+                    source="yfinance",
+                )
+
+            async def get_ohlcv_batch(  # type: ignore[override]
+                self,
+                *,
+                symbols: list[str],
+                exchange: Exchange,
+                timeframe: str,
+                since: Any | None = None,
+                limit: int = 500,
+            ) -> dict[str, list[OHLCVBar]]:
+                return {}
+
+        provider = YFinanceProvider()
+        failover = FailoverProvider(providers=[provider])
+
+        states = failover.get_circuit_states()
+        # Should use "yfinance" from class name mapping
+        assert "yfinance" in states
+
+    @pytest.mark.asyncio
+    async def test_source_switch_logging_with_structlog(self, mock_metrics_switches) -> None:
+        """Test that source switch logging works with structlog available."""
+        # This test covers the structlog import path in _log_source_switch
+        primary = MockProvider("kiteconnect", should_fail=True)
+        secondary = MockProvider("jugaad")
+        switches, switches_cb = mock_metrics_switches
+
+        failover = FailoverProvider(
+            providers=[primary, secondary],
+            metrics_switches=switches_cb,
+        )
+
+        # This will trigger source switch logging
+        await failover.get_ohlcv(
+            symbol="RELIANCE",
+            exchange=Exchange.NSE,
+            timeframe="1d",
+            limit=10,
+        )
+
+        # Verify switch was recorded
+        assert len(switches) == 1
+        assert switches[0] == ("kiteconnect", "jugaad", "get_ohlcv")

@@ -95,9 +95,9 @@ Before final delivery, ALL must be satisfied:
 | 2 | Tests | Test file name + storage location + one-line coverage intent |
 | 3 | Test Coverage | Happy path, edge cases, error paths, type handling, precision handling, timezone handling |
 | 4 | External APIs | Mocked in tests |
-| 5 | PowerShell Block | Complete and sequential Win11 PowerShell runbook |
-| 6 | Validation Steps | PowerShell includes validation steps and git sync to completion |
-| 7 | Git Sync Report | Branch name, commit hash, and push status |
+| 5 | Comprehensive and sequential Win11 Python scripts execution commands |
+| 6 | Validation Steps | Python scripts includes validation steps and git sync to completion |
+| 7 | Git Sync Report |Local git source control should not show "still pending", make sure all of them proposelry taken care duly following the git add, commit & push commands | Branch name, commit hash, and push status |
 | 8 | Output Contract | Follows Section 9 exactly |
 | 9 | Validation Gates | All G1–G10 addressed |
 | 10 | No Assumptions | Unknowns explicitly listed as blockers |
@@ -191,8 +191,8 @@ If not provided, use this strict default contract exactly in this order:
 | G9 | Print statement check | ✓/✗ | ... |
 | G10 | Function size check | ✓/✗ | ... |
 
-### 9.5 Win11 PowerShell Runbook (Sequential)
-```powershell
+### 9.5 Win11 Python Scripts (Sequential)
+
 # Step 1: Verify/Install dependencies
 poetry install
 
@@ -213,10 +213,18 @@ poetry run pytest --cov=src/iatb --cov-fail-under=90 -x
 # G10: Function size ≤50 LOC
 
 # Step 5: Git Sync
-git add .
+git init
+$branch = git rev-parse --abbrev-ref HEAD
+$context = Prepare the prompted context
 git status
-git commit -m "type(scope): description"
-git push origin <branch>
+git add -A or git add .
+git commit -m "Update: $context - $(Get-Date -Format 'yyyy-MM-dd')"
+git pull --rebase --autostash origin $branch
+git push origin $branch
+git push origin main
+git remote -v
+git status
+git log --oneline -5
 ```
 
 ### 9.6 Git Sync Report
@@ -286,8 +294,8 @@ Mandatory checklist (all required, no exceptions):
 2) Tests section shows test file name + storage location + coverage intent
 3) Tests cover happy path, edge cases, errors, types, precision, timezone
 4) External APIs mocked in tests
-5) Win11 PowerShell block complete and sequential
-6) PowerShell block includes validation + git sync to completion
+5) Win11 Comprehensive Python scripts complete and sequential
+6) Python scripts includes validation + git sync to completion
 7) Git sync reports branch name, commit hash, push status
 8) Output follows Section 9 contract exactly
 9) All validation gates (G1-G10) addressed
@@ -298,7 +306,7 @@ Output contract (exact order):
 2. Changed Files (File Name + Storage Location + Purpose)
 3. Tests (File Name + Storage Location + Coverage Intent)
 4. Validation Gates (G1-G10 Status)
-5. Win11 PowerShell Runbook (Sequential)
+5. Win11 Comprehensive Python scripts complete and sequential
 6. Git Sync Report
 7. Assumptions and Unknowns
 
@@ -335,7 +343,7 @@ Strict mandatory checklist:
 2) Tests section shows test file name + storage location + coverage intent
 3) Tests cover happy path, edge cases, errors, types, precision, timezone
 4) External APIs mocked in tests
-5) Win11 PowerShell block complete and sequential
+5) Win11 Comprehensive Python scripts complete and sequential
 6) PowerShell block includes validation + git sync to completion
 7) Git sync reports branch name, commit hash, push status
 8) Output follows exact section order contract
@@ -359,7 +367,7 @@ Default strict output contract (exact order):
 2. Changed Files (File Name + Storage Location + Purpose)
 3. Tests (File Name + Storage Location + Coverage Intent)
 4. Validation Gates (G1-G10 Status)
-5. Win11 PowerShell Runbook (Sequential)
+5. Win11 Comprehensive Python scripts complete and sequential
 6. Git Sync Report
 7. Assumptions and Unknowns
 
