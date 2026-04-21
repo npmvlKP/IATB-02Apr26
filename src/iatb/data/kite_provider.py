@@ -140,6 +140,7 @@ class _RateLimiter:
     def __init__(
         self,
         requests_per_window: int = _RATE_LIMIT_REQUESTS,
+        # Timing configuration (not financial calculation): use float for precision
         window_seconds: float = _RATE_LIMIT_WINDOW,
     ) -> None:
         self._requests_per_window = requests_per_window
@@ -193,6 +194,7 @@ class KiteProvider(DataProvider):
         access_token: str,
         kite_connect_factory: Callable[[str, str], Any] | None = None,
         max_retries: int = _MAX_RETRIES,
+        # Timing configuration (not financial calculation): use float for precision
         initial_retry_delay: float = _INITIAL_RETRY_DELAY,
         requests_per_second: int = _RATE_LIMIT_REQUESTS,
     ) -> None:
@@ -231,6 +233,7 @@ class KiteProvider(DataProvider):
         api_key: str,
         access_token: str,
         max_retries: int,
+        # Timing configuration (not financial calculation): use float for precision
         initial_retry_delay: float,
         requests_per_second: int,
     ) -> None:
@@ -314,7 +317,7 @@ class KiteProvider(DataProvider):
             end_date,
         )
 
-        return self._process_ohlcv_data(data, symbol, exchange, since, limit)
+        return self._process_ohlcv_data(data, symbol, exchange, timeframe, since, limit)
 
     def _calculate_date_range(
         self, since: Timestamp | None, limit: int
@@ -332,6 +335,7 @@ class KiteProvider(DataProvider):
         data: list[dict[str, object]],
         symbol: str,
         exchange: Exchange,
+        timeframe: str,
         since: Timestamp | None,
         limit: int,
     ) -> list[OHLCVBar]:
@@ -342,6 +346,7 @@ class KiteProvider(DataProvider):
             clipped,
             symbol=symbol,
             exchange=exchange,
+            timeframe=timeframe,
             source="kiteconnect",
         )
 
@@ -590,6 +595,7 @@ class KiteProvider(DataProvider):
         api_key_env_var: str = "ZERODHA_API_KEY",
         access_token_env_var: str = "ZERODHA_ACCESS_TOKEN",  # noqa: S107
         max_retries: int = _MAX_RETRIES,
+        # Timing configuration (not financial calculation): use float for precision
         initial_retry_delay: float = _INITIAL_RETRY_DELAY,
         requests_per_second: int = _RATE_LIMIT_REQUESTS,
     ) -> "KiteProvider":

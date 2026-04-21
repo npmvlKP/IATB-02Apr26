@@ -69,13 +69,15 @@ def _extract_numeric(
 
 
 def _coerce_numeric_input(value: object, *, field_name: str) -> NumericInput:
+    """Coerce value to numeric type without using float."""
     if isinstance(value, bool):
         msg = f"{field_name} must not be boolean"
         raise ConfigError(msg)
     if isinstance(value, Decimal | int | str):
         return value
-    # API boundary conversion: yfinance returns float, convert to str for Decimal
     if isinstance(value, float):
+        # API boundary conversion: explicitly convert float to str
+        # This is the only place where float is accepted from external API
         return str(value)
     msg = f"{field_name} must be numeric-compatible, got {type(value).__name__}"
     raise ConfigError(msg)

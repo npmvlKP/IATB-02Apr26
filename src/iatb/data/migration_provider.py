@@ -498,6 +498,20 @@ class MigrationProvider(DataProvider):
             _LOGGER.debug("Default provider batch failed, using parallel: %s", exc)
 
         # Fallback to parallel individual requests
+        return await self._get_ohlcv_batch_parallel(
+            symbols=symbols, exchange=exchange, timeframe=timeframe, since=since, limit=limit
+        )
+
+    async def _get_ohlcv_batch_parallel(
+        self,
+        *,
+        symbols: list[str],
+        exchange: Exchange,
+        timeframe: str,
+        since: Timestamp | None,
+        limit: int,
+    ) -> dict[str, list[OHLCVBar]]:
+        """Fetch OHLCV bars for multiple symbols using parallel individual requests."""
         tasks = [
             self.get_ohlcv(
                 symbol=symbol,

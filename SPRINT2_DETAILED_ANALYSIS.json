@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-04-21T09:06:36.256103",
+  "categories": {
+    "unit": [
+      "test_base.py",
+      "test_ccxt_provider.py",
+      "test_data_source_validation.py",
+      "test_instrument.py",
+      "test_instrument_master.py",
+      "test_instrument_master_cache.py",
+      "test_jugaad_provider.py",
+      "test_kite_provider.py",
+      "test_kite_ticker.py",
+      "test_kite_ws_provider.py",
+      "test_market_data_cache.py",
+      "test_migration_provider.py",
+      "test_normalizer.py",
+      "test_openalgo_provider.py",
+      "test_price_reconciler.py",
+      "test_rate_limiter.py",
+      "test_token_resolver.py",
+      "test_validator.py",
+      "test_yfinance_provider.py"
+    ],
+    "integration": [
+      "integration\\test_critical_path.py"
+    ],
+    "property_based": [
+      "test_properties_critical.py"
+    ],
+    "financial_invariant": [
+      "test_financial_invariants.py"
+    ],
+    "error_handling": [
+      "test_failover_provider.py"
+    ],
+    "other": []
+  },
+  "test_counts": {
+    "unit": 503,
+    "integration": 4,
+    "property_based": 11,
+    "financial_invariant": 18,
+    "error_handling": 32,
+    "other": 0
+  }
+}

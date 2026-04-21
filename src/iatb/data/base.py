@@ -31,6 +31,7 @@ class OHLCVBar:
     timestamp: Timestamp = field(default_factory=_utc_now_timestamp)
     exchange: Exchange = Exchange.NSE
     symbol: str = "UNKNOWN"
+    timeframe: str = "1d"
     open: Price = field(default_factory=lambda: create_price("0"))
     high: Price = field(default_factory=lambda: create_price("0"))
     low: Price = field(default_factory=lambda: create_price("0"))

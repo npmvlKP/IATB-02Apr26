@@ -61,12 +61,15 @@ def _extract_numeric(payload: Mapping[str, object], key: str) -> object | None:
 
 
 def _coerce_numeric_input(value: object, *, field_name: str) -> NumericInput:
+    """Coerce value to numeric type without using float."""
     if isinstance(value, bool):
         msg = f"{field_name} must not be boolean"
         raise ConfigError(msg)
     if isinstance(value, Decimal | int | str):
         return value
     if isinstance(value, float):
+        # API boundary conversion: explicitly convert float to str
+        # This is the only place where float is accepted from external API
         return str(value)
     msg = f"{field_name} must be numeric-compatible, got {type(value).__name__}"
     raise ConfigError(msg)
@@ -118,10 +121,13 @@ class CCXTProvider(DataProvider):
             limit,
         )
         records = self._normalize_ohlcv_rows(raw_rows)
+        # Clip to limit after normalization
+        clipped = records[-limit:] if len(records) > limit else records
         return normalize_ohlcv_batch(
-            records,
+            clipped,
             symbol=symbol,
             exchange=exchange,
+            timeframe=timeframe,
             source=f"ccxt:{exchange_id}",
         )
 

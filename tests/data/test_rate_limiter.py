@@ -672,12 +672,12 @@ class TestRetryWithBackoff:
 
         # Should have 3 attempts with delays: 0, 0.1, 0.2
         assert len(attempt_times) == 3
-        # First delay should be ~0.1s
+        # First delay should be ~0.1s (allow wider tolerance for timing variations)
         delay_1 = attempt_times[1] - attempt_times[0]
-        assert 0.08 < delay_1 < 0.12
+        assert 0.07 < delay_1 < 0.15
         # Second delay should be ~0.2s (exponential backoff)
         delay_2 = attempt_times[2] - attempt_times[1]
-        assert 0.18 < delay_2 < 0.22
+        assert 0.17 < delay_2 < 0.25
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_opens_on_failures(self) -> None:

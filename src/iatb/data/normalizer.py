@@ -82,6 +82,7 @@ def normalize_ohlcv_record(
     symbol: str,
     exchange: Exchange,
     source: str,
+    timeframe: str = "1d",
     validate: bool = True,
 ) -> OHLCVBar:
     """Normalize one provider OHLCV payload into strict internal form."""
@@ -92,6 +93,7 @@ def normalize_ohlcv_record(
         timestamp=create_timestamp(_parse_timestamp(raw_record["timestamp"])),
         exchange=exchange,
         symbol=symbol,
+        timeframe=timeframe,
         open=create_price(_to_decimal(raw_record["open"], "open")),
         high=create_price(_to_decimal(raw_record["high"], "high")),
         low=create_price(_to_decimal(raw_record["low"], "low")),
@@ -111,6 +113,7 @@ def normalize_ohlcv_batch(
     symbol: str,
     exchange: Exchange,
     source: str,
+    timeframe: str = "1d",
     validate_series: bool = True,
 ) -> list[OHLCVBar]:
     """Normalize a batch of OHLCV payloads with index-aware error context."""
@@ -123,6 +126,7 @@ def normalize_ohlcv_batch(
                     symbol=symbol,
                     exchange=exchange,
                     source=source,
+                    timeframe=timeframe,
                     validate=False,
                 )
             )
