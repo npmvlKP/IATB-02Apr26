@@ -542,3 +542,278 @@ class TestEngineSelectionCycle:
         mock_kill_switch.disengage.assert_called_once()
         # Verify the timestamp argument is a datetime
         assert mock_kill_switch.disengage.call_args[0][0] is not None
+
+
+class TestEngineFullCycle:
+    """Test engine run_full_cycle pipeline orchestration."""
+
+    def test_run_full_cycle_delegates_to_scan_cycle(self) -> None:
+        """Test that run_full_cycle delegates to run_scan_cycle."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.scan_cycle import ScanCycleResult
+
+        engine = Engine()
+
+        mock_result = ScanCycleResult(
+            scanner_result=None,
+            trades_executed=0,
+            total_pnl=Decimal("0"),
+            errors=[],
+            timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.scan_cycle.run_scan_cycle", return_value=mock_result) as mock_run:
+            result = engine.run_full_cycle()
+
+        assert result is mock_result
+        mock_run.assert_called_once_with(
+            symbols=None,
+            max_trades=5,
+            order_manager=None,
+            data_provider=None,
+            scanner_config=None,
+        )
+
+    def test_run_full_cycle_passes_dependencies(self) -> None:
+        """Test that run_full_cycle passes configured dependencies."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.scan_cycle import ScanCycleResult
+
+        mock_dp = MagicMock()
+        mock_om = MagicMock()
+        mock_config = MagicMock()
+
+        engine = Engine(
+            data_provider=mock_dp,
+            order_manager=mock_om,
+            scanner_config=mock_config,
+        )
+
+        mock_result = ScanCycleResult(
+            scanner_result=None,
+            trades_executed=0,
+            total_pnl=Decimal("0"),
+            errors=[],
+            timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.scan_cycle.run_scan_cycle", return_value=mock_result) as mock_run:
+            result = engine.run_full_cycle(
+                symbols=["RELIANCE", "TCS"],
+                max_trades=3,
+            )
+
+        assert result is mock_result
+        mock_run.assert_called_once_with(
+            symbols=["RELIANCE", "TCS"],
+            max_trades=3,
+            order_manager=mock_om,
+            data_provider=mock_dp,
+            scanner_config=mock_config,
+        )
+
+    def test_run_full_cycle_with_custom_params(self) -> None:
+        """Test run_full_cycle with custom symbols and max_trades."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.scan_cycle import ScanCycleResult
+
+        engine = Engine()
+
+        mock_result = ScanCycleResult(
+            scanner_result=None,
+            trades_executed=2,
+            total_pnl=Decimal("100"),
+            errors=[],
+            timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.scan_cycle.run_scan_cycle", return_value=mock_result) as mock_run:
+            result = engine.run_full_cycle(symbols=["INFY"], max_trades=10)
+
+        assert result.trades_executed == 2
+        mock_run.assert_called_once_with(
+            symbols=["INFY"],
+            max_trades=10,
+            order_manager=None,
+            data_provider=None,
+            scanner_config=None,
+        )
+
+
+class TestEngineScanOnly:
+    """Test engine run_scan_only method."""
+
+    def test_run_scan_only_with_preconfigured_scanner(self) -> None:
+        """Test run_scan_only uses pre-configured scanner."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.instrument_scanner import (
+            ScannerResult,
+            SortDirection,
+        )
+
+        mock_scanner = MagicMock()
+        mock_scan_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_scanner.scan.return_value = mock_scan_result
+
+        engine = Engine(instrument_scanner=mock_scanner)
+        result = engine.run_scan_only()
+
+        assert result is mock_scan_result
+        mock_scanner.scan.assert_called_once_with(direction=SortDirection.GAINERS)
+
+    def test_run_scan_only_with_direction(self) -> None:
+        """Test run_scan_only passes sort direction."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.instrument_scanner import (
+            ScannerResult,
+            SortDirection,
+        )
+
+        mock_scanner = MagicMock()
+        mock_scan_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_scanner.scan.return_value = mock_scan_result
+
+        engine = Engine(instrument_scanner=mock_scanner)
+        result = engine.run_scan_only(direction=SortDirection.LOSERS)
+
+        assert result is mock_scan_result
+        mock_scanner.scan.assert_called_once_with(direction=SortDirection.LOSERS)
+
+    def test_run_scan_only_creates_scanner_from_data_provider(self) -> None:
+        """Test run_scan_only creates scanner when only data_provider set."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.instrument_scanner import ScannerResult
+
+        mock_dp = MagicMock()
+
+        engine = Engine(data_provider=mock_dp)
+
+        mock_scan_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_is_cls:
+            mock_instance = MagicMock()
+            mock_instance.scan.return_value = mock_scan_result
+            mock_is_cls.return_value = mock_instance
+
+            result = engine.run_scan_only(symbols=["RELIANCE"])
+
+        assert result is mock_scan_result
+        mock_is_cls.assert_called_once_with(
+            config=None,
+            data_provider=mock_dp,
+            symbols=["RELIANCE"],
+        )
+        mock_instance.scan.assert_called_once()
+
+    def test_run_scan_only_raises_without_scanner_or_provider(self) -> None:
+        """Test run_scan_only raises EngineError without deps."""
+        engine = Engine()
+
+        with pytest.raises(EngineError, match="no instrument_scanner or data_provider"):
+            engine.run_scan_only()
+
+    def test_run_scan_only_no_symbols_without_scanner(self) -> None:
+        """Test run_scan_only passes None symbols when creating scanner."""
+        from datetime import UTC, datetime
+
+        from iatb.scanner.instrument_scanner import ScannerResult
+
+        mock_dp = MagicMock()
+        engine = Engine(data_provider=mock_dp)
+
+        mock_scan_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_is_cls:
+            mock_instance = MagicMock()
+            mock_instance.scan.return_value = mock_scan_result
+            mock_is_cls.return_value = mock_instance
+
+            engine.run_scan_only()
+
+        mock_is_cls.assert_called_once_with(
+            config=None,
+            data_provider=mock_dp,
+            symbols=None,
+        )
+
+
+class TestEngineNewProperties:
+    """Test new engine pipeline dependency properties."""
+
+    def test_data_provider_property_none(self) -> None:
+        """Test data_provider is None when not configured."""
+        engine = Engine()
+        assert engine.data_provider is None
+
+    def test_data_provider_property_set(self) -> None:
+        """Test data_provider returns configured provider."""
+        mock_dp = MagicMock()
+        engine = Engine(data_provider=mock_dp)
+        assert engine.data_provider is mock_dp
+
+    def test_instrument_scanner_property_none(self) -> None:
+        """Test instrument_scanner is None when not configured."""
+        engine = Engine()
+        assert engine.instrument_scanner is None
+
+    def test_instrument_scanner_property_set(self) -> None:
+        """Test instrument_scanner returns configured scanner."""
+        mock_scanner = MagicMock()
+        engine = Engine(instrument_scanner=mock_scanner)
+        assert engine.instrument_scanner is mock_scanner
+
+    def test_order_manager_property_none(self) -> None:
+        """Test order_manager is None when not configured."""
+        engine = Engine()
+        assert engine.order_manager is None
+
+    def test_order_manager_property_set(self) -> None:
+        """Test order_manager returns configured manager."""
+        mock_om = MagicMock()
+        engine = Engine(order_manager=mock_om)
+        assert engine.order_manager is mock_om
+
+    def test_backward_compat_two_arg_constructor(self) -> None:
+        """Test that Engine(instrument_scorer, kill_switch) still works."""
+        from iatb.risk.kill_switch import KillSwitch
+        from iatb.selection.instrument_scorer import InstrumentScorer
+
+        scorer = InstrumentScorer()
+        ks = MagicMock(spec=KillSwitch)
+        engine = Engine(instrument_scorer=scorer, kill_switch=ks)
+
+        assert engine.instrument_scorer is scorer
+        assert engine.kill_switch is ks
+        assert engine.data_provider is None
+        assert engine.instrument_scanner is None
+        assert engine.order_manager is None

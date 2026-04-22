@@ -4,10 +4,13 @@ Engine orchestrator for IATB.
 Manages startup and shutdown lifecycle of system components.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Sequence
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from iatb.core.enums import OrderSide
 from iatb.core.event_bus import EventBus
@@ -26,6 +29,17 @@ from iatb.selection.selection_bridge import (
 )
 from iatb.strategies.base import StrategyContext
 
+if TYPE_CHECKING:
+    from iatb.data.base import DataProvider
+    from iatb.execution.order_manager import OrderManager
+    from iatb.scanner.instrument_scanner import (
+        InstrumentScanner,
+        ScannerConfig,
+        ScannerResult,
+        SortDirection,
+    )
+    from iatb.scanner.scan_cycle import ScanCycleResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,11 +50,19 @@ class Engine:
         self,
         instrument_scorer: InstrumentScorer | None = None,
         kill_switch: KillSwitch | None = None,
+        data_provider: DataProvider | None = None,
+        instrument_scanner: InstrumentScanner | None = None,
+        order_manager: OrderManager | None = None,
+        scanner_config: ScannerConfig | None = None,
     ) -> None:
-        """Initialize the engine."""
+        """Initialize the engine with optional pipeline dependencies."""
         self._event_bus = EventBus()
         self._scorer = instrument_scorer or InstrumentScorer()
         self._kill_switch = kill_switch
+        self._data_provider = data_provider
+        self._instrument_scanner = instrument_scanner
+        self._order_manager = order_manager
+        self._scanner_config = scanner_config
         self._running = False
         self._tasks: set[asyncio.Task[None]] = set()
         self._lock = asyncio.Lock()
@@ -138,6 +160,83 @@ class Engine:
             correlations,
         )
 
+    def run_full_cycle(
+        self,
+        *,
+        symbols: Sequence[str] | None = None,
+        max_trades: int = 5,
+    ) -> ScanCycleResult:
+        """Run full pipeline: DataProvider -> Scanner -> Execution -> Audit.
+
+        Delegates to scan_cycle.run_scan_cycle() using the engine's
+        configured dependencies (data_provider, order_manager,
+        scanner_config).
+
+        Args:
+            symbols: Symbols to scan (default: NIFTY50).
+            max_trades: Maximum trades per cycle.
+
+        Returns:
+            ScanCycleResult with scan results, trades, PnL, and errors.
+        """
+        from iatb.scanner.scan_cycle import run_scan_cycle
+
+        return run_scan_cycle(
+            symbols=symbols,
+            max_trades=max_trades,
+            order_manager=self._order_manager,
+            data_provider=self._data_provider,
+            scanner_config=self._scanner_config,
+        )
+
+    def run_scan_only(
+        self,
+        *,
+        symbols: Sequence[str] | None = None,
+        direction: SortDirection | None = None,
+    ) -> ScannerResult:
+        """Run scanner without trade execution.
+
+        Uses the configured InstrumentScanner or creates one from the
+        stored DataProvider and ScannerConfig. The *symbols* parameter
+        is only used when creating a new scanner; a pre-configured
+        scanner uses its own symbol list.
+
+        Args:
+            symbols: Symbols to scan (used only if no scanner configured).
+            direction: Sort direction (default: GAINERS).
+
+        Returns:
+            ScannerResult with ranked gainers/losers.
+
+        Raises:
+            EngineError: If neither scanner nor data_provider is configured.
+        """
+        from iatb.scanner.instrument_scanner import (
+            InstrumentScanner as _InstrumentScanner,
+        )
+        from iatb.scanner.instrument_scanner import (
+            SortDirection as _SortDirection,
+        )
+
+        direction_resolved = direction or _SortDirection.GAINERS
+
+        scanner = self._instrument_scanner
+        if scanner is None:
+            if self._data_provider is None:
+                msg = (
+                    "Cannot run scan: no instrument_scanner or "
+                    "data_provider configured. Provide them at "
+                    "construction or use run_selection_cycle() instead."
+                )
+                raise EngineError(msg)
+            scanner = _InstrumentScanner(
+                config=self._scanner_config,
+                data_provider=self._data_provider,
+                symbols=list(symbols) if symbols else None,
+            )
+        return scanner.scan(direction=direction_resolved)
+
     def engage_kill_switch(self, reason: str) -> None:
         """Engage kill switch from engine level."""
         if self._kill_switch is None:
@@ -164,6 +263,21 @@ class Engine:
     def instrument_scorer(self) -> InstrumentScorer:
         """Get the instrument scorer instance."""
         return self._scorer
+
+    @property
+    def data_provider(self) -> DataProvider | None:
+        """Get the configured data provider."""
+        return self._data_provider
+
+    @property
+    def instrument_scanner(self) -> InstrumentScanner | None:
+        """Get the configured instrument scanner."""
+        return self._instrument_scanner
+
+    @property
+    def order_manager(self) -> OrderManager | None:
+        """Get the configured order manager."""
+        return self._order_manager
 
     @property
     def is_running(self) -> bool:
