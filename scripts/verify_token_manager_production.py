@@ -31,12 +31,8 @@ warnings.filterwarnings(
 
 from iatb.broker.token_manager import ZerodhaTokenManager
 from iatb.core.exceptions import ConfigError
+from iatb.execution.token_helpers import apply_env_defaults, load_env_file
 from iatb.execution.zerodha_connection import ZerodhaConnection
-from iatb.execution.zerodha_token_manager import (
-    ZerodhaTokenManager as ZerodhaTokenManagerV2,
-    apply_env_defaults,
-    load_env_file,
-)
 
 # Configure logging
 logging.basicConfig(
@@ -68,7 +64,7 @@ def test_zerodha_connection() -> bool:
         logger.info("✓ ZerodhaConnection initialized successfully")
 
         # Check if we have a saved token
-        token_mgr = ZerodhaTokenManagerV2(env_path=env_path, env_values=env_values)
+        token_mgr = ZerodhaTokenManager(env_path=env_path, env_values=env_values)
         saved_token = token_mgr.resolve_saved_access_token()
 
         if saved_token:
@@ -215,7 +211,7 @@ def test_env_persistence() -> bool:
             logger.info("ℹ No token-related keys in .env (tokens in keyring)")
 
         # Test persistence
-        token_mgr = ZerodhaTokenManagerV2(env_path=env_path, env_values=env_values)
+        token_mgr = ZerodhaTokenManager(env_path=env_path, env_values=env_values)
 
         # Test resolving saved tokens
         access_token = token_mgr.resolve_saved_access_token()

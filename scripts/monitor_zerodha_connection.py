@@ -12,13 +12,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from iatb.broker.token_manager import ZerodhaTokenManager
 from iatb.core.exceptions import ConfigError
+from iatb.execution.token_helpers import apply_env_defaults, load_env_file
 from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
-from iatb.execution.zerodha_token_manager import (
-    ZerodhaTokenManager,
-    apply_env_defaults,
-    load_env_file,
-)
 
 _LOGGER_NAME = "iatb.scripts.monitor_zerodha_connection"
 _STATUS_CONNECTED = "CONNECTED"
@@ -292,7 +289,12 @@ def main(argv: list[str] | None = None) -> int:
         env_path = Path(args.env_file)
         env_values = load_env_file(env_path)
         apply_env_defaults(env_values)
-        token_manager = ZerodhaTokenManager(env_path=env_path, env_values=env_values)
+        token_manager = ZerodhaTokenManager(
+            api_key=env_values.get("ZERODHA_API_KEY", ""),
+            api_secret=env_values.get("ZERODHA_API_SECRET", ""),
+            env_path=env_path,
+            env_values=env_values,
+        )
         connection = ZerodhaConnection.from_env()
     except (ConfigError, OSError) as exc:
         _emit("ZERODHA_MONITOR_STATUS=API_ERROR")

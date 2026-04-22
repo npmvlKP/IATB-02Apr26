@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import keyring  # noqa: S105
 import numpy as np
 import pytest
 import torch
@@ -67,6 +68,10 @@ def test_main_once_reports_connected_with_saved_access_token(
 ) -> None:
     module = _load_script_module()
     _seed_required_env(monkeypatch)
+
+    # Mock keyring to return None so the broker's ZerodhaTokenManager falls back to .env file
+    monkeypatch.setattr(keyring, "get_password", lambda service, username: None)
+
     today = datetime.now(UTC).date().isoformat()
     env_path = tmp_path / ".env"
     env_path.write_text(
@@ -123,6 +128,10 @@ def test_main_once_returns_login_required_without_tokens(
 ) -> None:
     module = _load_script_module()
     _seed_required_env(monkeypatch)
+
+    # Mock keyring to return None so the broker's ZerodhaTokenManager falls back to .env file
+    monkeypatch.setattr(keyring, "get_password", lambda service, username: None)
+
     env_path = tmp_path / ".env"
     env_path.write_text(
         "ZERODHA_API_KEY=kite-key\nZERODHA_API_SECRET=kite-secret\n",
@@ -169,6 +178,10 @@ def test_main_once_logs_api_error_for_non_auth_failure(
 ) -> None:
     module = _load_script_module()
     _seed_required_env(monkeypatch)
+
+    # Mock keyring to return None so the broker's ZerodhaTokenManager falls back to .env file
+    monkeypatch.setattr(keyring, "get_password", lambda service, username: None)
+
     today = datetime.now(UTC).date().isoformat()
     env_path = tmp_path / ".env"
     env_path.write_text(
@@ -227,6 +240,10 @@ def test_main_periodic_runs_max_checks_and_sleeps_between_checks(
 ) -> None:
     module = _load_script_module()
     _seed_required_env(monkeypatch)
+
+    # Mock keyring to return None so the broker's ZerodhaTokenManager falls back to .env file
+    monkeypatch.setattr(keyring, "get_password", lambda service, username: None)
+
     today = datetime.now(UTC).date().isoformat()
     env_path = tmp_path / ".env"
     env_path.write_text(
