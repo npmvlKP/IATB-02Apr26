@@ -703,34 +703,38 @@ def _prepare_scan_symbols(symbols: Sequence[str] | None) -> Sequence[str]:
     """Prepare symbols for scanning, using config or defaults if none provided.
 
     Priority order:
-    1. Explicitly provided symbols
-    2. Cached symbols from config/watchlist.toml
-    3. Fresh load from config/watchlist.toml
+    1. Explicitly provided symbols (non-empty list)
+    2. Fresh load from config/watchlist.toml (if empty list provided, forces reload)
+    3. Cached symbols from config/watchlist.toml
     4. Default NIFTY50 symbols (fallback)
 
     Args:
-        symbols: Optional list of symbols.
+        symbols: Optional list of symbols. Empty list forces reload from config.
 
     Returns:
         List of symbols to scan.
     """
+    global _cached_symbols
+
+    # Handle explicitly provided symbols (non-empty list)
     if symbols:
         _LOGGER.info("Using %d explicitly provided symbols", len(symbols))
         return symbols
 
-    global _cached_symbols
-
-    # Try to use cached symbols
+    # Check cache first (only if symbols is None)
     if _cached_symbols is not None:
         _LOGGER.info("Using %d cached symbols from config", len(_cached_symbols))
         return _cached_symbols
 
-    # Try to load from config
+    # Cache is empty, try to load from config
     config_symbols = _load_symbols_from_config()
     if config_symbols:
         _cached_symbols = config_symbols
         _LOGGER.info("Using %d symbols loaded from config/watchlist.toml", len(config_symbols))
         return config_symbols
+
+    # Config loading failed, clear cache to force fresh reload next time
+    _cached_symbols = None
 
     # Fallback to defaults
     default_symbols = _get_default_symbols()

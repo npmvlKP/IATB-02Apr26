@@ -753,6 +753,11 @@ class TestPrepareScanSymbols:
 
     def test_prepare_scan_symbols_loads_from_config(self) -> None:
         """Test that symbols are loaded from config when not cached."""
+        # Clear cache to ensure fresh load
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        scan_cycle_module._cached_symbols = None
+
         mock_config = MagicMock()
         mock_config.get_symbols.return_value = ["CONFIG1", "CONFIG2"]
 
@@ -765,8 +770,16 @@ class TestPrepareScanSymbols:
             assert symbols == ["CONFIG1", "CONFIG2"]
             mock_config.get_symbols.assert_called_once_with(exchange=Exchange.NSE)
 
+        # Clean up
+        scan_cycle_module._cached_symbols = None
+
     def test_prepare_scan_symbols_falls_back_to_defaults(self) -> None:
         """Test that default symbols are used when config is unavailable."""
+        # Clear cache to ensure fallback
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        scan_cycle_module._cached_symbols = None
+
         with patch("iatb.scanner.scan_cycle._load_symbols_from_config", return_value=None):
             symbols = _prepare_scan_symbols(None)
 
@@ -776,8 +789,16 @@ class TestPrepareScanSymbols:
             assert "TCS" in symbols
             assert "INFY" in symbols
 
+        # Clean up
+        scan_cycle_module._cached_symbols = None
+
     def test_prepare_scan_symbols_empty_list_uses_config(self) -> None:
         """Test that empty list triggers config loading."""
+        # Clear cache to ensure fresh load
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        scan_cycle_module._cached_symbols = None
+
         mock_config = MagicMock()
         mock_config.get_symbols.return_value = ["CONFIG1"]
 
@@ -788,6 +809,9 @@ class TestPrepareScanSymbols:
             symbols = _prepare_scan_symbols([])
 
             assert symbols == ["CONFIG1"]
+
+        # Clean up
+        scan_cycle_module._cached_symbols = None
 
 
 class TestRefreshSymbols:
