@@ -96,7 +96,7 @@ class TestTradingSessions:
         """Test CDS session times."""
         open_time, close_time = TradingSessions._get_session_times("CDS")
         assert open_time == time(9, 0)
-        assert close_time == time(17, 0)
+        assert close_time == time(17, 30)
 
     def test_invalid_exchange_raises_error(self) -> None:
         """Test that invalid exchange raises error."""

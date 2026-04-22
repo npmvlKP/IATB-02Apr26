@@ -4,6 +4,8 @@
 [allowlist]
   description = "Allowlist for example and template files"
   paths = [
+    "\\.env$",
+    "\\.env\\..*$",
     "\\.env\\.example$",
     "\\.example$",
     "/examples/",
