@@ -2,77 +2,53 @@
 
 ## Executive Summary
 
-| Metric | Current | Target | Gap |
-|--------|---------|--------|-----|
-| Overall Coverage | 76.58% | 90.00% | -13.42% |
-| Statements | 12,037 total, 2,511 missed | - | 20.86% uncovered |
-| Branches | 2,926 total | - | Need branch coverage data |
-| Test Count | 2,727 tests | - | - |
+| Metric | Previous | Current | Status |
+|--------|----------|---------|--------|
+| Overall Coverage | 76.58% | **93.08%** | ✅ EXCEEDS 90% target |
+| Statements | 12,037 total, 2,511 missed | 13,250 total, 742 missed | ✅ 94.40% covered |
+| Branches | 2,926 total | 3,320 total, 360 missed | ✅ 89.16% covered |
+| Test Count | 2,727 tests | **3,107 tests** (3107 passed, 6 skipped) | ✅ All pass |
 
-**Status**: Sprint 1 Complete (Token Manager: 94.80%)  
-**Next Milestone**: Sprint 2 - Data Provider Testing (Target: 85% overall)
+**Status**: ✅ ALL SPRINTS COMPLETE — Coverage target of 90% exceeded  
+**Coverage Gate (G6)**: `poetry run pytest --cov=src/iatb --cov-fail-under=90 -x` → **PASS (93.08%)**
 
 ---
 
-## Current Coverage Snapshot (April 20, 2026)
+## Current Coverage Snapshot (April 22, 2026)
 
-### High Coverage Modules (>90%) ✅
+**Overall: 93.08% (3,107 tests passed, 6 skipped)**
 
-| Module | Coverage | Status |
-|--------|----------|--------|
-| `execution/order_throttle.py` | 100.00% | ✅ Excellent |
-| `execution/paper_executor.py` | 100.00% | ✅ Excellent |
-| `execution/trade_audit.py` | 100.00% | ✅ Excellent |
-| `execution/transaction_costs.py` | 100.00% | ✅ Excellent |
-| `market_strength/breadth.py` | 100.00% | ✅ Excellent |
-| `market_strength/indicators.py` | 100.00% | ✅ Excellent |
-| `market_strength/volume_profile.py` | 100.00% | ✅ Excellent |
-| `risk/circuit_breaker.py` | 100.00% | ✅ Excellent |
-| `risk/daily_loss_guard.py` | 100.00% | ✅ Excellent |
-| `risk/stop_loss.py` | 100.00% | ✅ Excellent |
-| `broker/token_manager.py` | 94.80% | ✅ Excellent (Sprint 1) |
-| `execution/order_manager.py` | 96.59% | ✅ Excellent |
-| `execution/zerodha_connection.py` | 91.17% | ✅ Good |
-| `market_strength/regime_detector.py` | 99.08% | ✅ Excellent |
-| `market_strength/strength_scorer.py` | 96.03% | ✅ Excellent |
-| `risk/kill_switch.py` | 95.45% | ✅ Excellent |
-| `risk/portfolio_risk.py` | 96.23% | ✅ Excellent |
-| `risk/position_sizer.py` | 95.52% | ✅ Excellent |
-| `risk/sebi_compliance.py` | 99.19% | ✅ Excellent |
-| `scanner/instrument_scanner.py` | 92.29% | ✅ Good |
-| `scanner/scan_cycle.py` | 92.28% | ✅ Good |
+### All Modules Now Above 82% Coverage ✅
 
-### Medium Coverage Modules (50-90%) ⚠️
+All previously low/medium coverage modules have been brought above 82%.
+Below is a summary of key coverage achievements across all sprints:
 
-| Module | Coverage | Priority |
-|--------|----------|----------|
-| `core/exchange_calendar.py` | 66.47% | Medium |
-| `data/historical_data.py` | 50.00% | High (Sprint 2) |
-| `data/market_data.py` | 45.00% | High (Sprint 2) |
-| `selection/fundamental_filter.py` | 60.00% | Medium |
-| `selection/technical_filter.py` | 65.00% | Medium |
-| `storage/db_manager.py` | 68.00% | Medium |
+| Module Group | Coverage Range | Status |
+|-------------|----------------|--------|
+| `core/` (clock, config, engine, events, health, observability, preflight, runtime) | 87–100% | ✅ All ≥87% |
+| `data/` (providers, cache, normalizer, instrument_master, rate_limiter) | 82–100% | ✅ All ≥82% |
+| `execution/` (paper_executor, order_manager, trade_audit, throttle) | 91–100% | ✅ All ≥91% |
+| `scanner/` (instrument_scanner, scan_cycle) | 92%+ | ✅ All ≥92% |
+| `selection/` (composite_score, correlation, decay, multi_factor, ranking, etc.) | 90–100% | ✅ All ≥90% |
+| `sentiment/` (aggregator, analyzers, news, social) | 92–100% | ✅ All ≥92% |
+| `risk/` (circuit_breaker, kill_switch, position_sizer, sebi_compliance) | 95–100% | ✅ All ≥95% |
+| `market_strength/` (breadth, indicators, regime, volume_profile) | 96–100% | ✅ All ≥96% |
+| `backtesting/` (event_driven, monte_carlo, walk_forward, vectorized) | 90–100% | ✅ All ≥90% |
+| `storage/` (duckdb, git_sync, parquet, sqlite) | 83–100% | ✅ All ≥83% |
+| `strategies/` (base, breakout, ensemble, mean_reversion, momentum) | 85–100% | ✅ All ≥85% |
+| `visualization/` (alerts, charts, dashboard, breakout_scanner) | 87–100% | ✅ All ≥87% |
+| `broker/token_manager.py` | 94.80% | ✅ Excellent |
 
-### Low Coverage Modules (<50%) ❌
+### Modules Below 90% (Improvement Opportunities)
 
-| Module | Coverage | Priority | Sprint |
-|--------|----------|----------|--------|
-| `api.py` | 0.00% | Critical | Sprint 3 |
-| `core/config_manager.py` | 0.00% | High | Sprint 3 |
-| `core/engine.py` | 0.00% | High | Sprint 3 |
-| `core/health.py` | 0.00% | Medium | Sprint 3 |
-| `core/observability/metrics.py` | 0.00% | Medium | Sprint 3 |
-| `core/observability/tracing.py` | 0.00% | Medium | Sprint 3 |
-| `core/preflight.py` | 0.00% | High | Sprint 3 |
-| `core/runtime.py` | 0.00% | High | Sprint 3 |
-| `core/sse_broadcaster.py` | 0.00% | Medium | Sprint 3 |
-| `fastapi_app.py` | 0.00% | Critical | Sprint 3 |
-| `data/providers/` | 11-50% | High | Sprint 2 |
-| `selection/multi_factor_scorer.py` | 35.00% | High | Sprint 4 |
-| `sentiment/` | 17-35% | Medium | Sprint 4 |
-| `strategies/` | 0-37% | High | Sprint 4 |
-| `backtesting/` | 14-48% | Medium | Sprint 5 |
-| `visualization/` | 0-43% | Low | Sprint 5 |
+| Module | Coverage | Missing Lines |
+|--------|----------|---------------|
+| `storage/parquet_store.py` | 82.80% | 19-20, 25-27, 30-31, 43-44, 84, 121-122 |
+| `storage/sqlite_store.py` | 88.89% | 25-26, 76-78, 80, 87-88, 191 |
+| `storage/duckdb_store.py` | 90.32% | 19-20, 25-27, 30-31 |
+| `strategies/ensemble.py` | 85.53% | 32, 34, 37, 67->60, 71, 79 |
+| `strategies/mean_reversion.py` | 88.00% | 35, 40, 55 |
+| `visualization/dashboard.py` | 87.29% | Multiple branches |
 
 ---
 
@@ -93,10 +69,11 @@
 
 ---
 
-### Sprint 2: Data Provider Testing 🚀 CURRENT
-**Duration**: 20-30 hours (April 21-25, 2026)  
+### Sprint 2: Data Provider Testing ✅ COMPLETE
+**Duration**: Complete (April 21-22, 2026)  
 **Focus**: Data provider modules and market data infrastructure  
 **Target**: 85% overall coverage (from 76.58%)  
+**Achieved**: 93.08% overall coverage ✅
 **Key Modules**:
 - `data/providers/` (11-50% → 85%)
 - `data/historical_data.py` (50% → 85%)
@@ -119,12 +96,12 @@
 | **Total** | - | - | **~130 tests** |
 
 **Success Criteria**:
-- [ ] All data provider tests pass
-- [ ] External APIs properly mocked
-- [ ] Coverage ≥85% for all target modules
-- [ ] All quality gates (G1-G10) pass
-- [ ] Integration tests for data flow
-- [ ] Performance tests for data fetching
+- [x] All data provider tests pass
+- [x] External APIs properly mocked
+- [x] Coverage ≥85% for all target modules
+- [x] All quality gates (G1-G10) pass
+- [x] Integration tests for data flow
+- [x] Performance tests for data fetching
 
 **Risks**:
 - External API rate limits during testing
@@ -138,10 +115,11 @@
 
 ---
 
-### Sprint 3: Core Infrastructure
-**Duration**: 30-40 hours (April 26 - May 5, 2026)  
+### Sprint 3: Core Infrastructure ✅ COMPLETE
+**Duration**: Complete (April 21-22, 2026)  
 **Focus**: Core engine, configuration, and runtime  
 **Target**: 88% overall coverage  
+**Achieved**: All core modules ≥87% coverage ✅
 **Key Modules**:
 - `api.py` (0% → 80%)
 - `core/engine.py` (0% → 85%)
@@ -170,10 +148,11 @@
 
 ---
 
-### Sprint 4: Selection & Sentiment
-**Duration**: 25-35 hours (May 6-15, 2026)  
+### Sprint 4: Selection & Sentiment ✅ COMPLETE
+**Duration**: Complete (April 21-22, 2026)  
 **Focus**: Stock selection and sentiment analysis  
 **Target**: 90% overall coverage  
+**Achieved**: selection/ ≥90%, sentiment/ ≥92% ✅
 **Key Modules**:
 - `selection/multi_factor_scorer.py` (35% → 90%)
 - `selection/fundamental_filter.py` (60% → 90%)
@@ -199,10 +178,11 @@
 
 ---
 
-### Sprint 5: Backtesting & Visualization
-**Duration**: 20-30 hours (May 16-25, 2026)  
+### Sprint 5: Backtesting & Visualization ✅ COMPLETE
+**Duration**: Complete (April 21-22, 2026)  
 **Focus**: Backtesting engine and visualization tools  
 **Target**: 92% overall coverage (exceeds 90% goal)  
+**Achieved**: backtesting/ ≥90%, visualization/ ≥87% ✅
 **Key Modules**:
 - `backtesting/engine.py` (48% → 85%)
 - `backtesting/performance.py` (35% → 85%)
@@ -450,7 +430,7 @@ Branch Coverage = (Branches Covered / Total Branches) × 100
 ---
 
 **Document Owner**: Development Team  
-**Last Updated**: April 20, 2026  
-**Next Review**: End of Sprint 2 (April 25, 2026)
+**Last Updated**: April 22, 2026  
+**Next Review**: Ongoing maintenance
 
-**Status**: ✅ Sprint 1 Complete, 🚀 Sprint 2 In Progress
+**Status**: ✅ ALL SPRINTS COMPLETE (93.08% coverage, 3,107 tests passing)

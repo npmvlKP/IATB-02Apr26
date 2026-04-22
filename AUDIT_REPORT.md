@@ -589,7 +589,7 @@ Add alerting rules:
 - [ ] G3: `poetry run mypy src/ --strict` → 0 errors
 - [ ] G4: `poetry run bandit -r src/ -q` → 0 high/medium
 - [ ] G5: `gitleaks detect --source . --no-banner` → 0 leaks
-- [ ] G6: `poetry run pytest --cov=src/iatb --cov-fail-under=90 -x` → all pass ≥90%
+- [x] G6: `poetry run pytest --cov=src/iatb --cov-fail-under=90 -x` → **PASS: 93.08% (3,107 tests, 6 skipped)**
 - [ ] G7: No float in financial paths
 - [ ] G8: No naive datetime.now()
 - [ ] G9: No print() in src/
