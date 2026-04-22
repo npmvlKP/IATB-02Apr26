@@ -27,6 +27,7 @@ from iatb.execution.order_throttle import OrderThrottle
 from iatb.execution.paper_executor import PaperExecutor
 from iatb.execution.pre_trade_validator import PreTradeConfig
 from iatb.execution.trade_audit import TradeAuditLogger
+from iatb.market_strength.strength_scorer import StrengthScorer
 from iatb.ml.readiness import check_ml_readiness
 from iatb.risk.daily_loss_guard import DailyLossGuard
 from iatb.risk.kill_switch import KillSwitch
@@ -180,14 +181,13 @@ def _create_sentiment_analyzer() -> Callable[[str], tuple[Decimal, bool]]:
         return create_mock_sentiment_analyzer({})
 
 
-def _create_strength_inputs() -> Any:
-    """Create strength inputs for scanner.
+def _create_strength_scorer() -> StrengthScorer:
+    """Create StrengthScorer instance for market strength evaluation.
 
     Returns:
-        Mock strength inputs function.
+        StrengthScorer instance with caching enabled.
     """
-    # Placeholder - would integrate with actual strength scorer
-    return None
+    return StrengthScorer(cache_enabled=True)
 
 
 def _create_rl_predictor() -> Callable[[list[Decimal]], Decimal]:
@@ -237,6 +237,26 @@ def _initialize_rl_predictor(errors: list[str]) -> Callable[[list[Decimal]], Dec
         _LOGGER.error("  ✗ %s", error_msg)
         errors.append(error_msg)
         return create_mock_rl_predictor()
+
+
+def _initialize_strength_scorer(errors: list[str]) -> StrengthScorer:
+    """Initialize strength scorer for market strength evaluation.
+
+    Args:
+        errors: List to collect error messages.
+
+    Returns:
+        StrengthScorer instance.
+    """
+    try:
+        scorer = _create_strength_scorer()
+        _LOGGER.info("  ✓ Strength scorer ready")
+        return scorer
+    except Exception as exc:
+        error_msg = f"Failed to initialize strength scorer: {exc}"
+        _LOGGER.error("  ✗ %s", error_msg)
+        errors.append(error_msg)
+        return StrengthScorer(cache_enabled=False)
 
 
 def _create_order_manager(
@@ -325,9 +345,10 @@ def _initialize_analyzers_and_order_manager(
 ) -> tuple[
     Callable[[str], tuple[Decimal, bool]],
     Callable[[list[Decimal]], Decimal],
+    StrengthScorer,
     OrderManager | None,
 ]:
-    """Initialize sentiment analyzer, RL predictor, and order manager.
+    """Initialize sentiment analyzer, RL predictor, strength scorer, and order manager.
 
     Args:
         order_manager: Optional pre-configured OrderManager.
@@ -335,24 +356,26 @@ def _initialize_analyzers_and_order_manager(
         errors: List to collect error messages.
 
     Returns:
-        Tuple of (sentiment_analyzer, rl_predictor, order_manager).
+        Tuple of (sentiment_analyzer, rl_predictor, strength_scorer, order_manager).
         Returns None for order_manager if initialization fails.
     """
     sentiment_analyzer = _initialize_sentiment_analyzer(errors)
     rl_predictor = _initialize_rl_predictor(errors)
+    strength_scorer = _initialize_strength_scorer(errors)
 
     if order_manager is None:
         order_manager = _create_order_manager(audit_logger, errors)
         if order_manager is None:
-            return sentiment_analyzer, rl_predictor, None
+            return sentiment_analyzer, rl_predictor, strength_scorer, None
 
-    return sentiment_analyzer, rl_predictor, order_manager
+    return sentiment_analyzer, rl_predictor, strength_scorer, order_manager
 
 
 def _create_scanner(
     scanner_config: ScannerConfig | None,
     sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
     rl_predictor: Callable[[list[Decimal]], Decimal],
+    strength_scorer: StrengthScorer,
     data_provider: DataProvider | None,
     symbols: Sequence[str],
 ) -> Any:
@@ -362,6 +385,7 @@ def _create_scanner(
         scanner_config: Scanner configuration.
         sentiment_analyzer: Sentiment analysis function.
         rl_predictor: RL predictor function.
+        strength_scorer: StrengthScorer for market strength evaluation.
         data_provider: DataProvider for market data.
         symbols: List of symbols to scan.
 
@@ -373,6 +397,7 @@ def _create_scanner(
     return InstrumentScanner(
         config=scanner_config,
         data_provider=data_provider,
+        strength_scorer=strength_scorer,
         sentiment_analyzer=sentiment_analyzer,
         rl_predictor=rl_predictor,
         symbols=list(symbols),
@@ -402,6 +427,7 @@ def _execute_scanner(
     scanner_config: ScannerConfig | None,
     sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
     rl_predictor: Callable[[list[Decimal]], Decimal],
+    strength_scorer: StrengthScorer,
     data_provider: DataProvider | None,
     errors: list[str],
 ) -> ScannerResult | None:
@@ -412,6 +438,7 @@ def _execute_scanner(
         scanner_config: Optional scanner configuration.
         sentiment_analyzer: Sentiment analysis function.
         rl_predictor: RL predictor function.
+        strength_scorer: StrengthScorer for market strength evaluation.
         data_provider: DataProvider for market data.
         errors: List to collect error messages.
 
@@ -420,7 +447,12 @@ def _execute_scanner(
     """
     try:
         scanner = _create_scanner(
-            scanner_config, sentiment_analyzer, rl_predictor, data_provider, symbols
+            scanner_config,
+            sentiment_analyzer,
+            rl_predictor,
+            strength_scorer,
+            data_provider,
+            symbols,
         )
         scanner_result: ScannerResult = scanner.scan(direction=SortDirection.GAINERS)
         _log_scan_results(scanner_result)
@@ -750,6 +782,7 @@ def _initialize_scan_components(
 ) -> tuple[
     Callable[[str], tuple[Decimal, bool]],
     Callable[[list[Decimal]], Decimal],
+    StrengthScorer,
     OrderManager | None,
     DataProvider | None,
 ]:
@@ -762,17 +795,25 @@ def _initialize_scan_components(
         errors: List to collect error messages.
 
     Returns:
-        Tuple of (sentiment_analyzer, rl_predictor, order_manager, data_provider).
+        Tuple of (sentiment_analyzer, rl_predictor, strength_scorer,
+        order_manager, data_provider).
     """
     _LOGGER.info("Step 1: Initializing components...")
 
-    sentiment_analyzer, rl_predictor, order_manager = _initialize_analyzers_and_order_manager(
-        order_manager, audit_logger, errors
+    (
+        sentiment_analyzer,
+        rl_predictor,
+        strength_scorer,
+        order_manager,
+    ) = _initialize_analyzers_and_order_manager(
+        order_manager,
+        audit_logger,
+        errors,
     )
 
     data_provider = _initialize_data_provider(data_provider, errors)
 
-    return sentiment_analyzer, rl_predictor, order_manager, data_provider
+    return sentiment_analyzer, rl_predictor, strength_scorer, order_manager, data_provider
 
 
 def _create_early_return_result(
@@ -802,6 +843,7 @@ def _execute_scan_pipeline(
     scanner_config: ScannerConfig | None,
     sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
     rl_predictor: Callable[[list[Decimal]], Decimal],
+    strength_scorer: StrengthScorer,
     order_manager: OrderManager | None,
     data_provider: DataProvider | None,
     max_trades: int,
@@ -814,6 +856,7 @@ def _execute_scan_pipeline(
         scanner_config: Scanner configuration.
         sentiment_analyzer: Sentiment analysis function.
         rl_predictor: RL predictor function.
+        strength_scorer: StrengthScorer for market strength evaluation.
         order_manager: OrderManager instance (optional for scanning only).
         data_provider: DataProvider for market data.
         max_trades: Maximum trades to execute.
@@ -825,7 +868,13 @@ def _execute_scan_pipeline(
     # Step 2: Execute scanner
     _LOGGER.info("Step 2: Running scanner...")
     scanner_result = _execute_scanner(
-        symbols, scanner_config, sentiment_analyzer, rl_predictor, data_provider, errors
+        symbols,
+        scanner_config,
+        sentiment_analyzer,
+        rl_predictor,
+        strength_scorer,
+        data_provider,
+        errors,
     )
 
     if scanner_result is None:
@@ -856,6 +905,7 @@ def _initialize_scan_cycle(
     Sequence[str],
     Callable[[str], tuple[Decimal, bool]],
     Callable[[list[Decimal]], Decimal],
+    StrengthScorer,
     OrderManager | None,
     DataProvider | None,
     list[str],
@@ -872,7 +922,7 @@ def _initialize_scan_cycle(
 
     Returns:
         Tuple of (timestamp, symbols, sentiment_analyzer, rl_predictor,
-        order_manager, data_provider, errors).
+        strength_scorer, order_manager, data_provider, errors).
     """
     timestamp_utc = datetime.now(UTC)
     errors: list[str] = []
@@ -881,8 +931,17 @@ def _initialize_scan_cycle(
     _check_ml_readiness_and_log(errors)
 
     symbols = _prepare_scan_symbols(symbols)
-    sentiment_analyzer, rl_predictor, order_manager, data_provider = _initialize_scan_components(
-        order_manager, audit_logger, data_provider, errors
+    (
+        sentiment_analyzer,
+        rl_predictor,
+        strength_scorer,
+        order_manager,
+        data_provider,
+    ) = _initialize_scan_components(
+        order_manager,
+        audit_logger,
+        data_provider,
+        errors,
     )
 
     return (
@@ -890,6 +949,7 @@ def _initialize_scan_cycle(
         symbols,
         sentiment_analyzer,
         rl_predictor,
+        strength_scorer,
         order_manager,
         data_provider,
         errors,
@@ -974,6 +1034,7 @@ def _execute_full_scan_cycle(
     symbols: Sequence[str],
     sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
     rl_predictor: Callable[[list[Decimal]], Decimal],
+    strength_scorer: StrengthScorer,
     order_manager: OrderManager | None,
     data_provider: DataProvider | None,
     max_trades: int,
@@ -987,6 +1048,7 @@ def _execute_full_scan_cycle(
         symbols: List of symbols to scan.
         sentiment_analyzer: Sentiment analysis function.
         rl_predictor: RL predictor function.
+        strength_scorer: StrengthScorer for market strength evaluation.
         order_manager: OrderManager instance.
         data_provider: DataProvider for market data.
         max_trades: Maximum trades to execute.
@@ -1007,6 +1069,7 @@ def _execute_full_scan_cycle(
         scanner_config,
         sentiment_analyzer,
         rl_predictor,
+        strength_scorer,
         order_manager,
         data_provider,
         max_trades,
@@ -1044,6 +1107,7 @@ def _run_scan_cycle_with_params(
         symbols,
         sentiment_analyzer,
         rl_predictor,
+        strength_scorer,
         order_manager,
         data_provider,
         errors,
@@ -1056,6 +1120,7 @@ def _run_scan_cycle_with_params(
         symbols,
         sentiment_analyzer,
         rl_predictor,
+        strength_scorer,
         order_manager,
         data_provider,
         max_trades,
@@ -1078,7 +1143,7 @@ def run_scan_cycle(
     Main entry point for automated trading. Runs full pipeline:
       1. Fetches market data via DataProvider (KiteProvider or custom)
       2. Analyzes sentiment (FinBERT + AION)
-      3. Scores candidates
+      3. Scores candidates using StrengthScorer (market strength)
       4. Filters top gainers/losers
       5. Executes paper trades
       6. Logs to audit DB

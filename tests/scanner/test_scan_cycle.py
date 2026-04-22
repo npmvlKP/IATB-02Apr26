@@ -7,8 +7,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from iatb.core.enums import Exchange
+from iatb.market_strength.strength_scorer import StrengthScorer
 from iatb.scanner.scan_cycle import (
     ScanCycleResult,
+    _create_strength_scorer,
+    _initialize_strength_scorer,
     _load_symbols_from_config,
     _prepare_scan_symbols,
     refresh_symbols,
@@ -939,3 +942,91 @@ class TestSymbolLoadingIntegration:
 
                 # Verify scan completed
                 assert isinstance(result, ScanCycleResult)
+
+
+class TestCreateStrengthScorer:
+    """Tests for _create_strength_scorer function."""
+
+    def test_creates_strength_scorer_instance(self) -> None:
+        """Test that _create_strength_scorer returns a StrengthScorer."""
+        scorer = _create_strength_scorer()
+        assert isinstance(scorer, StrengthScorer)
+
+    def test_strength_scorer_cache_enabled(self) -> None:
+        """Test that created scorer has caching enabled."""
+        scorer = _create_strength_scorer()
+        assert scorer._cache_enabled is True
+
+
+class TestInitializeStrengthScorer:
+    """Tests for _initialize_strength_scorer function."""
+
+    def test_initialize_returns_strength_scorer(self) -> None:
+        """Test that _initialize_strength_scorer returns StrengthScorer."""
+        errors: list[str] = []
+        scorer = _initialize_strength_scorer(errors)
+        assert isinstance(scorer, StrengthScorer)
+        assert len(errors) == 0
+
+    def test_initialize_fallback_on_failure(self) -> None:
+        """Test that initialization falls back to uncached scorer on failure."""
+        errors: list[str] = []
+        with patch(
+            "iatb.scanner.scan_cycle._create_strength_scorer",
+            side_effect=RuntimeError("init failed"),
+        ):
+            scorer = _initialize_strength_scorer(errors)
+            assert isinstance(scorer, StrengthScorer)
+            assert scorer._cache_enabled is False
+            assert len(errors) == 1
+            assert "strength scorer" in errors[0].lower()
+
+
+class TestStrengthScorerWiring:
+    """Tests verifying StrengthScorer is wired into scan cycle."""
+
+    def test_scanner_receives_strength_scorer(self) -> None:
+        """Test that InstrumentScanner is created with a StrengthScorer."""
+        from iatb.scanner.instrument_scanner import ScannerResult
+
+        scanner_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
+            mock_scanner = MagicMock()
+            mock_scanner.scan.return_value = scanner_result
+            mock_scanner_class.return_value = mock_scanner
+
+            run_scan_cycle(symbols=["RELIANCE"], max_trades=0)
+
+            mock_scanner_class.assert_called_once()
+            call_kwargs = mock_scanner_class.call_args[1]
+            assert "strength_scorer" in call_kwargs
+            assert isinstance(call_kwargs["strength_scorer"], StrengthScorer)
+
+    def test_strength_scorer_not_none_in_pipeline(self) -> None:
+        """Regression: ensure strength_scorer passed to scanner is never None."""
+        from iatb.scanner.instrument_scanner import ScannerResult
+
+        scanner_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
+            mock_scanner = MagicMock()
+            mock_scanner.scan.return_value = scanner_result
+            mock_scanner_class.return_value = mock_scanner
+
+            run_scan_cycle(symbols=["TCS"], max_trades=0)
+
+            call_kwargs = mock_scanner_class.call_args[1]
+            assert call_kwargs["strength_scorer"] is not None
