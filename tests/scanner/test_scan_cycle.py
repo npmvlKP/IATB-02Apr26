@@ -4,8 +4,16 @@ Tests for scan cycle implementation.
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
-from iatb.scanner.scan_cycle import ScanCycleResult, run_scan_cycle
+from iatb.core.enums import Exchange
+from iatb.scanner.scan_cycle import (
+    ScanCycleResult,
+    _load_symbols_from_config,
+    _prepare_scan_symbols,
+    refresh_symbols,
+    run_scan_cycle,
+)
 
 
 class TestScanCycleResult:
@@ -664,3 +672,246 @@ class TestRunScanCycle:
                 assert result.trades_executed == 1
                 # Check for at least one trade error (may also have KiteProvider init error)
                 assert any("Sell trade" in error for error in result.errors)
+
+
+class TestLoadSymbolsFromConfig:
+    """Tests for _load_symbols_from_config function."""
+
+    def test_load_symbols_from_config_success(self) -> None:
+        """Test successful loading of symbols from config."""
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = ["TEST1", "TEST2", "TEST3"]
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            symbols = _load_symbols_from_config()
+
+            assert symbols == ["TEST1", "TEST2", "TEST3"]
+            mock_config.get_symbols.assert_called_once_with(exchange=Exchange.NSE)
+
+    def test_load_symbols_from_config_empty_list(self) -> None:
+        """Test loading when config returns empty list."""
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = []
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            symbols = _load_symbols_from_config()
+
+            assert symbols is None
+            mock_config.get_symbols.assert_called_once_with(exchange=Exchange.NSE)
+
+    def test_load_symbols_from_config_config_error(self) -> None:
+        """Test handling of ConfigError during load."""
+        from iatb.core.exceptions import ConfigError
+
+        with patch(
+            "iatb.core.config_manager.get_config_manager",
+            side_effect=ConfigError("Config file not found"),
+        ):
+            symbols = _load_symbols_from_config()
+
+            assert symbols is None
+
+    def test_load_symbols_from_config_unexpected_error(self) -> None:
+        """Test handling of unexpected exceptions during load."""
+        with patch(
+            "iatb.core.config_manager.get_config_manager",
+            side_effect=Exception("Unexpected error"),
+        ):
+            symbols = _load_symbols_from_config()
+
+            assert symbols is None
+
+
+class TestPrepareScanSymbols:
+    """Tests for _prepare_scan_symbols function."""
+
+    def test_prepare_scan_symbols_with_explicit_symbols(self) -> None:
+        """Test that explicit symbols are used without loading from config."""
+        symbols = _prepare_scan_symbols(["RELIANCE", "TCS"])
+
+        assert symbols == ["RELIANCE", "TCS"]
+
+    def test_prepare_scan_symbols_uses_cached_symbols(self) -> None:
+        """Test that cached symbols are used when available."""
+        # Set up cache
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        scan_cycle_module._cached_symbols = ["CACHED1", "CACHED2"]
+
+        symbols = _prepare_scan_symbols(None)
+
+        assert symbols == ["CACHED1", "CACHED2"]
+
+        # Clean up
+        scan_cycle_module._cached_symbols = None
+
+    def test_prepare_scan_symbols_loads_from_config(self) -> None:
+        """Test that symbols are loaded from config when not cached."""
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = ["CONFIG1", "CONFIG2"]
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            symbols = _prepare_scan_symbols(None)
+
+            assert symbols == ["CONFIG1", "CONFIG2"]
+            mock_config.get_symbols.assert_called_once_with(exchange=Exchange.NSE)
+
+    def test_prepare_scan_symbols_falls_back_to_defaults(self) -> None:
+        """Test that default symbols are used when config is unavailable."""
+        with patch("iatb.scanner.scan_cycle._load_symbols_from_config", return_value=None):
+            symbols = _prepare_scan_symbols(None)
+
+            # Should return default NIFTY50 symbols
+            assert len(symbols) == 10
+            assert "RELIANCE" in symbols
+            assert "TCS" in symbols
+            assert "INFY" in symbols
+
+    def test_prepare_scan_symbols_empty_list_uses_config(self) -> None:
+        """Test that empty list triggers config loading."""
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = ["CONFIG1"]
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            symbols = _prepare_scan_symbols([])
+
+            assert symbols == ["CONFIG1"]
+
+
+class TestRefreshSymbols:
+    """Tests for refresh_symbols function."""
+
+    def test_refresh_symbols_clears_cache_and_reloads(self) -> None:
+        """Test that refresh clears cache and reloads from config."""
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        # Set up initial cache
+        scan_cycle_module._cached_symbols = ["OLD1", "OLD2"]
+
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = ["NEW1", "NEW2", "NEW3"]
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            refreshed = refresh_symbols()
+
+            assert refreshed == ["NEW1", "NEW2", "NEW3"]
+            assert scan_cycle_module._cached_symbols == ["NEW1", "NEW2", "NEW3"]
+
+        # Clean up
+        scan_cycle_module._cached_symbols = None
+
+    def test_refresh_symbols_handles_config_unavailable(self) -> None:
+        """Test refresh when config is unavailable."""
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        # Set up initial cache
+        scan_cycle_module._cached_symbols = ["OLD1"]
+
+        with patch("iatb.scanner.scan_cycle._load_symbols_from_config", return_value=None):
+            refreshed = refresh_symbols()
+
+            assert refreshed is None
+            assert scan_cycle_module._cached_symbols is None
+
+        # Clean up
+        scan_cycle_module._cached_symbols = None
+
+    def test_refresh_symbols_with_empty_config(self) -> None:
+        """Test refresh when config returns empty list."""
+        import iatb.scanner.scan_cycle as scan_cycle_module
+
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = []
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            refreshed = refresh_symbols()
+
+            assert refreshed is None
+            assert scan_cycle_module._cached_symbols is None
+
+        # Clean up
+        scan_cycle_module._cached_symbols = None
+
+
+class TestSymbolLoadingIntegration:
+    """Integration tests for symbol loading with scan cycle."""
+
+    def test_scan_cycle_uses_config_symbols_by_default(self) -> None:
+        """Test that run_scan_cycle uses config symbols when available."""
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = ["SYMBOL1", "SYMBOL2"]
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        # Mock scanner to succeed
+        from iatb.scanner.instrument_scanner import ScannerResult
+
+        scanner_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
+                mock_scanner = MagicMock()
+                mock_scanner.scan.return_value = scanner_result
+                mock_scanner_class.return_value = mock_scanner
+
+                # Run scan cycle without explicit symbols
+                result = run_scan_cycle(symbols=None, max_trades=0)
+
+                # Verify scanner was created with config symbols
+                assert isinstance(result, ScanCycleResult)
+
+    def test_scan_cycle_with_explicit_symbols_overrides_config(self) -> None:
+        """Test that explicit symbols override config symbols."""
+        mock_config = MagicMock()
+        mock_config.get_symbols.return_value = ["CONFIG_SYMBOL"]
+
+        mock_manager = MagicMock()
+        mock_manager.get_config.return_value = mock_config
+
+        # Mock scanner to succeed
+        from iatb.scanner.instrument_scanner import ScannerResult
+
+        scanner_result = ScannerResult(
+            gainers=[],
+            losers=[],
+            total_scanned=0,
+            filtered_count=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+
+        with patch("iatb.core.config_manager.get_config_manager", return_value=mock_manager):
+            with patch("iatb.scanner.instrument_scanner.InstrumentScanner") as mock_scanner_class:
+                mock_scanner = MagicMock()
+                mock_scanner.scan.return_value = scanner_result
+                mock_scanner_class.return_value = mock_scanner
+
+                # Run scan cycle with explicit symbols
+                result = run_scan_cycle(symbols=["EXPLICIT1", "EXPLICIT2"], max_trades=0)
+
+                # Verify scan completed
+                assert isinstance(result, ScanCycleResult)

@@ -17,7 +17,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from iatb.core.enums import OrderSide
+from iatb.core.enums import Exchange, OrderSide
 from iatb.core.exceptions import ConfigError
 from iatb.data.base import DataProvider
 from iatb.data.kite_provider import KiteProvider
@@ -42,6 +42,80 @@ from iatb.sentiment.aion_analyzer import AionAnalyzer
 from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
 
 _LOGGER = logging.getLogger(__name__)
+
+# Module-level cache for symbols
+_cached_symbols: list[str] | None = None
+
+
+def _load_symbols_from_config() -> list[str] | None:
+    """Load symbols from config/watchlist.toml.
+
+    Attempts to load NSE symbols from the watchlist configuration.
+    Falls back to None if config is unavailable or empty.
+
+    Returns:
+        List of symbols from config, or None if unavailable.
+    """
+    try:
+        from iatb.core.config_manager import get_config_manager
+
+        config_manager = get_config_manager()
+        config = config_manager.get_config()
+
+        # Get NSE symbols (default exchange for scanner)
+        nse_symbols = config.get_symbols(exchange=Exchange.NSE)
+
+        if nse_symbols:
+            _LOGGER.info(
+                "Loaded %d symbols from config/watchlist.toml [NSE]",
+                len(nse_symbols),
+                extra={"symbol_count": len(nse_symbols)},
+            )
+            return nse_symbols
+        else:
+            _LOGGER.warning(
+                "No NSE symbols found in config/watchlist.toml",
+                extra={"config_path": "config/watchlist.toml"},
+            )
+            return None
+
+    except ConfigError as exc:
+        _LOGGER.warning(
+            "Failed to load config/watchlist.toml: %s. Will use defaults.",
+            exc,
+        )
+        return None
+    except Exception as exc:
+        _LOGGER.exception(
+            "Unexpected error loading config/watchlist.toml: %s. Will use defaults.",
+            exc,
+        )
+        return None
+
+
+def refresh_symbols() -> list[str] | None:
+    """Refresh the symbol cache from config.
+
+    Hot-reloads symbols from config/watchlist.toml at runtime.
+    Clears the module-level cache and reloads from config.
+
+    Returns:
+        List of refreshed symbols, or None if config unavailable.
+    """
+    global _cached_symbols
+    _cached_symbols = None
+
+    symbols = _load_symbols_from_config()
+    if symbols:
+        _cached_symbols = symbols
+        _LOGGER.info(
+            "Refreshed symbol cache: %d symbols",
+            len(symbols),
+        )
+    else:
+        _LOGGER.info("Refreshed symbol cache: using defaults (config unavailable)")
+
+    return symbols
 
 
 def _check_ml_readiness_and_log(errors: list[str]) -> None:
@@ -626,7 +700,13 @@ def _log_scan_cycle_complete(
 
 
 def _prepare_scan_symbols(symbols: Sequence[str] | None) -> Sequence[str]:
-    """Prepare symbols for scanning, using defaults if none provided.
+    """Prepare symbols for scanning, using config or defaults if none provided.
+
+    Priority order:
+    1. Explicitly provided symbols
+    2. Cached symbols from config/watchlist.toml
+    3. Fresh load from config/watchlist.toml
+    4. Default NIFTY50 symbols (fallback)
 
     Args:
         symbols: Optional list of symbols.
@@ -634,10 +714,28 @@ def _prepare_scan_symbols(symbols: Sequence[str] | None) -> Sequence[str]:
     Returns:
         List of symbols to scan.
     """
-    if not symbols:
-        symbols = _get_default_symbols()
-        _LOGGER.info("Using default NIFTY50 symbols")
-    return symbols
+    if symbols:
+        _LOGGER.info("Using %d explicitly provided symbols", len(symbols))
+        return symbols
+
+    global _cached_symbols
+
+    # Try to use cached symbols
+    if _cached_symbols is not None:
+        _LOGGER.info("Using %d cached symbols from config", len(_cached_symbols))
+        return _cached_symbols
+
+    # Try to load from config
+    config_symbols = _load_symbols_from_config()
+    if config_symbols:
+        _cached_symbols = config_symbols
+        _LOGGER.info("Using %d symbols loaded from config/watchlist.toml", len(config_symbols))
+        return config_symbols
+
+    # Fallback to defaults
+    default_symbols = _get_default_symbols()
+    _LOGGER.info("Using default NIFTY50 symbols (config unavailable)")
+    return default_symbols
 
 
 def _initialize_scan_components(
