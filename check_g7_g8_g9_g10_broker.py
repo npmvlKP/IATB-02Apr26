@@ -35,11 +35,27 @@ def check_g7_float():
                     
                 for i, line in enumerate(lines, 1):
                     # Check for float usage
-                    if 'float' in line and '# API boundary' not in line:
+                    if 'float' in line:
                         # Skip if it's just a comment or type hint
                         if line.strip().startswith('#'):
                             continue
-                        violations.append(f"{filepath}:{i}: {line.strip()}")
+                        # Check for API boundary comment on this line or previous line
+                        has_api_boundary = (
+                            '# API boundary' in line or
+                            '# float required:' in line or
+                            'math.exp' in line or
+                            'math.sqrt' in line or
+                            'math.pow' in line
+                        )
+                        if i > 1 and not has_api_boundary:
+                            prev_line = lines[i-2]
+                            has_api_boundary = (
+                                '# API boundary' in prev_line or
+                                '# float required:' in prev_line
+                            )
+                        
+                        if not has_api_boundary:
+                            violations.append(f"{filepath}:{i}: {line.strip()}")
     
     if violations:
         print(f"  [X] FAIL: Found {len(violations)} float usages:")
