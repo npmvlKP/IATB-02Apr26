@@ -1,4 +1,12 @@
-mode = "paper"
+# Execution Mode Configuration: "paper" | "live"
+# Paper trading is the default and safest mode for testing
+execution_mode = "paper"
+
+# Safety flag: Must be True for live trading to work
+# Requires explicit confirmation via confirm_live_mode() function
+live_trading_enabled = false
+
+# Trading settings
 default_exchange = "NSE"
 default_market_type = "SPOT"
 timezone = "Asia/Kolkata"
@@ -6,7 +14,6 @@ paper_trade_enforced = true
 
 [broker]
 name = "zerodha"
-live_trading_enabled = false
 
 [network]
 static_ip = "your.static.ip.address"

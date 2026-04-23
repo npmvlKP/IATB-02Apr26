@@ -13,6 +13,9 @@ from iatb.core.exceptions import ConfigError
 
 logger = logging.getLogger(__name__)
 
+# Global flag to track if live mode confirmation has been given
+_live_mode_confirmed: bool = False
+
 
 class Config(BaseSettings):
     """Application configuration loaded from environment variables."""
@@ -47,10 +50,13 @@ class Config(BaseSettings):
     # Engine settings
     engine_max_tasks: int = 100
 
+    # Execution Mode Configuration
+    execution_mode: str = "paper"  # "paper" | "live"
+    live_trading_enabled: bool = False  # Safety: defaults to False
+
     # Trading settings
     default_exchange: str = "NSE"
     default_market_type: str = "SPOT"
-    live_trading_enabled: bool = False
 
     # Paths
     data_dir: Path = Path("data")
@@ -74,6 +80,33 @@ class Config(BaseSettings):
         if self.default_market_type not in valid_market_types:
             msg = f"Invalid default_market_type: {self.default_market_type}"
             raise ConfigError(msg)
+
+        # Validate execution_mode
+        valid_execution_modes = ["paper", "live"]
+        if self.execution_mode not in valid_execution_modes:
+            msg = (
+                f"Invalid execution_mode: {self.execution_mode}. "
+                f"Must be one of: {valid_execution_modes}"
+            )
+            raise ConfigError(msg)
+
+        # Safety check: live mode requires live_trading_enabled=True
+        if self.execution_mode == "live" and not self.live_trading_enabled:
+            logger.warning(
+                "execution_mode is 'live' but live_trading_enabled=False. "
+                "This configuration is inconsistent. Setting execution_mode to 'paper' for safety."
+            )
+            self.execution_mode = "paper"
+
+        # Safety check: live_trading_enabled=True without confirmation is dangerous
+        if self.execution_mode == "live" and self.live_trading_enabled:
+            if not _live_mode_confirmed:
+                logger.warning(
+                    "LIVE TRADING MODE DETECTED. This will execute REAL trades with REAL money. "
+                    "Confirm live mode activation using confirm_live_mode() to proceed."
+                )
+                self.execution_mode = "paper"
+                self.live_trading_enabled = False
 
         if self.event_bus_max_queue_size <= 0:
             msg = "event_bus_max_queue_size must be positive"
@@ -119,3 +152,61 @@ def get_config() -> Config:
     if _config_instance is None:
         _config_instance = Config.load()
     return _config_instance
+
+
+def confirm_live_mode() -> None:
+    """Confirm live trading mode activation.
+
+    This function must be called explicitly to enable live trading.
+    It requires user confirmation through an interactive dialog.
+
+    Raises:
+        ConfigError: If confirmation is denied or if not running in an interactive session.
+    """
+    global _live_mode_confirmed
+
+    if _live_mode_confirmed:
+        logger.warning("Live mode has already been confirmed.")
+        return
+
+    logger.warning("=" * 80)
+    logger.warning("LIVE TRADING CONFIRMATION REQUIRED")
+    logger.warning("=" * 80)
+    logger.warning("You are about to enable LIVE TRADING MODE.")
+    logger.warning("This will execute REAL trades with REAL money.")
+    logger.warning("")
+    logger.warning("Risks:")
+    logger.warning("- Financial loss from algorithmic trading")
+    logger.warning("- Potential technical errors")
+    logger.warning("- Market volatility risks")
+    logger.warning("")
+    logger.warning("Make sure you have:")
+    logger.warning("- Thoroughly tested your strategy in paper trading mode")
+    logger.warning("- Set appropriate risk management parameters")
+    logger.warning("- Monitored the system for stability")
+    logger.warning("- Sufficient capital to withstand losses")
+    logger.warning("=" * 80)
+    logger.warning("")
+
+    try:
+        # Interactive confirmation
+        response = input("Type 'CONFIRM' to enable live trading: ").strip().upper()
+
+        if response != "CONFIRM":
+            msg = "Live trading activation cancelled by user."
+            logger.error(msg)
+            raise ConfigError(msg)
+
+        _live_mode_confirmed = True
+        logger.warning("LIVE TRADING MODE CONFIRMED. Real trades will be executed.")
+
+        # Reload config with confirmation enabled
+        global _config_instance
+        if _config_instance is not None:
+            _config_instance.execution_mode = "live"
+            _config_instance.live_trading_enabled = True
+
+    except (EOFError, KeyboardInterrupt):
+        msg = "Live trading activation cancelled (non-interactive session or interrupted)."
+        logger.error(msg)
+        raise ConfigError(msg) from None
