@@ -306,8 +306,8 @@ class TestDeprecatedFileRemoval:
         """Test no references to old scanner file paths."""
         import inspect
 
-        engine = Engine()
-        source = inspect.getsource(engine)
+        # Use the class, not an instance
+        source = inspect.getsource(Engine)
 
         # Verify no references to deprecated paths
         assert "old_scanner" not in source
