@@ -58,3 +58,9 @@ class EngineNotRunningError(IATBError):
     """Exception raised when engine/runtime is not started."""
 
     pass
+
+
+class ExecutionError(IATBError):
+    """Exception raised for order execution errors."""
+
+    pass
