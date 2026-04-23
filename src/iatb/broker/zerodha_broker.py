@@ -667,10 +667,10 @@ class ZerodhaBroker(BrokerInterface):
         """
         await self._ensure_authenticated()
 
-        async def _get_positions() -> list[Mapping[str, Any]]:
+        async def _get_positions() -> Mapping[str, Any]:
             return self._client.positions()  # type: ignore[no-any-return]
 
-        response = await self._execute_with_retry(_get_positions)  # type: ignore[no-any-return]
+        response: Mapping[str, Any] = await self._execute_with_retry(_get_positions)
 
         positions: list[Position] = []
         for pos in response.get("day", []):
@@ -705,7 +705,7 @@ class ZerodhaBroker(BrokerInterface):
         async def _get_orders() -> list[Mapping[str, Any]]:
             return self._client.orders()  # type: ignore[no-any-return]
 
-        response = await self._execute_with_retry(_get_orders)  # type: ignore[no-any-return]
+        response: list[Mapping[str, Any]] = await self._execute_with_retry(_get_orders)
 
         orders: list[Order] = []
         for order_data in response:
@@ -749,7 +749,7 @@ class ZerodhaBroker(BrokerInterface):
         async def _get_margins() -> Mapping[str, Any]:
             return self._client.margins()  # type: ignore[no-any-return]
 
-        response = await self._execute_with_retry(_get_margins)  # type: ignore[no-any-return]
+        response: Mapping[str, Any] = await self._execute_with_retry(_get_margins)
 
         equity_data = response.get("equity", {})
 
@@ -786,10 +786,14 @@ class ZerodhaBroker(BrokerInterface):
         async def _get_history() -> list[Mapping[str, Any]]:
             history = self._client.order_history(order_id=order_id)
             if isinstance(history, list):
-                return history  # type: ignore[no-any-return]
-            return [history]  # type: ignore[no-any-return]
+                return history
+            return [history]
 
-        return await self._execute_with_retry(_get_history)  # type: ignore[no-any-return]
+        result = await self._execute_with_retry(_get_history)
+        if not isinstance(result, list):
+            msg = f"Expected list from order_history, got {type(result)}"
+            raise RuntimeError(msg)
+        return result
 
     async def get_holdings(self) -> list[Mapping[str, Any]]:
         """Get holdings for delivery-based positions.
@@ -805,10 +809,14 @@ class ZerodhaBroker(BrokerInterface):
         async def _get_holdings() -> list[Mapping[str, Any]]:
             holdings = self._client.holdings()
             if isinstance(holdings, list):
-                return holdings  # type: ignore[no-any-return]
-            return [holdings]  # type: ignore[no-any-return]
+                return holdings
+            return [holdings]
 
-        return await self._execute_with_retry(_get_holdings)  # type: ignore[no-any-return]
+        result = await self._execute_with_retry(_get_holdings)
+        if not isinstance(result, list):
+            msg = f"Expected list from holdings, got {type(result)}"
+            raise RuntimeError(msg)
+        return result
 
     def _build_modify_params(
         self,
