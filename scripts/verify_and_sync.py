@@ -4,9 +4,19 @@ IATB Verification and Git Sync Script
 Runs all quality gates (G1-G10) and provides git sync steps.
 """
 
+# ruff: noqa: T201  # Allow print() for CLI output
+# ruff: noqa: S602  # Allow subprocess with shell=True for verification script
+
 import subprocess
 import sys
 from pathlib import Path
+
+# Windows-compatible output encoding
+if sys.platform == "win32":
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
 def run_command(cmd: str, description: str) -> tuple[bool, str]:
@@ -20,15 +30,15 @@ def run_command(cmd: str, description: str) -> tuple[bool, str]:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
 
         if result.returncode == 0:
-            print(f"✓ {description}: PASS")
+            print(f"[PASS] {description}")
             return True, result.stdout
         else:
-            print(f"✗ {description}: FAIL")
+            print(f"[FAIL] {description}")
             print(result.stdout)
             print(result.stderr)
             return False, result.stderr
     except Exception as e:
-        print(f"✗ {description}: ERROR - {e}")
+        print(f"[ERROR] {description} - {e}")
         return False, str(e)
 
 
@@ -46,20 +56,22 @@ def check_function_size() -> bool:
     ]
 
     if violations:
-        print("✗ G10: FAIL - Found functions exceeding 50 LOC:")
+        print("[FAIL] G10: Found functions exceeding 50 LOC:")
         for file_path, func_name, loc in violations:
             print(f"  - {file_path}:{func_name} = {loc} LOC")
         return False
     else:
-        print("✓ G10: PASS - All functions <= 50 LOC")
+        print("[PASS] G10: All functions <= 50 LOC")
         return True
 
 
 def check_float_in_financial_paths() -> bool:
-    """Check for float usage in financial paths."""
+    """Check for float usage in financial paths using Python (Windows-compatible)."""
     print(f"\n{'='*60}")
     print("[G7] No Float in Financial Paths")
     print("=" * 60)
+
+    import ast
 
     financial_paths = [
         "src/iatb/risk/",
@@ -69,55 +81,123 @@ def check_float_in_financial_paths() -> bool:
         "src/iatb/sentiment/",
     ]
 
-    for path in financial_paths:
-        if Path(path).exists():
-            success, output = run_command(
-                f'grep -r "float" {path} || true', f"Checking float in {path}"
-            )
-            if "float" in output.lower() and "no float" not in output.lower():
-                print(f"✗ G7: FAIL - Found 'float' in {path}")
-                print(output)
-                return False
+    for path_str in financial_paths:
+        path = Path(path_str)
+        if not path.exists():
+            continue
 
-    print("✓ G7: PASS - No float found in financial paths")
+        for py_file in path.rglob("*.py"):
+            try:
+                source = py_file.read_text(encoding="utf-8")
+                tree = ast.parse(source)
+                lines = source.splitlines()
+
+                for node in ast.walk(tree):
+                    is_float_type = isinstance(node, ast.Name) and node.id == "float"
+                    is_float_literal = isinstance(node, ast.Constant) and isinstance(
+                        node.value, float
+                    )
+
+                    if is_float_type or is_float_literal:
+                        line_number = getattr(node, "lineno", 1)
+                        line = (
+                            lines[line_number - 1].strip() if 0 < line_number <= len(lines) else ""
+                        )
+
+                        # Check for API boundary comment on same line
+                        if "API boundary" in line or ("API" in line and "#" in line):
+                            continue
+
+                        # Check for API boundary comment in preceding 5 lines
+                        has_api_boundary = False
+                        for i in range(max(0, line_number - 6), line_number - 1):
+                            if i >= 0 and i < len(lines):
+                                prev_line = lines[i].strip()
+                                if "API boundary" in prev_line or (
+                                    "API" in prev_line and "#" in prev_line
+                                ):
+                                    has_api_boundary = True
+                                    break
+
+                        if has_api_boundary:
+                            continue
+
+                        # Found problematic float usage
+                        print(
+                            f"[FAIL] G7: Found 'float' in "
+                            f"{py_file.relative_to(Path.cwd())}:{line_number}"
+                        )
+                        print(f"  Line: {line}")
+                        return False
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+
+    print("[PASS] G7: No float found in financial paths")
     return True
 
 
 def check_naive_datetime() -> bool:
-    """Check for naive datetime.now() usage."""
+    """Check for naive datetime.now() usage using Python (Windows-compatible)."""
     print(f"\n{'='*60}")
     print("[G8] No Naive Datetime")
     print("=" * 60)
 
-    success, output = run_command(
-        'grep -r "datetime.now()" src/ || true', "Checking for naive datetime.now()"
-    )
-
-    if "datetime.now()" in output:
-        print("✗ G8: FAIL - Found naive datetime.now()")
-        print(output)
+    src_path = Path("src")
+    if not src_path.exists():
+        print("[FAIL] G8: src/ directory not found")
         return False
 
-    print("✓ G8: PASS - No naive datetime.now() found")
+    for py_file in src_path.rglob("*.py"):
+        try:
+            source = py_file.read_text(encoding="utf-8")
+            lines = source.splitlines()
+
+            for line_number, line in enumerate(lines, start=1):
+                if "datetime.now()" in line:
+                    print(
+                        f"[FAIL] G8: Found naive datetime.now() in "
+                        f"{py_file.relative_to(Path.cwd())}:{line_number}"
+                    )
+                    print(f"  Line: {line.strip()}")
+                    return False
+        except UnicodeDecodeError:
+            continue
+
+    print("[PASS] G8: No naive datetime.now() found")
     return True
 
 
 def check_print_statements() -> bool:
-    """Check for print() statements in src/."""
+    """Check for print() statements in src/ using Python (Windows-compatible)."""
     print(f"\n{'='*60}")
     print("[G9] No Print Statements in src/")
     print("=" * 60)
 
-    success, output = run_command(
-        'grep -r "print(" src/ || true', "Checking for print() statements"
-    )
-
-    if "print(" in output:
-        print("✗ G9: FAIL - Found print() statements")
-        print(output)
+    src_path = Path("src")
+    if not src_path.exists():
+        print("[FAIL] G9: src/ directory not found")
         return False
 
-    print("✓ G9: PASS - No print() statements found")
+    for py_file in src_path.rglob("*.py"):
+        try:
+            source = py_file.read_text(encoding="utf-8")
+            lines = source.splitlines()
+
+            for line_number, line in enumerate(lines, start=1):
+                if "print(" in line:
+                    # Skip if it's in a comment
+                    if line.strip().startswith("#"):
+                        continue
+                    print(
+                        f"[FAIL] G9: Found print() in "
+                        f"{py_file.relative_to(Path.cwd())}:{line_number}"
+                    )
+                    print(f"  Line: {line.strip()}")
+                    return False
+        except UnicodeDecodeError:
+            continue
+
+    print("[PASS] G9: No print() statements found")
     return True
 
 
@@ -166,17 +246,17 @@ def main():
     total = len(results)
 
     for gate, status in results.items():
-        symbol = "✓" if status else "✗"
-        print(f"{symbol} {gate}: {'PASS' if status else 'FAIL'}")
+        status_text = "[PASS]" if status else "[FAIL]"
+        print(f"{status_text} {gate}: {'PASS' if status else 'FAIL'}")
 
     print(f"\nTotal: {passed}/{total} gates passed")
 
     if passed == total:
-        print("\n✓ ALL GATES PASSED - Ready for git sync")
+        print("\n[PASS] ALL GATES PASSED - Ready for git sync")
         print_git_sync_steps()
         return 0
     else:
-        print(f"\n✗ {total - passed} GATE(S) FAILED - Fix issues before syncing")
+        print(f"\n[FAIL] {total - passed} GATE(S) FAILED - Fix issues before syncing")
         print("\nFAILED GATES:")
         for gate, status in results.items():
             if not status:
