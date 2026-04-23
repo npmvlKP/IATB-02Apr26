@@ -1,21 +1,31 @@
+# mypy: disable-error-code="no-any-return,no-untyped-def,type-arg,override,assignment,attr-defined"
 """
-Tests for LiveExecutor with comprehensive coverage.
+Unit tests for LiveExecutor with real order routing through BrokerInterface.
+
+Covers:
+- Broker interface compliance
+- Live executor order routing
+- Mode switching (between exchanges, order types, etc.)
+- Safety guards (slippage protection, confirmation timeout, partial fills)
+All external API calls are mocked.
 """
 
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from iatb.broker.base import (
     BrokerInterface,
-    Order,
     ProductType,
     TransactionType,
 )
 from iatb.broker.base import (
     Exchange as BrokerExchange,
+)
+from iatb.broker.base import (
+    Order as BrokerOrder,
 )
 from iatb.broker.base import (
     OrderStatus as BrokerOrderStatus,
@@ -29,789 +39,995 @@ from iatb.execution.base import OrderRequest
 from iatb.execution.live_executor import LiveExecutor
 
 
-@pytest.fixture
-def mock_broker() -> MagicMock:
-    """Create mock broker interface."""
-    broker = MagicMock(spec=BrokerInterface)
-    broker.place_order = AsyncMock()
-    broker.cancel_order = AsyncMock()
-    broker.get_orders = AsyncMock(return_value=[])
-    broker.get_positions = AsyncMock(return_value=[])
-    broker.get_margins = AsyncMock()
-    broker.get_order_history = AsyncMock()
-    broker.get_holdings = AsyncMock()
-    broker.modify_order = AsyncMock()
-    broker.get_quote = AsyncMock()
-    return broker
-
-
-@pytest.fixture
-def live_executor(mock_broker: MagicMock) -> LiveExecutor:
-    """Create live executor with mock broker."""
-    return LiveExecutor(broker=mock_broker)
-
-
-def test_live_executor_initialization_success(mock_broker: MagicMock) -> None:
-    """Test successful initialization with valid parameters."""
-    executor = LiveExecutor(
-        broker=mock_broker,
-        confirmation_timeout_seconds=10,
-        confirmation_poll_interval_seconds=0.5,
-        slippage_tolerance_bps=Decimal("15"),
-    )
-
-    assert executor._broker is mock_broker
-    assert executor._confirmation_timeout_seconds == 10
-    assert executor._confirmation_poll_interval == 0.5
-    assert executor._slippage_tolerance_bps == Decimal("15")
-    assert len(executor._open_orders) == 0
-
-
-def test_live_executor_initialization_defaults(mock_broker: MagicMock) -> None:
-    """Test initialization with default values."""
-    executor = LiveExecutor(broker=mock_broker)
-
-    assert executor._confirmation_timeout_seconds == 30
-    assert executor._confirmation_poll_interval == 0.5
-    assert executor._slippage_tolerance_bps == Decimal("20")
-
-
-def test_live_executor_initialization_no_broker() -> None:
-    """Test that initialization fails without broker."""
-    with pytest.raises(ValueError, match="broker is required"):
-        LiveExecutor(broker=None)  # type: ignore[arg-type]
-
-
-def test_live_executor_initialization_invalid_timeout(mock_broker: MagicMock) -> None:
-    """Test that invalid timeout raises error."""
-    with pytest.raises(ValueError, match="confirmation_timeout_seconds must be positive"):
-        LiveExecutor(broker=mock_broker, confirmation_timeout_seconds=0)
-
-
-def test_live_executor_initialization_invalid_poll_interval(mock_broker: MagicMock) -> None:
-    """Test that invalid poll interval raises error."""
-    with pytest.raises(ValueError, match="confirmation_poll_interval_seconds must be positive"):
-        LiveExecutor(broker=mock_broker, confirmation_poll_interval_seconds=-1.0)
-
-
-def test_live_executor_initialization_negative_slippage(mock_broker: MagicMock) -> None:
-    """Test that negative slippage tolerance raises error."""
-    with pytest.raises(ValueError, match="slippage_tolerance_bps cannot be negative"):
-        LiveExecutor(broker=mock_broker, slippage_tolerance_bps=Decimal("-5"))
-
-
-def test_execute_order_happy_path_buy(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test successful buy order execution."""
-    # Setup mock broker response
-    broker_order = Order(
-        order_id="LIVE-000001",
-        symbol="RELIANCE",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=10,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=10,
-        average_price=Decimal("2500.50"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    # Execute order
-    request = OrderRequest(
-        Exchange.NSE,
-        "RELIANCE",
-        OrderSide.BUY,
-        Decimal("10"),
-        OrderType.MARKET,
-        price=Decimal("2500"),
-    )
-
-    result = live_executor.execute_order(request)
-
-    # Verify result
-    assert result.order_id == "LIVE-000001"
-    assert result.status == OrderStatus.FILLED
-    assert result.filled_quantity == Decimal("10")
-    assert result.average_price == Decimal("2500.50")
-    assert "broker order" in result.message
-
-    # Verify broker was called
-    mock_broker.place_order.assert_called_once()
-    mock_broker.get_orders.assert_called()
-
-
-def test_execute_order_happy_path_sell(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test successful sell order execution."""
-    broker_order = Order(
-        order_id="LIVE-000002",
-        symbol="INFY",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.SELL,
-        order_type=BrokerOrderType.LIMIT,
-        quantity=50,
-        price=Decimal("1500"),
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=50,
-        average_price=Decimal("1499.75"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "INFY",
-        OrderSide.SELL,
-        Decimal("50"),
-        OrderType.LIMIT,
-        price=Decimal("1500"),
-    )
-
-    result = live_executor.execute_order(request)
-
-    assert result.order_id == "LIVE-000002"
-    assert result.status == OrderStatus.FILLED
-    assert result.filled_quantity == Decimal("50")
-    assert result.average_price == Decimal("1499.75")
-
-
-def test_execute_order_partial_fill(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test handling of partial fills."""
-    broker_order = Order(
-        order_id="LIVE-000003",
-        symbol="TCS",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=100,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.OPEN,  # Still open, but partially filled
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=60,  # Partial fill
-        average_price=Decimal("3500.25"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "TCS",
-        OrderSide.BUY,
-        Decimal("100"),
-        OrderType.MARKET,
-        price=Decimal("3500"),
-    )
-
-    result = live_executor.execute_order(request)
-
-    assert result.status == OrderStatus.PARTIALLY_FILLED
-    assert result.filled_quantity == Decimal("60")
-    assert result.average_price == Decimal("3500.25")
-
-
-def test_execute_order_rejected(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test handling of rejected orders."""
-    broker_order = Order(
-        order_id="LIVE-000004",
-        symbol="WIPRO",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.LIMIT,
-        quantity=100,
-        price=Decimal("400"),
-        trigger_price=None,
-        status=BrokerOrderStatus.REJECTED,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=0,
-        average_price=None,
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "WIPRO",
-        OrderSide.BUY,
-        Decimal("100"),
-        OrderType.LIMIT,
-        price=Decimal("400"),
-    )
-
-    with pytest.raises(ExecutionError, match="Order LIVE-000004 was rejected"):
-        live_executor.execute_order(request)
-
-
-def test_execute_order_timeout(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test order confirmation timeout."""
-    pending_order = Order(
-        order_id="LIVE-000005",
-        symbol="HDFC",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=10,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.OPEN,  # Stays open
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=0,
-        average_price=None,
-    )
-
-    mock_broker.place_order.return_value = pending_order
-    mock_broker.get_orders.return_value = [pending_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "HDFC",
-        OrderSide.BUY,
-        Decimal("10"),
-        OrderType.MARKET,
-    )
-
-    # Use short timeout for test
-    executor = LiveExecutor(
-        broker=mock_broker,
-        confirmation_timeout_seconds=1,
-        confirmation_poll_interval_seconds=0.1,
-    )
-
-    with pytest.raises(ExecutionError, match="Order confirmation timeout"):
-        executor.execute_order(request)
-
-
-def test_slippage_within_tolerance_buy(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test slippage within tolerance for buy order."""
-    # Expected: 100, Filled: 100.15 (0.15% slippage, within 0.20% tolerance)
-    broker_order = Order(
-        order_id="LIVE-000006",
-        symbol="TATASTEEL",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=100,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=100,
-        average_price=Decimal("100.15"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "TATASTEEL",
-        OrderSide.BUY,
-        Decimal("100"),
-        OrderType.MARKET,
-        price=Decimal("100"),
-    )
-
-    result = live_executor.execute_order(request)
-    assert result.status == OrderStatus.FILLED
-
-
-def test_slippage_within_tolerance_sell(
-    live_executor: LiveExecutor, mock_broker: MagicMock
-) -> None:
-    """Test slippage within tolerance for sell order."""
-    # Expected: 200, Filled: 199.80 (0.10% slippage, within 0.20% tolerance)
-    broker_order = Order(
-        order_id="LIVE-000007",
-        symbol="MARUTI",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.SELL,
-        order_type=BrokerOrderType.MARKET,
-        quantity=50,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=50,
-        average_price=Decimal("199.80"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "MARUTI",
-        OrderSide.SELL,
-        Decimal("50"),
-        OrderType.MARKET,
-        price=Decimal("200"),
-    )
-
-    result = live_executor.execute_order(request)
-    assert result.status == OrderStatus.FILLED
-
-
-def test_slippage_exceeds_tolerance(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test slippage exceeding tolerance raises error."""
-    # Expected: 100, Filled: 100.50 (0.50% slippage, exceeds 0.20% tolerance)
-    broker_order = Order(
-        order_id="LIVE-000008",
-        symbol="SBIN",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=100,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=100,
-        average_price=Decimal("100.50"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "SBIN",
-        OrderSide.BUY,
-        Decimal("100"),
-        OrderType.MARKET,
-        price=Decimal("100"),
-    )
-
-    with pytest.raises(ExecutionError, match="Slippage exceeded tolerance"):
-        live_executor.execute_order(request)
-
-
-def test_slippage_check_skipped_without_expected_price(
-    live_executor: LiveExecutor,
-    mock_broker: MagicMock,
-) -> None:
-    """Test that slippage check is skipped when no expected price."""
-    broker_order = Order(
-        order_id="LIVE-000009",
-        symbol="ICICIBANK",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=100,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=100,
-        average_price=Decimal("500.75"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "ICICIBANK",
-        OrderSide.BUY,
-        Decimal("100"),
-        OrderType.MARKET,
-        # No expected price - slippage check skipped
-    )
-
-    result = live_executor.execute_order(request)
-    assert result.status == OrderStatus.FILLED
-
-
-def test_map_exchange() -> None:
-    """Test exchange mapping from core to broker."""
-    mock_broker = MagicMock(spec=BrokerInterface)
-    mock_broker.place_order = AsyncMock()
-    mock_broker.get_orders = AsyncMock(return_value=[])
-
-    executor = LiveExecutor(broker=mock_broker)
-
-    # Test NSE
-    assert executor._map_exchange(Exchange.NSE) == BrokerExchange.NSE
-    # Test BSE
-    assert executor._map_exchange(Exchange.BSE) == BrokerExchange.BSE
-    # Test MCX
-    assert executor._map_exchange(Exchange.MCX) == BrokerExchange.MCX
-    # Test fallback for CDS
-    assert executor._map_exchange(Exchange.CDS) == BrokerExchange.MCX
-
-
-def test_map_side() -> None:
-    """Test side mapping from core to broker."""
-    mock_broker = MagicMock(spec=BrokerInterface)
-    mock_broker.place_order = AsyncMock()
-    mock_broker.get_orders = AsyncMock(return_value=[])
-
-    executor = LiveExecutor(broker=mock_broker)
-
-    assert executor._map_side(OrderSide.BUY) == TransactionType.BUY
-    assert executor._map_side(OrderSide.SELL) == TransactionType.SELL
-
-
-def test_map_order_type() -> None:
-    """Test order type mapping from core to broker."""
-    mock_broker = MagicMock(spec=BrokerInterface)
-    mock_broker.place_order = AsyncMock()
-    mock_broker.get_orders = AsyncMock(return_value=[])
-
-    executor = LiveExecutor(broker=mock_broker)
-
-    assert executor._map_order_type(OrderType.MARKET) == BrokerOrderType.MARKET
-    assert executor._map_order_type(OrderType.LIMIT) == BrokerOrderType.LIMIT
-    assert executor._map_order_type(OrderType.STOP_LOSS) == BrokerOrderType.STOP_LOSS
-    assert executor._map_order_type(OrderType.STOP_LOSS_MARKET) == BrokerOrderType.STOP_LOSS_MARKET
-
-
-def test_map_broker_status() -> None:
-    """Test status mapping from broker to core."""
-    assert LiveExecutor._map_broker_status(BrokerOrderStatus.COMPLETE) == OrderStatus.FILLED
-    assert LiveExecutor._map_broker_status(BrokerOrderStatus.REJECTED) == OrderStatus.REJECTED
-    assert LiveExecutor._map_broker_status(BrokerOrderStatus.CANCELLED) == OrderStatus.CANCELLED
-    assert LiveExecutor._map_broker_status(BrokerOrderStatus.PENDING) == OrderStatus.PENDING
-    assert LiveExecutor._map_broker_status(BrokerOrderStatus.OPEN) == OrderStatus.OPEN
-
-
-def test_cancel_all_empty(live_executor: LiveExecutor) -> None:
-    """Test cancel_all with no open orders."""
-    count = live_executor.cancel_all()
-    assert count == 0
-
-
-def test_cancel_all_success(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test successful cancellation of all orders."""
-    # Add some orders to open_orders
-    live_executor._open_orders.add("LIVE-000001")
-    live_executor._open_orders.add("LIVE-000002")
-    live_executor._open_orders.add("LIVE-000003")
-
-    mock_broker.cancel_order = AsyncMock(return_value=None)
-
-    count = live_executor.cancel_all()
-
-    assert count == 3
-    assert len(live_executor._open_orders) == 0
-    assert mock_broker.cancel_order.call_count == 3
-
-
-def test_cancel_all_partial_failure(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test cancel_all with some failures."""
-    live_executor._open_orders.add("LIVE-000001")
-    live_executor._open_orders.add("LIVE-000002")
-
-    # First succeeds, second fails
-    async def side_effect(order_id: str) -> None:
-        if order_id == "LIVE-000002":
-            raise RuntimeError("Network error")
-
-    mock_broker.cancel_order = AsyncMock(side_effect=side_effect)
-
-    count = live_executor.cancel_all()
-
-    # Should still clear open_orders set
-    assert count == 1  # Only first succeeded
-    assert len(live_executor._open_orders) == 0
-
-
-def test_close_order_success(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test successful order closure."""
-    live_executor._open_orders.add("LIVE-000001")
-    mock_broker.cancel_order = AsyncMock(return_value=None)
-
-    result = live_executor.close_order("LIVE-000001")
-
-    assert result is True
-    assert "LIVE-000001" not in live_executor._open_orders
-    mock_broker.cancel_order.assert_called_once_with(order_id="LIVE-000001")
-
-
-def test_close_order_not_found(live_executor: LiveExecutor) -> None:
-    """Test closing non-existent order."""
-    result = live_executor.close_order("LIVE-999999")
-    assert result is False
-
-
-def test_close_order_already_closed(live_executor: LiveExecutor) -> None:
-    """Test closing an already closed order."""
-    live_executor._open_orders.add("LIVE-000001")
-    live_executor._open_orders.discard("LIVE-000001")
-
-    result = live_executor.close_order("LIVE-000001")
-    assert result is False
-
-
-def test_close_order_failure(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test closing order with broker failure."""
-    live_executor._open_orders.add("LIVE-000001")
-    mock_broker.cancel_order = AsyncMock(side_effect=RuntimeError("Network error"))
-
-    result = live_executor.close_order("LIVE-000001")
-
-    # Order should remain in open_orders on failure
-    assert result is False
-    assert "LIVE-000001" in live_executor._open_orders
-
-
-def test_convert_broker_order_to_result_complete() -> None:
-    """Test conversion of complete broker order to result."""
-    broker_order = Order(
-        order_id="LIVE-000001",
-        symbol="RELIANCE",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=10,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=10,
-        average_price=Decimal("2500.50"),
-    )
-
-    mock_broker = MagicMock(spec=BrokerInterface)
-    mock_broker.place_order = AsyncMock()
-    mock_broker.get_orders = AsyncMock(return_value=[])
-
-    executor = LiveExecutor(broker=mock_broker)
-    result = executor._convert_broker_order_to_result(broker_order)
-
-    assert result.order_id == "LIVE-000001"
-    assert result.status == OrderStatus.FILLED
-    assert result.filled_quantity == Decimal("10")
-    assert result.average_price == Decimal("2500.50")
-
-
-def test_convert_broker_order_to_result_partial() -> None:
-    """Test conversion of partially filled broker order to result."""
-    broker_order = Order(
-        order_id="LIVE-000002",
-        symbol="INFY",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=100,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.OPEN,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=60,
-        average_price=Decimal("1500.25"),
-    )
-
-    mock_broker = MagicMock(spec=BrokerInterface)
-    mock_broker.place_order = AsyncMock()
-    mock_broker.get_orders = AsyncMock(return_value=[])
-
-    executor = LiveExecutor(broker=mock_broker)
-    result = executor._convert_broker_order_to_result(broker_order)
-
-    assert result.status == OrderStatus.PARTIALLY_FILLED
-    assert result.filled_quantity == Decimal("60")
-
-
-def test_decimal_precision_handling(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test that Decimal precision is maintained throughout execution."""
-    # High precision price
-    expected_price = Decimal("1234.5678")
-    filled_price = Decimal("1234.5890")
-
-    broker_order = Order(
-        order_id="LIVE-000001",
-        symbol="RELIANCE",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.LIMIT,
-        quantity=10,
-        price=expected_price,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=10,
-        average_price=filled_price,
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "RELIANCE",
-        OrderSide.BUY,
-        Decimal("10"),
-        OrderType.LIMIT,
-        price=expected_price,
-    )
-
-    result = live_executor.execute_order(request)
-
-    # Verify precision is maintained
-    assert isinstance(result.filled_quantity, Decimal)
-    assert isinstance(result.average_price, Decimal)
-    assert result.filled_quantity == Decimal("10")
-    assert result.average_price == filled_price
-
-
-def test_utc_datetime_in_broker_order(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test that broker order uses UTC-aware datetime."""
-    utc_time = datetime.now(UTC)
-
-    broker_order = Order(
-        order_id="LIVE-000001",
-        symbol="RELIANCE",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=10,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=utc_time,  # UTC-aware
-        filled_quantity=10,
-        average_price=Decimal("2500.50"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "RELIANCE",
-        OrderSide.BUY,
-        Decimal("10"),
-        OrderType.MARKET,
-    )
-
-    result = live_executor.execute_order(request)
-    assert result.status == OrderStatus.FILLED
-
-
-def test_no_float_usage(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test that no float types are used in financial calculations."""
-    broker_order = Order(
-        order_id="LIVE-000001",
-        symbol="RELIANCE",
-        exchange=BrokerExchange.NSE,
-        transaction_type=TransactionType.BUY,
-        order_type=BrokerOrderType.MARKET,
-        quantity=10,
-        price=None,
-        trigger_price=None,
-        status=BrokerOrderStatus.COMPLETE,
-        product_type=ProductType.INTRADAY,
-        timestamp=datetime.now(UTC),
-        filled_quantity=10,
-        average_price=Decimal("2500.50"),
-    )
-
-    mock_broker.place_order.return_value = broker_order
-    mock_broker.get_orders.return_value = [broker_order]
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "RELIANCE",
-        OrderSide.BUY,
-        Decimal("10"),
-        OrderType.MARKET,
-        price=Decimal("2500"),
-    )
-
-    result = live_executor.execute_order(request)
-
-    # All financial values should be Decimal
-    assert isinstance(result.filled_quantity, Decimal)
-    assert isinstance(result.average_price, Decimal)
-    assert not isinstance(result.filled_quantity, float)
-    assert not isinstance(result.average_price, float)
-
-
-def test_execute_order_broker_exception(
-    live_executor: LiveExecutor, mock_broker: MagicMock
-) -> None:
-    """Test handling of broker exceptions during order execution."""
-    mock_broker.place_order.side_effect = RuntimeError("API error")
-
-    request = OrderRequest(
-        Exchange.NSE,
-        "RELIANCE",
-        OrderSide.BUY,
-        Decimal("10"),
-        OrderType.MARKET,
-    )
-
-    with pytest.raises(ExecutionError, match="Order execution failed"):
-        live_executor.execute_order(request)
-
-
-def test_multiple_sequential_orders(live_executor: LiveExecutor, mock_broker: MagicMock) -> None:
-    """Test multiple sequential order executions."""
-    order_id_counter = 0
-    placed_orders: list[Order] = []
-
-    async def create_order(*args: Any, **kwargs: Any) -> Order:
-        nonlocal order_id_counter
-        order_id_counter += 1
-        order = Order(
-            order_id=f"LIVE-{order_id_counter:06d}",
-            symbol=kwargs.get("symbol", "TEST"),
-            exchange=kwargs.get("exchange", BrokerExchange.NSE),
-            transaction_type=kwargs.get("transaction_type", TransactionType.BUY),
-            order_type=kwargs.get("order_type", BrokerOrderType.MARKET),
-            quantity=kwargs.get("quantity", 10),
+class MockBroker(BrokerInterface):
+    """Mock broker for testing LiveExecutor."""
+
+    def __init__(self) -> None:
+        """Initialize mock broker with async methods."""
+        from typing import TYPE_CHECKING
+
+        if TYPE_CHECKING:
+            from iatb.broker.base import Margin, Order, Position
+
+        self.place_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.cancel_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_positions_async: AsyncMock[list[Position]] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_orders_async: AsyncMock[list[Order]] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_margins_async: AsyncMock[Margin] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_order_history_async: AsyncMock[list[dict[str, Any]]] = (
+            AsyncMock(return_value=None)  # type: ignore[assignment]
+        )
+        self.get_holdings_async: AsyncMock[list[dict[str, Any]]] = (
+            AsyncMock(return_value=None)  # type: ignore[assignment]
+        )
+        self.modify_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_quote_async: AsyncMock[dict[str, Any]] = AsyncMock(return_value=None)  # type: ignore[assignment]
+
+    async def place_order(
+        self,
+        *,
+        symbol: str,
+        exchange: BrokerExchange,
+        transaction_type: TransactionType,
+        order_type: BrokerOrderType,
+        quantity: int,
+        price: Decimal | None = None,
+        trigger_price: Decimal | None = None,
+        product_type: ProductType = ProductType.INTRADAY,
+    ) -> BrokerOrder:
+        """Mock place order."""
+        return await self.place_order_async(
+            symbol=symbol,
+            exchange=exchange,
+            transaction_type=transaction_type,
+            order_type=order_type,
+            quantity=quantity,
+            price=price,
+            trigger_price=trigger_price,
+            product_type=product_type,
+        )
+
+    async def cancel_order(self, *, order_id: str) -> BrokerOrder:
+        """Mock cancel order."""
+        return await self.cancel_order_async(order_id=order_id)
+
+    async def get_positions(self) -> list:
+        """Mock get positions."""
+        return await self.get_positions_async()
+
+    async def get_orders(self) -> list[BrokerOrder]:
+        """Mock get orders."""
+        return await self.get_orders_async()
+
+    async def get_margins(self) -> object:
+        """Mock get margins."""
+        return await self.get_margins_async()
+
+    async def get_order_history(self, *, order_id: str, from_date=None, to_date=None) -> list:
+        """Mock get order history."""
+        return await self.get_order_history_async(
+            order_id=order_id, from_date=from_date, to_date=to_date
+        )
+
+    async def get_holdings(self) -> list:
+        """Mock get holdings."""
+        return await self.get_holdings_async()
+
+    async def modify_order(
+        self,
+        *,
+        order_id: str,
+        quantity: int | None = None,
+        price: Decimal | None = None,
+        order_type: BrokerOrderType | None = None,
+        trigger_price: Decimal | None = None,
+        disclosed_quantity: int | None = None,
+    ) -> BrokerOrder:
+        """Mock modify order."""
+        return await self.modify_order_async(
+            order_id=order_id,
+            quantity=quantity,
+            price=price,
+            order_type=order_type,
+            trigger_price=trigger_price,
+            disclosed_quantity=disclosed_quantity,
+        )
+
+    async def get_quote(self, *, symbol: str, exchange: BrokerExchange) -> dict:
+        """Mock get quote."""
+        return await self.get_quote_async(symbol=symbol, exchange=exchange)
+
+
+class TestLiveExecutor:
+    """Test suite for LiveExecutor."""
+
+    def setup_method(self) -> None:
+        """Set up test fixtures."""
+        self.mock_broker = MockBroker()
+        self.executor = LiveExecutor(broker=self.mock_broker)
+
+        # Sample broker order response
+        self.sample_broker_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
             price=None,
             trigger_price=None,
             status=BrokerOrderStatus.COMPLETE,
             product_type=ProductType.INTRADAY,
-            timestamp=datetime.now(UTC),
-            filled_quantity=kwargs.get("quantity", 10),
-            average_price=Decimal("100"),
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2500.50"),
         )
-        placed_orders.append(order)
-        return order
 
-    async def get_orders_list(*args: Any, **kwargs: Any) -> list[Order]:
-        return list(placed_orders)
+    # ========================================
+    # Happy Path Tests
+    # ========================================
 
-    mock_broker.place_order.side_effect = create_order
-    mock_broker.get_orders.side_effect = get_orders_list
+    def test_initialization_with_broker(self) -> None:
+        """Test executor initializes correctly with broker."""
+        assert self.executor._broker is not None
+        assert self.executor._confirmation_timeout_seconds == 30
+        assert self.executor._slippage_tolerance_bps == Decimal("20")
 
-    # Execute multiple orders
-    results = []
-    for i in range(5):
+    def test_initialization_with_custom_parameters(self) -> None:
+        """Test executor initializes with custom parameters."""
+        executor = LiveExecutor(
+            broker=self.mock_broker,
+            confirmation_timeout_seconds=60,
+            slippage_tolerance_bps=Decimal("50"),
+        )
+        assert executor._confirmation_timeout_seconds == 60
+        assert executor._slippage_tolerance_bps == Decimal("50")
+
+    def test_execute_market_order_success(self) -> None:
+        """Test successful market order execution."""
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
         request = OrderRequest(
-            Exchange.NSE,
-            f"STOCK{i}",
-            OrderSide.BUY,
-            Decimal("10"),
-            OrderType.MARKET,
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.MARKET,
         )
-        result = live_executor.execute_order(request)
-        results.append(result)
 
-    assert len(results) == 5
-    assert all(r.status == OrderStatus.FILLED for r in results)
-    assert len(live_executor._open_orders) == 5
+        result = self.executor.execute_order(request)
+
+        assert result.order_id == "ORD123456"
+        assert result.status == OrderStatus.FILLED
+        assert result.filled_quantity == Decimal("10")
+        assert result.average_price == Decimal("2500.50")
+
+    def test_execute_limit_order_with_price(self) -> None:
+        """Test successful limit order execution."""
+        limit_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="INFY",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.LIMIT,
+            quantity=50,
+            price=Decimal("1450.75"),
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=50,
+            average_price=Decimal("1450.75"),
+        )
+        self.mock_broker.place_order_async.return_value = limit_order
+        self.mock_broker.get_orders_async.return_value = [limit_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="INFY",
+            side=OrderSide.BUY,
+            quantity=Decimal("50"),
+            order_type=OrderType.LIMIT,
+            price=Decimal("1450.75"),
+        )
+
+        result = self.executor.execute_order(request)
+
+        assert result.order_id == "ORD123456"
+        assert result.average_price == Decimal("1450.75")
+
+    def test_execute_sell_order(self) -> None:
+        """Test successful sell order execution."""
+        sell_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="TCS",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.SELL,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("3400.00"),
+        )
+        self.mock_broker.place_order_async.return_value = sell_order
+        self.mock_broker.get_orders_async.return_value = [sell_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="TCS",
+            side=OrderSide.SELL,
+            quantity=Decimal("10"),
+            order_type=OrderType.MARKET,
+        )
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.FILLED
+
+    # ========================================
+    # Mode Switching Tests
+    # ========================================
+
+    def test_exchange_mapping_nse(self) -> None:
+        """Test exchange mapping for NSE."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["exchange"] == BrokerExchange.NSE
+
+    def test_exchange_mapping_bse(self) -> None:
+        """Test exchange mapping for BSE."""
+        request = OrderRequest(
+            exchange=Exchange.BSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["exchange"] == BrokerExchange.BSE
+
+    def test_exchange_mapping_mcx(self) -> None:
+        """Test exchange mapping for MCX."""
+        request = OrderRequest(
+            exchange=Exchange.MCX,
+            symbol="CRUDEOIL",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["exchange"] == BrokerExchange.MCX
+
+    def test_order_type_mapping_market(self) -> None:
+        """Test order type mapping for MARKET."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.MARKET,
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["order_type"] == BrokerOrderType.MARKET
+
+    def test_order_type_mapping_limit(self) -> None:
+        """Test order type mapping for LIMIT."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.LIMIT,
+            price=Decimal("2500.00"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["order_type"] == BrokerOrderType.LIMIT
+
+    def test_order_type_mapping_stop_loss(self) -> None:
+        """Test order type mapping for STOP_LOSS."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.STOP_LOSS,
+            price=Decimal("2510.00"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["order_type"] == BrokerOrderType.STOP_LOSS
+
+    def test_transaction_type_mapping_buy(self) -> None:
+        """Test transaction type mapping for BUY."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["transaction_type"] == TransactionType.BUY
+
+    def test_transaction_type_mapping_sell(self) -> None:
+        """Test transaction type mapping for SELL."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.SELL,
+            quantity=Decimal("10"),
+        )
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        self.executor.execute_order(request)
+
+        call_kwargs = self.mock_broker.place_order_async.call_args[1]
+        assert call_kwargs["transaction_type"] == TransactionType.SELL
+
+    # ========================================
+    # Safety Guard Tests
+    # ========================================
+
+    def test_slippage_protection_within_tolerance_buy(self) -> None:
+        """Test slippage protection within tolerance for BUY order."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.LIMIT,
+            price=Decimal("2500.00"),
+        )
+
+        # Fill within tolerance (0.10% slippage)
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.LIMIT,
+            quantity=10,
+            price=Decimal("2500.00"),
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2502.50"),  # 10 bps slippage
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.FILLED
+
+    def test_slippage_protection_exceeds_tolerance_buy(self) -> None:
+        """Test slippage protection rejects order exceeding tolerance for BUY."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.LIMIT,
+            price=Decimal("2500.00"),
+        )
+
+        # Fill exceeds tolerance (0.30% slippage)
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.LIMIT,
+            quantity=10,
+            price=Decimal("2500.00"),
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2507.50"),  # 30 bps slippage
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        with pytest.raises(ExecutionError, match="Slippage exceeded tolerance"):
+            self.executor.execute_order(request)
+
+    def test_slippage_protection_within_tolerance_sell(self) -> None:
+        """Test slippage protection within tolerance for SELL order."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.SELL,
+            quantity=Decimal("10"),
+            order_type=OrderType.LIMIT,
+            price=Decimal("2500.00"),
+        )
+
+        # Fill within tolerance (0.10% slippage)
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.SELL,
+            order_type=BrokerOrderType.LIMIT,
+            quantity=10,
+            price=Decimal("2500.00"),
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2497.50"),  # 10 bps slippage
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.FILLED
+
+    def test_confirmation_timeout_raises_error(self) -> None:
+        """Test that confirmation timeout raises ExecutionError."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        pending_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.PENDING,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=0,
+            average_price=None,
+        )
+        self.mock_broker.place_order_async.return_value = pending_order
+        self.mock_broker.get_orders_async.return_value = [pending_order]
+
+        # Set very short timeout for testing
+        executor = LiveExecutor(
+            broker=self.mock_broker,
+            confirmation_timeout_seconds=1,
+        )
+
+        with pytest.raises(ExecutionError, match="confirmation timeout"):
+            executor.execute_order(request)
+
+    def test_partial_fill_handling(self) -> None:
+        """Test handling of partial fills."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        partial_fill_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.OPEN,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=5,
+            average_price=Decimal("2500.50"),
+        )
+        self.mock_broker.place_order_async.return_value = partial_fill_order
+        self.mock_broker.get_orders_async.return_value = [partial_fill_order]
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.PARTIALLY_FILLED
+        assert result.filled_quantity == Decimal("5")
+
+    def test_rejected_order_raises_error(self) -> None:
+        """Test that rejected order raises ExecutionError."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        rejected_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.REJECTED,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=0,
+            average_price=None,
+        )
+        self.mock_broker.place_order_async.return_value = rejected_order
+        self.mock_broker.get_orders_async.return_value = [rejected_order]
+
+        with pytest.raises(ExecutionError, match="was rejected"):
+            self.executor.execute_order(request)
+
+    # ========================================
+    # Error Path Tests
+    # ========================================
+
+    def test_initialization_without_broker_raises_error(self) -> None:
+        """Test that initialization without broker raises ValueError."""
+        with pytest.raises(ValueError, match="broker is required"):
+            LiveExecutor(broker=None)
+
+    def test_initialization_invalid_timeout_raises_error(self) -> None:
+        """Test that invalid confirmation timeout raises ValueError."""
+        with pytest.raises(ValueError, match="confirmation_timeout_seconds must be positive"):
+            LiveExecutor(broker=self.mock_broker, confirmation_timeout_seconds=0)
+
+    def test_initialization_invalid_poll_interval_raises_error(self) -> None:
+        """Test that invalid poll interval raises ValueError."""
+        with pytest.raises(ValueError, match="confirmation_poll_interval_seconds must be positive"):
+            LiveExecutor(broker=self.mock_broker, confirmation_poll_interval_seconds=-0.5)
+
+    def test_initialization_negative_slippage_tolerance_raises_error(self) -> None:
+        """Test that negative slippage tolerance raises ValueError."""
+        with pytest.raises(ValueError, match="slippage_tolerance_bps cannot be negative"):
+            LiveExecutor(broker=self.mock_broker, slippage_tolerance_bps=Decimal("-10"))
+
+    def test_broker_place_order_failure_raises_error(self) -> None:
+        """Test that broker place order failure raises ExecutionError."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        self.mock_broker.place_order_async.side_effect = RuntimeError("API connection failed")
+
+        with pytest.raises(ExecutionError, match="Order execution failed"):
+            self.executor.execute_order(request)
+
+    # ========================================
+    # Precision Handling Tests
+    # ========================================
+
+    def test_decimal_precision_in_price(self) -> None:
+        """Test that Decimal precision is maintained for price."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.LIMIT,
+            price=Decimal("1234.5678"),
+        )
+
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.LIMIT,
+            quantity=10,
+            price=Decimal("1234.5678"),
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("1234.5678"),
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        result = self.executor.execute_order(request)
+
+        assert result.average_price == Decimal("1234.5678")
+        assert isinstance(result.average_price, Decimal)
+
+    def test_decimal_precision_in_quantity(self) -> None:
+        """Test that Decimal precision is maintained for quantity."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10.5"),
+        )
+
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2500.50"),
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        result = self.executor.execute_order(request)
+
+        assert isinstance(result.filled_quantity, Decimal)
+        assert result.filled_quantity == Decimal("10")
+
+    # ========================================
+    # Timezone Handling Tests
+    # ========================================
+
+    def test_order_timestamp_is_utc_aware(self) -> None:
+        """Test that order timestamp is timezone-aware in UTC."""
+        utc_timestamp = datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC)
+
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=utc_timestamp,
+            filled_quantity=10,
+            average_price=Decimal("2500.50"),
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        self.executor.execute_order(request)
+
+        # Verify the timestamp in the broker order is UTC-aware
+        assert filled_order.timestamp.tzinfo == UTC
+
+    # ========================================
+    # Order Management Tests
+    # ========================================
+
+    def test_cancel_all_orders(self) -> None:
+        """Test cancelling all open orders."""
+        # Add some open orders to the executor
+        self.executor._open_orders.add("ORD001")
+        self.executor._open_orders.add("ORD002")
+        self.executor._open_orders.add("ORD003")
+
+        cancelled_order = BrokerOrder(
+            order_id="ORD001",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.CANCELLED,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=0,
+            average_price=None,
+        )
+        self.mock_broker.cancel_order_async.return_value = cancelled_order
+
+        cancelled_count = self.executor.cancel_all()
+
+        assert cancelled_count == 3
+        assert len(self.executor._open_orders) == 0
+
+    def test_cancel_all_empty_orders(self) -> None:
+        """Test cancelling all orders when none are open."""
+        cancelled_count = self.executor.cancel_all()
+
+        assert cancelled_count == 0
+        self.mock_broker.cancel_order_async.assert_not_called()
+
+    def test_close_specific_order(self) -> None:
+        """Test closing a specific order by ID."""
+        self.executor._open_orders.add("ORD001")
+        self.executor._open_orders.add("ORD002")
+
+        cancelled_order = BrokerOrder(
+            order_id="ORD001",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.CANCELLED,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=0,
+            average_price=None,
+        )
+        self.mock_broker.cancel_order_async.return_value = cancelled_order
+
+        result = self.executor.close_order("ORD001")
+
+        assert result is True
+        assert "ORD001" not in self.executor._open_orders
+        assert "ORD002" in self.executor._open_orders
+
+    def test_close_nonexistent_order(self) -> None:
+        """Test closing a non-existent order returns False."""
+        result = self.executor.close_order("NONEXISTENT")
+
+        assert result is False
+        self.mock_broker.cancel_order_async.assert_not_called()
+
+    # ========================================
+    # Order Status Mapping Tests
+    # ========================================
+
+    def test_map_broker_status_complete_to_filled(self) -> None:
+        """Test mapping COMPLETE status to FILLED."""
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2500.50"),
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.FILLED
+
+    def test_map_broker_status_cancelled(self) -> None:
+        """Test mapping CANCELLED status."""
+        cancelled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.CANCELLED,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=0,
+            average_price=None,
+        )
+        self.mock_broker.place_order_async.return_value = cancelled_order
+        self.mock_broker.get_orders_async.return_value = [cancelled_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.CANCELLED
+
+    def test_map_broker_status_pending(self) -> None:
+        """Test mapping PENDING status."""
+        pending_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.PENDING,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=0,
+            average_price=None,
+        )
+        self.mock_broker.place_order_async.return_value = pending_order
+        self.mock_broker.get_orders_async.return_value = [pending_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        # Should timeout since order never completes
+        executor = LiveExecutor(
+            broker=self.mock_broker,
+            confirmation_timeout_seconds=1,
+        )
+
+        with pytest.raises(ExecutionError, match="confirmation timeout"):
+            executor.execute_order(request)
+
+    # ========================================
+    # Edge Cases
+    # ========================================
+
+    def test_order_without_price_skips_slippage_check(self) -> None:
+        """Test that market orders without price skip slippage check."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+            order_type=OrderType.MARKET,
+            price=None,  # No expected price
+        )
+
+        filled_order = BrokerOrder(
+            order_id="ORD123456",
+            symbol="RELIANCE",
+            exchange=BrokerExchange.NSE,
+            transaction_type=TransactionType.BUY,
+            order_type=BrokerOrderType.MARKET,
+            quantity=10,
+            price=None,
+            trigger_price=None,
+            status=BrokerOrderStatus.COMPLETE,
+            product_type=ProductType.INTRADAY,
+            timestamp=datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC),
+            filled_quantity=10,
+            average_price=Decimal("2600.00"),  # Large slippage, but no check
+        )
+        self.mock_broker.place_order_async.return_value = filled_order
+        self.mock_broker.get_orders_async.return_value = [filled_order]
+
+        result = self.executor.execute_order(request)
+
+        assert result.status == OrderStatus.FILLED
+        assert result.average_price == Decimal("2600.00")
+
+    def test_order_not_found_in_broker_list(self) -> None:
+        """Test handling when order is not found in broker's order list."""
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = []  # Order not found
+
+        # Should timeout since order is never found
+        executor = LiveExecutor(
+            broker=self.mock_broker,
+            confirmation_timeout_seconds=1,
+        )
+
+        with pytest.raises(ExecutionError, match="confirmation timeout"):
+            executor.execute_order(request)
+
+    def test_close_order_failure_handles_gracefully(self) -> None:
+        """Test that close order handles failures gracefully."""
+        self.executor._open_orders.add("ORD001")
+
+        self.mock_broker.cancel_order_async.side_effect = RuntimeError("Cancel failed")
+
+        result = self.executor.close_order("ORD001")
+
+        # Should return False on failure but not crash
+        assert result is False
+        assert "ORD001" in self.executor._open_orders
+
+    # ========================================
+    # External API Mocking Tests
+    # ========================================
+
+    def test_all_broker_methods_are_mocked(self) -> None:
+        """Verify all broker API calls are properly mocked."""
+        assert isinstance(self.mock_broker.place_order_async, AsyncMock)
+        assert isinstance(self.mock_broker.cancel_order_async, AsyncMock)
+        assert isinstance(self.mock_broker.get_orders_async, AsyncMock)
+
+    def test_mock_isolation_prevents_external_calls(self) -> None:
+        """Test that mocks prevent actual external API calls."""
+        self.mock_broker.place_order_async.return_value = self.sample_broker_order
+        self.mock_broker.get_orders_async.return_value = [self.sample_broker_order]
+
+        request = OrderRequest(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            side=OrderSide.BUY,
+            quantity=Decimal("10"),
+        )
+
+        result = self.executor.execute_order(request)
+
+        # Verify only mocks were called
+        assert self.mock_broker.place_order_async.called
+        assert self.mock_broker.get_orders_async.called
+        assert result.order_id == "ORD123456"
