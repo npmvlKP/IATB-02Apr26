@@ -2,24 +2,30 @@
 """
 iATB Deployment Dashboard — Server-Sent Events (SSE) enabled UI.
 
-Serves a live status page at http://localhost:8080 showing:
-  - Engine & health status
-  - Pre-flight check results
-  - Kill switch state
-  - Daily loss guard state
-  - Recent trades from audit SQLite
-  - Session PnL summary
-  - Log tail (last 50 lines)
+  Serves a live status page at http://localhost:8080 showing:
+    - Engine & health status
+    - Pre-flight check results
+    - Kill switch state
+    - Daily loss guard state
+    - Recent trades from audit SQLite
+    - Session PnL summary
+    - Real-time position monitor
+    - PnL curve with live updates
+    - Data source health indicators (Kite vs Jugaad vs Fallback)
+    - Risk metric gauges (drawdown, exposure, daily loss)
+    - Order flow visualization
+    - Log tail (last 50 lines)
 
-Features:
-  - Real-time updates via SSE (GET /events/stream)
-  - Automatic fallback to 5-second polling if SSE fails
-  - Reduced API load with SSE
-  - Low-latency scan and PnL updates
+  Features:
+    - Real-time updates via SSE (GET /events/stream)
+    - Automatic fallback to 5-second polling if SSE fails
+    - Reduced API load with SSE
+    - Low-latency scan and PnL updates
+    - Comprehensive position and risk monitoring
 
-Run:  poetry run python scripts/dashboard_sse.py
-Open:  http://localhost:8080
-"""
+  Run:  poetry run python scripts/dashboard_sse.py
+  Open:  http://localhost:8080
+  """
 
 import json
 import sqlite3
@@ -27,6 +33,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 _PORT = 8080
 _AUDIT_DB = Path("data/audit/trades.sqlite")
@@ -144,12 +151,212 @@ def _compute_pnl(trades: list[dict[str, str]]) -> dict[str, str]:
     }
 
 
+def _get_positions() -> list[dict[str, Any]]:
+    """Get current positions from broker."""
+    try:
+        from iatb.broker.zerodha_broker import ZerodhaBroker
+
+        broker = ZerodhaBroker()
+        positions = broker.get_positions()
+        return [
+            {
+                "symbol": pos.symbol,
+                "exchange": pos.exchange.value,
+                "quantity": pos.quantity,
+                "average_price": str(pos.average_price),
+                "last_price": str(pos.last_price),
+                "pnl": str(pos.pnl),
+                "day_change": str(pos.day_change),
+            }
+            for pos in positions
+        ]
+    except Exception:
+        return []
+
+
+def _compute_pnl_curve(trades: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Compute PnL curve points from trades."""
+    cumulative_pnl = Decimal("0")
+    pnl_curve = []
+    for t in reversed(trades):
+        qty = Decimal(t.get("quantity", "0"))
+        price = Decimal(t.get("price", "0"))
+        side = t.get("side", "")
+        if side == "BUY":
+            cumulative_pnl -= qty * price
+        elif side == "SELL":
+            cumulative_pnl += qty * price
+
+        pnl_curve.append(
+            {
+                "timestamp": t.get("timestamp_utc", "")[:19],
+                "cumulative_pnl": str(cumulative_pnl),
+                "trade_pnl": str(qty * price if side == "SELL" else -(qty * price)),
+            }
+        )
+    return list(reversed(pnl_curve))
+
+
+def _check_data_source_health() -> dict[str, dict[str, Any]]:
+    """Check health of all data sources."""
+    sources = {
+        "kite": {"status": "unavailable", "latency_ms": None, "errors": []},
+        "jugaad": {"status": "unavailable", "latency_ms": None, "errors": []},
+        "fallback": {"status": "unavailable", "latency_ms": None, "errors": []},
+    }
+
+    # Check Kite
+    try:
+        import urllib.request
+        from time import perf_counter
+
+        start = perf_counter()
+        with urllib.request.urlopen(  # noqa: S310
+            f"{_API_BASE}/api/data/health?provider=kite", timeout=2, context=None
+        ) as r:
+            if r.status == 200:
+                sources["kite"]["status"] = "healthy"
+                sources["kite"]["latency_ms"] = int((perf_counter() - start) * 1000)
+            else:
+                sources["kite"]["status"] = "degraded"
+                sources["kite"]["errors"].append(f"HTTP {r.status}")
+    except Exception as exc:
+        sources["kite"]["status"] = "unavailable"
+        sources["kite"]["errors"].append(type(exc).__name__)
+
+    # Check Jugaad
+    try:
+        import urllib.request
+        from time import perf_counter
+
+        start = perf_counter()
+        with urllib.request.urlopen(  # noqa: S310
+            f"{_API_BASE}/api/data/health?provider=jugaad", timeout=2, context=None
+        ) as r:
+            if r.status == 200:
+                sources["jugaad"]["status"] = "healthy"
+                sources["jugaad"]["latency_ms"] = int((perf_counter() - start) * 1000)
+            else:
+                sources["jugaad"]["status"] = "degraded"
+                sources["jugaad"]["errors"].append(f"HTTP {r.status}")
+    except Exception as exc:
+        sources["jugaad"]["status"] = "unavailable"
+        sources["jugaad"]["errors"].append(type(exc).__name__)
+
+    # Check Fallback (YFinance)
+    try:
+        import urllib.request
+        from time import perf_counter
+
+        start = perf_counter()
+        with urllib.request.urlopen(  # noqa: S310
+            f"{_API_BASE}/api/data/health?provider=yfinance", timeout=5, context=None
+        ) as r:
+            if r.status == 200:
+                sources["fallback"]["status"] = "healthy"
+                sources["fallback"]["latency_ms"] = int((perf_counter() - start) * 1000)
+            else:
+                sources["fallback"]["status"] = "degraded"
+                sources["fallback"]["errors"].append(f"HTTP {r.status}")
+    except Exception as exc:
+        sources["fallback"]["status"] = "unavailable"
+        sources["fallback"]["errors"].append(type(exc).__name__)
+
+    return sources
+
+
+def _compute_risk_metrics(
+    trades: list[dict[str, str]], positions: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Compute risk metrics from trades and positions."""
+    # Daily PnL
+    daily_pnl = Decimal("0")
+    for t in trades:
+        qty = Decimal(t.get("quantity", "0"))
+        price = Decimal(t.get("price", "0"))
+        side = t.get("side", "")
+        if side == "BUY":
+            daily_pnl -= qty * price
+        elif side == "SELL":
+            daily_pnl += qty * price
+
+    # Drawdown (simplified: max negative PnL in session)
+    pnl_curve = _compute_pnl_curve(trades)
+    min_pnl = min(
+        (Decimal(p["cumulative_pnl"]) for p in pnl_curve),
+        default=Decimal("0"),
+    )
+    max_pnl = max(
+        (Decimal(p["cumulative_pnl"]) for p in pnl_curve),
+        default=Decimal("0"),
+    )
+    drawdown = abs(min_pnl) if min_pnl < Decimal("0") else Decimal("0")
+
+    # Exposure (total notional value of open positions)
+    exposure = Decimal("0")
+    for pos in positions:
+        qty = Decimal(pos["quantity"])
+        price = Decimal(pos["last_price"])
+        exposure += abs(qty * price)
+
+    # Daily loss guard state (simplified simulation)
+    try:
+        from iatb.risk.daily_loss_guard import DailyLossGuard
+        from iatb.risk.kill_switch import KillSwitch
+
+        kill_switch = KillSwitch()
+        loss_guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("1000000"),
+            kill_switch=kill_switch,
+        )
+        loss_state = loss_guard.state
+        daily_loss_pct = str(loss_state.cumulative_pnl / Decimal("1000000"))
+        loss_limit_breached = loss_state.breached
+    except Exception:
+        daily_loss_pct = "0"
+        loss_limit_breached = False
+
+    return {
+        "daily_pnl": str(daily_pnl),
+        "max_drawdown": str(drawdown),
+        "max_pnl": str(max_pnl),
+        "total_exposure": str(exposure),
+        "position_count": len(positions),
+        "daily_loss_pct": daily_loss_pct,
+        "loss_limit_breached": loss_limit_breached,
+    }
+
+
+def _get_order_flow(trades: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Get order flow visualization data."""
+    return [
+        {
+            "timestamp": t.get("timestamp_utc", "")[:19],
+            "order_id": t.get("order_id", ""),
+            "symbol": t.get("symbol", ""),
+            "side": t.get("side", ""),
+            "quantity": t.get("quantity", "0"),
+            "price": t.get("price", "0"),
+            "status": t.get("status", ""),
+            "algo_id": t.get("algo_id", ""),
+            "notional": str(Decimal(t.get("quantity", "0")) * Decimal(t.get("price", "0"))),
+        }
+        for t in trades[:50]
+    ]
+
+
 def _build_status() -> dict[str, object]:
     trades = _read_trades()
     pnl = _compute_pnl(trades)
     health = _check_health()
     sentiment_health = _check_sentiment_health()
     log_tail = _read_log_tail(30)
+    positions = _get_positions()
+    pnl_curve = _compute_pnl_curve(trades)
+    data_source_health = _check_data_source_health()
+    risk_metrics = _compute_risk_metrics(trades, positions)
+    order_flow = _get_order_flow(trades)
     return {
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "engine_health": health,
@@ -158,6 +365,11 @@ def _build_status() -> dict[str, object]:
         "pnl_summary": pnl,
         "recent_trades": trades[:20],
         "log_tail": log_tail,
+        "positions": positions,
+        "pnl_curve": pnl_curve[-100:],  # Last 100 points
+        "data_source_health": data_source_health,
+        "risk_metrics": risk_metrics,
+        "order_flow": order_flow,
     }
 
 
@@ -549,6 +761,18 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(html)))
             self.end_headers()
             self.wfile.write(html)
+        elif self.path == "/enhanced" or self.path == "/dashboard/enhanced":
+            # Serve the enhanced dashboard
+            enhanced_html_path = Path(__file__).parent / "dashboard_enhanced.html"
+            if enhanced_html_path.exists():
+                html = enhanced_html_path.read_text(encoding="utf-8").encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(html)))
+                self.end_headers()
+                self.wfile.write(html)
+            else:
+                self.send_error(404, "Enhanced dashboard not found")
         else:
             self.send_error(404)
 
