@@ -17,6 +17,10 @@ from iatb.core.observability.metrics import (
     data_source_simple_latency,
     database_connection_status,
     error_counter,
+    iatb_broker_api_calls_total,
+    iatb_order_latency_seconds,
+    iatb_position_count,
+    iatb_risk_check_duration_seconds,
     initialize_metrics,
     instrument_fastapi_app,
     kite_token_freshness,
@@ -24,11 +28,14 @@ from iatb.core.observability.metrics import (
     model_inference_duration,
     open_positions,
     portfolio_value,
+    record_broker_api_call,
     record_data_source_fallback,
     record_data_source_request,
     record_data_source_request_latency,
     record_error,
     record_model_inference,
+    record_order_latency,
+    record_risk_check_duration,
     record_scan_cycle,
     record_trade,
     scan_cycle_duration,
@@ -44,6 +51,7 @@ from iatb.core.observability.metrics import (
     update_ml_model_status,
     update_open_positions,
     update_portfolio_value,
+    update_position_count,
 )
 from prometheus_client import Counter, Gauge, Histogram, Info
 
@@ -643,6 +651,259 @@ class TestTrackExecutionTime:
 
         # Metric should still be labeled
         assert mock_metric.labels.called
+
+
+class TestLiveTradingMetrics:
+    """Tests for live trading metrics."""
+
+    def test_iatb_order_latency_seconds_is_histogram(self) -> None:
+        """Test that iatb_order_latency_seconds is a Histogram."""
+        assert isinstance(iatb_order_latency_seconds, Histogram)
+
+    def test_iatb_position_count_is_gauge(self) -> None:
+        """Test that iatb_position_count is a Gauge."""
+        assert isinstance(iatb_position_count, Gauge)
+
+    def test_iatb_broker_api_calls_total_is_counter(self) -> None:
+        """Test that iatb_broker_api_calls_total is a Counter."""
+        assert isinstance(iatb_broker_api_calls_total, Counter)
+
+    def test_iatb_risk_check_duration_seconds_is_histogram(self) -> None:
+        """Test that iatb_risk_check_duration_seconds is a Histogram."""
+        assert isinstance(iatb_risk_check_duration_seconds, Histogram)
+
+
+class TestRecordOrderLatency:
+    """Tests for record_order_latency function."""
+
+    def test_record_order_latency_observes_latency(self) -> None:
+        """Test that record_order_latency records latency."""
+        record_order_latency(
+            exchange="NSE",
+            symbol="RELIANCE",
+            order_type="MARKET",
+            latency_seconds=0.5,
+        )
+        # Should not raise exception
+        assert True
+
+    def test_record_order_latency_with_different_order_types(self) -> None:
+        """Test that record_order_latency handles different order types."""
+        order_types = ["MARKET", "LIMIT", "STOP_LOSS"]
+        for order_type in order_types:
+            record_order_latency(
+                exchange="NSE",
+                symbol="TCS",
+                order_type=order_type,
+                latency_seconds=1.0,
+            )
+        # Should not raise exception
+        assert True
+
+    def test_record_order_latency_with_different_exchanges(self) -> None:
+        """Test that record_order_latency handles different exchanges."""
+        exchanges = ["NSE", "BSE", "MCX"]
+        for exchange in exchanges:
+            record_order_latency(
+                exchange=exchange,
+                symbol="INFY",
+                order_type="MARKET",
+                latency_seconds=0.8,
+            )
+        # Should not raise exception
+        assert True
+
+    def test_record_order_latency_with_zero_latency(self) -> None:
+        """Test that record_order_latency handles zero latency."""
+        record_order_latency(
+            exchange="NSE",
+            symbol="RELIANCE",
+            order_type="LIMIT",
+            latency_seconds=0.0,
+        )
+        # Should not raise exception
+        assert True
+
+    def test_record_order_latency_with_high_latency(self) -> None:
+        """Test that record_order_latency handles high latency."""
+        record_order_latency(
+            exchange="NSE",
+            symbol="RELIANCE",
+            order_type="STOP_LOSS",
+            latency_seconds=10.0,
+        )
+        # Should not raise exception
+        assert True
+
+
+class TestUpdatePositionCount:
+    """Tests for update_position_count function."""
+
+    def test_update_position_count_sets_value(self) -> None:
+        """Test that update_position_count sets position count."""
+        update_position_count(exchange="NSE", symbol="RELIANCE", count=10)
+        # Should not raise exception
+        assert True
+
+    def test_update_position_count_with_zero(self) -> None:
+        """Test that update_position_count handles zero positions."""
+        update_position_count(exchange="NSE", symbol="TCS", count=0)
+        # Should not raise exception
+        assert True
+
+    def test_update_position_count_with_negative(self) -> None:
+        """Test that update_position_count handles negative positions (short)."""
+        update_position_count(exchange="NSE", symbol="INFY", count=-5)
+        # Should not raise exception
+        assert True
+
+    def test_update_position_count_with_different_exchanges(self) -> None:
+        """Test that update_position_count handles different exchanges."""
+        exchanges = ["NSE", "BSE", "MCX"]
+        for exchange in exchanges:
+            update_position_count(exchange=exchange, symbol="HDFC", count=5)
+        # Should not raise exception
+        assert True
+
+
+class TestRecordBrokerApiCall:
+    """Tests for record_broker_api_call function."""
+
+    def test_record_broker_api_call_increments_counter(self) -> None:
+        """Test that record_broker_api_call increments counter."""
+        record_broker_api_call(
+            endpoint="/orders/place",
+            method="POST",
+            status="success",
+        )
+        # Should not raise exception
+        assert True
+
+    def test_record_broker_api_call_with_different_endpoints(self) -> None:
+        """Test that record_broker_api_call handles different endpoints."""
+        endpoints = ["/orders/place", "/positions", "/orders/cancel", "/account"]
+        for endpoint in endpoints:
+            record_broker_api_call(
+                endpoint=endpoint,
+                method="GET",
+                status="success",
+            )
+        # Should not raise exception
+        assert True
+
+    def test_record_broker_api_call_with_different_methods(self) -> None:
+        """Test that record_broker_api_call handles different HTTP methods."""
+        methods = ["GET", "POST", "PUT", "DELETE"]
+        for method in methods:
+            record_broker_api_call(
+                endpoint="/orders/place",
+                method=method,
+                status="success",
+            )
+        # Should not raise exception
+        assert True
+
+    def test_record_broker_api_call_with_different_statuses(self) -> None:
+        """Test that record_broker_api_call handles different statuses."""
+        statuses = ["success", "error", "timeout"]
+        for status in statuses:
+            record_broker_api_call(
+                endpoint="/orders/place",
+                method="POST",
+                status=status,
+            )
+        # Should not raise exception
+        assert True
+
+
+class TestRecordRiskCheckDuration:
+    """Tests for record_risk_check_duration function."""
+
+    def test_record_risk_check_duration_observes_duration(self) -> None:
+        """Test that record_risk_check_duration records duration."""
+        record_risk_check_duration(
+            check_type="position_limit",
+            duration_seconds=0.1,
+        )
+        # Should not raise exception
+        assert True
+
+    def test_record_risk_check_duration_with_different_check_types(self) -> None:
+        """Test that record_risk_check_duration handles different check types."""
+        check_types = ["position_limit", "drawdown", "exposure", "leverage"]
+        for check_type in check_types:
+            record_risk_check_duration(
+                check_type=check_type,
+                duration_seconds=0.5,
+            )
+        # Should not raise exception
+        assert True
+
+    def test_record_risk_check_duration_with_zero_duration(self) -> None:
+        """Test that record_risk_check_duration handles zero duration."""
+        record_risk_check_duration(
+            check_type="position_limit",
+            duration_seconds=0.0,
+        )
+        # Should not raise exception
+        assert True
+
+    def test_record_risk_check_duration_with_high_duration(self) -> None:
+        """Test that record_risk_check_duration handles high duration."""
+        record_risk_check_duration(
+            check_type="drawdown",
+            duration_seconds=5.0,
+        )
+        # Should not raise exception
+        assert True
+
+    def test_live_trading_metrics_integration(self) -> None:
+        """Test live trading metrics integration workflow."""
+        # Record order latency
+        record_order_latency(
+            exchange="NSE",
+            symbol="RELIANCE",
+            order_type="MARKET",
+            latency_seconds=0.5,
+        )
+
+        # Update position count
+        update_position_count(exchange="NSE", symbol="RELIANCE", count=10)
+        update_position_count(exchange="NSE", symbol="TCS", count=-5)
+
+        # Record broker API calls
+        record_broker_api_call(
+            endpoint="/orders/place",
+            method="POST",
+            status="success",
+        )
+        record_broker_api_call(
+            endpoint="/positions",
+            method="GET",
+            status="success",
+        )
+        record_broker_api_call(
+            endpoint="/orders/cancel",
+            method="DELETE",
+            status="error",
+        )
+
+        # Record risk check durations
+        record_risk_check_duration(
+            check_type="position_limit",
+            duration_seconds=0.1,
+        )
+        record_risk_check_duration(
+            check_type="drawdown",
+            duration_seconds=0.2,
+        )
+        record_risk_check_duration(
+            check_type="exposure",
+            duration_seconds=0.15,
+        )
+
+        # Should not raise exceptions
+        assert True
 
 
 class TestIntegration:

@@ -263,6 +263,67 @@ def update_ml_model_status(model_name: str, available: bool) -> None:
     ml_model_status.labels(model_name=model_name).set(1 if available else 0)
 
 
+def record_order_latency(
+    exchange: str,
+    symbol: str,
+    order_type: str,
+    latency_seconds: float,
+) -> None:
+    """Record order latency from signal to fill.
+
+    Args:
+        exchange: Exchange name.
+        symbol: Trading symbol.
+        order_type: Type of order (MARKET, LIMIT, STOP_LOSS).
+        latency_seconds: Latency in seconds from signal to fill.
+    """
+    iatb_order_latency_seconds.labels(
+        exchange=exchange,
+        symbol=symbol,
+        order_type=order_type,
+    ).observe(latency_seconds)
+
+
+def update_position_count(exchange: str, symbol: str, count: int) -> None:
+    """Update position count for a specific exchange and symbol.
+
+    Args:
+        exchange: Exchange name.
+        symbol: Trading symbol.
+        count: Number of positions (can be 0, positive for long, negative for short).
+    """
+    iatb_position_count.labels(exchange=exchange, symbol=symbol).set(count)
+
+
+def record_broker_api_call(
+    endpoint: str,
+    method: str,
+    status: str,
+) -> None:
+    """Record a broker API call.
+
+    Args:
+        endpoint: API endpoint called (e.g., "/orders/place", "/positions").
+        method: HTTP method (GET, POST, PUT, DELETE).
+        status: Call status (success, error, timeout).
+    """
+    iatb_broker_api_calls_total.labels(
+        endpoint=endpoint,
+        method=method,
+        status=status,
+    ).inc()
+
+
+def record_risk_check_duration(check_type: str, duration_seconds: float) -> None:
+    """Record risk check duration.
+
+    Args:
+        check_type: Type of risk check (position_limit, drawdown, exposure, etc.).
+        duration_seconds: Duration in seconds.
+    """
+    iatb_risk_check_duration_seconds.labels(check_type=check_type).observe(duration_seconds)
+
+
 # Data provider metrics
 data_source_switches = Counter(
     "iatb_data_source_switches_total",
@@ -334,6 +395,31 @@ def track_execution_time(metric: Histogram | Summary, labels: dict[str, str]) ->
 
     return decorator
 
+
+# Live trading metrics
+iatb_order_latency_seconds = Histogram(
+    "iatb_order_latency_seconds",
+    "Order latency from signal to fill in seconds",
+    ["exchange", "symbol", "order_type"],
+)
+
+iatb_position_count = Gauge(
+    "iatb_position_count",
+    "Current position count by exchange and symbol",
+    ["exchange", "symbol"],
+)
+
+iatb_broker_api_calls_total = Counter(
+    "iatb_broker_api_calls_total",
+    "Total number of broker API calls",
+    ["endpoint", "method", "status"],
+)
+
+iatb_risk_check_duration_seconds = Histogram(
+    "iatb_risk_check_duration_seconds",
+    "Risk check duration in seconds",
+    ["check_type"],
+)
 
 # Data source observability metrics
 data_source_requests_total = Counter(
