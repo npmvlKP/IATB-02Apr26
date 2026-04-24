@@ -256,7 +256,12 @@ class TestFailoverProviderCreation:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        failover = factory.create_failover_provider(cooldown_seconds=45.0)
+        # Pass primary provider explicitly to avoid token creation
+        failover = factory.create_failover_provider(
+            primary=mock_kite_provider,
+            fallback=mock_jugaad_provider,
+            cooldown_seconds=45.0,
+        )
         assert isinstance(failover, FailoverProvider)
 
 
@@ -294,7 +299,9 @@ class TestProviderChainCreation:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        chain = factory.create_provider_chain(cooldown_seconds=60.0)
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            chain = factory.create_provider_chain(cooldown_seconds=60.0)
 
         assert isinstance(chain, ProviderChain)
         assert chain.primary_provider is not None
@@ -321,7 +328,9 @@ class TestProviderChainCreation:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        provider = factory.get_data_provider()
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            provider = factory.get_data_provider()
         assert isinstance(provider, FailoverProvider)
 
 
@@ -345,7 +354,9 @@ class TestProviderChainIntegration:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        chain = factory.create_provider_chain()
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            chain = factory.create_provider_chain()
 
         # Test failover provider works
         bars = await chain.failover_provider.get_ohlcv(
@@ -379,7 +390,9 @@ class TestCreateCoreComponents:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        token_manager, instrument_master, primary, fallback = factory._create_core_components()
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            token_manager, instrument_master, primary, fallback = factory._create_core_components()
 
         assert isinstance(token_manager, ZerodhaTokenManager)
         assert isinstance(instrument_master, InstrumentMaster)
@@ -436,7 +449,9 @@ class TestProviderChainDataclass:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        chain = factory.create_provider_chain()
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            chain = factory.create_provider_chain()
 
         # Verify all components are present
         assert chain.primary_provider is not None
@@ -528,7 +543,9 @@ class TestFailoverProviderWithCustomCooldown:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        failover = factory.create_failover_provider(cooldown_seconds=120.0)
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            failover = factory.create_failover_provider(cooldown_seconds=120.0)
         assert isinstance(failover, FailoverProvider)
         # Cooldown is passed to FailoverProvider constructor
 
@@ -719,7 +736,9 @@ class TestGetDataProviderConvenience:
             jugaad_provider_factory=lambda: mock_jugaad_provider,
         )
 
-        provider = factory.get_data_provider()
+        # Patch create_token_manager to return mock
+        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+            provider = factory.get_data_provider()
         assert isinstance(provider, FailoverProvider)
 
 
