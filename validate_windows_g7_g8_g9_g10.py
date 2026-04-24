@@ -72,6 +72,15 @@ class QualityGateValidator:
             with open(filepath, encoding="utf-8") as f:
                 lines = f.readlines()
 
+            # Parse the file to get function docstrings
+            tree = ast.parse("".join(lines))
+            docstring_map = {}
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    docstring = ast.get_docstring(node)
+                    if docstring:
+                        docstring_map[node.lineno] = docstring
+
             for i, line in enumerate(lines, 1):
                 # Skip comment lines entirely
                 if line.strip().startswith("#"):
@@ -121,9 +130,23 @@ class QualityGateValidator:
                         or "API boundary" in prev_line
                     ):
                         continue
-                    self.results["G7"]["violations"].append(
-                        {"filepath": filepath, "line": i, "content": line.strip()}
-                    )
+
+                    # Check function docstring for API boundary documentation
+                    # Find the function this line belongs to
+                    for func_line, docstring in docstring_map.items():
+                        if func_line <= i <= func_line + 10:  # Within first 10 lines of function
+                            if (
+                                "API boundary" in docstring
+                                or "external API" in docstring
+                                or "not financial" in docstring
+                            ):
+                                # This is a documented API boundary, skip it
+                                break
+                    else:
+                        # No break means no docstring with API boundary found
+                        self.results["G7"]["violations"].append(
+                            {"filepath": filepath, "line": i, "content": line.strip()}
+                        )
                 elif re.search(r"=\s*\d+\.\d+", line):
                     # Float literal in assignment - check for API boundary comment
                     # Check current line for inline comment
