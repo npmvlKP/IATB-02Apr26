@@ -1,9 +1,21 @@
 """Observability stack for IATB - Logging, Tracing, Metrics, and Alerting."""
 
 from iatb.core.observability.alerting import (
+    Alert,
+    AlertAcknowledgment,
+    AlertAcknowledgmentTracker,
+    AlertChannel,
+    AlertLevel,
+    AlertRule,
+    AlertRulesEngine,
+    AlertThrottler,
+    EmailChannel,
+    MultiChannelAlertManager,
     TelegramAlerter,
     TelegramAlertLevel,
+    WebhookChannel,
     get_alerter,
+    get_multi_channel_manager,
 )
 from iatb.core.observability.logging_config import (
     LogContext,
@@ -111,7 +123,19 @@ __all__ = [
     "database_connection_status",
     "ml_model_status",
     # Alerting
+    "Alert",
+    "AlertAcknowledgment",
+    "AlertAcknowledgmentTracker",
+    "AlertChannel",
+    "AlertLevel",
+    "AlertRule",
+    "AlertRulesEngine",
+    "AlertThrottler",
+    "EmailChannel",
+    "MultiChannelAlertManager",
     "TelegramAlertLevel",
     "TelegramAlerter",
+    "WebhookChannel",
     "get_alerter",
+    "get_multi_channel_manager",
 ]

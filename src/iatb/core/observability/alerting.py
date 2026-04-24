@@ -1,13 +1,19 @@
-"""Telegram alerting configuration for sending notifications."""
+"""Multi-channel alerting system with rules, throttling, and acknowledgment."""
 
 from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Sequence
-from datetime import UTC, datetime
+import smtplib
+from abc import ABC, abstractmethod
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from email.mime.text import MIMEText
 from typing import Any
+from urllib.parse import urlparse
 
+import aiohttp
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
@@ -25,7 +31,59 @@ class TelegramAlertLevel:
     CRITICAL = "CRITICAL"
 
 
-class TelegramAlerter:
+# =============================================================================
+# MULTI-CHANNEL ALERTING SYSTEM
+# =============================================================================
+
+
+class AlertLevel:
+    """Standardized alert severity levels."""
+
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+@dataclass
+class Alert:
+    """Alert data structure."""
+
+    message: str
+    level: str = AlertLevel.INFO
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    context: dict[str, Any] = field(default_factory=dict)
+    rule_name: str | None = None
+    alert_id: str | None = None
+
+
+class AlertChannel(ABC):
+    """Abstract base class for alert channels."""
+
+    enabled: bool = False
+
+    def __init__(self, enabled: bool = True) -> None:
+        """Initialize alert channel.
+
+        Args:
+            enabled: Whether this channel is enabled.
+        """
+        self.enabled = enabled
+
+    @abstractmethod
+    def send(self, alert: Alert) -> bool:
+        """Send an alert through this channel.
+
+        Args:
+            alert: Alert to send.
+
+        Returns:
+            True if sent successfully, False otherwise.
+        """
+        pass
+
+
+class TelegramAlerter(AlertChannel):
     """Telegram bot for sending alerts and notifications."""
 
     def __init__(
@@ -43,6 +101,7 @@ class TelegramAlerter:
                 reads from TELEGRAM_CHAT_ID env var.
             enabled: Whether alerts are enabled.
         """
+        super().__init__(enabled)
         self.bot_token = bot_token or os.getenv(
             "TELEGRAM_BOT_TOKEN",
         )
@@ -149,14 +208,13 @@ class TelegramAlerter:
         if timestamp is None:
             timestamp = datetime.now(UTC)
 
-        emoji = "🟢" if side == "BUY" else "🔴"
         message = f"""
-{emoji} *Trade Executed*
+*Trade Executed*
 
 *Ticker:* {ticker}
 *Side:* {side}
 *Quantity:* {quantity}
-*Price:* ₹{price:.2f}
+*Price:* {price:.2f}
 *Time:* {timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")}
 """
         return self.send_alert(message, TelegramAlertLevel.INFO)
@@ -178,7 +236,7 @@ class TelegramAlerter:
             True if alert was sent successfully, False otherwise.
         """
         message = f"""
-🚨 *Error Alert*
+*Error Alert*
 
 *Component:* {component}
 *Error:* {error_message}
@@ -204,14 +262,8 @@ class TelegramAlerter:
         Returns:
             True if alert was sent successfully, False otherwise.
         """
-        emoji = {
-            "UP": "✅",
-            "DOWN": "❌",
-            "DEGRADED": "⚠️",
-        }.get(status, "ℹ️")
-
         message = f"""
-{emoji} *Health Alert*
+*Health Alert*
 
 *Service:* {service}
 *Status:* {status}
@@ -239,15 +291,14 @@ class TelegramAlerter:
         Returns:
             True if alert was sent successfully, False otherwise.
         """
-        emoji = "💰" if pnl >= 0 else "📉"
         message = f"""
-{emoji} *PnL Update*
+*PnL Update*
 
-*Total PnL:* ₹{pnl:.2f}
+*Total PnL:* {pnl:.2f}
 """
         if daily_pnl is not None:
-            emoji = "💚" if daily_pnl >= 0 else "🔻"
-            message += f"*Daily PnL:* {emoji} ₹{daily_pnl:.2f}\n"
+            daily_emoji = "GREEN" if daily_pnl >= 0 else "RED"
+            message += f"*Daily PnL:* {daily_emoji} {daily_pnl:.2f}\n"
 
         message += f"*Open Positions:* {open_positions}"
 
@@ -269,9 +320,8 @@ class TelegramAlerter:
         Returns:
             True if alert was sent successfully, False otherwise.
         """
-        emoji = "🤖" if status == "AVAILABLE" else "⚠️"
         message = f"""
-{emoji} *ML Model Alert*
+*ML Model Alert*
 
 *Model:* {model_name}
 *Status:* {status}
@@ -300,7 +350,7 @@ class TelegramAlerter:
             True if alert was sent successfully, False otherwise.
         """
         message = f"""
-🔴 *Data Source Failure Alert*
+*Data Source Failure Alert*
 
 *Source:* {source}
 *Failures:* {failure_count} in {time_window}
@@ -327,7 +377,7 @@ Immediate attention required. Check connection and logs.
             True if alert was sent successfully, False otherwise.
         """
         message = f"""
-⚠️ *Data Source Fallback Alert*
+*Data Source Fallback Alert*
 
 *From:* {from_source}
 *To:* {to_source}
@@ -353,9 +403,8 @@ Immediate attention required. Check connection and logs.
         Returns:
             True if alert was sent successfully, False otherwise.
         """
-        emoji = "🚨" if minutes_remaining <= 5 else "⚠️"
         message = f"""
-{emoji} *Token Expiry Alert*
+*Token Expiry Alert*
 
 *Token Type:* {token_type}
 *Expires in:* {minutes_remaining} minutes
@@ -425,14 +474,14 @@ Action required: Refresh token immediately to avoid service disruption.
             Formatted message.
         """
         level_emoji = {
-            TelegramAlertLevel.INFO: "ℹ️",
-            TelegramAlertLevel.WARNING: "⚠️",
-            TelegramAlertLevel.ERROR: "🚨",
-            TelegramAlertLevel.CRITICAL: "🔴",
-        }.get(level, "ℹ️")
+            TelegramAlertLevel.INFO: "INFO",
+            TelegramAlertLevel.WARNING: "WARNING",
+            TelegramAlertLevel.ERROR: "ERROR",
+            TelegramAlertLevel.CRITICAL: "CRITICAL",
+        }.get(level, "INFO")
 
         formatted = f"""
-{level_emoji} *{level} Alert*
+*{level_emoji} Alert*
 *Time:* {datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")}
 
 {message}
@@ -441,10 +490,711 @@ Action required: Refresh token immediately to avoid service disruption.
         if context:
             formatted += "\n*Context:*\n"
             for key, value in context.items():
-                formatted += f"  • *{key}:* {value}\n"
+                formatted += f"  *{key}:* {value}\n"
 
         return formatted
 
+    def send(self, alert: Alert) -> bool:
+        """Send alert via Telegram (implements AlertChannel interface).
+
+        Args:
+            alert: Alert to send.
+
+        Returns:
+            True if sent successfully, False otherwise.
+        """
+        return self.send_alert(alert.message, alert.level, alert.context)
+
+
+class EmailChannel(AlertChannel):
+    """Email alert channel using SMTP."""
+
+    def __init__(
+        self,
+        smtp_host: str | None = None,
+        smtp_port: int = 587,
+        smtp_user: str | None = None,
+        smtp_password: str | None = None,
+        from_email: str | None = None,
+        to_emails: list[str] | None = None,
+        enabled: bool = True,
+    ) -> None:
+        """Initialize email alert channel.
+
+        Args:
+            smtp_host: SMTP server host.
+            smtp_port: SMTP server port.
+            smtp_user: SMTP username.
+            smtp_password: SMTP password.
+            from_email: From email address.
+            to_emails: List of recipient email addresses.
+            enabled: Whether this channel is enabled.
+        """
+        super().__init__(enabled)
+        self.smtp_host = smtp_host or os.getenv("SMTP_HOST")
+        self.smtp_port = smtp_port
+        self.smtp_user = smtp_user or os.getenv("SMTP_USER")
+        self.smtp_password = smtp_password or os.getenv("SMTP_PASSWORD")
+        self.from_email = from_email or os.getenv("EMAIL_FROM")
+        self.to_emails = to_emails or os.getenv("EMAIL_TO", "").split(",")
+        self.to_emails = [email.strip() for email in self.to_emails if email.strip()]
+
+        self.enabled = (
+            enabled
+            and bool(self.smtp_host and self.smtp_user and self.smtp_password)
+            and len(self.to_emails) > 0
+        )
+
+    def send(self, alert: Alert) -> bool:
+        """Send alert via email.
+
+        Args:
+            alert: Alert to send.
+
+        Returns:
+            True if sent successfully, False otherwise.
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            subject = f"[{alert.level}] {alert.rule_name or 'Alert'}"
+            body = self._format_body(alert)
+
+            msg = MIMEText(body)
+            msg["Subject"] = subject
+            msg["From"] = self.from_email or "noreply@iatb.local"
+            msg["To"] = ", ".join(self.to_emails)
+
+            if self.smtp_host and self.smtp_user and self.smtp_password:
+                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.send_message(msg)
+
+            return True
+        except Exception as exc:
+            _LOGGER.error("Failed to send email alert: %s", exc)
+            return False
+
+    def _format_body(self, alert: Alert) -> str:
+        """Format alert body for email.
+
+        Args:
+            alert: Alert to format.
+
+        Returns:
+            Formatted email body.
+        """
+        body = f"""
+Alert Level: {alert.level}
+Timestamp: {alert.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")}
+Rule: {alert.rule_name or 'N/A'}
+Alert ID: {alert.alert_id or 'N/A'}
+
+Message:
+{alert.message}
+"""
+        if alert.context:
+            body += "\nContext:\n"
+            for key, value in alert.context.items():
+                body += f"  {key}: {value}\n"
+
+        return body
+
+
+class WebhookChannel(AlertChannel):
+    """Webhook alert channel using HTTP POST."""
+
+    def __init__(
+        self,
+        webhook_url: str | None = None,
+        headers: dict[str, str] | None = None,
+        enabled: bool = True,
+    ) -> None:
+        """Initialize webhook alert channel.
+
+        Args:
+            webhook_url: Webhook URL endpoint.
+            headers: Additional HTTP headers.
+            enabled: Whether this channel is enabled.
+        """
+        super().__init__(enabled)
+        self.webhook_url = webhook_url or os.getenv("WEBHOOK_URL")
+        self.headers = headers or {}
+
+        if self.webhook_url:
+            try:
+                result = urlparse(self.webhook_url)
+                self.enabled = enabled and bool(result.scheme and result.netloc)
+            except Exception:
+                self.enabled = False
+        else:
+            self.enabled = False
+
+    async def send_async(self, alert: Alert) -> bool:
+        """Send alert via webhook asynchronously.
+
+        Args:
+            alert: Alert to send.
+
+        Returns:
+            True if sent successfully, False otherwise.
+        """
+        if not self.enabled or not self.webhook_url:
+            return False
+
+        try:
+            payload = {
+                "message": alert.message,
+                "level": alert.level,
+                "timestamp": alert.timestamp.isoformat(),
+                "rule_name": alert.rule_name,
+                "alert_id": alert.alert_id,
+                "context": alert.context,
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.webhook_url,
+                    json=payload,
+                    headers=self.headers,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response:
+                    return response.status < 400
+        except Exception as exc:
+            _LOGGER.error("Failed to send webhook alert: %s", exc)
+            return False
+
+    def send(self, alert: Alert) -> bool:
+        """Send alert via webhook (synchronous wrapper).
+
+        Args:
+            alert: Alert to send.
+
+        Returns:
+            True if sent successfully, False otherwise.
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            loop = asyncio.get_running_loop()
+            future = asyncio.ensure_future(self.send_async(alert))
+            return loop.run_until_complete(future)
+        except RuntimeError:
+            return asyncio.run(self.send_async(alert))
+        except Exception as exc:
+            _LOGGER.error("Failed to send webhook alert: %s", exc)
+            return False
+
+
+# =============================================================================
+# ALERT RULES ENGINE
+# =============================================================================
+
+
+@dataclass
+class AlertRule:
+    """Alert rule definition."""
+
+    name: str
+    condition: Callable[[dict[str, Any]], bool]
+    level: str = AlertLevel.WARNING
+    enabled: bool = True
+    description: str = ""
+
+
+class AlertRulesEngine:
+    """Engine for evaluating and triggering alert rules."""
+
+    def __init__(self) -> None:
+        """Initialize alert rules engine."""
+        self.rules: dict[str, AlertRule] = {}
+        self._initialize_default_rules()
+
+    def _initialize_default_rules(self) -> None:
+        """Initialize default alert rules."""
+        # Token expiry rule
+        self.add_rule(
+            AlertRule(
+                name="token_expiry",
+                condition=self._check_token_expiry,
+                level=AlertLevel.CRITICAL,
+                description="Alert when broker token is about to expire",
+            )
+        )
+
+        # Position limit breach rule
+        self.add_rule(
+            AlertRule(
+                name="position_limit_breach",
+                condition=self._check_position_limit_breach,
+                level=AlertLevel.CRITICAL,
+                description="Alert when position limit is exceeded",
+            )
+        )
+
+        # Daily loss threshold rule
+        self.add_rule(
+            AlertRule(
+                name="daily_loss_threshold",
+                condition=self._check_daily_loss_threshold,
+                level=AlertLevel.CRITICAL,
+                description="Alert when daily loss exceeds threshold",
+            )
+        )
+
+        # Data source failure rule
+        self.add_rule(
+            AlertRule(
+                name="data_source_failure",
+                condition=self._check_data_source_failure,
+                level=AlertLevel.ERROR,
+                description="Alert when data source fails repeatedly",
+            )
+        )
+
+    def add_rule(self, rule: AlertRule) -> None:
+        """Add or update an alert rule.
+
+        Args:
+            rule: Alert rule to add.
+        """
+        self.rules[rule.name] = rule
+
+    def remove_rule(self, rule_name: str) -> None:
+        """Remove an alert rule.
+
+        Args:
+            rule_name: Name of rule to remove.
+        """
+        if rule_name in self.rules:
+            del self.rules[rule_name]
+
+    def evaluate_rules(
+        self,
+        context: dict[str, Any],
+    ) -> list[tuple[AlertRule, dict[str, Any]]]:
+        """Evaluate all enabled rules against context.
+
+        Args:
+            context: Context data for rule evaluation.
+
+        Returns:
+            List of (rule, context) tuples for triggered rules.
+        """
+        triggered = []
+        for rule in self.rules.values():
+            if not rule.enabled:
+                continue
+            try:
+                if rule.condition(context):
+                    triggered.append((rule, context))
+            except Exception as exc:
+                _LOGGER.error("Error evaluating rule %s: %s", rule.name, exc)
+
+        return triggered
+
+    # Default rule conditions
+    def _check_token_expiry(self, context: dict[str, Any]) -> bool:
+        """Check if token is about to expire.
+
+        Args:
+            context: Context with 'token_type' and 'minutes_remaining'.
+
+        Returns:
+            True if token expires in 10 minutes or less.
+        """
+        minutes_remaining = int(context.get("minutes_remaining", 999))
+        return minutes_remaining <= 10
+
+    def _check_position_limit_breach(self, context: dict[str, Any]) -> bool:
+        """Check if position limit is breached.
+
+        Args:
+            context: Context with 'current_positions' and 'limit'.
+
+        Returns:
+            True if positions exceed limit.
+        """
+        current = int(context.get("current_positions", 0))
+        limit = int(context.get("limit", 999))
+        return current >= limit
+
+    def _check_daily_loss_threshold(self, context: dict[str, Any]) -> bool:
+        """Check if daily loss exceeds threshold.
+
+        Args:
+            context: Context with 'daily_pnl' and 'loss_threshold'.
+
+        Returns:
+            True if daily loss exceeds threshold.
+        """
+        daily_pnl = float(context.get("daily_pnl", 0))
+        threshold = float(context.get("loss_threshold", -999999))
+        return daily_pnl <= threshold
+
+    def _check_data_source_failure(self, context: dict[str, Any]) -> bool:
+        """Check if data source is failing.
+
+        Args:
+            context: Context with 'failure_count' and 'time_window'.
+
+        Returns:
+            True if failure count exceeds threshold.
+        """
+        failure_count = int(context.get("failure_count", 0))
+        threshold = int(context.get("failure_threshold", 3))
+        return failure_count >= threshold
+
+
+# =============================================================================
+# ALERT THROTTLING
+# =============================================================================
+
+
+class AlertThrottler:
+    """Throttle alerts to prevent spam (max 1 per minute per rule)."""
+
+    def __init__(self, min_interval_seconds: int = 60) -> None:
+        """Initialize alert throttler.
+
+        Args:
+            min_interval_seconds: Minimum seconds between alerts for same rule.
+        """
+        self.min_interval_seconds = min_interval_seconds
+        self._last_sent: dict[str, datetime] = {}
+
+    def should_send(self, rule_name: str) -> bool:
+        """Check if alert should be sent based on throttling.
+
+        Args:
+            rule_name: Name of the alert rule.
+
+        Returns:
+            True if alert can be sent, False if throttled.
+        """
+        if rule_name not in self._last_sent:
+            return True
+
+        last_sent = self._last_sent[rule_name]
+        elapsed = (datetime.now(UTC) - last_sent).total_seconds()
+
+        if elapsed >= self.min_interval_seconds:
+            return True
+
+        _LOGGER.info(
+            "Alert throttled for rule '%s': %d seconds since last alert",
+            rule_name,
+            int(elapsed),
+        )
+        return False
+
+    def record_sent(self, rule_name: str) -> None:
+        """Record that an alert was sent for a rule.
+
+        Args:
+            rule_name: Name of the alert rule.
+        """
+        self._last_sent[rule_name] = datetime.now(UTC)
+
+    def reset(self, rule_name: str | None = None) -> None:
+        """Reset throttling for a rule or all rules.
+
+        Args:
+            rule_name: Name of rule to reset. If None, reset all.
+        """
+        if rule_name:
+            self._last_sent.pop(rule_name, None)
+        else:
+            self._last_sent.clear()
+
+
+# =============================================================================
+# ALERT ACKNOWLEDGMENT TRACKING
+# =============================================================================
+
+
+@dataclass
+class AlertAcknowledgment:
+    """Alert acknowledgment record."""
+
+    alert_id: str
+    rule_name: str
+    acknowledged: bool = False
+    acknowledged_by: str | None = None
+    acknowledged_at: datetime | None = None
+    acknowledged_via: str | None = None
+
+
+class AlertAcknowledgmentTracker:
+    """Track alert acknowledgments."""
+
+    def __init__(self) -> None:
+        """Initialize acknowledgment tracker."""
+        self.acknowledgments: dict[str, AlertAcknowledgment] = {}
+
+    def register_alert(
+        self,
+        alert_id: str,
+        rule_name: str,
+    ) -> None:
+        """Register a new alert for acknowledgment tracking.
+
+        Args:
+            alert_id: Unique alert identifier.
+            rule_name: Name of the rule that triggered the alert.
+        """
+        self.acknowledgments[alert_id] = AlertAcknowledgment(
+            alert_id=alert_id,
+            rule_name=rule_name,
+        )
+
+    def acknowledge(
+        self,
+        alert_id: str,
+        acknowledged_by: str,
+        acknowledged_via: str,
+    ) -> bool:
+        """Acknowledge an alert.
+
+        Args:
+            alert_id: Alert identifier to acknowledge.
+            acknowledged_by: User/service acknowledging.
+            acknowledged_via: Channel used for acknowledgment.
+
+        Returns:
+            True if acknowledged successfully, False if not found.
+        """
+        if alert_id not in self.acknowledgments:
+            return False
+
+        ack = self.acknowledgments[alert_id]
+        ack.acknowledged = True
+        ack.acknowledged_by = acknowledged_by
+        ack.acknowledged_at = datetime.now(UTC)
+        ack.acknowledged_via = acknowledged_via
+
+        _LOGGER.info(
+            "Alert '%s' acknowledged by %s via %s",
+            alert_id,
+            acknowledged_by,
+            acknowledged_via,
+        )
+        return True
+
+    def is_acknowledged(self, alert_id: str) -> bool:
+        """Check if alert is acknowledged.
+
+        Args:
+            alert_id: Alert identifier.
+
+        Returns:
+            True if acknowledged, False otherwise.
+        """
+        return self.acknowledgments.get(alert_id, AlertAcknowledgment(alert_id, "")).acknowledged
+
+    def get_unacknowledged(
+        self,
+        rule_name: str | None = None,
+    ) -> list[AlertAcknowledgment]:
+        """Get list of unacknowledged alerts.
+
+        Args:
+            rule_name: Optional filter by rule name.
+
+        Returns:
+            List of unacknowledged alerts.
+        """
+        unacknowledged = [ack for ack in self.acknowledgments.values() if not ack.acknowledged]
+
+        if rule_name:
+            unacknowledged = [ack for ack in unacknowledged if ack.rule_name == rule_name]
+
+        return unacknowledged
+
+    def cleanup_old_alerts(self, max_age_hours: int = 24) -> int:
+        """Clean up old acknowledged alerts.
+
+        Args:
+            max_age_hours: Maximum age in hours to keep.
+
+        Returns:
+            Number of alerts cleaned up.
+        """
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        to_remove = []
+
+        for alert_id, ack in self.acknowledgments.items():
+            if ack.acknowledged and ack.acknowledged_at and ack.acknowledged_at < cutoff:
+                to_remove.append(alert_id)
+
+        for alert_id in to_remove:
+            del self.acknowledgments[alert_id]
+
+        return len(to_remove)
+
+
+# =============================================================================
+# MULTI-CHANNEL ALERT MANAGER
+# =============================================================================
+
+
+class MultiChannelAlertManager:
+    """Unified manager for multi-channel alerting with rules and throttling."""
+
+    def __init__(
+        self,
+        channels: list[AlertChannel] | None = None,
+        rules_engine: AlertRulesEngine | None = None,
+        throttler: AlertThrottler | None = None,
+        acknowledgment_tracker: AlertAcknowledgmentTracker | None = None,
+    ) -> None:
+        """Initialize multi-channel alert manager.
+
+        Args:
+            channels: List of alert channels.
+            rules_engine: Rules engine instance.
+            throttler: Alert throttler instance.
+            acknowledgment_tracker: Acknowledgment tracker instance.
+        """
+        self.channels = channels or []
+        self.rules_engine = rules_engine or AlertRulesEngine()
+        self.throttler = throttler or AlertThrottler()
+        self.ack_tracker = acknowledgment_tracker or AlertAcknowledgmentTracker()
+        self._alert_counter = 0
+
+    def add_channel(self, channel: AlertChannel) -> None:
+        """Add an alert channel.
+
+        Args:
+            channel: Alert channel to add.
+        """
+        if channel not in self.channels:
+            self.channels.append(channel)
+
+    def send_alert(
+        self,
+        message: str,
+        level: str = AlertLevel.INFO,
+        context: dict[str, Any] | None = None,
+        rule_name: str | None = None,
+    ) -> str | None:
+        """Send alert through all enabled channels.
+
+        Args:
+            message: Alert message.
+            level: Alert severity level.
+            context: Additional context.
+            rule_name: Name of rule that triggered alert.
+
+        Returns:
+            Alert ID if sent, None if throttled or no channels enabled.
+        """
+        if rule_name and not self.throttler.should_send(rule_name):
+            return None
+
+        self._alert_counter += 1
+        alert_id = f"alert_{self._alert_counter}_{int(datetime.now(UTC).timestamp())}"
+
+        alert = Alert(
+            message=message,
+            level=level,
+            context=context or {},
+            rule_name=rule_name,
+            alert_id=alert_id,
+        )
+
+        self.ack_tracker.register_alert(alert_id, rule_name or "manual")
+
+        for channel in self.channels:
+            if channel.enabled:
+                try:
+                    channel.send(alert)
+                except Exception as exc:
+                    _LOGGER.error(
+                        "Failed to send alert via %s: %s",
+                        channel.__class__.__name__,
+                        exc,
+                    )
+
+        if rule_name:
+            self.throttler.record_sent(rule_name)
+
+        return alert_id
+
+    def evaluate_and_alert(self, context: dict[str, Any]) -> list[str]:
+        """Evaluate all rules and send alerts for triggered ones.
+
+        Args:
+            context: Context data for rule evaluation.
+
+        Returns:
+            List of alert IDs sent.
+        """
+        triggered = self.rules_engine.evaluate_rules(context)
+        alert_ids = []
+
+        for rule, rule_context in triggered:
+            alert_id = self.send_alert(
+                message=f"Rule '{rule.name}' triggered: {rule.description}",
+                level=rule.level,
+                context=rule_context,
+                rule_name=rule.name,
+            )
+            if alert_id:
+                alert_ids.append(alert_id)
+
+        return alert_ids
+
+    def acknowledge(
+        self,
+        alert_id: str,
+        acknowledged_by: str = "system",
+        acknowledged_via: str = "api",
+    ) -> bool:
+        """Acknowledge an alert.
+
+        Args:
+            alert_id: Alert identifier.
+            acknowledged_by: User/service acknowledging.
+            acknowledged_via: Channel used.
+
+        Returns:
+            True if acknowledged, False otherwise.
+        """
+        return self.ack_tracker.acknowledge(alert_id, acknowledged_by, acknowledged_via)
+
+    def get_unacknowledged_alerts(
+        self,
+        rule_name: str | None = None,
+    ) -> list[AlertAcknowledgment]:
+        """Get unacknowledged alerts.
+
+        Args:
+            rule_name: Optional filter by rule name.
+
+        Returns:
+            List of unacknowledged alerts.
+        """
+        return self.ack_tracker.get_unacknowledged(rule_name)
+
+    def cleanup_old_alerts(self, max_age_hours: int = 24) -> int:
+        """Clean up old acknowledged alerts.
+
+        Args:
+            max_age_hours: Maximum age in hours.
+
+        Returns:
+            Number of alerts cleaned up.
+        """
+        return self.ack_tracker.cleanup_old_alerts(max_age_hours)
+
+
+# =============================================================================
+# GLOBAL ALERTER INSTANCE
+# =============================================================================
 
 # Global alerter instance
 _alerter: TelegramAlerter | None = None
@@ -460,3 +1210,25 @@ def get_alerter() -> TelegramAlerter:
     if _alerter is None:
         _alerter = TelegramAlerter()
     return _alerter
+
+
+# Global multi-channel manager instance
+_multi_channel_manager: MultiChannelAlertManager | None = None
+
+
+def get_multi_channel_manager() -> MultiChannelAlertManager:
+    """Get or create global multi-channel alert manager.
+
+    Returns:
+        MultiChannelAlertManager instance.
+    """
+    global _multi_channel_manager
+    if _multi_channel_manager is None:
+        _multi_channel_manager = MultiChannelAlertManager(
+            channels=[
+                TelegramAlerter(),  # Uses existing Telegram alerter
+                EmailChannel(),
+                WebhookChannel(),
+            ]
+        )
+    return _multi_channel_manager
