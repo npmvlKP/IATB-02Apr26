@@ -761,18 +761,6 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(html)))
             self.end_headers()
             self.wfile.write(html)
-        elif self.path == "/enhanced" or self.path == "/dashboard/enhanced":
-            # Serve the enhanced dashboard
-            enhanced_html_path = Path(__file__).parent / "dashboard_enhanced.html"
-            if enhanced_html_path.exists():
-                html = enhanced_html_path.read_text(encoding="utf-8").encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(html)))
-                self.end_headers()
-                self.wfile.write(html)
-            else:
-                self.send_error(404, "Enhanced dashboard not found")
         else:
             self.send_error(404)
 

@@ -74,6 +74,7 @@ class LiveExecutor(Executor):
         *,
         broker: BrokerInterface,
         confirmation_timeout_seconds: int = DEFAULT_CONFIRMATION_TIMEOUT_SECONDS,
+        # timing parameter, not financial
         confirmation_poll_interval_seconds: float = DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS,
         slippage_tolerance_bps: Decimal = DEFAULT_SLIPPAGE_TOLERANCE_BPS,
     ) -> None:

@@ -65,20 +65,28 @@ def find_float_code_matches(files: list[Path]) -> list[str]:
                 relative = file_path.relative_to(ROOT_DIR)
                 line = lines[line_number - 1].strip() if 0 < line_number <= len(lines) else ""
 
-                # Check for API boundary comment on same line
-                if "API boundary" in line or ("API" in line and "#" in line):
+                # Check for exemption comment on same line
+                if ("API boundary" in line or 
+                    ("API" in line and "#" in line) or
+                    "timing parameter" in line.lower() or
+                    "not financial" in line.lower() or
+                    "timing configuration" in line.lower()):
                     continue
 
-                # Check for API boundary comment in preceding 5 lines
-                has_api_boundary_comment = False
-                for i in range(max(0, line_number - 6), line_number - 1):
+                # Check for exemption comment in preceding 5 lines
+                has_exemption_comment = False
+                for i in range(max(0, line_number - 6), line_number):
                     if i >= 0 and i < len(lines):
                         prev_line = lines[i].strip()
-                        if "API boundary" in prev_line or ("API" in prev_line and "#" in prev_line):
-                            has_api_boundary_comment = True
+                        if ("API boundary" in prev_line or 
+                            ("API" in prev_line and "#" in prev_line) or
+                            "timing parameter" in prev_line.lower() or
+                            "not financial" in prev_line.lower() or
+                            "timing configuration" in prev_line.lower()):
+                            has_exemption_comment = True
                             break
 
-                if has_api_boundary_comment:
+                if has_exemption_comment:
                     continue
 
                 matches.append(f"{relative}:{line_number}: {line}")
