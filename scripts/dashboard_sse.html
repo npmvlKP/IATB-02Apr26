@@ -63,6 +63,13 @@
             gap: 20px;
             margin-bottom: 30px;
         }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
         
         .card {
             background: #1e293b;
@@ -243,6 +250,75 @@
                 <h2>Last Update</h2>
                 <div class="value" id="lastUpdate" style="font-size: 1.5rem;">--</div>
                 <div class="subtitle">Latest event time</div>
+            </div>
+        </div>
+
+        <!-- New Enhancement Panels -->
+        <h2 style="color: #94a3b8; font-size: 1.2rem; margin-bottom: 20px;">📊 Real-Time Monitoring</h2>
+        
+        <div class="grid-2">
+            <!-- Position Monitor -->
+            <div class="card">
+                <h2>📈 Position Monitor</h2>
+                <div id="positionList" style="max-height: 200px; overflow-y: auto;">
+                    <div style="color: #64748b; font-size: 0.875rem;">No positions loaded</div>
+                </div>
+            </div>
+
+            <!-- PnL Curve -->
+            <div class="card">
+                <h2>📉 PnL Curve</h2>
+                <canvas id="pnlChart" style="width: 100%; height: 200px;"></canvas>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Data Source Health -->
+            <div class="card">
+                <h2>🔗 Data Source Health</h2>
+                <div id="dataSourceHealth">
+                    <div style="margin-bottom: 10px;">
+                        <span style="color: #94a3b8;">Kite:</span>
+                        <span id="kiteHealth" style="color: #64748b;">Checking...</span>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <span style="color: #94a3b8;">Jugaad:</span>
+                        <span id="jugaadHealth" style="color: #64748b;">Checking...</span>
+                    </div>
+                    <div>
+                        <span style="color: #94a3b8;">Fallback (YFinance):</span>
+                        <span id="fallbackHealth" style="color: #64748b;">Checking...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk Metrics -->
+            <div class="card">
+                <h2>⚠️ Risk Metrics</h2>
+                <div style="margin-bottom: 8px;">
+                    <span style="color: #94a3b8; font-size: 0.8rem;">Drawdown:</span>
+                    <span id="drawdown" style="color: #f8fafc; font-weight: 600;">₹0.00</span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <span style="color: #94a3b8; font-size: 0.8rem;">Exposure:</span>
+                    <span id="exposure" style="color: #f8fafc; font-weight: 600;">₹0.00</span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <span style="color: #94a3b8; font-size: 0.8rem;">Daily Loss:</span>
+                    <span id="dailyLoss" style="color: #f8fafc; font-weight: 600;">0.00%</span>
+                </div>
+                <div>
+                    <span style="color: #94a3b8; font-size: 0.8rem;">Positions:</span>
+                    <span id="positionCount" style="color: #f8fafc; font-weight: 600;">0</span>
+                </div>
+            </div>
+
+            <!-- Order Flow -->
+            <div class="card">
+                <h2>📋 Order Flow</h2>
+                <div id="orderFlow" style="max-height: 200px; overflow-y: auto; font-size: 0.8rem;">
+                    <div style="color: #64748b;">No orders yet</div>
+                </div>
             </div>
         </div>
         
@@ -446,10 +522,171 @@
             }
         }
         
+        // Update position monitor
+        function updatePositions(positions) {
+            const positionList = document.getElementById('positionList');
+            if (!positions || positions.length === 0) {
+                positionList.innerHTML = '<div style="color: #64748b; font-size: 0.875rem;">No positions</div>';
+                return;
+            }
+            
+            let html = '';
+            positions.forEach(pos => {
+                const pnlColor = pos.pnl >= 0 ? '#22c55e' : '#ef4444';
+                html += `
+                    <div style="padding: 8px; margin-bottom: 8px; background: #0f172a; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span style="font-weight: 600; color: #e2e8f0;">${pos.symbol}</span>
+                            <span style="color: ${pnlColor}; font-weight: 600;">${pos.pnl >= 0 ? '+' : ''}₹${pos.pnl}</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: #64748b;">
+                            Qty: ${pos.quantity} | Avg: ₹${pos.average_price} | Last: ₹${pos.last_price}
+                        </div>
+                    </div>
+                `;
+            });
+            positionList.innerHTML = html;
+        }
+
+        // Update PnL curve
+        function updatePnLCurve(pnlData) {
+            const canvas = document.getElementById('pnlChart');
+            if (!canvas || !pnlData || pnlData.length === 0) return;
+            
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width = canvas.offsetWidth;
+            const height = canvas.height = canvas.offsetHeight;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Find min and max for scaling
+            const values = pnlData.map(p => parseFloat(p.cumulative_pnl));
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            const range = maxVal - minVal || 1;
+            
+            // Draw line
+            ctx.beginPath();
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            
+            pnlData.forEach((point, i) => {
+                const x = (i / (pnlData.length - 1)) * width;
+                const y = height - ((parseFloat(point.cumulative_pnl) - minVal) / range) * height;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            
+            ctx.stroke();
+            
+            // Draw zero line if in range
+            if (minVal <= 0 && maxVal >= 0) {
+                const zeroY = height - ((-minVal) / range) * height;
+                ctx.beginPath();
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.moveTo(0, zeroY);
+                ctx.lineTo(width, zeroY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        // Update data source health
+        function updateDataSourceHealth(healthData) {
+            if (!healthData) return;
+            
+            // Update Kite
+            const kiteEl = document.getElementById('kiteHealth');
+            kiteEl.textContent = `${healthData.kite?.status || 'unknown'} ${healthData.kite?.latency_ms ? '(' + healthData.kite.latency_ms + 'ms)' : ''}`;
+            kiteEl.style.color = healthData.kite?.status === 'healthy' ? '#22c55e' : '#ef4444';
+            
+            // Update Jugaad
+            const jugaadEl = document.getElementById('jugaadHealth');
+            jugaadEl.textContent = `${healthData.jugaad?.status || 'unknown'} ${healthData.jugaad?.latency_ms ? '(' + healthData.jugaad.latency_ms + 'ms)' : ''}`;
+            jugaadEl.style.color = healthData.jugaad?.status === 'healthy' ? '#22c55e' : '#ef4444';
+            
+            // Update Fallback
+            const fallbackEl = document.getElementById('fallbackHealth');
+            fallbackEl.textContent = `${healthData.fallback?.status || 'unknown'} ${healthData.fallback?.latency_ms ? '(' + healthData.fallback.latency_ms + 'ms)' : ''}`;
+            fallbackEl.style.color = healthData.fallback?.status === 'healthy' ? '#22c55e' : '#ef4444';
+        }
+
+        // Update risk metrics
+        function updateRiskMetrics(riskData) {
+            if (!riskData) return;
+            
+            document.getElementById('drawdown').textContent = `₹${parseFloat(riskData.max_drawdown || 0).toFixed(2)}`;
+            document.getElementById('exposure').textContent = `₹${parseFloat(riskData.total_exposure || 0).toFixed(2)}`;
+            document.getElementById('dailyLoss').textContent = `${parseFloat(riskData.daily_loss_pct || 0).toFixed(2)}%`;
+            document.getElementById('positionCount').textContent = riskData.position_count || 0;
+            
+            // Color code daily loss
+            const lossEl = document.getElementById('dailyLoss');
+            if (riskData.loss_limit_breached) {
+                lossEl.style.color = '#ef4444';
+            } else {
+                lossEl.style.color = '#f8fafc';
+            }
+        }
+
+        // Update order flow
+        function updateOrderFlow(orders) {
+            const orderFlowEl = document.getElementById('orderFlow');
+            if (!orders || orders.length === 0) {
+                orderFlowEl.innerHTML = '<div style="color: #64748b;">No orders yet</div>';
+                return;
+            }
+            
+            let html = '';
+            orders.slice(0, 10).forEach(order => {
+                const sideColor = order.side === 'BUY' ? '#22c55e' : '#ef4444';
+                html += `
+                    <div style="padding: 6px; margin-bottom: 4px; background: #0f172a; border-radius: 4px; border-left: 2px solid ${sideColor};">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-weight: 600; color: ${sideColor};">${order.side}</span>
+                            <span style="color: #94a3b8; font-size: 0.75rem;">${order.timestamp}</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: #e2e8f0;">
+                            ${order.symbol} | ${order.quantity} @ ₹${order.price}
+                        </div>
+                    </div>
+                `;
+            });
+            orderFlowEl.innerHTML = html;
+        }
+
+        // Fetch enhanced dashboard data
+        async function fetchEnhancedData() {
+            try {
+                const response = await fetch('http://localhost:8080/api/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    updatePositions(data.positions);
+                    updatePnLCurve(data.pnl_curve);
+                    updateDataSourceHealth(data.data_source_health);
+                    updateRiskMetrics(data.risk_metrics);
+                    updateOrderFlow(data.order_flow);
+                }
+            } catch (error) {
+                console.error('Error fetching enhanced data:', error);
+            }
+        }
+
         // Auto-connect on page load
         window.addEventListener('load', function() {
             logEvent('system', 'Dashboard initialized');
             connectSSE();
+            
+            // Fetch enhanced data every 5 seconds
+            setInterval(fetchEnhancedData, 5000);
+            fetchEnhancedData(); // Initial fetch
         });
         
         // Handle page unload
