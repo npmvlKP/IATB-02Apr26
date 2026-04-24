@@ -154,21 +154,8 @@ def get_config() -> Config:
     return _config_instance
 
 
-def confirm_live_mode() -> None:
-    """Confirm live trading mode activation.
-
-    This function must be called explicitly to enable live trading.
-    It requires user confirmation through an interactive dialog.
-
-    Raises:
-        ConfigError: If confirmation is denied or if not running in an interactive session.
-    """
-    global _live_mode_confirmed
-
-    if _live_mode_confirmed:
-        logger.warning("Live mode has already been confirmed.")
-        return
-
+def _log_live_trading_warning() -> None:
+    """Log live trading warning messages."""
     logger.warning("=" * 80)
     logger.warning("LIVE TRADING CONFIRMATION REQUIRED")
     logger.warning("=" * 80)
@@ -188,24 +175,52 @@ def confirm_live_mode() -> None:
     logger.warning("=" * 80)
     logger.warning("")
 
+
+def _process_confirmation_response(response: str) -> None:
+    """Process user confirmation response.
+
+    Args:
+        response: User's input response.
+
+    Raises:
+        ConfigError: If confirmation is denied.
+    """
+    global _config_instance
+
+    if response != "CONFIRM":
+        msg = "Live trading activation cancelled by user."
+        logger.error(msg)
+        raise ConfigError(msg)
+
+    global _live_mode_confirmed
+    _live_mode_confirmed = True
+    logger.warning("LIVE TRADING MODE CONFIRMED. Real trades will be executed.")
+
+    if _config_instance is not None:
+        _config_instance.execution_mode = "live"
+        _config_instance.live_trading_enabled = True
+
+
+def confirm_live_mode() -> None:
+    """Confirm live trading mode activation.
+
+    This function must be called explicitly to enable live trading.
+    It requires user confirmation through an interactive dialog.
+
+    Raises:
+        ConfigError: If confirmation is denied or if not running in an interactive session.
+    """
+    global _live_mode_confirmed
+
+    if _live_mode_confirmed:
+        logger.warning("Live mode has already been confirmed.")
+        return
+
+    _log_live_trading_warning()
+
     try:
-        # Interactive confirmation
         response = input("Type 'CONFIRM' to enable live trading: ").strip().upper()
-
-        if response != "CONFIRM":
-            msg = "Live trading activation cancelled by user."
-            logger.error(msg)
-            raise ConfigError(msg)
-
-        _live_mode_confirmed = True
-        logger.warning("LIVE TRADING MODE CONFIRMED. Real trades will be executed.")
-
-        # Reload config with confirmation enabled
-        global _config_instance
-        if _config_instance is not None:
-            _config_instance.execution_mode = "live"
-            _config_instance.live_trading_enabled = True
-
+        _process_confirmation_response(response)
     except (EOFError, KeyboardInterrupt):
         msg = "Live trading activation cancelled (non-interactive session or interrupted)."
         logger.error(msg)

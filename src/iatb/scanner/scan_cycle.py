@@ -838,6 +838,65 @@ def _create_early_return_result(
     )
 
 
+def _run_scanner_step(
+    symbols: Sequence[str],
+    scanner_config: ScannerConfig | None,
+    sentiment_analyzer: Callable[[str], tuple[Decimal, bool]],
+    rl_predictor: Callable[[list[Decimal]], Decimal],
+    strength_scorer: StrengthScorer,
+    data_provider: DataProvider | None,
+    errors: list[str],
+) -> ScannerResult | None:
+    """Execute scanner step of the pipeline.
+
+    Args:
+        symbols: List of symbols to scan.
+        scanner_config: Scanner configuration.
+        sentiment_analyzer: Sentiment analysis function.
+        rl_predictor: RL predictor function.
+        strength_scorer: StrengthScorer for market strength evaluation.
+        data_provider: DataProvider for market data.
+        errors: List to collect error messages.
+
+    Returns:
+        ScannerResult if successful, None otherwise.
+    """
+    _LOGGER.info("Step 2: Running scanner...")
+    return _execute_scanner(
+        symbols,
+        scanner_config,
+        sentiment_analyzer,
+        rl_predictor,
+        strength_scorer,
+        data_provider,
+        errors,
+    )
+
+
+def _run_trade_execution_step(
+    scanner_result: ScannerResult,
+    max_trades: int,
+    order_manager: OrderManager | None,
+    errors: list[str],
+) -> tuple[int, Decimal]:
+    """Execute trade execution step of the pipeline.
+
+    Args:
+        scanner_result: Scanner result from scan step.
+        max_trades: Maximum trades to execute.
+        order_manager: OrderManager instance.
+        errors: List to collect error messages.
+
+    Returns:
+        Tuple of (trades_executed, total_pnl).
+    """
+    _LOGGER.info("Step 3: Executing paper trades...")
+    if order_manager is None:
+        _LOGGER.warning("  ⚠ Order manager not available, skipping trade execution")
+        return 0, Decimal("0")
+    return _execute_paper_trades(scanner_result, max_trades, order_manager, errors)
+
+
 def _execute_scan_pipeline(
     symbols: Sequence[str],
     scanner_config: ScannerConfig | None,
@@ -865,9 +924,7 @@ def _execute_scan_pipeline(
     Returns:
         Tuple of (scanner_result, trades_executed, total_pnl).
     """
-    # Step 2: Execute scanner
-    _LOGGER.info("Step 2: Running scanner...")
-    scanner_result = _execute_scanner(
+    scanner_result = _run_scanner_step(
         symbols,
         scanner_config,
         sentiment_analyzer,
@@ -876,21 +933,27 @@ def _execute_scan_pipeline(
         data_provider,
         errors,
     )
-
     if scanner_result is None:
         return None, 0, Decimal("0")
-
-    # Step 3: Execute paper trades (only if order_manager is available)
-    _LOGGER.info("Step 3: Executing paper trades...")
-    if order_manager is None:
-        _LOGGER.warning("  ⚠ Order manager not available, skipping trade execution")
-        return scanner_result, 0, Decimal("0")
-
-    trades_executed, total_pnl = _execute_paper_trades(
+    trades_executed, total_pnl = _run_trade_execution_step(
         scanner_result, max_trades, order_manager, errors
     )
-
     return scanner_result, trades_executed, total_pnl
+
+
+def _initialize_scan_cycle_logging(
+    timestamp_utc: datetime, symbols: Sequence[str] | None, max_trades: int, errors: list[str]
+) -> None:
+    """Initialize logging for scan cycle.
+
+    Args:
+        timestamp_utc: UTC timestamp.
+        symbols: Symbols to scan.
+        max_trades: Maximum trades.
+        errors: List to collect errors.
+    """
+    _log_scan_cycle_start(timestamp_utc, symbols, max_trades)
+    _check_ml_readiness_and_log(errors)
 
 
 def _initialize_scan_cycle(
@@ -926,34 +989,10 @@ def _initialize_scan_cycle(
     """
     timestamp_utc = datetime.now(UTC)
     errors: list[str] = []
-
-    _log_scan_cycle_start(timestamp_utc, symbols, max_trades)
-    _check_ml_readiness_and_log(errors)
-
+    _initialize_scan_cycle_logging(timestamp_utc, symbols, max_trades, errors)
     symbols = _prepare_scan_symbols(symbols)
-    (
-        sentiment_analyzer,
-        rl_predictor,
-        strength_scorer,
-        order_manager,
-        data_provider,
-    ) = _initialize_scan_components(
-        order_manager,
-        audit_logger,
-        data_provider,
-        errors,
-    )
-
-    return (
-        timestamp_utc,
-        symbols,
-        sentiment_analyzer,
-        rl_predictor,
-        strength_scorer,
-        order_manager,
-        data_provider,
-        errors,
-    )
+    comps = _initialize_scan_components(order_manager, audit_logger, data_provider, errors)
+    return timestamp_utc, symbols, comps[0], comps[1], comps[2], comps[3], comps[4], errors
 
 
 def _create_final_result(
@@ -989,8 +1028,8 @@ def _check_order_manager_and_return_early_if_needed(
     order_manager: OrderManager | None,
     errors: list[str],
     timestamp_utc: datetime,
-) -> ScanCycleResult | None:
-    """Check if order manager exists, return early result if not.
+) -> bool:
+    """Check if order manager exists.
 
     Args:
         order_manager: OrderManager instance or None.
@@ -998,11 +1037,12 @@ def _check_order_manager_and_return_early_if_needed(
         timestamp_utc: UTC timestamp.
 
     Returns:
-        ScanCycleResult if order_manager is None, otherwise None.
+        True if early return is needed (order_manager is None).
     """
     if order_manager is None:
-        return _create_early_return_result(errors, timestamp_utc)
-    return None
+        _create_early_return_result(errors, timestamp_utc)
+        return True
+    return False
 
 
 def _handle_scan_result_or_early_return(
@@ -1058,11 +1098,8 @@ def _execute_full_scan_cycle(
     Returns:
         ScanCycleResult with results, trades, PnL, errors.
     """
-    early_result = _check_order_manager_and_return_early_if_needed(
-        order_manager, errors, timestamp_utc
-    )
-    if early_result is not None:
-        return early_result
+    if _check_order_manager_and_return_early_if_needed(order_manager, errors, timestamp_utc):
+        return _create_early_return_result(errors, timestamp_utc)
 
     scanner_result, trades_executed, total_pnl = _execute_scan_pipeline(
         symbols,

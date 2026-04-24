@@ -6,6 +6,7 @@ debt-to-equity, dividend yield, and earnings growth.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -89,6 +90,168 @@ class FundamentalFilter:
     def __init__(self, config: FundamentalFilterConfig | None = None) -> None:
         self._config = config or FundamentalFilterConfig()
 
+    def _evaluate_optional_metric(
+        self,
+        value: Decimal | None,
+        check_fn: Callable[
+            [Decimal],
+            tuple[bool, Decimal, str],
+        ],
+        reasons: list[str],
+        score: Decimal,
+        total_checks: list[int],
+        passed_checks: list[int],
+    ) -> tuple[Decimal, list[str], int, int]:
+        """Evaluate an optional metric.
+
+        Args:
+            value: Metric value to evaluate.
+            check_fn: Check function to use.
+            reasons: List of failure reasons.
+            score: Current score.
+            total_checks: List containing total check count.
+            passed_checks: List containing passed check count.
+
+        Returns:
+            Tuple of (updated_score, updated_reasons, total_checks, passed_checks).
+        """
+        if value is None:
+            return score, reasons, total_checks[0], passed_checks[0]
+
+        total_checks[0] += 1
+        result = check_fn(value)
+        if result[0]:
+            passed_checks[0] += 1
+            score += result[1]
+        else:
+            reasons.append(result[2])
+
+        return score, reasons, total_checks[0], passed_checks[0]
+
+    def _evaluate_ratio_metrics(
+        self,
+        metrics: FundamentalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate P/E, P/B, and ROE ratio metrics."""
+        score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            metrics.pe_ratio, self._check_pe_ratio, reasons, score, [total_checks], [passed_checks]
+        )
+        score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            metrics.pb_ratio, self._check_pb_ratio, reasons, score, [total_checks], [passed_checks]
+        )
+        score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            metrics.roe, self._check_roe, reasons, score, [total_checks], [passed_checks]
+        )
+        return score, total_checks, passed_checks
+
+    def _evaluate_balance_sheet_metrics(
+        self,
+        metrics: FundamentalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate debt-to-equity and current ratio metrics."""
+        score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            metrics.debt_to_equity,
+            self._check_debt_to_equity,
+            reasons,
+            score,
+            [total_checks],
+            [passed_checks],
+        )
+        score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            metrics.current_ratio,
+            self._check_current_ratio,
+            reasons,
+            score,
+            [total_checks],
+            [passed_checks],
+        )
+        return score, total_checks, passed_checks
+
+    def _evaluate_growth_metrics(
+        self,
+        metrics: FundamentalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate dividend, earnings, and revenue growth metrics."""
+        if self._config.min_dividend_yield is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+                metrics.dividend_yield,
+                self._check_dividend_yield,
+                reasons,
+                score,
+                [total_checks],
+                [passed_checks],
+            )
+        if self._config.min_earnings_growth is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+                metrics.earnings_growth,
+                self._check_earnings_growth,
+                reasons,
+                score,
+                [total_checks],
+                [passed_checks],
+            )
+        if self._config.min_revenue_growth is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+                metrics.revenue_growth,
+                self._check_revenue_growth,
+                reasons,
+                score,
+                [total_checks],
+                [passed_checks],
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_market_cap(
+        self,
+        metrics: FundamentalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate market cap metric."""
+        score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            metrics.market_cap,
+            self._check_market_cap,
+            reasons,
+            score,
+            [total_checks],
+            [passed_checks],
+        )
+        return score, total_checks, passed_checks
+
+    def _evaluate_profitability(
+        self,
+        metrics: FundamentalMetrics,
+        total_checks: int,
+        passed_checks: int,
+        score: Decimal,
+        reasons: list[str],
+    ) -> tuple[int, int, Decimal]:
+        """Evaluate profitability if required."""
+        if not self._config.require_profitability:
+            return total_checks, passed_checks, score
+        total_checks += 1
+        prof_result = self._check_profitability(metrics)
+        if prof_result[0]:
+            passed_checks += 1
+            score += prof_result[1]
+        else:
+            reasons.append(prof_result[2])
+        return total_checks, passed_checks, score
+
     def evaluate(self, metrics: FundamentalMetrics) -> FilterResult:
         """Evaluate a single instrument based on fundamental criteria."""
         reasons: list[str] = []
@@ -96,95 +259,21 @@ class FundamentalFilter:
         total_checks = 0
         passed_checks = 0
 
-        if metrics.pe_ratio is not None:
-            total_checks += 1
-            pe_result = self._check_pe_ratio(metrics.pe_ratio)
-            if pe_result[0]:
-                passed_checks += 1
-                score += pe_result[1]
-            else:
-                reasons.append(pe_result[2])
-
-        if metrics.pb_ratio is not None:
-            total_checks += 1
-            pb_result = self._check_pb_ratio(metrics.pb_ratio)
-            if pb_result[0]:
-                passed_checks += 1
-                score += pb_result[1]
-            else:
-                reasons.append(pb_result[2])
-
-        if metrics.roe is not None:
-            total_checks += 1
-            roe_result = self._check_roe(metrics.roe)
-            if roe_result[0]:
-                passed_checks += 1
-                score += roe_result[1]
-            else:
-                reasons.append(roe_result[2])
-
-        if metrics.debt_to_equity is not None:
-            total_checks += 1
-            de_result = self._check_debt_to_equity(metrics.debt_to_equity)
-            if de_result[0]:
-                passed_checks += 1
-                score += de_result[1]
-            else:
-                reasons.append(de_result[2])
-
-        if metrics.current_ratio is not None:
-            total_checks += 1
-            cr_result = self._check_current_ratio(metrics.current_ratio)
-            if cr_result[0]:
-                passed_checks += 1
-                score += cr_result[1]
-            else:
-                reasons.append(cr_result[2])
-
-        if metrics.dividend_yield is not None and self._config.min_dividend_yield is not None:
-            total_checks += 1
-            div_result = self._check_dividend_yield(metrics.dividend_yield)
-            if div_result[0]:
-                passed_checks += 1
-                score += div_result[1]
-            else:
-                reasons.append(div_result[2])
-
-        if metrics.earnings_growth is not None and self._config.min_earnings_growth is not None:
-            total_checks += 1
-            eg_result = self._check_earnings_growth(metrics.earnings_growth)
-            if eg_result[0]:
-                passed_checks += 1
-                score += eg_result[1]
-            else:
-                reasons.append(eg_result[2])
-
-        if metrics.market_cap is not None:
-            total_checks += 1
-            mc_result = self._check_market_cap(metrics.market_cap)
-            if mc_result[0]:
-                passed_checks += 1
-                score += mc_result[1]
-            else:
-                reasons.append(mc_result[2])
-
-        if metrics.revenue_growth is not None and self._config.min_revenue_growth is not None:
-            total_checks += 1
-            rg_result = self._check_revenue_growth(metrics.revenue_growth)
-            if rg_result[0]:
-                passed_checks += 1
-                score += rg_result[1]
-            else:
-                reasons.append(rg_result[2])
-
-        if self._config.require_profitability:
-            total_checks += 1
-            prof_result = self._check_profitability(metrics)
-            if prof_result[0]:
-                passed_checks += 1
-                score += prof_result[1]
-            else:
-                reasons.append(prof_result[2])
+        score, total_checks, passed_checks = self._evaluate_ratio_metrics(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_balance_sheet_metrics(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_growth_metrics(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_market_cap(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        total_checks, passed_checks, score = self._evaluate_profitability(
+            metrics, total_checks, passed_checks, score, reasons
+        )
 
         final_score = score / max(total_checks, 1)
         passed = passed_checks == total_checks

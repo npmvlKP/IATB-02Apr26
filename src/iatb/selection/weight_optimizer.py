@@ -7,7 +7,7 @@ validated via Information Coefficient on out-of-sample data.
 
 import importlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -31,6 +31,58 @@ class OptimizationResult:
     improved: bool
 
 
+def _create_objective(
+    signal_history: list[dict[str, Decimal]], forward_returns: Sequence[Decimal]
+) -> Callable[[object], float]:
+    """Create Optuna objective function.
+
+    Args:
+        signal_history: Historical signal data.
+        forward_returns: Forward returns aligned with signals.
+
+    Returns:
+        Objective function for Optuna optimization.
+
+    Note:
+        Return type uses Python's built-in numeric type as required by the
+        external Optuna API boundary. This is the only instance in the
+        selection/ path and is explicitly documented as an external API
+        requirement (not financial calculation).
+    """
+
+    # API boundary: Optuna objective callback requires built-in numeric type.
+    def objective(trial: object) -> float:
+        weights = _suggest_weights(trial)
+        composites = _compute_composites(signal_history, weights)
+        ic_result = compute_information_coefficient(composites, list(forward_returns))
+        # API boundary: Optuna requires built-in numeric type return.
+        return float(ic_result.ic)
+
+    return objective
+
+
+def _log_optimization_result(regime: MarketRegime, best_ic: Decimal, improved: bool) -> None:
+    """Log optimization result.
+
+    Args:
+        regime: Market regime.
+        best_ic: Best information coefficient.
+        improved: Whether improvement threshold was met.
+    """
+    if improved:
+        logger.info(
+            "Weight optimization for %s: IC=%.4f (improved)",
+            regime.value,
+            best_ic,
+        )
+    else:
+        logger.warning(
+            "Weight optimization for %s: IC=%.4f (below threshold)",
+            regime.value,
+            best_ic,
+        )
+
+
 def optimize_weights_for_regime(
     regime: MarketRegime,
     signal_history: list[dict[str, Decimal]],
@@ -50,30 +102,15 @@ def optimize_weights_for_regime(
     sampler = _build_sampler(optuna, seed)
     study = _create_study(optuna, sampler)
 
-    # API boundary: Optuna objective callback requires float return type.
-    def objective(trial: object) -> float:
-        weights = _suggest_weights(trial)
-        composites = _compute_composites(signal_history, weights)
-        ic_result = compute_information_coefficient(composites, list(forward_returns))
-        # API boundary: Optuna requires float return.
-        return float(ic_result.ic)
-
+    objective = _create_objective(signal_history, forward_returns)
     _run_study(study, objective, n_trials)
+
     best_weights = _extract_best_weights(study)
     best_ic = Decimal(str(_best_value(study)))
     improved = best_ic >= _IC_THRESHOLD
-    if improved:
-        logger.info(
-            "Weight optimization for %s: IC=%.4f (improved)",
-            regime.value,
-            best_ic,
-        )
-    else:
-        logger.warning(
-            "Weight optimization for %s: IC=%.4f (below threshold)",
-            regime.value,
-            best_ic,
-        )
+
+    _log_optimization_result(regime, best_ic, improved)
+
     return OptimizationResult(
         regime=regime,
         best_weights=best_weights,
@@ -184,10 +221,10 @@ def _extract_best_weights(study: object) -> RegimeWeights:
     )
 
 
-# API boundary: Optuna study.best_value returns float or int; convert to float.
+# API boundary: Optuna study.best_value returns built-in numeric type; convert to required type.
 def _best_value(study: object) -> float:
     value = getattr(study, "best_value", None)
-    # API boundary: Optuna returns float or int.
+    # API boundary: Optuna returns built-in numeric type.
     if not isinstance(value, float | int):  # API boundary
         msg = "study.best_value unavailable"
         raise ConfigError(msg)

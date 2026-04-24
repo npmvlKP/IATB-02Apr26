@@ -39,8 +39,8 @@ from iatb.execution.base import ExecutionResult, Executor, OrderRequest
 _LOGGER = logging.getLogger(__name__)
 
 # Default configuration values
-# NOTE: float used for poll_interval is a timing parameter, not financial calculation
 DEFAULT_CONFIRMATION_TIMEOUT_SECONDS: int = 30
+# timing parameter, not financial calculation
 DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS: float = 0.5
 DEFAULT_SLIPPAGE_TOLERANCE_BPS: Decimal = Decimal("20")  # 0.20%
 
@@ -265,6 +265,57 @@ class LiveExecutor(Executor):
         }
         return status_map.get(broker_status, OrderStatus.PENDING)
 
+    def _is_terminal_status(self, order: BrokerOrder) -> bool:
+        """Check if order status is terminal.
+
+        Args:
+            order: Broker order to check.
+
+        Returns:
+            True if order is in terminal state.
+        """
+        return order.status in (
+            BrokerOrderStatus.COMPLETE,
+            BrokerOrderStatus.REJECTED,
+            BrokerOrderStatus.CANCELLED,
+            BrokerOrderStatus.EXPIRED,
+        )
+
+    def _has_partial_fill(self, order: BrokerOrder) -> bool:
+        """Check if order has partial fill.
+
+        Args:
+            order: Broker order to check.
+
+        Returns:
+            True if order has partial fill.
+        """
+        return order.filled_quantity > 0 and order.filled_quantity < order.quantity
+
+    def _check_order_status(self, order: BrokerOrder, order_id: str) -> BrokerOrder:
+        """Check order status and handle terminal states.
+
+        Args:
+            order: Broker order to check.
+            order_id: Order ID for error messages.
+
+        Returns:
+            The order if it's in a terminal state.
+
+        Raises:
+            ExecutionError: If order is rejected.
+        """
+        if self._is_terminal_status(order):
+            if order.status == BrokerOrderStatus.REJECTED:
+                msg = f"Order {order_id} was rejected"
+                raise ExecutionError(msg)
+            return order
+
+        if self._has_partial_fill(order):
+            return order
+
+        return None  # type: ignore[return-value]
+
     async def _wait_for_confirmation(self, order_id: str) -> BrokerOrder:
         """Wait for order confirmation/fill with timeout.
 
@@ -280,6 +331,7 @@ class LiveExecutor(Executor):
         Raises:
             asyncio.TimeoutError: If timeout occurs.
             ExecutionError: If order is rejected.
+            RuntimeError: If loop exits unexpectedly.
         """
         start_time = asyncio.get_event_loop().time()
 
@@ -300,23 +352,12 @@ class LiveExecutor(Executor):
                 continue
 
             # Check terminal states
-            if order.status in (
-                BrokerOrderStatus.COMPLETE,
-                BrokerOrderStatus.REJECTED,
-                BrokerOrderStatus.CANCELLED,
-                BrokerOrderStatus.EXPIRED,
-            ):
-                if order.status == BrokerOrderStatus.REJECTED:
-                    msg = f"Order {order_id} was rejected"
-                    raise ExecutionError(msg)
-                return order
-
-            # Partial fills are also considered terminal for confirmation
-            if order.filled_quantity > 0 and order.filled_quantity < order.quantity:
-                return order
+            result = self._check_order_status(order, order_id)
+            if result is not None:
+                return result
 
             # Wait before next poll
-            await asyncio.sleep(self._confirmation_poll_interval)
+            await asyncio.sleep(self._confirmation_poll_interval)  # type: ignore[unreachable]
 
     def _validate_slippage(
         self,

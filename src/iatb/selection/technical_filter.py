@@ -6,8 +6,10 @@ moving averages, Bollinger Bands, volume analysis, and price momentum.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from iatb.core.exceptions import ConfigError
 
@@ -98,6 +100,207 @@ class TechnicalFilter:
     def __init__(self, config: TechnicalFilterConfig | None = None) -> None:
         self._config = config or TechnicalFilterConfig()
 
+    def _evaluate_required_metric(
+        self,
+        check_fn: Callable[..., tuple[bool, Decimal, str]],
+        check_args: tuple[Any, ...],
+        reasons: list[str],
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+    ) -> tuple[Decimal, list[str], int, int]:
+        """Evaluate a required metric.
+
+        Args:
+            check_fn: Check function to use.
+            check_args: Arguments for check function.
+            reasons: List of failure reasons.
+            score: Current score.
+            total_checks: Current total check count.
+            passed_checks: Current passed check count.
+
+        Returns:
+            Tuple of (updated_score, updated_reasons, total_checks, passed_checks).
+        """
+        total_checks += 1
+        result = check_fn(*check_args)
+        if result[0]:
+            passed_checks += 1
+            score += result[1]
+        else:
+            reasons.append(result[2])
+
+        return score, reasons, total_checks, passed_checks
+
+    def _evaluate_rsi(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate RSI metric if available."""
+        if metrics.rsi is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_rsi, (metrics.rsi,), reasons, score, total_checks, passed_checks
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_macd(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate MACD metric if available."""
+        if metrics.macd is not None and metrics.macd_signal is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_macd,
+                (metrics.macd, metrics.macd_signal),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_moving_averages(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate moving average crossover if available."""
+        if metrics.ma_short is not None and metrics.ma_long is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_ma_cross,
+                (metrics.ma_short, metrics.ma_long),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_bollinger_bands(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate Bollinger Bands if available."""
+        if (
+            metrics.price is not None
+            and metrics.bollinger_upper is not None
+            and metrics.bollinger_lower is not None
+            and metrics.bollinger_middle is not None
+        ):
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_bollinger,
+                (
+                    metrics.price,
+                    metrics.bollinger_upper,
+                    metrics.bollinger_lower,
+                    metrics.bollinger_middle,
+                ),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_volume(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate volume ratio if available."""
+        if metrics.volume_avg is not None and metrics.volume_current is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_volume,
+                (metrics.volume_current, metrics.volume_avg),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_momentum(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate price momentum if available and configured."""
+        if metrics.price_momentum is not None and self._config.min_price_momentum is not None:
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_momentum,
+                (metrics.price_momentum,),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_atr(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate ATR ratio if available and configured."""
+        if (
+            metrics.atr is not None
+            and metrics.price is not None
+            and self._config.max_atr_ratio is not None
+        ):
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_atr,
+                (metrics.atr, metrics.price),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
+    def _evaluate_trend_alignment(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate trend alignment if configured."""
+        if self._config.require_trend_alignment:
+            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+                self._check_trend_alignment,
+                (metrics,),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
+            )
+        return score, total_checks, passed_checks
+
     def evaluate(self, metrics: TechnicalMetrics) -> FilterResult:
         """Evaluate a single instrument based on technical criteria."""
         reasons: list[str] = []
@@ -105,91 +308,30 @@ class TechnicalFilter:
         total_checks = 0
         passed_checks = 0
 
-        if metrics.rsi is not None:
-            total_checks += 1
-            rsi_result = self._check_rsi(metrics.rsi)
-            if rsi_result[0]:
-                passed_checks += 1
-                score += rsi_result[1]
-            else:
-                reasons.append(rsi_result[2])
-
-        if metrics.macd is not None and metrics.macd_signal is not None:
-            total_checks += 1
-            macd_result = self._check_macd(metrics.macd, metrics.macd_signal)
-            if macd_result[0]:
-                passed_checks += 1
-                score += macd_result[1]
-            else:
-                reasons.append(macd_result[2])
-
-        if metrics.ma_short is not None and metrics.ma_long is not None:
-            total_checks += 1
-            ma_result = self._check_ma_cross(metrics.ma_short, metrics.ma_long)
-            if ma_result[0]:
-                passed_checks += 1
-                score += ma_result[1]
-            else:
-                reasons.append(ma_result[2])
-
-        if (
-            metrics.price is not None
-            and metrics.bollinger_upper is not None
-            and metrics.bollinger_lower is not None
-            and metrics.bollinger_middle is not None
-        ):
-            total_checks += 1
-            bb_result = self._check_bollinger(
-                metrics.price,
-                metrics.bollinger_upper,
-                metrics.bollinger_lower,
-                metrics.bollinger_middle,
-            )
-            if bb_result[0]:
-                passed_checks += 1
-                score += bb_result[1]
-            else:
-                reasons.append(bb_result[2])
-
-        if metrics.volume_avg is not None and metrics.volume_current is not None:
-            total_checks += 1
-            vol_result = self._check_volume(metrics.volume_current, metrics.volume_avg)
-            if vol_result[0]:
-                passed_checks += 1
-                score += vol_result[1]
-            else:
-                reasons.append(vol_result[2])
-
-        if metrics.price_momentum is not None and self._config.min_price_momentum is not None:
-            total_checks += 1
-            mom_result = self._check_momentum(metrics.price_momentum)
-            if mom_result[0]:
-                passed_checks += 1
-                score += mom_result[1]
-            else:
-                reasons.append(mom_result[2])
-
-        if (
-            metrics.atr is not None
-            and metrics.price is not None
-            and self._config.max_atr_ratio is not None
-        ):
-            total_checks += 1
-            atr_result = self._check_atr(metrics.atr, metrics.price)
-            if atr_result[0]:
-                passed_checks += 1
-                score += atr_result[1]
-            else:
-                reasons.append(atr_result[2])
-
-        if self._config.require_trend_alignment:
-            total_checks += 1
-            trend_result = self._check_trend_alignment(metrics)
-            if trend_result[0]:
-                passed_checks += 1
-                score += trend_result[1]
-            else:
-                reasons.append(trend_result[2])
+        score, total_checks, passed_checks = self._evaluate_rsi(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_macd(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_moving_averages(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_bollinger_bands(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_volume(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_momentum(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_atr(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        score, total_checks, passed_checks = self._evaluate_trend_alignment(
+            metrics, score, total_checks, passed_checks, reasons
+        )
 
         final_score = score / max(total_checks, 1)
         passed = passed_checks == total_checks
