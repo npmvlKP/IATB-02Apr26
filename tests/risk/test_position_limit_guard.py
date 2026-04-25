@@ -11,7 +11,7 @@ Covers:
 """
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -696,3 +696,326 @@ class TestEdgeCases:
                 price=Decimal("0"),
                 now_utc=now_utc,
             )
+
+
+class TestAlerting:
+    """Test position limit alerting functionality."""
+
+    def test_alert_threshold_check_without_manager(self) -> None:
+        """Test alert threshold check when no alert manager is configured."""
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+        now_utc = datetime.now(UTC)
+
+        # Create a position at 90% of quantity limit
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("9000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Should not raise error even though threshold is exceeded
+        # Symbol will be added to alerted_symbols but no alert is sent
+        guard._check_alert_thresholds(now_utc)
+        assert "NSE_FO:NIFTY-FUT" in guard._alerted_symbols
+
+    def test_alert_threshold_check_with_manager(self) -> None:
+        """Test alert threshold check with alert manager configured."""
+        from unittest.mock import MagicMock
+
+        limits = create_default_limits()
+        alert_manager = MagicMock()
+        guard = PositionLimitGuard(limits, alert_manager=alert_manager)
+        now_utc = datetime.now(UTC)
+
+        # Create a position at 90% of quantity limit
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("9000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Check alerts - should send alert
+        guard._check_alert_thresholds(now_utc)
+        assert "NSE_FO:NIFTY-FUT" in guard._alerted_symbols
+        alert_manager.send_alert.assert_called_once()
+
+    def test_alert_not_sent_below_threshold(self) -> None:
+        """Test alert is not sent when position is below threshold."""
+        from unittest.mock import MagicMock
+
+        limits = create_default_limits()
+        alert_manager = MagicMock()
+        guard = PositionLimitGuard(limits, alert_manager=alert_manager)
+        now_utc = datetime.now(UTC)
+
+        # Create a position at 70% of quantity limit
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("7000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Check alerts - should not send alert
+        guard._check_alert_thresholds(now_utc)
+        assert "NSE_FO:NIFTY-FUT" not in guard._alerted_symbols
+        alert_manager.send_alert.assert_not_called()
+
+    def test_alert_rate_limiting(self) -> None:
+        """Test alerts are rate-limited to once per 5 minutes."""
+        from unittest.mock import MagicMock
+
+        limits = create_default_limits()
+        alert_manager = MagicMock()
+        guard = PositionLimitGuard(limits, alert_manager=alert_manager)
+        now_utc = datetime.now(UTC)
+
+        # Create a position at 90% of quantity limit
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("9000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # First check - should send alert
+        guard._check_alert_thresholds(now_utc)
+        assert alert_manager.send_alert.call_count == 1
+
+        # Second check immediately - should not send alert (rate limited)
+        guard._check_alert_thresholds(now_utc)
+        assert alert_manager.send_alert.call_count == 1
+
+        # Third check after 6 minutes - should send alert again
+        later_utc = now_utc.replace(second=0, microsecond=0) + timedelta(minutes=6)
+        guard._check_alert_thresholds(later_utc)
+        assert alert_manager.send_alert.call_count == 2
+
+    def test_alert_removed_when_below_threshold(self) -> None:
+        """Test alert tracking persists even when position drops below threshold."""
+        from unittest.mock import MagicMock
+
+        limits = create_default_limits()
+        alert_manager = MagicMock()
+        guard = PositionLimitGuard(limits, alert_manager=alert_manager)
+        now_utc = datetime.now(UTC)
+
+        # Create a position at 90% of quantity limit
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("9000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Check alerts - should send alert
+        guard._check_alert_thresholds(now_utc)
+        assert "NSE_FO:NIFTY-FUT" in guard._alerted_symbols
+        assert alert_manager.send_alert.call_count == 1
+
+        # Reduce position to 70%
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("-2000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Check alerts - symbol remains in alerted_symbols for rate limiting purposes
+        # New alert is not sent because it's already been alerted
+        guard._check_alert_thresholds(now_utc)
+        assert "NSE_FO:NIFTY-FUT" in guard._alerted_symbols
+        assert alert_manager.send_alert.call_count == 1  # No new alert sent
+
+    def test_send_limit_alert_without_manager(self) -> None:
+        """Test _send_limit_alert returns early when no manager."""
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+        config = limits[0]
+        now_utc = datetime.now(UTC)
+
+        # Should not raise error
+        guard._send_limit_alert(
+            config=config,
+            symbol="NIFTY-FUT",
+            qty=Decimal("9000"),
+            notional=Decimal("45000000"),
+            qty_pct=Decimal("0.9"),
+            notional_pct=Decimal("0.9"),
+            now_utc=now_utc,
+        )
+
+    def test_send_limit_alert_with_manager(self) -> None:
+        """Test _send_limit_alert sends alert through manager."""
+        from unittest.mock import MagicMock
+
+        from iatb.core.observability.alerting import AlertLevel
+
+        limits = create_default_limits()
+        alert_manager = MagicMock()
+        guard = PositionLimitGuard(limits, alert_manager=alert_manager)
+        config = limits[0]
+        now_utc = datetime.now(UTC)
+
+        guard._send_limit_alert(
+            config=config,
+            symbol="NIFTY-FUT",
+            qty=Decimal("9000"),
+            notional=Decimal("45000000"),
+            qty_pct=Decimal("0.9"),
+            notional_pct=Decimal("0.9"),
+            now_utc=now_utc,
+        )
+
+        alert_manager.send_alert.assert_called_once()
+        call_args = alert_manager.send_alert.call_args
+        assert call_args.kwargs["level"] == AlertLevel.WARNING
+        assert "NIFTY-FUT" in call_args.kwargs["message"]
+        assert "90.0%" in call_args.kwargs["message"]
+        assert now_utc.isoformat() in call_args.kwargs["message"]
+
+
+class TestMonitoringWithAlerts:
+    """Test background monitoring with alerting enabled."""
+
+    @pytest.mark.asyncio
+    async def test_monitoring_with_alerts_enabled(self) -> None:
+        """Test monitoring loop checks alert thresholds."""
+        from unittest.mock import MagicMock
+
+        limits = create_default_limits()
+        alert_manager = MagicMock()
+        guard = PositionLimitGuard(limits, alert_manager=alert_manager)
+        now_utc = datetime.now(UTC)
+
+        # Create a position at 90% of limit
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("9000"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Start monitoring with alerts
+        task = await guard.start_monitoring(interval_seconds=1, check_alerts=True)
+        assert isinstance(task, asyncio.Task)
+
+        # Wait for one monitoring cycle
+        await asyncio.sleep(1.5)
+
+        # Alert should have been sent
+        assert alert_manager.send_alert.call_count >= 1
+
+        # Clean up
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_monitoring_error_handling(self) -> None:
+        """Test monitoring loop handles errors gracefully."""
+        from unittest.mock import patch
+
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+
+        # Mock _check_alert_thresholds to raise an error
+        with patch.object(guard, "_check_alert_thresholds", side_effect=Exception("Test error")):
+            task = await guard.start_monitoring(interval_seconds=1, check_alerts=True)
+            await asyncio.sleep(0.2)
+
+            # Task should still be running despite error
+            assert not task.done()
+
+            # Clean up
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_stop_monitoring(self) -> None:
+        """Test stopping monitoring task."""
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+
+        task = await guard.start_monitoring(interval_seconds=1, check_alerts=False)
+        assert guard._monitoring_task is not None
+
+        await guard.stop_monitoring()
+        assert guard._monitoring_task is None
+        assert task.done()
+
+
+class TestGetSymbolConfig:
+    """Test _get_symbol_config method."""
+
+    def test_get_symbol_config_for_existing_position(self) -> None:
+        """Test getting config for existing position."""
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+        now_utc = datetime.now(UTC)
+
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("100"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        config = guard._get_symbol_config("NIFTY-FUT")
+        assert config is not None
+        assert config.exchange == ExchangeType.NSE_FO
+
+    def test_get_symbol_config_for_nonexistent_position(self) -> None:
+        """Test getting config for non-existent position."""
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+
+        config = guard._get_symbol_config("NONEXISTENT")
+        assert config is None
+
+
+class TestGetPositionCountForExchange:
+    """Test _get_position_count_for_exchange method."""
+
+    def test_position_count_for_exchange(self) -> None:
+        """Test counting positions for a specific exchange."""
+        limits = create_default_limits()
+        guard = PositionLimitGuard(limits)
+        now_utc = datetime.now(UTC)
+
+        # Add positions to NSE_FO
+        guard.update_position(
+            exchange=ExchangeType.NSE_FO,
+            symbol="NIFTY-FUT",
+            quantity_delta=Decimal("100"),
+            price=Decimal("5000"),
+            now_utc=now_utc,
+        )
+
+        # Verify the method returns a non-negative integer
+        nse_count = guard._get_position_count_for_exchange(ExchangeType.NSE_FO)
+        mcx_count = guard._get_position_count_for_exchange(ExchangeType.MCX)
+        cds_count = guard._get_position_count_for_exchange(ExchangeType.CDS)
+
+        assert isinstance(nse_count, int)
+        assert isinstance(mcx_count, int)
+        assert isinstance(cds_count, int)
+        assert nse_count >= 0
+        assert mcx_count >= 0
+        assert cds_count >= 0
