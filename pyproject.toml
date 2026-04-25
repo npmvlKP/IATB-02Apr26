@@ -114,6 +114,10 @@ disable_error_code = ["assignment"]
 module = "iatb.data.rate_limiter"
 disable_error_code = ["no-any-return"]
 
+[[tool.mypy.overrides]]
+module = "iatb.core.queue"
+disable_error_code = ["import-not-found"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
