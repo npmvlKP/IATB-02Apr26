@@ -305,6 +305,63 @@ class TestCreateDailyRiskMetrics:
         )
         assert len(metrics.positions) == 0
 
+    def test_invalid_metrics_confidence_too_low(
+        self,
+        sample_positions: list[PositionData],
+    ) -> None:
+        """Test metrics validation fails with confidence <= 0."""
+        with pytest.raises(ConfigError, match="between 0 and 1"):
+            create_daily_risk_metrics(
+                date=datetime.now(UTC),
+                daily_pnl=Decimal("1000.00"),
+                daily_return=Decimal("0.01"),
+                var_95=Decimal("500.00"),
+                cvar_95=Decimal("600.00"),
+                max_drawdown=Decimal("0.05"),
+                total_exposure=Decimal("100000.00"),
+                net_liquidation_value=Decimal("200000.00"),
+                positions=sample_positions,
+                confidence_level=Decimal("0"),
+            )
+
+    def test_invalid_metrics_confidence_too_high(
+        self,
+        sample_positions: list[PositionData],
+    ) -> None:
+        """Test metrics validation fails with confidence >= 1."""
+        with pytest.raises(ConfigError, match="between 0 and 1"):
+            create_daily_risk_metrics(
+                date=datetime.now(UTC),
+                daily_pnl=Decimal("1000.00"),
+                daily_return=Decimal("0.01"),
+                var_95=Decimal("500.00"),
+                cvar_95=Decimal("600.00"),
+                max_drawdown=Decimal("0.05"),
+                total_exposure=Decimal("100000.00"),
+                net_liquidation_value=Decimal("200000.00"),
+                positions=sample_positions,
+                confidence_level=Decimal("1"),
+            )
+
+    def test_invalid_metrics_confidence_negative(
+        self,
+        sample_positions: list[PositionData],
+    ) -> None:
+        """Test metrics validation fails with negative confidence level."""
+        with pytest.raises(ConfigError, match="between 0 and 1"):
+            create_daily_risk_metrics(
+                date=datetime.now(UTC),
+                daily_pnl=Decimal("1000.00"),
+                daily_return=Decimal("0.01"),
+                var_95=Decimal("500.00"),
+                cvar_95=Decimal("600.00"),
+                max_drawdown=Decimal("0.05"),
+                total_exposure=Decimal("100000.00"),
+                net_liquidation_value=Decimal("200000.00"),
+                positions=sample_positions,
+                confidence_level=Decimal("-0.1"),
+            )
+
 
 class TestRiskReportGenerator:
     """Test RiskReportGenerator class."""
@@ -566,3 +623,113 @@ class TestRiskReportGenerator:
         assert "1234.57" in content
         assert "5678.90" in content
         assert "6789.01" in content
+
+    def test_generate_report_with_invalid_metrics_naive_datetime(
+        self,
+        temp_output_dir: TemporaryDirectory,
+        sample_positions: list[PositionData],
+    ) -> None:
+        """Test generate_report raises error for metrics with naive datetime."""
+        # Create valid config first
+        config = ReportConfig(output_dir=Path(temp_output_dir.name))
+        generator = RiskReportGenerator(config)
+
+        # Create metrics with naive datetime (bypass create_daily_risk_metrics validation)
+        # We need to create a PortfolioRiskSnapshot first
+        from iatb.risk.portfolio_risk import build_risk_snapshot
+
+        returns = [Decimal("0.01"), Decimal("-500.00"), Decimal("-600.00")]
+        equity_curve = [Decimal("199000.00"), Decimal("200000.00")]
+        risk_snapshot = build_risk_snapshot(
+            returns=returns,
+            equity_curve=equity_curve,
+            max_allowed_drawdown=Decimal("0.10"),
+        )
+
+        # Create DailyRiskMetrics directly with naive datetime
+        naive_datetime = datetime.now()  # noqa: DTZ005
+        invalid_metrics = DailyRiskMetrics(
+            date=naive_datetime,
+            daily_pnl=Decimal("1000.00"),
+            daily_return=Decimal("0.01"),
+            var_95=Decimal("500.00"),
+            cvar_95=Decimal("600.00"),
+            max_drawdown=Decimal("0.05"),
+            total_exposure=Decimal("100000.00"),
+            net_liquidation_value=Decimal("200000.00"),
+            positions=sample_positions,
+            risk_snapshot=risk_snapshot,
+        )
+
+        with pytest.raises(ConfigError, match="must be UTC-aware"):
+            generator.generate_report(invalid_metrics)
+
+    def test_generate_report_with_invalid_metrics_negative_liquidation(
+        self,
+        temp_output_dir: TemporaryDirectory,
+        sample_positions: list[PositionData],
+    ) -> None:
+        """Test generate_report raises error for metrics with negative liquidation."""
+        config = ReportConfig(output_dir=Path(temp_output_dir.name))
+        generator = RiskReportGenerator(config)
+
+        from iatb.risk.portfolio_risk import build_risk_snapshot
+
+        returns = [Decimal("0.01"), Decimal("-500.00"), Decimal("-600.00")]
+        equity_curve = [Decimal("201000.00"), Decimal("200000.00")]
+        risk_snapshot = build_risk_snapshot(
+            returns=returns,
+            equity_curve=equity_curve,
+            max_allowed_drawdown=Decimal("0.10"),
+        )
+
+        invalid_metrics = DailyRiskMetrics(
+            date=datetime.now(UTC),
+            daily_pnl=Decimal("1000.00"),
+            daily_return=Decimal("0.01"),
+            var_95=Decimal("500.00"),
+            cvar_95=Decimal("600.00"),
+            max_drawdown=Decimal("0.05"),
+            total_exposure=Decimal("100000.00"),
+            net_liquidation_value=Decimal("-100.00"),  # Invalid: negative
+            positions=sample_positions,
+            risk_snapshot=risk_snapshot,
+        )
+
+        with pytest.raises(ConfigError, match="must be positive"):
+            generator.generate_report(invalid_metrics)
+
+    def test_generate_report_with_invalid_metrics_negative_exposure(
+        self,
+        temp_output_dir: TemporaryDirectory,
+        sample_positions: list[PositionData],
+    ) -> None:
+        """Test generate_report raises error for metrics with negative exposure."""
+        config = ReportConfig(output_dir=Path(temp_output_dir.name))
+        generator = RiskReportGenerator(config)
+
+        from iatb.risk.portfolio_risk import build_risk_snapshot
+
+        returns = [Decimal("0.01"), Decimal("-500.00"), Decimal("-600.00")]
+        equity_curve = [Decimal("199000.00"), Decimal("200000.00")]
+        risk_snapshot = build_risk_snapshot(
+            returns=returns,
+            equity_curve=equity_curve,
+            max_allowed_drawdown=Decimal("0.10"),
+        )
+
+        invalid_metrics = DailyRiskMetrics(
+            date=datetime.now(UTC),
+            daily_pnl=Decimal("1000.00"),
+            daily_return=Decimal("0.01"),
+            var_95=Decimal("500.00"),
+            cvar_95=Decimal("600.00"),
+            max_drawdown=Decimal("0.05"),
+            total_exposure=Decimal("-1000.00"),  # Invalid: negative
+            net_liquidation_value=Decimal("200000.00"),
+            positions=sample_positions,
+            risk_snapshot=risk_snapshot,
+        )
+
+        with pytest.raises(ConfigError, match="cannot be negative"):
+            generator.generate_report(invalid_metrics)
