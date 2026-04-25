@@ -81,7 +81,10 @@ ignore = []
 "tests/risk/test_sebi_compliance_coverage.py" = ["DTZ001"]  # Naive datetime test
 "src/iatb/data/rate_limiter.py" = ["S311"]  # Random used for jitter, not cryptographic
 "src/iatb/market_strength/strength_scorer.py" = ["B019"]  # Intentional caching with size limits for performance
-  "scripts/verify_sprint2_*.py" = ["T201", "DTZ005", "S602", "E501"]  # Utility scripts for manual verification
+"scripts/verify_sprint2_*.py" = ["T201", "DTZ005", "S602", "E501"]  # Utility scripts for manual verification
+"src/iatb/storage/audit_exporter.py" = ["A002"]  # 'format' parameter shadows builtin
+"tests/storage/test_audit_exporter.py" = ["DTZ001", "B017", "E501"]  # Naive datetime, generic Exception, long test assertions
+"tests/storage/test_audit_scheduler.py" = ["F841"]  # Unused variable in test
 
 [tool.mypy]
 python_version = "3.12"

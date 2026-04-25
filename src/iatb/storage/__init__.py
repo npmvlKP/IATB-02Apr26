@@ -2,6 +2,20 @@
 Storage adapters for audit logs, time-series market data, and sync workflows.
 """
 
+from iatb.storage.audit_exporter import (
+    AuditExporter,
+    AuditExportRecord,
+    ExportConfig,
+    ExportFormat,
+    ExportResult,
+    ScheduleFrequency,
+)
+from iatb.storage.audit_scheduler import (
+    AuditExportScheduler,
+    ScheduleConfig,
+    ScheduleExecution,
+    ScheduleStatus,
+)
 from iatb.storage.duckdb_store import DuckDBStore
 from iatb.storage.git_sync import GitSyncReport, GitSyncService
 from iatb.storage.parquet_store import ParquetStore
@@ -14,4 +28,14 @@ __all__ = [
     "TradeAuditRecord",
     "GitSyncService",
     "GitSyncReport",
+    "AuditExporter",
+    "AuditExportRecord",
+    "ExportConfig",
+    "ExportFormat",
+    "ExportResult",
+    "ScheduleFrequency",
+    "AuditExportScheduler",
+    "ScheduleConfig",
+    "ScheduleExecution",
+    "ScheduleStatus",
 ]
