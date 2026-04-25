@@ -5,11 +5,17 @@ MITIGATION OF RISK 1 (Data Inconsistency):
 - Scanner and execution both use KiteProvider as single source of truth
 - Price reconciliation validates timestamp consistency, not cross-source discrepancies
 - Eliminates 0.1-2% price discrepancies from multi-source architecture
+
+MITIGATION OF RISK J.1 (SEBI Position Limit Enforcement):
+- Integrated with PositionLimitGuard for exchange-level position limits
+- Pre-check validates against NSE F&O, MCX, and CDS limits
+- Real-time monitoring with 80% threshold alerts
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import Price
@@ -20,6 +26,12 @@ from iatb.data.price_reconciler import (
     ReconciliationResult,
 )
 from iatb.execution.base import OrderRequest
+
+if TYPE_CHECKING:
+    from iatb.risk.position_limit_guard import (
+        ExchangeType,
+        PositionLimitGuard,
+    )
 
 
 @dataclass(frozen=True)
@@ -59,6 +71,61 @@ def validate_order(
     _check_price_deviation(request, price, last_prices, config)
     _check_position_limit(request, current_positions, config)
     _check_exposure(request, price, total_exposure, config)
+    return request
+
+
+def validate_order_with_position_limit_guard(
+    request: OrderRequest,
+    config: PreTradeConfig,
+    last_prices: dict[str, Decimal],
+    current_positions: dict[str, Decimal],
+    total_exposure: Decimal,
+    position_limit_guard: "PositionLimitGuard",
+    exchange: "ExchangeType",
+    price: Decimal | None = None,
+) -> OrderRequest:
+    """
+    Validate order against all pre-trade gates including SEBI position limits.
+
+    MITIGATION OF RISK J.1: Integrates PositionLimitGuard as pre-check.
+    Validates order against exchange-specific position limits (NSE F&O, MCX, CDS)
+    before submission to prevent limit breaches.
+
+    Args:
+        request: Order request to validate.
+        config: Pre-trade configuration.
+        last_prices: Dictionary of last prices for symbols.
+        current_positions: Current position sizes per symbol.
+        total_exposure: Current total portfolio exposure.
+        position_limit_guard: PositionLimitGuard instance for exchange limits.
+        exchange: Exchange type for the order.
+        price: Optional order price (uses last price if None).
+
+    Returns:
+        Validated order request.
+
+    Raises:
+        ConfigError: If any validation gate fails or position limit would be breached.
+    """
+    order_price = price if price is not None else _resolve_price(request, last_prices)
+
+    # Run standard pre-trade validations
+    _check_quantity(request, config)
+    _check_notional(request, order_price, config)
+    _check_price_deviation(request, order_price, last_prices, config)
+    _check_position_limit(request, current_positions, config)
+    _check_exposure(request, order_price, total_exposure, config)
+
+    # Validate against SEBI position limits (RISK J.1)
+    now_utc = datetime.now(UTC)
+    position_limit_guard.validate_order(
+        exchange=exchange,
+        symbol=request.symbol,
+        quantity=request.quantity,
+        price=order_price,
+        now_utc=now_utc,
+    )
+
     return request
 
 

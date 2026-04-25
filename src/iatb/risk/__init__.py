@@ -9,6 +9,13 @@ from iatb.risk.portfolio_risk import (
     compute_max_drawdown,
     compute_var,
 )
+from iatb.risk.position_limit_guard import (
+    ExchangeType,
+    PositionLimitConfig,
+    PositionLimitGuard,
+    PositionState,
+    create_default_limits,
+)
 from iatb.risk.position_sizer import (
     PositionSizingInput,
     fixed_fractional_size,
@@ -20,14 +27,19 @@ from iatb.risk.stop_loss import atr_stop_price, should_time_exit, trailing_stop_
 
 __all__ = [
     "CircuitBreakerState",
+    "ExchangeType",
     "PortfolioRiskSnapshot",
+    "PositionLimitConfig",
+    "PositionLimitGuard",
     "PositionSizingInput",
+    "PositionState",
     "SEBIComplianceConfig",
     "SEBIComplianceManager",
     "atr_stop_price",
     "compute_cvar",
     "compute_max_drawdown",
     "compute_var",
+    "create_default_limits",
     "evaluate_circuit_breaker",
     "fixed_fractional_size",
     "kelly_fraction",
