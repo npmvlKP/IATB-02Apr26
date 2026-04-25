@@ -251,7 +251,7 @@ class AuditExporter:
                 if file_mtime < cutoff:
                     file_path.unlink()
                     removed_count += 1
-            except Exception:  # noqa: S112
+            except Exception:  # nosec B112 - Legitimate: continue on individual file deletion failures
                 continue
 
         return removed_count

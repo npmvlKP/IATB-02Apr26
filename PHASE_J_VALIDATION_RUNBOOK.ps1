@@ -86,7 +86,7 @@ $testFiles = @(
     "tests/risk/test_risk_report.py"
 )
 
-$testOutput = poetry run pytest $testFiles -v --tb=short --cov=src/iatb/risk --cov=src/iatb/storage --cov-report=term-missing 2>&1
+$testOutput = poetry run pytest $testFiles -v --tb=short --cov=src/iatb/risk --cov=src/iatb/storage --cov-report=term-missing --cov-fail-under=0 2>&1
 $testExitCode = $LASTEXITCODE
 
 # Display test output

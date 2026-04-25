@@ -83,7 +83,7 @@ ignore = []
 "src/iatb/data/rate_limiter.py" = ["S311"]  # Random used for jitter, not cryptographic
 "src/iatb/market_strength/strength_scorer.py" = ["B019"]  # Intentional caching with size limits for performance
 "scripts/verify_sprint2_*.py" = ["T201", "DTZ005", "S602", "E501"]  # Utility scripts for manual verification
-"src/iatb/storage/audit_exporter.py" = ["A002"]  # 'format' parameter shadows builtin
+"src/iatb/storage/audit_exporter.py" = ["A002", "A003", "S112"]  # 'format' shadows builtin; try-except-continue for individual file deletion failures
 "tests/storage/test_audit_exporter.py" = ["DTZ001", "B017", "E501"]  # Naive datetime, generic Exception, long test assertions
 "tests/storage/test_audit_scheduler.py" = ["F841"]  # Unused variable in test
 
@@ -146,6 +146,6 @@ show_missing = true
 skip_covered = false
 fail_under = 90
 
-[tool.bandit]
-exclude_dirs = ["tests"]
-skips = ["B101", "B112", "B019"]  # Skip assert_used and lru_cache warnings
+  [tool.bandit]
+  exclude_dirs = ["tests"]
+  skips = ["B101", "B112"]  # Skip assert_used and try_except_pass warnings
