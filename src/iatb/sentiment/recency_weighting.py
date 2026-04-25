@@ -48,6 +48,7 @@ def _article_weight(article_utc: datetime, current_utc: datetime) -> Decimal:
     hours = elapsed / _SECONDS_PER_HOUR
     # API boundary: math.exp requires float; convert to Decimal.
     exponent = -(_LAMBDA * hours)
+    # Clamp exponent to avoid overflow in math.exp.
     clamped = max(Decimal("-500"), exponent)
     raw = Decimal(str(math.exp(float(clamped))))  # float required: math.exp API
     return max(Decimal("0"), min(Decimal("1"), raw))
