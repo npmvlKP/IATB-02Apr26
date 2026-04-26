@@ -31,8 +31,16 @@ nul)
 python-3.13.7-amd64.exe
 *.ps1
 .kilo/
+.kilocode/
+.opencode/
 .pre-commit-cache/
 .pre-commit-config.yaml
 .gitignore
 .gitleaks.toml
 IATB.code-workspace
+tests/
+AGENTS.md
+Agent1.md
+iatb020426/
+*.exe
+*.log

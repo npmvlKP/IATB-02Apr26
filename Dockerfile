@@ -1,4 +1,10 @@
-FROM python:3.12-slim AS builder
+#syntax=docker/dockerfile:1.7
+# ============================================================================
+# IATB Trading Engine — Production-Hardened Multi-Stage Dockerfile
+# ============================================================================
+
+# ---------- Stage 1: Build wheels in isolated builder ----------
+FROM python:3.12.9-slim-bookworm@sha256:48a11b7ba705fd53bf15248d1f94d36c39549903c5d59edcfa2f3f84126e7b44 AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -12,39 +18,50 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir poetry==$POETRY_VERSION
+
 WORKDIR /build
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry export --without-hashes --format requirements.txt > requirements.txt
-RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    poetry export --without-hashes --format requirements.txt > requirements.txt \
+    && grep -v '^aion-sentiment==' requirements.txt > requirements-filtered.txt \
+    && pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-filtered.txt
 
-FROM python:3.12-slim AS runtime
+# ---------- Stage 2: Minimal runtime image ----------
+FROM python:3.12.9-slim-bookworm@sha256:48a11b7ba705fd53bf15248d1f94d36c39549903c5d59edcfa2f3f84126e7b44 AS runtime
+
+LABEL org.opencontainers.image.title="IATB Trading Engine" \
+      org.opencontainers.image.description="Interactive Algorithmic Trading Bot — production-hardened container" \
+      org.opencontainers.image.source="https://github.com/npmvlKP/IATB-02Apr26" \
+      org.opencontainers.image.vendor="IATB" \
+      maintainer="IATB Team"
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONHASHSEED=random \
+    PYTHONPATH=/app/src
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && addgroup --system --gid 1000 iatb \
-    && adduser --system --uid 1000 --ingroup iatb iatb
+RUN groupadd --system --gid 1000 iatb \
+    && useradd --system --uid 1000 --gid iatb --home-dir /app --shell /usr/sbin/nologin iatb
 
 WORKDIR /app
 
 COPY --from=builder /wheels /wheels
 COPY --from=builder /build/requirements.txt /tmp/requirements.txt
+
 RUN pip install --no-cache-dir /wheels/* \
     && rm -rf /wheels /tmp/requirements.txt \
-    && mkdir -p /app/data /app/logs \
+    && mkdir -p /app/data /app/logs /app/config \
     && chown -R iatb:iatb /app
 
-COPY src/ /app/src/
-COPY config/ /app/config/
-COPY .env.example /app/.env.example
-COPY scripts/docker-healthcheck.py /app/scripts/docker-healthcheck.py
+COPY --chown=iatb:iatb src/ /app/src/
+COPY --chown=iatb:iatb config/ /app/config/
+COPY --chown=iatb:iatb scripts/docker-healthcheck.py /app/scripts/docker-healthcheck.py
 
-ENV PYTHONPATH=/app/src
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 USER iatb
 
