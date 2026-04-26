@@ -67,10 +67,10 @@ class TestEngineEventBus:
     async def test_event_bus_started_on_engine_start(self) -> None:
         """Test that event bus starts when engine starts."""
         engine = Engine()
-        assert not engine.event_bus._running
+        assert not engine.event_bus.is_running
 
         await engine.start()
-        assert engine.event_bus._running
+        assert engine.event_bus.is_running
 
         await engine.stop()
 

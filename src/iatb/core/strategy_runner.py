@@ -426,19 +426,7 @@ class StrategyRunner:
         state: StrategyState,
         timeframe: str,
     ) -> tuple[int, int, list[str]]:
-        """Process a single symbol for signal generation.
-
-        Args:
-            symbol: Trading symbol.
-            strategy: Strategy instance.
-            config: Strategy configuration.
-            guard: Position guard.
-            state: Strategy state.
-            timeframe: Candle timeframe.
-
-        Returns:
-            Tuple of (signals_generated, orders_submitted, errors).
-        """
+        """Process a single symbol for signal generation and order submission."""
         signals_generated = 0
         orders_submitted = 0
         errors: list[str] = []
@@ -453,34 +441,64 @@ class StrategyRunner:
                 timeframe=timeframe,
                 limit=100,
             )
-
             if not bars:
                 return signals_generated, orders_submitted, errors
 
-            latest_bar = bars[-1]
-            context = self._create_strategy_context(config, symbol)
-            signal = strategy.on_bar(context, Any)  # type: ignore
-
-            if signal is not None:
-                signals_generated += 1
-                _LOGGER.debug(
-                    "Signal generated: %s %s %s",
-                    signal.strategy_id,
-                    signal.symbol,
-                    signal.side.value,
-                )
-
-                order = strategy.on_signal(context, signal)
-
-                if order is not None:
-                    orders_submitted += self._process_order(order, latest_bar, guard, state)
-
+            signals_generated, orders_submitted = self._evaluate_signal(
+                strategy=strategy,
+                config=config,
+                symbol=symbol,
+                latest_bar=bars[-1],
+                guard=guard,
+                state=state,
+            )
         except Exception as exc:
             error_msg = f"Error processing symbol {symbol}: {exc}"
             _LOGGER.error(error_msg, exc_info=True)
             errors.append(error_msg)
 
         return signals_generated, orders_submitted, errors
+
+    def _evaluate_signal(
+        self,
+        strategy: Strategy,
+        config: StrategyConfig,
+        symbol: str,
+        latest_bar: OHLCVBar,
+        guard: SimplePositionGuard,
+        state: StrategyState,
+    ) -> tuple[int, int]:
+        """Evaluate strategy signal and process resulting order.
+
+        Args:
+            strategy: Strategy instance.
+            config: Strategy configuration.
+            symbol: Trading symbol.
+            latest_bar: Latest OHLCV bar.
+            guard: Position guard.
+            state: Strategy state.
+
+        Returns:
+            Tuple of (signals_generated, orders_submitted).
+        """
+        context = self._create_strategy_context(config, symbol)
+        signal = strategy.on_bar(context, Any)  # type: ignore
+
+        if signal is None:
+            return 0, 0
+
+        _LOGGER.debug(
+            "Signal generated: %s %s %s",
+            signal.strategy_id,
+            signal.symbol,
+            signal.side.value,
+        )
+
+        order = strategy.on_signal(context, signal)
+        if order is None:
+            return 1, 0
+
+        return 1, self._process_order(order, latest_bar, guard, state)
 
     def _validate_strategy_access(
         self,
@@ -576,31 +594,16 @@ class StrategyRunner:
             ConfigError: If strategy_id not found.
         """
         strategy, config, guard, state = self._validate_strategy_access(strategy_id)
-
         start_time = datetime.now(UTC)
-        errors: list[str] = []
-        signals_generated = 0
-        orders_submitted = 0
 
         try:
-            _LOGGER.info(
-                "Starting scan cycle for strategy: %s (%d symbols)",
-                strategy_id,
-                len(config.symbols),
+            signals, orders, errors = await self._scan_symbols(
+                strategy=strategy,
+                config=config,
+                guard=guard,
+                state=state,
+                timeframe=timeframe,
             )
-
-            for symbol in config.symbols:
-                sigs, orders, errs = await self._process_symbol(
-                    symbol=symbol,
-                    strategy=strategy,
-                    config=config,
-                    guard=guard,
-                    state=state,
-                    timeframe=timeframe,
-                )
-                signals_generated += sigs
-                orders_submitted += orders
-                errors.extend(errs)
 
             state.last_scan_time = datetime.now(UTC)
             state.scan_count += 1
@@ -608,25 +611,87 @@ class StrategyRunner:
             return self._create_scan_result(
                 strategy_id=strategy_id,
                 start_time=start_time,
-                signals_generated=signals_generated,
-                orders_submitted=orders_submitted,
+                signals_generated=signals,
+                orders_submitted=orders,
                 errors=errors,
                 success=len(errors) == 0,
             )
 
         except Exception as exc:
-            error_msg = f"Scan cycle failed for {strategy_id}: {exc}"
-            _LOGGER.exception(error_msg)
-            errors.append(error_msg)
+            return self._build_failed_result(strategy_id, start_time, exc)
 
-            return self._create_scan_result(
-                strategy_id=strategy_id,
-                start_time=start_time,
-                signals_generated=0,
-                orders_submitted=0,
-                errors=errors,
-                success=False,
+    async def _scan_symbols(
+        self,
+        strategy: Strategy,
+        config: StrategyConfig,
+        guard: SimplePositionGuard,
+        state: StrategyState,
+        timeframe: str,
+    ) -> tuple[int, int, list[str]]:
+        """Scan all symbols for a strategy.
+
+        Args:
+            strategy: Strategy instance.
+            config: Strategy configuration.
+            guard: Position guard.
+            state: Strategy state.
+            timeframe: Candle timeframe.
+
+        Returns:
+            Tuple of (signals_generated, orders_submitted, errors).
+        """
+        _LOGGER.info(
+            "Starting scan cycle for strategy: %s (%d symbols)",
+            config.strategy_id,
+            len(config.symbols),
+        )
+
+        signals_generated = 0
+        orders_submitted = 0
+        errors: list[str] = []
+
+        for symbol in config.symbols:
+            sigs, orders, errs = await self._process_symbol(
+                symbol=symbol,
+                strategy=strategy,
+                config=config,
+                guard=guard,
+                state=state,
+                timeframe=timeframe,
             )
+            signals_generated += sigs
+            orders_submitted += orders
+            errors.extend(errs)
+
+        return signals_generated, orders_submitted, errors
+
+    def _build_failed_result(
+        self,
+        strategy_id: str,
+        start_time: datetime,
+        exc: Exception,
+    ) -> StrategyScanResult:
+        """Build a failed scan result from an exception.
+
+        Args:
+            strategy_id: Strategy identifier.
+            start_time: Scan start time.
+            exc: Exception that caused the failure.
+
+        Returns:
+            StrategyScanResult with failure details.
+        """
+        error_msg = f"Scan cycle failed for {strategy_id}: {exc}"
+        _LOGGER.exception(error_msg)
+
+        return self._create_scan_result(
+            strategy_id=strategy_id,
+            start_time=start_time,
+            signals_generated=0,
+            orders_submitted=0,
+            errors=[error_msg],
+            success=False,
+        )
 
     async def run_all_strategies(
         self,

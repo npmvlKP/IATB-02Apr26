@@ -35,11 +35,11 @@ class TestEventBusLifecycle:
     async def test_start_stop(self) -> None:
         """Test starting and stopping event bus."""
         bus = EventBus()
-        assert not bus._running
+        assert not bus.is_running
         await bus.start()
-        assert bus._running
+        assert bus.is_running
         await bus.stop()
-        assert not bus._running
+        assert not bus.is_running
 
     @pytest.mark.asyncio
     async def test_start_idempotent(self) -> None:
@@ -47,7 +47,7 @@ class TestEventBusLifecycle:
         bus = EventBus()
         await bus.start()
         await bus.start()  # Should not raise
-        assert bus._running
+        assert bus.is_running
         await bus.stop()
 
     @pytest.mark.asyncio
@@ -57,7 +57,7 @@ class TestEventBusLifecycle:
         await bus.start()
         await bus.stop()
         await bus.stop()  # Should not raise
-        assert not bus._running
+        assert not bus.is_running
 
 
 class TestEventBusPublishSubscribe:
@@ -68,14 +68,14 @@ class TestEventBusPublishSubscribe:
         """Test subscribing to a topic."""
         queue = await event_bus.subscribe("test.topic")
         assert isinstance(queue, asyncio.Queue)
-        assert queue in event_bus._queues
+        assert queue in event_bus._backend._queues
 
     @pytest.mark.asyncio
     async def test_unsubscribe(self, event_bus: EventBus) -> None:
         """Test unsubscribing from a topic."""
         queue = await event_bus.subscribe("test.topic")
         await event_bus.unsubscribe("test.topic", queue)
-        assert queue not in event_bus._queues
+        assert queue not in event_bus._backend._queues
 
     @pytest.mark.asyncio
     async def test_publish_to_subscriber(self, event_bus: EventBus) -> None:
@@ -115,7 +115,7 @@ class TestEventBusPublishSubscribe:
         bus = EventBus()
         event = MarketTickEvent(symbol="TEST")
 
-        with pytest.raises(EventBusError, match="Event bus is not running"):
+        with pytest.raises(EventBusError, match="Event bus backend is not running"):
             await bus.publish("test.topic", event)
 
     @pytest.mark.asyncio
@@ -191,7 +191,7 @@ class TestEventBusPublishSubscribe:
             async def put(self, item: MarketTickEvent) -> None:
                 raise RuntimeError("queue failure")
 
-        event_bus._subscribers["broken.topic"] = [BrokenQueue()]
+        event_bus._backend._subscribers["broken.topic"] = [BrokenQueue()]
         with pytest.raises(EventBusError, match="Failed to publish event"):
             await event_bus.publish(
                 "broken.topic",
@@ -206,7 +206,7 @@ class TestEventBusPublishSubscribe:
             async def put(self, item: MarketTickEvent) -> None:
                 raise RuntimeError("queue failure")
 
-        event_bus._subscribers["broken.topic"] = [BrokenQueue()]
+        event_bus._backend._subscribers["broken.topic"] = [BrokenQueue()]
         with pytest.raises(EventBusError, match="Failed to publish batch"):
             await event_bus.publish_batch(
                 "broken.topic",
