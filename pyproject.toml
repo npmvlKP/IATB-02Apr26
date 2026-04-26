@@ -86,6 +86,8 @@ ignore = []
 "src/iatb/storage/audit_exporter.py" = ["A002", "A003", "S112"]  # 'format' shadows builtin; try-except-continue for individual file deletion failures
 "tests/storage/test_audit_exporter.py" = ["DTZ001", "B017", "E501"]  # Naive datetime, generic Exception, long test assertions
 "tests/storage/test_audit_scheduler.py" = ["F841"]  # Unused variable in test
+"tests/integration/test_phase_n_live_simulation.py" = ["S311"]  # Random for simulation, not crypto
+"tests/integration/test_phase_n_failure_injection.py" = ["S311"]  # Random for failure simulation
 
 [tool.mypy]
 python_version = "3.12"
