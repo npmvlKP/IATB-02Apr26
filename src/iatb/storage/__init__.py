@@ -16,6 +16,14 @@ from iatb.storage.audit_scheduler import (
     ScheduleExecution,
     ScheduleStatus,
 )
+from iatb.storage.backup import (
+    BackupConfig,
+    BackupManager,
+    BackupManifest,
+    BackupResult,
+    export_trading_state,
+    load_trading_state,
+)
 from iatb.storage.duckdb_store import DuckDBStore
 from iatb.storage.git_sync import GitSyncReport, GitSyncService
 from iatb.storage.parquet_store import ParquetStore
@@ -38,4 +46,10 @@ __all__ = [
     "ScheduleConfig",
     "ScheduleExecution",
     "ScheduleStatus",
+    "BackupConfig",
+    "BackupManager",
+    "BackupManifest",
+    "BackupResult",
+    "export_trading_state",
+    "load_trading_state",
 ]

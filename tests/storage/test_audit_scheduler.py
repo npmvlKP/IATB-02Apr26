@@ -277,17 +277,12 @@ class TestAuditExportScheduler:
         exporter: AuditExporter,
     ) -> None:
         """Test that execute returns SKIPPED when not due."""
-        # Schedule for future time
-        future_time = time(hour=10, minute=30)
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=future_time,
+            time=time(hour=23, minute=59),
             enabled=True,
         )
         scheduler = AuditExportScheduler(exporter=exporter, schedule_config=config)
-
-        # Current time is before scheduled time
-        now = datetime(2025, 4, 25, 9, 0, 0, tzinfo=UTC)
 
         execution = scheduler.execute()
 
