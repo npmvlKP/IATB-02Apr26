@@ -1,5 +1,22 @@
 version: "3.9"
 
+x-common-security: &common-security
+  read_only: false
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-common-resource-limits: &common-limits
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 1G
+      reservations:
+        cpus: "0.25"
+        memory: 256M
+
 services:
   trading-engine:
     image: ${IATB_IMAGE:-iatb-trading-engine:local}
@@ -7,22 +24,31 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: iatb-trading-engine
+    restart: unless-stopped
     command: ["python", "-m", "iatb.core.runtime"]
     env_file:
       - .env
     environment:
       LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
+      TZ: ${TZ:-Asia/Kolkata}
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./config:/app/config
+      - trading-data:/app/data
+      - trading-logs:/app/logs
+      - ./config:/app/config:ro
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; import sys; sys.exit(0) if urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else sys.exit(1)"]
+      test: ["CMD", "python", "/app/scripts/docker-healthcheck.py"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
+    <<: [*common-security, *common-limits]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   dashboard:
     image: ${IATB_IMAGE:-iatb-trading-engine:local}
@@ -30,15 +56,62 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: iatb-dashboard
+    restart: unless-stopped
     command: ["streamlit", "run", "src/iatb/visualization/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Kolkata}
     ports:
       - "8501:8501"
     depends_on:
-      - trading-engine
+      trading-engine:
+        condition: service_healthy
+    volumes:
+      - trading-logs:/app/logs:ro
+    <<: [*common-security]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.16.2
     container_name: iatb-mlflow
+    restart: unless-stopped
     command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
     ports:
       - "5000:5000"
+    volumes:
+      - mlflow-artifacts:/mlflow/artifacts
+    <<: [*common-security]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  trading-data:
+    driver: local
+  trading-logs:
+    driver: local
+  mlflow-artifacts:
+    driver: local
