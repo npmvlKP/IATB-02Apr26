@@ -771,3 +771,221 @@ class TestManifestPersistence:
         backup_dir.mkdir(parents=True)
         result = manager._export_state(backup_dir, {})
         assert result is None
+
+
+class TestCorruptedBackupHandling:
+    def _full_backup_setup(
+        self, tmp_path: Path
+    ) -> tuple[BackupManager, BackupResult, Path, Path, Path, Path]:
+        db_path = _create_sqlite_db(tmp_path / "audit.sqlite3")
+        duckdb_path = _create_duckdb_file(tmp_path / "ohlcv.duckdb")
+        cfg_dir = tmp_path / "configs"
+        cfg_dir.mkdir()
+        _create_toml_file(cfg_dir / "settings.toml", "mode = 'paper'")
+        state_path = tmp_path / "state.json"
+        state_path.write_text('{"positions": {"X": {"qty": 10}}}', encoding="utf-8")
+        config = _make_config(
+            tmp_path,
+            sqlite_paths=[db_path],
+            duckdb_paths=[duckdb_path],
+            config_dirs=[cfg_dir],
+            state_path=state_path,
+        )
+        manager = BackupManager(config)
+        result = manager.create_backup()
+        assert result.success is True
+        return manager, result, db_path, duckdb_path, cfg_dir, state_path
+
+    def test_duckdb_corruption_detected(self, tmp_path: Path) -> None:
+        manager, result, _, _, _, _ = self._full_backup_setup(tmp_path)
+        backup_dir = Path(result.backup_dir)
+        duckdb_backup = backup_dir / f"duckdb_{(tmp_path / 'ohlcv.duckdb').name}"
+        duckdb_backup.write_bytes(b"\x00\x01\x02\x03CORRUPTED")
+        with pytest.raises(ConfigError, match="Checksum mismatch"):
+            manager.restore_backup(result.backup_id)
+
+    def test_config_corruption_detected(self, tmp_path: Path) -> None:
+        manager, result, _, _, _, _ = self._full_backup_setup(tmp_path)
+        backup_dir = Path(result.backup_dir)
+        config_backup = backup_dir / "configs" / "settings.toml"
+        config_backup.write_text("mode = 'CORRUPTED'", encoding="utf-8")
+        with pytest.raises(ConfigError, match="Checksum mismatch"):
+            manager.restore_backup(result.backup_id)
+
+    def test_state_export_corruption_detected(self, tmp_path: Path) -> None:
+        manager, result, _, _, _, _ = self._full_backup_setup(tmp_path)
+        backup_dir = Path(result.backup_dir)
+        state_backup = backup_dir / "state_export.json"
+        state_backup.write_text('{"corrupted": true}', encoding="utf-8")
+        with pytest.raises(ConfigError, match="Checksum mismatch"):
+            manager.restore_backup(result.backup_id)
+
+    def test_empty_manifest_file(self, tmp_path: Path) -> None:
+        backup_dir = tmp_path / "backups" / "backup_empty_manifest"
+        backup_dir.mkdir(parents=True)
+        (backup_dir / "manifest.json").write_text("", encoding="utf-8")
+        config = _make_config(tmp_path)
+        manager = BackupManager(config)
+        with pytest.raises(ConfigError, match="Failed to read manifest"):
+            manager.restore_backup("backup_empty_manifest")
+
+    def test_manifest_valid_json_empty_object(self, tmp_path: Path) -> None:
+        backup_dir = tmp_path / "backups" / "backup_empty_obj"
+        backup_dir.mkdir(parents=True)
+        (backup_dir / "manifest.json").write_text("{}", encoding="utf-8")
+        config = _make_config(tmp_path)
+        manager = BackupManager(config)
+        with pytest.raises(ConfigError, match="missing required keys"):
+            manager.restore_backup("backup_empty_obj")
+
+    def test_manifest_null_checksums(self, tmp_path: Path) -> None:
+        backup_dir = tmp_path / "backups" / "backup_null_checksums"
+        backup_dir.mkdir(parents=True)
+        (backup_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "backup_id": "backup_null_checksums",
+                    "timestamp_utc": "2025-01-01T00:00:00+00:00",
+                    "checksums": None,
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = _make_config(tmp_path)
+        manager = BackupManager(config)
+        with pytest.raises((ConfigError, TypeError)):
+            manager.restore_backup("backup_null_checksums")
+
+    def test_manifest_with_empty_checksums_passes_validation(self, tmp_path: Path) -> None:
+        backup_dir = tmp_path / "backups" / "backup_no_checksums"
+        backup_dir.mkdir(parents=True)
+        (backup_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "backup_id": "backup_no_checksums",
+                    "timestamp_utc": "2025-01-01T00:00:00+00:00",
+                    "checksums": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = _make_config(tmp_path)
+        manager = BackupManager(config)
+        result = manager.restore_backup("backup_no_checksums")
+        assert result.success is True
+
+    def test_multiple_simultaneous_corruptions(self, tmp_path: Path) -> None:
+        manager, result, _, _, _, _ = self._full_backup_setup(tmp_path)
+        backup_dir = Path(result.backup_dir)
+        duckdb_backup = backup_dir / f"duckdb_{(tmp_path / 'ohlcv.duckdb').name}"
+        duckdb_backup.write_bytes(b"CORRUPTED")
+        config_backup = backup_dir / "configs" / "settings.toml"
+        config_backup.write_text("corrupted", encoding="utf-8")
+        with pytest.raises(ConfigError, match="Checksum mismatch"):
+            manager.restore_backup(result.backup_id)
+
+    def test_zero_byte_sqlite_backup(self, tmp_path: Path) -> None:
+        manager, result, _, _, _, _ = self._full_backup_setup(tmp_path)
+        backup_dir = Path(result.backup_dir)
+        sqlite_backup = list(backup_dir.glob("sqlite_*"))[0]
+        sqlite_backup.write_bytes(b"")
+        with pytest.raises(ConfigError, match="Checksum mismatch"):
+            manager.restore_backup(result.backup_id)
+
+    def test_zero_byte_duckdb_backup(self, tmp_path: Path) -> None:
+        manager, result, _, _, _, _ = self._full_backup_setup(tmp_path)
+        backup_dir = Path(result.backup_dir)
+        duckdb_backup = backup_dir / f"duckdb_{(tmp_path / 'ohlcv.duckdb').name}"
+        duckdb_backup.write_bytes(b"")
+        with pytest.raises(ConfigError, match="Checksum mismatch"):
+            manager.restore_backup(result.backup_id)
+
+    def test_restore_validates_all_sources_roundtrip(self, tmp_path: Path) -> None:
+        manager, result, db_path, duckdb_path, cfg_dir, state_path = self._full_backup_setup(
+            tmp_path
+        )
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("DELETE FROM trade_audit_log")
+        conn.commit()
+        conn.close()
+        duckdb_path.write_text("overwritten", encoding="utf-8")
+        (cfg_dir / "settings.toml").write_text("mode = 'live'", encoding="utf-8")
+        state_path.write_text('{"positions": {}}', encoding="utf-8")
+        restore_result = manager.restore_backup(result.backup_id)
+        assert restore_result.success is True
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute("SELECT data FROM trade_audit_log WHERE trade_id = 't1'").fetchone()
+        conn.close()
+        assert row is not None
+        assert row[0] == "test-data-1"
+        assert duckdb_path.read_text(encoding="utf-8") == "duckdb-fixture-content"
+        assert "paper" in (cfg_dir / "settings.toml").read_text(encoding="utf-8")
+        assert "X" in state_path.read_text(encoding="utf-8")
+
+    def test_corrupted_manifest_extra_data_ignored(self, tmp_path: Path) -> None:
+        db_path = _create_sqlite_db(tmp_path / "audit.sqlite3")
+        config = _make_config(tmp_path, sqlite_paths=[db_path])
+        manager = BackupManager(config)
+        result = manager.create_backup()
+        assert result.success is True
+        manifest_path = Path(result.backup_dir) / "manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["extra_key"] = "should be ignored"
+        manifest_path.write_text(json.dumps(data), encoding="utf-8")
+        restore_result = manager.restore_backup(result.backup_id)
+        assert restore_result.success is True
+
+    def test_restore_to_new_directory_creates_parents(self, tmp_path: Path) -> None:
+        db_path = _create_sqlite_db(tmp_path / "audit.sqlite3")
+        config = _make_config(tmp_path, sqlite_paths=[db_path])
+        manager = BackupManager(config)
+        result = manager.create_backup()
+        assert result.success is True
+        manifest_path = Path(result.backup_dir) / "manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        new_dest = tmp_path / "phantom" / "db.sqlite3"
+        orig_dest_name = data["sqlite_files"][0]["dest"]
+        data["sqlite_files"] = [{"source": str(new_dest), "dest": orig_dest_name}]
+        manifest_path.write_text(json.dumps(data), encoding="utf-8")
+        restore_result = manager.restore_backup(result.backup_id)
+        assert restore_result.success is True
+        assert new_dest.exists()
+
+    def test_manifest_with_missing_duckdb_backup_file(self, tmp_path: Path) -> None:
+        duckdb_path = _create_duckdb_file(tmp_path / "ohlcv.duckdb")
+        config = _make_config(tmp_path, duckdb_paths=[duckdb_path])
+        manager = BackupManager(config)
+        result = manager.create_backup()
+        assert result.success is True
+        backup_dir = Path(result.backup_dir)
+        duckdb_backup = backup_dir / f"duckdb_{duckdb_path.name}"
+        duckdb_backup.unlink()
+        with pytest.raises(ConfigError, match="Backup file missing"):
+            manager.restore_backup(result.backup_id)
+
+    def test_manifest_with_missing_config_backup_file(self, tmp_path: Path) -> None:
+        cfg_dir = tmp_path / "configs"
+        cfg_dir.mkdir()
+        _create_toml_file(cfg_dir / "settings.toml", "key = 'value'")
+        config = _make_config(tmp_path, config_dirs=[cfg_dir])
+        manager = BackupManager(config)
+        result = manager.create_backup()
+        assert result.success is True
+        backup_dir = Path(result.backup_dir)
+        config_backup = backup_dir / "configs" / "settings.toml"
+        config_backup.unlink()
+        with pytest.raises(ConfigError, match="Backup file missing"):
+            manager.restore_backup(result.backup_id)
+
+    def test_manifest_with_missing_state_backup_file(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "state.json"
+        state_path.write_text('{"positions": {}}', encoding="utf-8")
+        config = _make_config(tmp_path, state_path=state_path)
+        manager = BackupManager(config)
+        result = manager.create_backup()
+        assert result.success is True
+        backup_dir = Path(result.backup_dir)
+        state_backup = backup_dir / "state_export.json"
+        state_backup.unlink()
+        with pytest.raises(ConfigError, match="Backup file missing"):
+            manager.restore_backup(result.backup_id)
