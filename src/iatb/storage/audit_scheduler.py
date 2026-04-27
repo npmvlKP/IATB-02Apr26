@@ -95,29 +95,40 @@ class AuditExportScheduler:
             # ScheduleFrequency.MONTHLY is the only remaining case
             return self._is_monthly_due(now)
 
+    def _create_execution(
+        self,
+        status: ScheduleStatus,
+        timestamp: datetime,
+        records_exported: int = 0,
+        file_path: Path | None = None,
+        error_message: str | None = None,
+    ) -> ScheduleExecution:
+        return ScheduleExecution(
+            schedule_id=self._generate_schedule_id(timestamp),
+            status=status,
+            timestamp=timestamp,
+            records_exported=records_exported,
+            file_path=file_path,
+            error_message=error_message,
+        )
+
     def execute(self) -> ScheduleExecution:
         """Execute scheduled export and record result."""
         execution_timestamp = datetime.now(UTC)
 
         if not self._config.enabled:
-            execution = ScheduleExecution(
-                schedule_id=self._generate_schedule_id(execution_timestamp),
-                status=ScheduleStatus.SKIPPED,
-                timestamp=execution_timestamp,
-                records_exported=0,
-                file_path=None,
+            execution = self._create_execution(
+                ScheduleStatus.SKIPPED,
+                execution_timestamp,
                 error_message="Schedule is disabled",
             )
             self._save_execution(execution)
             return execution
 
         if not self.is_due():
-            execution = ScheduleExecution(
-                schedule_id=self._generate_schedule_id(execution_timestamp),
-                status=ScheduleStatus.SKIPPED,
-                timestamp=execution_timestamp,
-                records_exported=0,
-                file_path=None,
+            execution = self._create_execution(
+                ScheduleStatus.SKIPPED,
+                execution_timestamp,
                 error_message="Export not due at this time",
             )
             self._save_execution(execution)
@@ -125,32 +136,23 @@ class AuditExportScheduler:
 
         try:
             result = self._exporter.export()
-
             if result.success:
-                execution = ScheduleExecution(
-                    schedule_id=self._generate_schedule_id(result.timestamp),
-                    status=ScheduleStatus.SUCCESS,
-                    timestamp=result.timestamp,
+                execution = self._create_execution(
+                    ScheduleStatus.SUCCESS,
+                    result.timestamp,
                     records_exported=result.records_exported,
                     file_path=result.file_path,
-                    error_message=None,
                 )
             else:
-                execution = ScheduleExecution(
-                    schedule_id=self._generate_schedule_id(result.timestamp),
-                    status=ScheduleStatus.FAILED,
-                    timestamp=result.timestamp,
-                    records_exported=0,
-                    file_path=None,
+                execution = self._create_execution(
+                    ScheduleStatus.FAILED,
+                    result.timestamp,
                     error_message=result.error_message,
                 )
         except Exception as exc:
-            execution = ScheduleExecution(
-                schedule_id=self._generate_schedule_id(execution_timestamp),
-                status=ScheduleStatus.FAILED,
-                timestamp=execution_timestamp,
-                records_exported=0,
-                file_path=None,
+            execution = self._create_execution(
+                ScheduleStatus.FAILED,
+                execution_timestamp,
                 error_message=str(exc),
             )
 

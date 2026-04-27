@@ -84,48 +84,24 @@ def validate_order_with_position_limit_guard(
     exchange: "ExchangeType",
     price: Decimal | None = None,
 ) -> OrderRequest:
-    """
-    Validate order against all pre-trade gates including SEBI position limits.
+    """Validate order including SEBI position limits (RISK J.1).
 
-    MITIGATION OF RISK J.1: Integrates PositionLimitGuard as pre-check.
-    Validates order against exchange-specific position limits (NSE F&O, MCX, CDS)
-    before submission to prevent limit breaches.
-
-    Args:
-        request: Order request to validate.
-        config: Pre-trade configuration.
-        last_prices: Dictionary of last prices for symbols.
-        current_positions: Current position sizes per symbol.
-        total_exposure: Current total portfolio exposure.
-        position_limit_guard: PositionLimitGuard instance for exchange limits.
-        exchange: Exchange type for the order.
-        price: Optional order price (uses last price if None).
-
-    Returns:
-        Validated order request.
-
-    Raises:
-        ConfigError: If any validation gate fails or position limit would be breached.
+    Standard pre-trade gates plus exchange-specific position limits.
+    Raises ConfigError on any validation failure.
     """
     order_price = price if price is not None else _resolve_price(request, last_prices)
-
-    # Run standard pre-trade validations
     _check_quantity(request, config)
     _check_notional(request, order_price, config)
     _check_price_deviation(request, order_price, last_prices, config)
     _check_position_limit(request, current_positions, config)
     _check_exposure(request, order_price, total_exposure, config)
-
-    # Validate against SEBI position limits (RISK J.1)
-    now_utc = datetime.now(UTC)
     position_limit_guard.validate_order(
         exchange=exchange,
         symbol=request.symbol,
         quantity=request.quantity,
         price=order_price,
-        now_utc=now_utc,
+        now_utc=datetime.now(UTC),
     )
-
     return request
 
 

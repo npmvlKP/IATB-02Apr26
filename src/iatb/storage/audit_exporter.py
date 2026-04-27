@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import Timestamp, create_timestamp
@@ -288,6 +288,24 @@ class AuditExporter:
         ts_str = timestamp.strftime("%Y%m%d_%H%M%S")
         return f"{self._config.filename_prefix}_{ts_str}.{format.value}"
 
+    @staticmethod
+    def _build_csv_row(rec: AuditExportRecord, include_metadata: bool) -> dict[str, Any]:
+        """Build a CSV row dict from an export record."""
+        row: dict[str, Any] = {
+            "trade_id": rec.trade_id,
+            "timestamp": rec.timestamp,
+            "exchange": rec.exchange,
+            "symbol": rec.symbol,
+            "side": rec.side,
+            "quantity": rec.quantity,
+            "price": rec.price,
+            "status": rec.status,
+            "strategy_id": rec.strategy_id,
+        }
+        if include_metadata and rec.metadata:
+            row["metadata"] = json.dumps(rec.metadata)
+        return row
+
     def _write_csv(
         self,
         file_path: Path,
@@ -327,22 +345,9 @@ class AuditExporter:
             writer.writeheader()
 
             for rec in export_records:
-                row = {
-                    "trade_id": rec.trade_id,
-                    "timestamp": rec.timestamp,
-                    "exchange": rec.exchange,
-                    "symbol": rec.symbol,
-                    "side": rec.side,
-                    "quantity": rec.quantity,
-                    "price": rec.price,
-                    "status": rec.status,
-                    "strategy_id": rec.strategy_id,
-                }
-
-                if self._config.include_metadata and rec.metadata:
-                    row["metadata"] = json.dumps(rec.metadata)
-
-                writer.writerow(row)
+                writer.writerow(
+                    self._build_csv_row(rec, self._config.include_metadata),
+                )
 
     def _write_json(
         self,
@@ -381,21 +386,81 @@ class AuditExporter:
         with file_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
+    def _build_pdf_table_data(
+        self,
+        export_records: list[AuditExportRecord],
+    ) -> list[list[str]]:
+        """Build table data (headers + rows) for PDF export."""
+        headers = [
+            "Trade ID",
+            "Timestamp",
+            "Exchange",
+            "Symbol",
+            "Side",
+            "Quantity",
+            "Price",
+            "Status",
+            "Strategy ID",
+        ]
+        if self._config.include_metadata:
+            headers.append("Metadata")
+        data = [headers]
+        for rec in export_records:
+            row = [
+                rec.trade_id,
+                rec.timestamp,
+                rec.exchange,
+                rec.symbol,
+                rec.side,
+                rec.quantity,
+                rec.price,
+                rec.status,
+                rec.strategy_id,
+            ]
+            if self._config.include_metadata:
+                metadata_str = json.dumps(rec.metadata) if rec.metadata else "None"
+                if len(metadata_str) > 100:
+                    metadata_str = metadata_str[:100] + "..."
+                row.append(metadata_str)
+            data.append(row)
+        return data
+
+    @staticmethod
+    def _create_pdf_table(data: list[list[str]]) -> Any:
+        """Create a styled reportlab Table from data."""
+        from reportlab.lib import colors  # type: ignore[import-untyped]
+        from reportlab.platypus import Table as RLTable  # type: ignore[import-untyped]
+        from reportlab.platypus import TableStyle
+
+        table = RLTable(data)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ]
+            )
+        )
+        return table
+
     def _write_pdf(
         self,
         file_path: Path,
         records: list[TradeAuditRecord],
     ) -> None:
-        """Write records to PDF file using tabula or reportlab."""
+        """Write records to PDF file using reportlab."""
         try:
-            from reportlab.lib import colors  # type: ignore[import-untyped]
             from reportlab.lib.pagesizes import letter  # type: ignore[import-untyped]
             from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
-            from reportlab.platypus import (  # type: ignore[import-untyped]
+            from reportlab.platypus import (
                 Paragraph,
                 SimpleDocTemplate,
-                Table,
-                TableStyle,
             )
 
             export_records = [
@@ -407,7 +472,7 @@ class AuditExporter:
             ]
 
             doc = SimpleDocTemplate(str(file_path), pagesize=letter)
-            elements = []
+            elements: list[Any] = []
             styles = getSampleStyleSheet()
 
             title = Paragraph(
@@ -415,7 +480,6 @@ class AuditExporter:
                 styles["Heading1"],
             )
             elements.append(title)
-
             subtitle = Paragraph(
                 f"Total Records: {len(export_records)}",
                 styles["Heading2"],
@@ -423,60 +487,8 @@ class AuditExporter:
             elements.append(subtitle)
 
             if export_records:
-                headers = [
-                    "Trade ID",
-                    "Timestamp",
-                    "Exchange",
-                    "Symbol",
-                    "Side",
-                    "Quantity",
-                    "Price",
-                    "Status",
-                    "Strategy ID",
-                ]
-
-                if self._config.include_metadata:
-                    headers.append("Metadata")
-
-                data = [headers]
-
-                for rec in export_records:
-                    row = [
-                        rec.trade_id,
-                        rec.timestamp,
-                        rec.exchange,
-                        rec.symbol,
-                        rec.side,
-                        rec.quantity,
-                        rec.price,
-                        rec.status,
-                        rec.strategy_id,
-                    ]
-
-                    if self._config.include_metadata:
-                        metadata_str = json.dumps(rec.metadata) if rec.metadata else "None"
-                        if len(metadata_str) > 100:
-                            metadata_str = metadata_str[:100] + "..."
-                        row.append(metadata_str)
-
-                    data.append(row)
-
-                table = Table(data)
-                table.setStyle(
-                    TableStyle(
-                        [
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                            ("FONTSIZE", (0, 0), (-1, 0), 10),
-                            ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                            ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                            ("GRID", (0, 0), (-1, -1), 1, colors.black),
-                        ]
-                    )
-                )
-                elements.append(table)
+                table_data = self._build_pdf_table_data(export_records)
+                elements.append(self._create_pdf_table(table_data))
 
             doc.build(elements)
 

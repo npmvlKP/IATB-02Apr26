@@ -161,13 +161,13 @@ class RiskReportGenerator:
         return template.render(
             report_date=metrics.date.strftime("%Y-%m-%d"),
             report_timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
-            daily_pnl=f"{float(metrics.daily_pnl):.2f}",
-            daily_return=f"{float(metrics.daily_return) * 100:.2f}%",
-            var_95=f"{float(metrics.var_95):.2f}",
-            cvar_95=f"{float(metrics.cvar_95):.2f}",
-            max_drawdown=f"{float(metrics.max_drawdown) * 100:.2f}%",
-            total_exposure=f"{float(metrics.total_exposure):.2f}",
-            net_liquidation_value=f"{float(metrics.net_liquidation_value):.2f}",
+            daily_pnl=f"{metrics.daily_pnl:.2f}",
+            daily_return=f"{metrics.daily_return * 100:.2f}%",
+            var_95=f"{metrics.var_95:.2f}",
+            cvar_95=f"{metrics.cvar_95:.2f}",
+            max_drawdown=f"{metrics.max_drawdown * 100:.2f}%",
+            total_exposure=f"{metrics.total_exposure:.2f}",
+            net_liquidation_value=f"{metrics.net_liquidation_value:.2f}",
             positions=_format_positions(metrics.positions),
             risk_alert=_get_risk_alert(metrics, self._config.max_allowed_drawdown),
         )
@@ -262,6 +262,26 @@ class RiskReportGenerator:
         logger.info("Report path: %s", report_path)
 
 
+def _validate_risk_metrics_inputs(
+    date: datetime,
+    net_liquidation_value: Decimal,
+    total_exposure: Decimal,
+    confidence_level: Decimal,
+) -> None:
+    if date.tzinfo is None or date.tzinfo != UTC:
+        msg = "Date must be UTC-aware"
+        raise ConfigError(msg)
+    if net_liquidation_value <= Decimal("0"):
+        msg = "Net liquidation value must be positive"
+        raise ConfigError(msg)
+    if total_exposure < Decimal("0"):
+        msg = "Total exposure cannot be negative"
+        raise ConfigError(msg)
+    if confidence_level <= Decimal("0") or confidence_level >= Decimal("1"):
+        msg = "Confidence level must be between 0 and 1"
+        raise ConfigError(msg)
+
+
 def create_daily_risk_metrics(
     date: datetime,
     daily_pnl: Decimal,
@@ -276,7 +296,6 @@ def create_daily_risk_metrics(
     max_allowed_drawdown: Decimal = Decimal("0.10"),
 ) -> DailyRiskMetrics:
     """Create daily risk metrics with validation.
-
     Args:
         date: Report date (UTC).
         daily_pnl: Daily profit/loss.
@@ -289,37 +308,17 @@ def create_daily_risk_metrics(
         positions: List of position data.
         confidence_level: Confidence level for VaR/CVaR.
         max_allowed_drawdown: Maximum allowed drawdown threshold.
-
     Returns:
         Validated DailyRiskMetrics object.
-
     Raises:
         ConfigError: If any validation fails.
     """
-    if date.tzinfo is None or date.tzinfo != UTC:
-        msg = "Date must be UTC-aware"
-        raise ConfigError(msg)
-
-    if net_liquidation_value <= Decimal("0"):
-        msg = "Net liquidation value must be positive"
-        raise ConfigError(msg)
-
-    if total_exposure < Decimal("0"):
-        msg = "Total exposure cannot be negative"
-        raise ConfigError(msg)
-
-    if confidence_level <= Decimal("0") or confidence_level >= Decimal("1"):
-        msg = "Confidence level must be between 0 and 1"
-        raise ConfigError(msg)
-
-    returns = [daily_return, -var_95, -cvar_95]
-    equity_curve = [net_liquidation_value - daily_pnl, net_liquidation_value]
+    _validate_risk_metrics_inputs(date, net_liquidation_value, total_exposure, confidence_level)
     risk_snapshot = build_risk_snapshot(
-        returns=returns,
-        equity_curve=equity_curve,
+        returns=[daily_return, -var_95, -cvar_95],
+        equity_curve=[net_liquidation_value - daily_pnl, net_liquidation_value],
         max_allowed_drawdown=max_allowed_drawdown,
     )
-
     return DailyRiskMetrics(
         date=date,
         daily_pnl=daily_pnl,
@@ -395,10 +394,10 @@ def _format_positions(positions: list[PositionData]) -> list[dict[str, Any]]:
         {
             "symbol": pos.symbol,
             "quantity": int(pos.quantity),
-            "entry_price": f"{float(pos.entry_price):.2f}",
-            "current_price": f"{float(pos.current_price):.2f}",
-            "unrealized_pnl": f"{float(pos.unrealized_pnl):.2f}",
-            "exposure": f"{float(pos.exposure):.2f}",
+            "entry_price": f"{pos.entry_price:.2f}",
+            "current_price": f"{pos.current_price:.2f}",
+            "unrealized_pnl": f"{pos.unrealized_pnl:.2f}",
+            "exposure": f"{pos.exposure:.2f}",
         }
         for pos in positions
     ]
@@ -421,8 +420,8 @@ def _get_risk_alert(metrics: DailyRiskMetrics, max_allowed: Decimal) -> dict[str
         "level": alert_level,
         "is_breached": is_breached,
         "message": (
-            f"Drawdown breach detected: {float(metrics.max_drawdown) * 100:.2f}% "
-            f"exceeds {float(max_allowed) * 100:.2f}%"
+            f"Drawdown breach detected: {metrics.max_drawdown * 100:.2f}% "
+            f"exceeds {max_allowed * 100:.2f}%"
             if is_breached
             else "Risk levels within acceptable limits"
         ),
@@ -444,13 +443,7 @@ def _get_logger() -> Any:
     return logging.getLogger(__name__)
 
 
-def _get_default_template() -> str:
-    """Get default HTML template for risk report.
-
-    Returns:
-        HTML template string.
-    """
-    return """
+_DEFAULT_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -688,4 +681,8 @@ def _get_default_template() -> str:
     </div>
 </body>
 </html>
-    """.strip()
+""".strip()
+
+
+def _get_default_template() -> str:
+    return _DEFAULT_HTML_TEMPLATE

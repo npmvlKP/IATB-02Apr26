@@ -276,6 +276,26 @@ class PositionLimitGuard:
             )
             raise ConfigError(msg)
 
+    def _build_position_state(
+        self,
+        exchange: ExchangeType,
+        symbol: str,
+        current_qty: Decimal,
+        price: Decimal,
+        exchange_total: Decimal,
+        config: PositionLimitConfig,
+    ) -> PositionState:
+        return PositionState(
+            exchange=exchange,
+            symbol=symbol,
+            current_quantity=current_qty,
+            current_notional=current_qty * price,
+            limit_quantity=config.max_quantity_per_symbol,
+            limit_notional=config.max_notional_per_symbol,
+            total_notional_used=exchange_total,
+            total_notional_limit=config.max_total_notional,
+        )
+
     def validate_order(
         self,
         exchange: ExchangeType,
@@ -321,15 +341,8 @@ class PositionLimitGuard:
         )
         self._check_exchange_total_limit(projected_total, config.max_total_notional, exchange)
 
-        return PositionState(
-            exchange=exchange,
-            symbol=symbol,
-            current_quantity=current_qty,
-            current_notional=current_qty * price,  # Approximation
-            limit_quantity=config.max_quantity_per_symbol,
-            limit_notional=config.max_notional_per_symbol,
-            total_notional_used=exchange_total,
-            total_notional_limit=config.max_total_notional,
+        return self._build_position_state(
+            exchange, symbol, current_qty, price, exchange_total, config
         )
 
     def update_position(

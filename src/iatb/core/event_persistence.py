@@ -5,6 +5,7 @@ Provides storage and retrieval of events for debugging, testing,
 and replay scenarios.
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -27,6 +28,31 @@ class PersistedEvent:
     timestamp: str
     event_data: dict[str, Any]
     sequence: int
+
+
+def _parse_event_file(
+    event_file: Path,
+    start_sequence: int,
+    end_sequence: int | None,
+) -> PersistedEvent | None:
+    try:
+        with event_file.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        persisted = PersistedEvent(
+            event_id=data["event_id"],
+            topic=data["topic"],
+            timestamp=data["timestamp"],
+            event_data=data["event_data"],
+            sequence=data["sequence"],
+        )
+        if persisted.sequence < start_sequence:
+            return None
+        if end_sequence is not None and persisted.sequence > end_sequence:
+            return None
+        return persisted
+    except Exception as exc:
+        logger.error("Error loading event file %s: %s", event_file, exc)
+        return None
 
 
 class EventPersistence:
@@ -103,42 +129,16 @@ class EventPersistence:
         """
         try:
             topic_dir = self._storage_dir / topic
-
             if not topic_dir.exists():
                 logger.warning(f"No events found for topic: {topic}")
                 return []
-
-            events = []
-
-            for event_file in sorted(topic_dir.glob("*.json")):
-                try:
-                    with event_file.open("r", encoding="utf-8") as f:
-                        data = json.load(f)
-
-                    persisted = PersistedEvent(
-                        event_id=data["event_id"],
-                        topic=data["topic"],
-                        timestamp=data["timestamp"],
-                        event_data=data["event_data"],
-                        sequence=data["sequence"],
-                    )
-
-                    # Filter by sequence range
-                    if persisted.sequence < start_sequence:
-                        continue
-
-                    if end_sequence is not None and persisted.sequence > end_sequence:
-                        continue
-
-                    events.append(persisted)
-
-                except Exception as exc:
-                    logger.error("Error loading event file %s: %s", event_file, exc)
-                    continue
-
+            events = [
+                parsed
+                for f in sorted(topic_dir.glob("*.json"))
+                if (parsed := _parse_event_file(f, start_sequence, end_sequence)) is not None
+            ]
             logger.info(f"Loaded {len(events)} events from persistence for topic: {topic}")
             return events
-
         except Exception as exc:
             logger.error("Error loading events from persistence: %s", exc)
             msg = f"Failed to load events for topic '{topic}'"
@@ -164,8 +164,6 @@ class EventPersistence:
         Returns:
             Number of events replayed.
         """
-        import asyncio
-
         events = await self.load_events(topic, start_sequence, end_sequence)
 
         if not events:
@@ -173,7 +171,6 @@ class EventPersistence:
             return 0
 
         replayed_count = 0
-
         for event in events:
             try:
                 # Deserialize event
