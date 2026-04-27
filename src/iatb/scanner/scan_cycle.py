@@ -19,6 +19,11 @@ from typing import Any
 
 from iatb.core.enums import Exchange, OrderSide
 from iatb.core.exceptions import ConfigError
+from iatb.core.pipeline_health import (
+    PipelineHealthMonitor,
+    PipelineRun,
+    PipelineStage,
+)
 from iatb.data.base import DataProvider
 from iatb.data.kite_provider import KiteProvider
 from iatb.execution.base import OrderRequest
@@ -44,7 +49,9 @@ from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
 
 _LOGGER = logging.getLogger(__name__)
 
-# Module-level cache for symbols
+_module_health_monitor = PipelineHealthMonitor()
+_module_pipeline_counter = 0
+
 _cached_symbols: list[str] | None = None
 
 
@@ -146,12 +153,14 @@ class ScanCycleResult:
         total_pnl: Decimal,
         errors: list[str],
         timestamp_utc: datetime,
+        pipeline_id: str | None = None,
     ) -> None:
         self.scanner_result = scanner_result
         self.trades_executed = trades_executed
         self.total_pnl = total_pnl
         self.errors = errors
         self.timestamp_utc = timestamp_utc
+        self.pipeline_id = pipeline_id
 
 
 def _create_sentiment_analyzer() -> Callable[[str], tuple[Decimal, bool]]:
@@ -1166,6 +1175,54 @@ def _run_scan_cycle_with_params(
     )
 
 
+def _generate_pipeline_id() -> str:
+    """Generate a unique pipeline run ID."""
+    global _module_pipeline_counter
+    _module_pipeline_counter += 1
+    ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    return f"scan-{ts}-{_module_pipeline_counter:04d}"
+
+
+def get_pipeline_health_monitor() -> PipelineHealthMonitor:
+    """Get the module-level pipeline health monitor.
+
+    Returns:
+        Shared PipelineHealthMonitor instance for scan cycles.
+    """
+    return _module_health_monitor
+
+
+def _run_timed_stage(
+    pipeline_run: PipelineRun,
+    stage: PipelineStage,
+    stage_fn: Any,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """Execute a pipeline stage function with timing and health tracking.
+
+    Args:
+        pipeline_run: Active pipeline run for recording.
+        stage: Pipeline stage enum value.
+        stage_fn: Callable to execute.
+        *args: Positional arguments for stage_fn.
+        **kwargs: Keyword arguments for stage_fn.
+
+    Returns:
+        Return value of stage_fn.
+    """
+    start = datetime.now(UTC)
+    try:
+        result = stage_fn(*args, **kwargs)
+        duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+        pipeline_run.record_stage(stage, success=True, duration_ms=duration_ms)
+        return result
+    except Exception as exc:
+        duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+        pipeline_run.record_stage(stage, success=False, duration_ms=duration_ms, error=str(exc))
+        raise
+
+
 def run_scan_cycle(
     *,
     symbols: Sequence[str] | None = None,
@@ -1174,8 +1231,9 @@ def run_scan_cycle(
     audit_logger: TradeAuditLogger | None = None,
     data_provider: DataProvider | None = None,
     scanner_config: ScannerConfig | None = None,
+    health_monitor: PipelineHealthMonitor | None = None,
 ) -> ScanCycleResult:
-    """Execute scan cycle: fetch → sentiment → score → scan → paper-execute → audit.
+    """Execute scan cycle: fetch -> sentiment -> score -> scan -> paper-execute -> audit.
 
     Main entry point for automated trading. Runs full pipeline:
       1. Fetches market data via DataProvider (KiteProvider or custom)
@@ -1194,10 +1252,29 @@ def run_scan_cycle(
             If None, attempts to create KiteProvider from environment variables.
             If environment variables not set, scanner will require custom_data.
         scanner_config: Optional scanner config.
+        health_monitor: Optional PipelineHealthMonitor for stage tracking.
+            If None, uses the module-level monitor.
 
     Returns:
         ScanCycleResult with results, trades, PnL, errors.
     """
-    return _run_scan_cycle_with_params(
-        symbols, max_trades, order_manager, audit_logger, data_provider, scanner_config
-    )
+    monitor = health_monitor or _module_health_monitor
+    pipeline_id = _generate_pipeline_id()
+    pipeline_run = monitor.start_run(pipeline_id)
+
+    try:
+        result = _run_scan_cycle_with_params(
+            symbols, max_trades, order_manager, audit_logger, data_provider, scanner_config
+        )
+        result.pipeline_id = pipeline_id
+        pipeline_run.finish()
+        return result
+    except Exception as exc:
+        pipeline_run.record_stage(
+            PipelineStage.COMPLETE,
+            success=False,
+            duration_ms=0,
+            error=str(exc),
+        )
+        pipeline_run.finish()
+        raise
