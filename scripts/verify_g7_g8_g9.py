@@ -66,11 +66,13 @@ def find_float_code_matches(files: list[Path]) -> list[str]:
                 line = lines[line_number - 1].strip() if 0 < line_number <= len(lines) else ""
 
                 # Check for exemption comment on same line
-                if ("API boundary" in line or 
-                    ("API" in line and "#" in line) or
-                    "timing parameter" in line.lower() or
-                    "not financial" in line.lower() or
-                    "timing configuration" in line.lower()):
+                if (
+                    "API boundary" in line
+                    or ("API" in line and "#" in line)
+                    or "timing parameter" in line.lower()
+                    or "not financial" in line.lower()
+                    or "timing configuration" in line.lower()
+                ):
                     continue
 
                 # Check for exemption comment in preceding 5 lines
@@ -78,11 +80,13 @@ def find_float_code_matches(files: list[Path]) -> list[str]:
                 for i in range(max(0, line_number - 6), line_number):
                     if i >= 0 and i < len(lines):
                         prev_line = lines[i].strip()
-                        if ("API boundary" in prev_line or 
-                            ("API" in prev_line and "#" in prev_line) or
-                            "timing parameter" in prev_line.lower() or
-                            "not financial" in prev_line.lower() or
-                            "timing configuration" in prev_line.lower()):
+                        if (
+                            "API boundary" in prev_line
+                            or ("API" in prev_line and "#" in prev_line)
+                            or "timing parameter" in prev_line.lower()
+                            or "not financial" in prev_line.lower()
+                            or "timing configuration" in prev_line.lower()
+                        ):
                             has_exemption_comment = True
                             break
 

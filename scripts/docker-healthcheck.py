@@ -1,6 +1,6 @@
 import sys
-from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.request import urlopen
 
 HEALTH_URL = "http://127.0.0.1:8000/health"
 TIMEOUT_SECONDS = 3
