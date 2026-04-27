@@ -31,6 +31,7 @@ class OptimizationResult:
     improved: bool
 
 
+# API boundary: Optuna framework requires float return type for objective functions
 def _create_objective(
     signal_history: list[dict[str, Decimal]], forward_returns: Sequence[Decimal]
 ) -> Callable[[object], float]:
