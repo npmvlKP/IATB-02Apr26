@@ -88,6 +88,10 @@ ignore = []
 "tests/storage/test_audit_scheduler.py" = ["F841"]  # Unused variable in test
 "tests/integration/test_phase_n_live_simulation.py" = ["S311"]  # Random for simulation, not crypto
 "tests/integration/test_phase_n_failure_injection.py" = ["S311"]  # Random for failure simulation
+"tests/risk/test_sebi_live_validator.py" = ["DTZ001"]  # Naive datetime rejection tests
+"tests/risk/test_risk_disclosure.py" = ["DTZ001"]  # Naive datetime rejection tests
+"tests/core/test_secrets_rotation.py" = ["DTZ001"]  # Naive datetime rejection tests
+"src/iatb/core/secrets_rotation.py" = ["S105"]  # Secret type constant names, not actual secrets
 
 [tool.mypy]
 python_version = "3.12"
