@@ -23,6 +23,8 @@ from iatb.core.types import (
 )
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 
+_TICK_QUEUE_MAXSIZE = 10000
+
 
 @dataclass(frozen=True)
 class Tick:
@@ -174,7 +176,7 @@ class KiteWebSocketProvider(DataProvider):
         self._latest_tickers: dict[str, TickerSnapshot] = {}
         self._is_connected = False
         self._ticker_instance: Any = None
-        self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue()
+        self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
         self._tick_processor_task: asyncio.Task[None] | None = None
 
     @staticmethod

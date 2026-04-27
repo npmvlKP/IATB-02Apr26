@@ -104,6 +104,7 @@ class PositionLimitGuard:
             self._limits[limit.exchange] = limit
 
         self._positions: dict[str, tuple[Decimal, Decimal]] = {}
+        self._symbol_exchange: dict[str, ExchangeType] = {}
         self._exchange_totals: dict[ExchangeType, Decimal] = {
             exchange: Decimal("0") for exchange in self._limits
         }
@@ -321,6 +322,7 @@ class PositionLimitGuard:
         """
         _validate_utc(now_utc)
         self._validate_price(price, symbol)
+        self._symbol_exchange[symbol] = exchange
 
         (
             current_qty,
@@ -364,6 +366,7 @@ class PositionLimitGuard:
         """
         _validate_utc(now_utc)
         self.get_limit_config(exchange)
+        self._symbol_exchange[symbol] = exchange
 
         current_qty, current_notional = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
         new_qty = current_qty + quantity_delta
@@ -503,6 +506,9 @@ class PositionLimitGuard:
         """
         if symbol not in self._positions:
             return None
+        exchange = self._symbol_exchange.get(symbol)
+        if exchange is not None:
+            return self._limits.get(exchange)
         for limit_config in self._limits.values():
             return limit_config
         return None

@@ -4,8 +4,12 @@ Order lifecycle manager with safety pipeline.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from iatb.core.enums import OrderSide, OrderStatus
@@ -18,6 +22,8 @@ if TYPE_CHECKING:
     from iatb.execution.trade_audit import TradeAuditLogger
     from iatb.risk.daily_loss_guard import DailyLossGuard
     from iatb.risk.kill_switch import KillSwitch
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class OrderManager:
@@ -50,7 +56,6 @@ class OrderManager:
         self._last_prices: dict[str, Decimal] = {}
         self._positions: dict[str, Decimal] = {}
         self._total_exposure = Decimal("0")
-        # Position tracking for PnL: symbol -> (position_qty, avg_entry_price)
         self._position_state: dict[str, tuple[Decimal, Decimal]] = {}
 
     def update_market_data(
@@ -303,3 +308,77 @@ class OrderManager:
                 if self._order_status[key] in {OrderStatus.OPEN, OrderStatus.PENDING}:
                     self._order_status[key] = OrderStatus.CANCELLED
         return True
+
+    async def place_order_async(
+        self,
+        request: OrderRequest,
+        strategy_id: str = "",
+        algo_id: str = "",
+    ) -> ExecutionResult:
+        """Async variant that offloads execution to thread pool.
+
+        Prevents event loop blocking during live trading by running
+        the synchronous executor in a separate thread.
+        """
+        self._gate_kill_switch()
+        self._gate_throttle()
+        self._gate_pre_trade(request)
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, self._executor.execute_order, request)
+        self._order_status[result.order_id] = result.status
+        self._record_pnl(request, result)
+        effective_algo_id = algo_id or self._algo_id
+        self._audit(request, result, strategy_id, effective_algo_id)
+        return result
+
+    def save_state(self, state_path: Path) -> None:
+        """Persist positions and PnL state to JSON for crash recovery."""
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        position_data = {
+            symbol: {"qty": str(qty), "avg_price": str(price)}
+            for symbol, (qty, price) in self._position_state.items()
+        }
+        order_data = {oid: status.value for oid, status in self._order_status.items()}
+        payload = {
+            "saved_at_utc": datetime.now(UTC).isoformat(),
+            "position_state": position_data,
+            "order_status": order_data,
+            "total_exposure": str(self._total_exposure),
+        }
+        state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        _LOGGER.info(
+            "State persisted",
+            extra={"path": str(state_path), "positions": len(position_data)},
+        )
+
+    def load_state(self, state_path: Path) -> None:
+        """Restore positions and PnL state from JSON on process restart."""
+        if not state_path.exists():
+            _LOGGER.warning("State file not found: %s", state_path)
+            return
+        try:
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            _LOGGER.error("Failed to load state from %s: %s", state_path, exc)
+            return
+
+        position_data = payload.get("position_state", {})
+        self._position_state = {
+            symbol: (Decimal(v["qty"]), Decimal(v["avg_price"]))
+            for symbol, v in position_data.items()
+        }
+
+        order_data = payload.get("order_status", {})
+        self._order_status = {oid: OrderStatus(value) for oid, value in order_data.items()}
+
+        exposure = payload.get("total_exposure", "0")
+        self._total_exposure = Decimal(str(exposure))
+
+        _LOGGER.info(
+            "State restored",
+            extra={
+                "path": str(state_path),
+                "positions": len(self._position_state),
+                "orders": len(self._order_status),
+            },
+        )

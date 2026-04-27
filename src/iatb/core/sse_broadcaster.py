@@ -20,6 +20,9 @@ from iatb.core.events import (
 _LOGGER = logging.getLogger(__name__)
 
 
+_SSE_QUEUE_MAXSIZE = 1000
+
+
 class SSEBroadcaster:
     """Manages SSE client connections and event broadcasting."""
 
@@ -182,7 +185,7 @@ class SSEBroadcaster:
             >>> async for message in broadcaster.subscribe():
             ...     _LOGGER.info("Message: %s", message)
         """
-        queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
+        queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
 
         async with self._lock:
             self._subscribers.append(queue)

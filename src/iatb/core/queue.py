@@ -69,12 +69,19 @@ class EventBusBackend(ABC):
             raise EventBusError(msg)
 
 
+_DEFAULT_QUEUE_MAXSIZE = 10000
+
+
 class InProcessBackend(EventBusBackend):
     """In-memory asyncio queue backend for single-machine deployment."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_queue_size: int = _DEFAULT_QUEUE_MAXSIZE) -> None:
         """Initialize the in-process backend."""
         super().__init__()
+        if max_queue_size <= 0:
+            msg = "max_queue_size must be positive"
+            raise EventBusError(msg)
+        self._max_queue_size = max_queue_size
         self._subscribers: dict[str, list[asyncio.Queue[Any]]] = {}
         self._queues: list[asyncio.Queue[Any]] = []
         self._lock = asyncio.Lock()
@@ -103,7 +110,7 @@ class InProcessBackend(EventBusBackend):
         async with self._lock:
             if topic not in self._subscribers:
                 self._subscribers[topic] = []
-            queue: asyncio.Queue[Any] = asyncio.Queue()
+            queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=self._max_queue_size)
             self._subscribers[topic].append(queue)
             self._queues.append(queue)
             logger.debug(f"Subscribed to topic: {topic}")
@@ -185,6 +192,7 @@ class RedisStreamBackend(EventBusBackend):
         db: int = 0,
         password: str | None = None,
         max_stream_length: int = 10000,
+        max_queue_size: int = _DEFAULT_QUEUE_MAXSIZE,
     ) -> None:
         """Initialize the Redis Streams backend.
 
@@ -194,6 +202,7 @@ class RedisStreamBackend(EventBusBackend):
             db: Redis database number.
             password: Redis password.
             max_stream_length: Maximum stream length before trimming.
+            max_queue_size: Maximum size for subscriber queues.
         """
         super().__init__()
         self._host = host
@@ -201,6 +210,7 @@ class RedisStreamBackend(EventBusBackend):
         self._db = db
         self._password = password
         self._max_stream_length = max_stream_length
+        self._max_queue_size = max_queue_size
         self._client: Any = None
         self._subscribers: dict[str, list[asyncio.Queue[Any]]] = {}
         self._listener_tasks: dict[str, asyncio.Task[None]] = {}
@@ -264,9 +274,8 @@ class RedisStreamBackend(EventBusBackend):
                     self._listen_to_stream(topic),
                 )
 
-            queue: asyncio.Queue[Any] = asyncio.Queue()
+            queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=self._max_queue_size)
             self._subscribers[topic].append(queue)
-            logger.debug(f"Subscribed to Redis stream: {topic}")
             return queue
 
     async def unsubscribe(self, topic: str, queue: asyncio.Queue[Any]) -> None:

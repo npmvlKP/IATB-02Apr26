@@ -38,6 +38,9 @@ _MODE_QUOTE = "quote"
 _MODE_LTP = "ltp"
 
 
+_TICK_QUEUE_MAXSIZE = 10000
+
+
 @dataclass
 class ConnectionStats:
     """Statistics about the WebSocket connection."""
@@ -322,7 +325,7 @@ class KiteTickerFeed:
         """Initialize buffers and queues."""
         self._subscriptions: set[tuple[str, Exchange]] = set()
         self._tick_buffer = TickBuffer(max_size=tick_buffer_size)
-        self._tick_queue: asyncio.Queue[TickerSnapshot] = asyncio.Queue()
+        self._tick_queue: asyncio.Queue[TickerSnapshot] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
 
     def _init_connection_state(self) -> None:
         """Initialize connection state variables."""
