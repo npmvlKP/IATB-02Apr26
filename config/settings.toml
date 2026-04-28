@@ -16,7 +16,10 @@ paper_trade_enforced = true
 name = "zerodha"
 
 [network]
-static_ip = "your.static.ip.address"
+# Static IP address for SEBI compliance
+# Replace with your actual static IP address
+# Format: IPv4 address (e.g., "192.168.1.100")
+static_ip = "192.168.1.100"
 
 [algorithm]
 algo_id = "iatb-algo-001"

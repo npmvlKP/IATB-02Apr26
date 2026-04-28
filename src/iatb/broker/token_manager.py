@@ -112,6 +112,97 @@ class ZerodhaTokenManager:
         expiry_time = _get_next_expiry_utc(token_time)
         return now_utc < expiry_time
 
+    def is_token_valid_for_pre_market(self) -> bool:
+        """Check if token is valid for pre-market trading (before 9 AM IST).
+
+        Pre-market trading starts at 9 AM IST. This method checks if the token
+        will be valid at least until 9 AM IST today.
+
+        Returns:
+            True if token is valid for pre-market, False otherwise.
+        """
+        token = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TOKEN_KEY)
+        if not token:
+            return False
+        timestamp_str = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TIMESTAMP_KEY)
+        if not timestamp_str:
+            return False
+        try:
+            token_time = datetime.fromisoformat(timestamp_str)
+        except ValueError:
+            _LOGGER.error("Invalid token timestamp in keyring")
+            return False
+        now_utc = datetime.now(UTC)
+        pre_market_time = _get_pre_market_utc(token_time)
+        return now_utc < pre_market_time
+
+    def should_refresh_token(self, buffer_minutes: int = 30) -> bool:
+        """Check if token should be refreshed before expiry.
+
+        Args:
+            buffer_minutes: Minutes before expiry to trigger refresh.
+
+        Returns:
+            True if token should be refreshed, False otherwise.
+        """
+        token = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TOKEN_KEY)
+        if not token:
+            return True
+        timestamp_str = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TIMESTAMP_KEY)
+        if not timestamp_str:
+            return True
+        try:
+            token_time = datetime.fromisoformat(timestamp_str)
+        except ValueError:
+            _LOGGER.error("Invalid token timestamp in keyring")
+            return True
+        now_utc = datetime.now(UTC)
+        expiry_time = _get_next_expiry_utc(token_time)
+        time_until_expiry = expiry_time - now_utc
+        return time_until_expiry <= timedelta(minutes=buffer_minutes)
+
+    def auto_refresh_token(self) -> str | None:
+        """Automatically refresh token using TOTP if available.
+
+        This method checks if the token needs refresh and attempts to
+        refresh it using the stored TOTP secret.
+
+        Returns:
+            New access token if refresh successful, None otherwise.
+
+        Raises:
+            ValueError: If TOTP secret not configured or refresh fails.
+        """
+        if not self.should_refresh_token():
+            _LOGGER.debug("Token does not need refresh")
+            return None
+
+        if not self._totp_secret:
+            msg = "TOTP secret not configured for auto-refresh"
+            _LOGGER.warning(msg)
+            raise ValueError(msg)
+
+        _LOGGER.info("Attempting automatic token refresh with TOTP")
+
+        try:
+            self._generate_totp()
+            _LOGGER.debug("Generated TOTP code for auto-refresh")
+
+            request_token = self.resolve_saved_request_token()
+            if not request_token:
+                msg = "No saved request token available for auto-refresh"
+                _LOGGER.warning(msg)
+                raise ValueError(msg)
+
+            new_access_token = self.exchange_request_token(request_token)
+            self.store_access_token(new_access_token)
+            _LOGGER.info("Token auto-refresh successful")
+
+            return new_access_token
+        except Exception as exc:
+            _LOGGER.error("Token auto-refresh failed: %s", exc)
+            raise
+
     def get_login_url(self) -> str:
         """Return Zerodha OAuth login URL.
 
@@ -572,6 +663,31 @@ def _get_next_expiry_utc(token_time: datetime) -> datetime:
     if token_ist < expiry_ist:
         return expiry_ist.astimezone(UTC)
     return (expiry_ist + timedelta(days=1)).astimezone(UTC)
+
+
+def _get_pre_market_utc(token_time: datetime) -> datetime:
+    """Calculate next 9 AM IST pre-market time in UTC.
+
+    Args:
+        token_time: Token creation time.
+
+    Returns:
+        Next pre-market time in UTC.
+    """
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+    ist_tz = ZoneInfo("Asia/Kolkata")
+    token_ist = token_time.astimezone(ist_tz)
+    pre_market_hour = 9
+    pre_market_minute = 0
+    pre_market_ist = datetime.combine(
+        token_ist.date(),
+        time(hour=pre_market_hour, minute=pre_market_minute),
+        tzinfo=ist_tz,
+    )
+    if token_ist < pre_market_ist:
+        return pre_market_ist.astimezone(UTC)
+    return (pre_market_ist + timedelta(days=1)).astimezone(UTC)
 
 
 def _default_http_post(
