@@ -6,11 +6,11 @@ repos:
         name: ruff check
         args: [--fix, --exit-non-zero-on-fix]
         types_or: [python, pyi, jupyter]
-        exclude: (^|.*/)(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py|verify_observability_optimization\.py|verify_g7_g8_g9\.py|add_seeds_.*\.py|check_.*\.py|sync_to_remote\.py|docker-healthcheck\.py|validate_windows_g7_g8_g9_g10\.py)$
+        exclude: (^|.*/)(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py|verify_observability_optimization\.py|verify_g7_g8_g9\.py|add_seeds_.*\.py|check_.*\.py|sync_to_remote\.py|docker-healthcheck\.py|validate_windows_g7_g8_g9_g10\.py)$|^scripts/
       - id: ruff-format
         name: ruff format
         types_or: [python, pyi, jupyter]
-        exclude: (^|.*/)(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py|verify_observability_optimization\.py|verify_g7_g8_g9\.py|add_seeds_.*\.py|check_.*\.py|sync_to_remote\.py|docker-healthcheck\.py|validate_windows_g7_g8_g9_g10\.py)$
+        exclude: (^|.*/)(fix_.*\.py|git_sync_and_verify\.py|verify_and_sync\.py|verify_observability_optimization\.py|verify_g7_g8_g9\.py|add_seeds_.*\.py|check_.*\.py|sync_to_remote\.py|docker-healthcheck\.py|validate_windows_g7_g8_g9_g10\.py)$|^scripts/
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0

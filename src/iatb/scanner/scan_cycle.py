@@ -1235,28 +1235,9 @@ def run_scan_cycle(
 ) -> ScanCycleResult:
     """Execute scan cycle: fetch -> sentiment -> score -> scan -> paper-execute -> audit.
 
-    Main entry point for automated trading. Runs full pipeline:
-      1. Fetches market data via DataProvider (KiteProvider or custom)
-      2. Analyzes sentiment (FinBERT + AION)
-      3. Scores candidates using StrengthScorer (market strength)
-      4. Filters top gainers/losers
-      5. Executes paper trades
-      6. Logs to audit DB
-
-    Args:
-        symbols: Symbols to scan (default: NIFTY50).
-        max_trades: Max trades per cycle.
-        order_manager: Optional OrderManager.
-        audit_logger: Optional TradeAuditLogger.
-        data_provider: Optional DataProvider for market data.
-            If None, attempts to create KiteProvider from environment variables.
-            If environment variables not set, scanner will require custom_data.
-        scanner_config: Optional scanner config.
-        health_monitor: Optional PipelineHealthMonitor for stage tracking.
-            If None, uses the module-level monitor.
-
-    Returns:
-        ScanCycleResult with results, trades, PnL, errors.
+    Pipeline: fetch data -> sentiment -> score -> filter -> paper-execute -> audit.
+    Args are optional; defaults pulled from env/config when not provided.
+    Returns ScanCycleResult with results, trades, PnL, errors.
     """
     monitor = health_monitor or _module_health_monitor
     pipeline_id = _generate_pipeline_id()
