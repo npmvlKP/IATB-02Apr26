@@ -158,9 +158,7 @@ class TestTokenAutoRefresh:
             keyring,
             "get_password",
             side_effect=lambda service, key: (
-                "test_token"
-                if key == "access_token"
-                else token_time.isoformat()
+                "test_token" if key == "access_token" else token_time.isoformat()
             ),
         ):
             with patch("iatb.broker.token_manager.datetime") as mock_dt:
