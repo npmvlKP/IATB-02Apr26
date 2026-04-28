@@ -5,10 +5,12 @@ WebSocket-based real-time market data provider using KiteTicker.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Any, cast
 
 from iatb.core.enums import Exchange
@@ -24,6 +26,17 @@ from iatb.core.types import (
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 
 _TICK_QUEUE_MAXSIZE = 10000
+_LOGGER = logging.getLogger(__name__)
+
+
+class ConnectionState(Enum):
+    """WebSocket connection state."""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True)
@@ -152,6 +165,11 @@ class KiteWebSocketProvider(DataProvider):
         kite_ticker_factory: Callable[[str, str], Any] | None = None,
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
+        heartbeat_interval_seconds: float = 30.0,
+        heartbeat_timeout_seconds: float = 90.0,
+        max_reconnect_attempts: int = 10,
+        reconnect_backoff_base: float = 2.0,
+        reconnect_backoff_max: float = 60.0,
     ) -> None:
         if not api_key.strip():
             msg = "api_key cannot be empty"
@@ -165,19 +183,45 @@ class KiteWebSocketProvider(DataProvider):
         if retry_delay_seconds < 0:
             msg = "retry_delay_seconds must be non-negative"
             raise ConfigError(msg)
+        if heartbeat_interval_seconds <= 0:
+            msg = "heartbeat_interval_seconds must be positive"
+            raise ConfigError(msg)
+        if heartbeat_timeout_seconds <= 0:
+            msg = "heartbeat_timeout_seconds must be positive"
+            raise ConfigError(msg)
+        if max_reconnect_attempts <= 0:
+            msg = "max_reconnect_attempts must be positive"
+            raise ConfigError(msg)
+        if reconnect_backoff_base <= 1.0:
+            msg = "reconnect_backoff_base must be greater than 1.0"
+            raise ConfigError(msg)
+        if reconnect_backoff_max <= 0:
+            msg = "reconnect_backoff_max must be positive"
+            raise ConfigError(msg)
 
         self._api_key = api_key
         self._access_token = access_token
         self._max_retries = max_retries
         self._retry_delay_seconds = retry_delay_seconds
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._heartbeat_timeout_seconds = heartbeat_timeout_seconds
+        self._max_reconnect_attempts = max_reconnect_attempts
+        self._reconnect_backoff_base = reconnect_backoff_base
+        self._reconnect_backoff_max = reconnect_backoff_max
         self._kite_ticker_factory = kite_ticker_factory or self._default_ticker_factory
 
         self._tickers: dict[str, CandleBuilder] = {}
         self._latest_tickers: dict[str, TickerSnapshot] = {}
         self._is_connected = False
+        self._connection_state = ConnectionState.DISCONNECTED
         self._ticker_instance: Any = None
         self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
         self._tick_processor_task: asyncio.Task[None] | None = None
+        self._heartbeat_task: asyncio.Task[None] | None = None
+        self._reconnect_task: asyncio.Task[None] | None = None
+        self._last_heartbeat_utc: datetime | None = None
+        self._reconnect_attempt = 0
+        self._should_stop = False
 
     @staticmethod
     def _default_ticker_factory(api_key: str, access_token: str) -> Any:
@@ -190,9 +234,13 @@ class KiteWebSocketProvider(DataProvider):
             raise ConfigError(msg) from exc
 
     async def connect(self) -> None:
-        """Establish WebSocket connection."""
-        if self._is_connected:
+        """Establish WebSocket connection with reconnection support."""
+        if self._is_connected and self._connection_state == ConnectionState.CONNECTED:
             return
+
+        self._should_stop = False
+        self._connection_state = ConnectionState.CONNECTING
+        self._reconnect_attempt = 0
 
         self._ticker_instance = await asyncio.to_thread(
             self._kite_ticker_factory,
@@ -203,10 +251,38 @@ class KiteWebSocketProvider(DataProvider):
         self._setup_tick_handlers()
         await self._start_connection()
         self._start_tick_processor()
+        self._start_heartbeat_monitor()
         self._is_connected = True
+        self._connection_state = ConnectionState.CONNECTED
+        _LOGGER.info(
+            "WebSocket connected",
+            extra={"api_key": self._api_key[:8] + "..."},
+        )
 
     async def disconnect(self) -> None:
         """Disconnect WebSocket and cleanup resources."""
+        self._should_stop = True
+
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            except RuntimeError:
+                pass
+            self._heartbeat_task = None
+
+        if self._reconnect_task:
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except asyncio.CancelledError:
+                pass
+            except RuntimeError:
+                pass
+            self._reconnect_task = None
+
         if not self._is_connected:
             return
 
@@ -217,15 +293,16 @@ class KiteWebSocketProvider(DataProvider):
             except asyncio.CancelledError:
                 pass
             except RuntimeError:
-                # Event loop is closed during shutdown, ignore
                 pass
 
         if self._ticker_instance:
             await asyncio.to_thread(self._ticker_instance.close)
 
         self._is_connected = False
+        self._connection_state = ConnectionState.DISCONNECTED
         self._tickers.clear()
         self._latest_tickers.clear()
+        _LOGGER.info("WebSocket disconnected")
 
     async def subscribe(self, symbol: str, exchange: Exchange, timeframe: str) -> None:
         """Subscribe to real-time updates for a symbol."""
@@ -310,7 +387,7 @@ class KiteWebSocketProvider(DataProvider):
         return results
 
     async def _start_connection(self) -> None:
-        """Start the WebSocket connection with retries."""
+        """Start the WebSocket connection with retries and exponential backoff."""
         for attempt in range(1, self._max_retries + 1):
             try:
                 await asyncio.to_thread(self._ticker_instance.connect)
@@ -318,8 +395,18 @@ class KiteWebSocketProvider(DataProvider):
             except Exception as exc:
                 if attempt >= self._max_retries:
                     msg = f"Failed to connect after {self._max_retries} attempts: {exc}"
+                    self._connection_state = ConnectionState.FAILED
+                    _LOGGER.error(
+                        "WebSocket connection failed",
+                        extra={"attempts": attempt, "error": str(exc)},
+                    )
                     raise ConfigError(msg) from exc
-                await asyncio.sleep(self._retry_delay_seconds * attempt)
+                delay = self._retry_delay_seconds * attempt
+                _LOGGER.warning(
+                    "WebSocket connection retry",
+                    extra={"attempt": attempt, "delay": delay, "error": str(exc)},
+                )
+                await asyncio.sleep(delay)
 
     def _setup_tick_handlers(self) -> None:
         """Setup tick event handlers."""
@@ -330,6 +417,7 @@ class KiteWebSocketProvider(DataProvider):
 
     def _on_ticks(self, ws: Any, ticks: list[dict[str, object]]) -> None:
         """Handle incoming ticks."""
+        self._last_heartbeat_utc = datetime.now(UTC)
         for tick_data in ticks:
             tick = self._parse_tick(tick_data)
             if tick:
@@ -337,19 +425,146 @@ class KiteWebSocketProvider(DataProvider):
 
     def _on_connect(self, ws: Any, response: dict[str, object]) -> None:
         """Handle connection event."""
-        pass
+        self._last_heartbeat_utc = datetime.now(UTC)
+        _LOGGER.info("WebSocket connection established")
 
     def _on_close(self, ws: Any, code: int, reason: str) -> None:
-        """Handle connection close event."""
+        """Handle connection close event and trigger reconnection."""
         self._is_connected = False
+        self._connection_state = ConnectionState.DISCONNECTED
+        _LOGGER.warning(
+            "WebSocket connection closed",
+            extra={"code": code, "reason": reason},
+        )
+        if not self._should_stop:
+            self._schedule_reconnect()
 
     def _on_error(self, ws: Any, code: int, reason: str) -> None:
-        """Handle connection error event."""
-        pass
+        """Handle connection error event and trigger reconnection."""
+        _LOGGER.error(
+            "WebSocket connection error",
+            extra={"code": code, "reason": reason},
+        )
+        if not self._should_stop:
+            self._schedule_reconnect()
 
     def _start_tick_processor(self) -> None:
         """Start the background tick processor task."""
         self._tick_processor_task = asyncio.create_task(self._process_ticks())
+
+    def _start_heartbeat_monitor(self) -> None:
+        """Start the heartbeat monitoring task."""
+        self._heartbeat_task = asyncio.create_task(self._monitor_heartbeat())
+
+    def _schedule_reconnect(self) -> None:
+        """Schedule reconnection with exponential backoff."""
+        if self._reconnect_task is None or self._reconnect_task.done():
+            self._reconnect_task = asyncio.create_task(self._reconnect_with_backoff())
+
+    async def _reconnect_with_backoff(self) -> None:
+        """Reconnect with exponential backoff."""
+        if self._should_stop:
+            return
+
+        self._connection_state = ConnectionState.RECONNECTING
+        self._reconnect_attempt += 1
+
+        if self._reconnect_attempt > self._max_reconnect_attempts:
+            _LOGGER.error(
+                "Max reconnection attempts reached",
+                extra={"attempts": self._reconnect_attempt},
+            )
+            self._connection_state = ConnectionState.FAILED
+            return
+
+        backoff_delay = min(
+            self._reconnect_backoff_base**self._reconnect_attempt,
+            self._reconnect_backoff_max,
+        )
+
+        _LOGGER.info(
+            "Scheduling reconnection",
+            extra={
+                "attempt": self._reconnect_attempt,
+                "delay": backoff_delay,
+            },
+        )
+
+        await asyncio.sleep(backoff_delay)
+
+        if not self._should_stop:
+            try:
+                await self._perform_reconnect()
+            except Exception as exc:
+                _LOGGER.error(
+                    "Reconnection failed",
+                    extra={"attempt": self._reconnect_attempt, "error": str(exc)},
+                )
+                self._schedule_reconnect()
+
+    async def _perform_reconnect(self) -> None:
+        """Perform the actual reconnection."""
+        if self._ticker_instance:
+            try:
+                await asyncio.to_thread(self._ticker_instance.close)
+            except Exception:
+                _LOGGER.debug("Error closing ticker instance during disconnect")
+
+        self._ticker_instance = await asyncio.to_thread(
+            self._kite_ticker_factory,
+            self._api_key,
+            self._access_token,
+        )
+
+        self._setup_tick_handlers()
+        await self._start_connection()
+
+        self._is_connected = True
+        self._connection_state = ConnectionState.CONNECTED
+        self._reconnect_attempt = 0
+        self._last_heartbeat_utc = datetime.now(UTC)
+
+        _LOGGER.info(
+            "WebSocket reconnected successfully",
+            extra={"attempt": self._reconnect_attempt},
+        )
+
+    async def _monitor_heartbeat(self) -> None:
+        """Monitor heartbeat and detect stale connections."""
+        while not self._should_stop:
+            try:
+                await asyncio.sleep(self._heartbeat_interval_seconds)
+
+                if self._should_stop:
+                    break
+
+                now_utc = datetime.now(UTC)
+
+                if self._last_heartbeat_utc is None:
+                    self._last_heartbeat_utc = now_utc
+                    continue
+
+                time_since_last_heartbeat = now_utc - self._last_heartbeat_utc
+
+                if time_since_last_heartbeat.total_seconds() > self._heartbeat_timeout_seconds:
+                    _LOGGER.warning(
+                        "Heartbeat timeout detected",
+                        extra={
+                            "last_heartbeat": self._last_heartbeat_utc.isoformat(),
+                            "timeout": self._heartbeat_timeout_seconds,
+                        },
+                    )
+                    if self._is_connected:
+                        self._is_connected = False
+                        self._connection_state = ConnectionState.DISCONNECTED
+                        self._schedule_reconnect()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                _LOGGER.error(
+                    "Heartbeat monitor error",
+                    extra={"error": str(exc)},
+                )
 
     async def _process_ticks(self) -> None:
         """Process ticks from the queue and update candle builders."""
@@ -427,6 +642,11 @@ class KiteWebSocketProvider(DataProvider):
         access_token_env_var: str = "ZERODHA_ACCESS_TOKEN",  # noqa: S107
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
+        heartbeat_interval_seconds: float = 30.0,
+        heartbeat_timeout_seconds: float = 90.0,
+        max_reconnect_attempts: int = 10,
+        reconnect_backoff_base: float = 2.0,
+        reconnect_backoff_max: float = 60.0,
     ) -> KiteWebSocketProvider:
         """Create provider from environment variables."""
         import os
@@ -446,4 +666,9 @@ class KiteWebSocketProvider(DataProvider):
             access_token=access_token,
             max_retries=max_retries,
             retry_delay_seconds=retry_delay_seconds,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
+            heartbeat_timeout_seconds=heartbeat_timeout_seconds,
+            max_reconnect_attempts=max_reconnect_attempts,
+            reconnect_backoff_base=reconnect_backoff_base,
+            reconnect_backoff_max=reconnect_backoff_max,
         )

@@ -113,6 +113,10 @@ module = "iatb.data.kite_provider"
 warn_unreachable = false
 
 [[tool.mypy.overrides]]
+module = "iatb.data.kite_ws_provider"
+warn_unreachable = false
+
+[[tool.mypy.overrides]]
 module = "iatb.market_strength.strength_scorer"
 disable_error_code = ["assignment"]
 

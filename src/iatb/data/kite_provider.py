@@ -428,6 +428,7 @@ class KiteProvider(DataProvider):
         """Execute function with exponential backoff retry logic.
 
         Retries on 429 (rate limit) and 5xx errors with exponential backoff.
+        Includes circuit breaker pattern for persistent failures.
 
         Args:
             func: Async function to execute.
@@ -440,18 +441,32 @@ class KiteProvider(DataProvider):
             ConfigError: If all retries exhausted.
         """
         delay = self._initial_retry_delay
+        consecutive_failures = 0
+        max_consecutive_failures = 5
 
         for attempt in range(self._max_retries + 1):
             try:
                 await self._rate_limiter.acquire()
                 result = await func(*args)
+                consecutive_failures = 0
                 return result
             except Exception as exc:
+                consecutive_failures += 1
+
                 if not self._is_retryable_error(exc):
                     raise ConfigError(f"Kite API error: {exc}") from exc
+
+                if consecutive_failures >= max_consecutive_failures:
+                    msg = (
+                        f"Kite API circuit breaker triggered after "
+                        f"{consecutive_failures} consecutive failures: {exc}"
+                    )
+                    raise ConfigError(msg) from exc
+
                 if attempt >= self._max_retries:
                     msg = f"Kite API failed after {self._max_retries} retries: {exc}"
                     raise ConfigError(msg) from exc
+
                 await asyncio.sleep(delay)
                 delay *= _RETRY_BACKOFF_MULTIPLIER
 
@@ -462,7 +477,9 @@ class KiteProvider(DataProvider):
         error_str = str(exc).lower()
         is_rate_limit = "429" in error_str or "rate limit" in error_str
         is_server_error = any(code in error_str for code in ("500", "502", "503", "504"))
-        return is_rate_limit or is_server_error
+        is_timeout = "timeout" in error_str or "timed out" in error_str
+        is_connection = "connection" in error_str or "network" in error_str
+        return is_rate_limit or is_server_error or is_timeout or is_connection
 
     async def _fetch_historical_data(
         self,

@@ -39,6 +39,8 @@ class OrderManager:
         audit_logger: TradeAuditLogger | None = None,
         order_throttle: OrderThrottle | None = None,
         algo_id: str = "",
+        enable_duplicate_detection: bool = True,
+        state_persistence_path: Path | None = None,
     ) -> None:
         if heartbeat_timeout_seconds <= 0:
             msg = "heartbeat_timeout_seconds must be positive"
@@ -57,6 +59,10 @@ class OrderManager:
         self._positions: dict[str, Decimal] = {}
         self._total_exposure = Decimal("0")
         self._position_state: dict[str, tuple[Decimal, Decimal]] = {}
+        self._enable_duplicate_detection = enable_duplicate_detection
+        self._state_persistence_path = state_persistence_path
+        self._order_fingerprints: set[str] = set()
+        self._order_id_mapping: dict[str, str] = {}
 
     def update_market_data(
         self,
@@ -75,21 +81,80 @@ class OrderManager:
             raise ConfigError(msg)
         self._last_heartbeat_utc = heartbeat_utc
 
+    def _generate_order_fingerprint(self, request: OrderRequest) -> str:
+        """Generate a unique fingerprint for order duplicate detection."""
+        fingerprint_parts = [
+            request.exchange.value,
+            request.symbol,
+            request.side.value,
+            str(request.quantity),
+            str(request.price) if request.price else "MARKET",
+        ]
+        return "|".join(fingerprint_parts)
+
+    def _check_duplicate_order(self, request: OrderRequest) -> str | None:
+        """Check if order is a duplicate and return existing order ID if so."""
+        if not self._enable_duplicate_detection:
+            return None
+
+        fingerprint = self._generate_order_fingerprint(request)
+
+        if fingerprint in self._order_fingerprints:
+            existing_order_id = self._order_id_mapping.get(fingerprint)
+            _LOGGER.warning(
+                "Duplicate order detected",
+                extra={
+                    "fingerprint": fingerprint,
+                    "existing_order_id": existing_order_id,
+                    "symbol": request.symbol,
+                    "side": request.side.value,
+                },
+            )
+            return existing_order_id
+
+        return None
+
+    def _record_order_fingerprint(self, request: OrderRequest, order_id: str) -> None:
+        """Record order fingerprint for duplicate detection."""
+        if not self._enable_duplicate_detection:
+            return
+
+        fingerprint = self._generate_order_fingerprint(request)
+        self._order_fingerprints.add(fingerprint)
+        self._order_id_mapping[fingerprint] = order_id
+
     def place_order(
         self,
         request: OrderRequest,
         strategy_id: str = "",
         algo_id: str = "",
     ) -> ExecutionResult:
-        """7-step safety pipeline: kill→throttle→validate→execute→loss→audit→return."""
+        """7-step safety pipeline: kill→throttle→validate→duplicate→execute→loss→audit→return."""
         self._gate_kill_switch()
         self._gate_throttle()
         self._gate_pre_trade(request)
+
+        existing_order_id = self._check_duplicate_order(request)
+        if existing_order_id is not None:
+            existing_status = self._order_status.get(existing_order_id)
+            if existing_status in {OrderStatus.OPEN, OrderStatus.PENDING}:
+                return ExecutionResult(
+                    existing_order_id,
+                    existing_status,
+                    Decimal("0"),
+                    Decimal("0"),
+                )
+
         result = self._executor.execute_order(request)
         self._order_status[result.order_id] = result.status
+        self._record_order_fingerprint(request, result.order_id)
         self._record_pnl(request, result)
         effective_algo_id = algo_id or self._algo_id
         self._audit(request, result, strategy_id, effective_algo_id)
+
+        if self._state_persistence_path:
+            self.save_state(self._state_persistence_path)
+
         return result
 
     def _gate_kill_switch(self) -> None:
@@ -323,12 +388,29 @@ class OrderManager:
         self._gate_kill_switch()
         self._gate_throttle()
         self._gate_pre_trade(request)
+
+        existing_order_id = self._check_duplicate_order(request)
+        if existing_order_id is not None:
+            existing_status = self._order_status.get(existing_order_id)
+            if existing_status in {OrderStatus.OPEN, OrderStatus.PENDING}:
+                return ExecutionResult(
+                    existing_order_id,
+                    existing_status,
+                    Decimal("0"),
+                    Decimal("0"),
+                )
+
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self._executor.execute_order, request)
         self._order_status[result.order_id] = result.status
+        self._record_order_fingerprint(request, result.order_id)
         self._record_pnl(request, result)
         effective_algo_id = algo_id or self._algo_id
         self._audit(request, result, strategy_id, effective_algo_id)
+
+        if self._state_persistence_path:
+            self.save_state(self._state_persistence_path)
+
         return result
 
     def save_state(self, state_path: Path) -> None:
@@ -344,6 +426,8 @@ class OrderManager:
             "position_state": position_data,
             "order_status": order_data,
             "total_exposure": str(self._total_exposure),
+            "order_fingerprints": list(self._order_fingerprints),
+            "order_id_mapping": self._order_id_mapping,
         }
         state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         _LOGGER.info(
@@ -374,11 +458,18 @@ class OrderManager:
         exposure = payload.get("total_exposure", "0")
         self._total_exposure = Decimal(str(exposure))
 
+        fingerprints = payload.get("order_fingerprints", [])
+        self._order_fingerprints = set(fingerprints)
+
+        id_mapping = payload.get("order_id_mapping", {})
+        self._order_id_mapping = id_mapping
+
         _LOGGER.info(
             "State restored",
             extra={
                 "path": str(state_path),
                 "positions": len(self._position_state),
                 "orders": len(self._order_status),
+                "fingerprints": len(self._order_fingerprints),
             },
         )
