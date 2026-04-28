@@ -15,7 +15,7 @@ from iatb.core.secrets_rotation import (
 
 
 def _utc_now() -> datetime:
-    return datetime(2026, 4, 27, 12, 0, 0, tzinfo=UTC)
+    return datetime(2026, 5, 1, 12, 0, 0, tzinfo=UTC)
 
 
 class TestSecretMetadata:
