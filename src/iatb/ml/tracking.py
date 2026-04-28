@@ -237,11 +237,11 @@ class ExperimentTracker:
             return
 
         try:
-            # Convert Decimal to float for MLflow logging
+            # G7 exemption: MLflow API requires float (not financial calculation)
             mlflow_params: dict[str, Any] = {}
             for key, value in params.items():
                 if isinstance(value, Decimal):
-                    mlflow_params[key] = float(value)
+                    mlflow_params[key] = float(value)  # noqa: G7
                 else:
                     mlflow_params[key] = value
 
@@ -268,30 +268,30 @@ class ExperimentTracker:
             return
 
         try:
-            # Convert to dict and handle Decimal types
+            # G7 exemption: MLflow API requires float (not financial calculation)
             mlflow_metrics: dict[str, float] = {}
 
             if metrics.sharpe_ratio is not None:
-                mlflow_metrics["sharpe_ratio"] = float(metrics.sharpe_ratio)
+                mlflow_metrics["sharpe_ratio"] = float(metrics.sharpe_ratio)  # noqa: G7
             if metrics.sortino_ratio is not None:
-                mlflow_metrics["sortino_ratio"] = float(metrics.sortino_ratio)
+                mlflow_metrics["sortino_ratio"] = float(metrics.sortino_ratio)  # noqa: G7
             if metrics.total_return is not None:
-                mlflow_metrics["total_return"] = float(metrics.total_return)
+                mlflow_metrics["total_return"] = float(metrics.total_return)  # noqa: G7
             if metrics.max_drawdown is not None:
-                mlflow_metrics["max_drawdown"] = float(metrics.max_drawdown)
+                mlflow_metrics["max_drawdown"] = float(metrics.max_drawdown)  # noqa: G7
             if metrics.win_rate is not None:
-                mlflow_metrics["win_rate"] = float(metrics.win_rate)
+                mlflow_metrics["win_rate"] = float(metrics.win_rate)  # noqa: G7
             if metrics.profit_factor is not None:
-                mlflow_metrics["profit_factor"] = float(metrics.profit_factor)
+                mlflow_metrics["profit_factor"] = float(metrics.profit_factor)  # noqa: G7
             if metrics.num_trades is not None:
-                mlflow_metrics["num_trades"] = float(metrics.num_trades)
+                mlflow_metrics["num_trades"] = float(metrics.num_trades)  # noqa: G7
 
             # Add custom metrics
             for key, value in metrics.custom_metrics.items():
                 if isinstance(value, Decimal):
-                    mlflow_metrics[key] = float(value)
+                    mlflow_metrics[key] = float(value)  # noqa: G7
                 elif isinstance(value, int | float):
-                    mlflow_metrics[key] = float(value)
+                    mlflow_metrics[key] = float(value)  # noqa: G7
 
             mlflow.log_metrics(mlflow_metrics, step=step)
             _LOGGER.debug(
@@ -544,7 +544,8 @@ class HyperparameterOptimizer:
             _LOGGER.error("No trials in study")
             raise ConfigError(msg)
 
-        return float(self.study.best_value)
+        # G7 exemption: optuna API returns float (not financial calculation)
+        return float(self.study.best_value)  # noqa: G7
 
 
 def create_default_tracking(

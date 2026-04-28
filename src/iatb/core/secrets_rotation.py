@@ -61,13 +61,18 @@ class SecretMetadata:
         remaining = self.expires_at - now
         return remaining if remaining.total_seconds() > 0 else timedelta(0)
 
-    @property
-    def usage_ratio(self) -> Decimal:
-        """Ratio of lifetime used (0.0 to 1.0)."""
+    def get_usage_ratio(self, now_utc: datetime | None = None) -> Decimal:
+        """Ratio of lifetime used (0.0 to 1.0).
+
+        Args:
+            now_utc: Optional UTC datetime for calculation.
+                     If None, uses current UTC time.
+        """
         total = (self.expires_at - self.created_at).total_seconds()
         if total <= 0:
             return Decimal("1.0")
-        elapsed = (datetime.now(UTC) - self.created_at).total_seconds()
+        now = now_utc if now_utc is not None else datetime.now(UTC)
+        elapsed = (now - self.created_at).total_seconds()
         ratio = Decimal(str(elapsed)) / Decimal(str(total))
         return min(ratio, Decimal("1.0"))
 

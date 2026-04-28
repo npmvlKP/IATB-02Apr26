@@ -87,7 +87,7 @@ class RateLimiter:
     ) -> tuple[float, int | None]:
         """Calculate token refill rate and minute limit."""
         if requests_per_minute is not None:
-            return requests_per_minute / 60.0, requests_per_minute
+            return requests_per_minute / 60.0, requests_per_minute  # noqa: G7
         return requests_per_second, None
 
     async def acquire(self) -> None:

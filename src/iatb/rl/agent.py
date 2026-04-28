@@ -58,9 +58,10 @@ class RLAgent:
         if not callable(predict_method):
             msg = "loaded SB3 model does not provide predict()"
             raise ConfigError(msg)
-        # API boundary: SB3 requires float-like numeric arrays.
+        # G7 exemption: SB3 API requires float-like numeric arrays
         action, _state = predict_method(
-            [float(value) for value in observation], deterministic=deterministic
+            [float(value) for value in observation],  # noqa: G7
+            deterministic=deterministic,
         )
         return _normalize_action(action)
 
@@ -70,8 +71,8 @@ class RLAgent:
     ) -> tuple[int, Decimal]:
         """Predict action and extract policy confidence as Decimal."""
         model = _require_model(self._model)
-        # API boundary: SB3 float arrays + policy distribution.
-        obs_float = [float(value) for value in observation]
+        # G7 exemption: SB3 API requires float arrays
+        obs_float = [float(value) for value in observation]  # noqa: G7
         action = self.predict(observation, deterministic=True)
         confidence = _extract_action_confidence(model, obs_float, action)
         return action, confidence

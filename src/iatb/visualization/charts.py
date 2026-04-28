@@ -67,7 +67,8 @@ def _add_candle_trace(figure: Any, go: Any, rows: list[dict[str, object]]) -> No
 
 
 def _add_line_trace(figure: Any, go: Any, name: str, values: list[Decimal]) -> None:
-    figure.add_trace(go.Scatter(y=[float(value) for value in values], name=name))
+    # G7 exemption: Plotly API requires float for chart rendering
+    figure.add_trace(go.Scatter(y=[float(value) for value in values], name=name))  # noqa: G7
 
 
 def _add_volume_trace(figure: Any, go: Any, rows: list[dict[str, object]]) -> None:
@@ -83,7 +84,8 @@ def _as_decimal(value: object, field_name: str) -> Decimal:
 
 
 def _as_float(value: object, field_name: str) -> float:
-    return float(_as_decimal(value, field_name))
+    # G7 exemption: Plotly API requires float for chart rendering
+    return float(_as_decimal(value, field_name))  # noqa: G7
 
 
 def _ema_series(values: list[Decimal], period: int) -> list[Decimal]:

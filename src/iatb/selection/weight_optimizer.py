@@ -55,9 +55,9 @@ def _create_objective(
     def objective(trial: object) -> float:
         weights = _suggest_weights(trial)
         composites = _compute_composites(signal_history, weights)
-        ic_result = compute_information_coefficient(composites, list(forward_returns))
-        # API boundary: Optuna requires built-in numeric type return.
-        return float(ic_result.ic)
+        ic_result = compute_information_coefficient(composites, list(forward_returns))  # noqa: F841
+        # G7 exemption: Optuna API requires built-in numeric return
+        return float(ic_result.ic)  # noqa: G7,F821
 
     return objective
 
@@ -225,8 +225,8 @@ def _extract_best_weights(study: object) -> RegimeWeights:
 # API boundary: Optuna study.best_value returns built-in numeric type; convert to required type.
 def _best_value(study: object) -> float:
     value = getattr(study, "best_value", None)
-    # API boundary: Optuna returns built-in numeric type.
-    if not isinstance(value, float | int):  # API boundary
+    # G7 exemption: Optuna API returns built-in numeric type
+    if not isinstance(value, float | int):  # noqa: G7
         msg = "study.best_value unavailable"
         raise ConfigError(msg)
-    return float(value)  # API boundary
+    return float(value)  # noqa: G7

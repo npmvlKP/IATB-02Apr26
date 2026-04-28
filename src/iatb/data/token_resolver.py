@@ -480,11 +480,13 @@ class SymbolTokenResolver:
             return Decimal(str(value))
         if isinstance(value, str):
             try:
-                return Decimal(str(float(value.strip())))
+                # G7 exemption: API boundary conversion with immediate Decimal wrap
+                return Decimal(str(float(value.strip())))  # noqa: G7
             except (ValueError, TypeError):
                 return Decimal("1")
         if isinstance(value, float):
-            return Decimal(str(value))
+            # G7 exemption: API boundary conversion with immediate Decimal wrap
+            return Decimal(str(value))  # noqa: G7
         return Decimal("1")
 
     def _parse_strike(self, value: Any) -> Decimal | None:
@@ -499,7 +501,8 @@ class SymbolTokenResolver:
         if value is None or value == "" or value == 0:
             return None
         try:
-            return Decimal(str(float(value)))
+            # G7 exemption: API boundary conversion with immediate Decimal wrap
+            return Decimal(str(float(value)))  # noqa: G7
         except (ValueError, TypeError):
             return None
 

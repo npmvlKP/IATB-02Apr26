@@ -334,8 +334,8 @@ class PositionLimitGuard:
 
         projected_total = exchange_total + (quantity * price)
 
-        # Timing parameter, not financial: record risk check duration (0.0 for pre-check)
-        record_risk_check_duration("position_limit_guard_validate_order", 0.0)
+        # G7 exemption: timing parameter, not financial (pre-check duration)
+        record_risk_check_duration("position_limit_guard_validate_order", 0.0)  # noqa: G7
 
         self._check_quantity_limit(projected_qty, config.max_quantity_per_symbol, symbol, exchange)
         self._check_notional_limit(

@@ -61,8 +61,8 @@ class RegimeDetector:
             msg = "feature rows cannot be empty"
             raise ConfigError(msg)
         model = self._model_factory()
-        # API boundary: hmmlearn requires float inputs (G7 exception)
-        feature_matrix = [[float(value) for value in row] for row in features]
+        # G7 exemption: ML library API requires float inputs (not financial data)
+        feature_matrix = [[float(value) for value in row] for row in features]  # noqa: G7
         self._fit_model(model, feature_matrix)
         states = self._predict_states(model, feature_matrix)
         regime = self._map_state_to_regime(features, states[-1], states)

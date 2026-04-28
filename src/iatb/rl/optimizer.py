@@ -40,8 +40,8 @@ class RLParameterOptimizer:
         def objective_wrapper(trial: object) -> float:
             params = _suggest_params(trial, search_space)
             score = self._objective(params)
-            # API boundary: Optuna objective callbacks operate with float values.
-            return float(score)
+            # G7 exemption: Optuna API requires float return
+            return float(score)  # noqa: G7
 
         optimize_method = getattr(study, "optimize", None)
         if not callable(optimize_method):
@@ -128,4 +128,5 @@ def _best_value(study: object) -> float:
     if not isinstance(value, float | int):
         msg = "optuna study does not expose numeric best_value"
         raise ConfigError(msg)
-    return float(value)
+    # G7 exemption: Optuna API returns float
+    return float(value)  # noqa: G7
