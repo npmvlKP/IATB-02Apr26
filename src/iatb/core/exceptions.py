@@ -64,3 +64,9 @@ class ExecutionError(IATBError):
     """Exception raised for order execution errors."""
 
     pass
+
+
+class ExchangeHaltError(IATBError):
+    """Exception raised when exchange is halted."""
+
+    pass

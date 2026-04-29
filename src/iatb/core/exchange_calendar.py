@@ -6,20 +6,28 @@ Loads official session timings and holiday calendar from config files.
 
 import logging
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import UTC, date, datetime, time
+from enum import Enum
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from iatb.core.enums import Exchange
-from iatb.core.exceptions import ConfigError
+from iatb.core.exceptions import ConfigError, ExchangeHaltError
 
 logger = logging.getLogger(__name__)
 
 SESSION_EXCHANGES = frozenset({Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS})
 
-# Config file paths (relative to project root)
-EXCHANGES_CONFIG_PATH = Path("config/exchanges.toml")
-HOLIDAYS_CONFIG_PATH = Path("config/nse_holidays.toml")
+
+class ExchangeStatus(Enum):
+    """Exchange operational status."""
+
+    NORMAL = "normal"
+    HALTED = "halted"
+    PRE_OPEN = "pre_open"
+    POST_CLOSE = "post_close"
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -28,6 +36,21 @@ class SessionWindow:
 
     open_time: time
     close_time: time
+
+
+@dataclass
+class ExchangeState:
+    """Current state of an exchange."""
+
+    status: ExchangeStatus = ExchangeStatus.UNKNOWN
+    halted_at: datetime | None = None
+    last_checked: datetime | None = None
+    halt_reason: str | None = None
+
+
+# Config file paths (relative to project root)
+EXCHANGES_CONFIG_PATH = Path("config/exchanges.toml")
+HOLIDAYS_CONFIG_PATH = Path("config/nse_holidays.toml")
 
 
 class ExchangeCalendar:
@@ -42,6 +65,14 @@ class ExchangeCalendar:
         self._regular_sessions = regular_sessions
         self._holidays = holidays
         self._special_sessions = special_sessions
+        self._exchange_states: dict[Exchange, ExchangeState] = {}
+        self._state_lock = Lock()
+        self._initialize_exchange_states()
+
+    def _initialize_exchange_states(self) -> None:
+        """Initialize exchange states for all known exchanges."""
+        for exchange in self._regular_sessions:
+            self._exchange_states[exchange] = ExchangeState()
 
     def get_regular_session(self, exchange: Exchange) -> SessionWindow | None:
         """Get regular session window for an exchange."""
@@ -70,6 +101,139 @@ class ExchangeCalendar:
     def is_trading_day(self, exchange: Exchange, trading_date: date) -> bool:
         """Check if exchange has an active session on the given date."""
         return self.session_for(exchange, trading_date) is not None
+
+    def get_exchange_status(self, exchange: Exchange) -> ExchangeStatus:
+        """Get current status of an exchange."""
+        with self._state_lock:
+            state = self._exchange_states.get(exchange)
+            if state is None:
+                return ExchangeStatus.UNKNOWN
+            return state.status
+
+    def set_exchange_halted(self, exchange: Exchange, reason: str | None = None) -> None:
+        """Mark an exchange as halted.
+
+        Args:
+            exchange: Exchange to halt.
+            reason: Optional reason for the halt.
+
+        Raises:
+            ExchangeHaltError: If exchange is already halted.
+        """
+        with self._state_lock:
+            state = self._exchange_states.get(exchange)
+            if state is None:
+                state = ExchangeState()
+                self._exchange_states[exchange] = state
+
+            if state.status == ExchangeStatus.HALTED:
+                msg = f"Exchange {exchange.value} is already halted"
+                raise ExchangeHaltError(msg)
+
+            state.status = ExchangeStatus.HALTED
+            state.halted_at = datetime.now(UTC)
+            state.last_checked = datetime.now(UTC)
+            state.halt_reason = reason
+            logger.warning(
+                "Exchange halted",
+                extra={
+                    "exchange": exchange.value,
+                    "reason": reason,
+                    "halted_at": state.halted_at.isoformat(),
+                },
+            )
+
+    def set_exchange_normal(self, exchange: Exchange) -> None:
+        """Mark an exchange as normal (not halted).
+
+        Args:
+            exchange: Exchange to mark as normal.
+        """
+        with self._state_lock:
+            state = self._exchange_states.get(exchange)
+            if state is None:
+                state = ExchangeState()
+                self._exchange_states[exchange] = state
+
+            state.status = ExchangeStatus.NORMAL
+            state.halted_at = None
+            state.last_checked = datetime.now(UTC)
+            state.halt_reason = None
+            logger.info(
+                "Exchange恢复正常",
+                extra={"exchange": exchange.value},
+            )
+
+    def is_exchange_halted(self, exchange: Exchange) -> bool:
+        """Check if an exchange is currently halted.
+
+        Args:
+            exchange: Exchange to check.
+
+        Returns:
+            True if exchange is halted, False otherwise.
+        """
+        return self.get_exchange_status(exchange) == ExchangeStatus.HALTED
+
+    def check_session_boundary(
+        self, exchange: Exchange, check_time: datetime | None = None
+    ) -> tuple[bool, str]:
+        """Check if current time is within session boundaries.
+
+        Args:
+            exchange: Exchange to check.
+            check_time: Time to check (defaults to now in UTC).
+
+        Returns:
+            Tuple of (is_within_session, status_message).
+        """
+        if check_time is None:
+            check_time = datetime.now(UTC)
+
+        trading_date = check_time.date()
+        session = self.session_for(exchange, trading_date)
+
+        if session is None:
+            return False, "No active session for this date"
+
+        if self.is_exchange_halted(exchange):
+            return False, f"Exchange {exchange.value} is halted"
+
+        check_time_ist = check_time.replace(tzinfo=None)
+        session_open = datetime.combine(trading_date, session.open_time)
+        session_close = datetime.combine(trading_date, session.close_time)
+
+        if check_time_ist < session_open:
+            return False, "Before session open"
+
+        if check_time_ist > session_close:
+            return False, "After session close"
+
+        return True, "Within session boundaries"
+
+    def validate_trading_time(self, exchange: Exchange, check_time: datetime | None = None) -> None:
+        """Validate that current time is safe for trading.
+
+        Args:
+            exchange: Exchange to validate.
+            check_time: Time to check (defaults to now in UTC).
+
+        Raises:
+            ExchangeHaltError: If exchange is halted or outside session.
+        """
+        is_valid, message = self.check_session_boundary(exchange, check_time)
+        if not is_valid:
+            msg = f"Cannot trade: {message}"
+            raise ExchangeHaltError(msg)
+
+    def get_all_exchange_states(self) -> dict[Exchange, ExchangeState]:
+        """Get current state of all exchanges.
+
+        Returns:
+            Dictionary mapping Exchange to ExchangeState.
+        """
+        with self._state_lock:
+            return dict(self._exchange_states)
 
 
 def _load_config_file(config_path: Path) -> dict[str, Any]:

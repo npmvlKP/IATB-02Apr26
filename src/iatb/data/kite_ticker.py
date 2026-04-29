@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import psutil
+
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_quantity
@@ -36,6 +38,9 @@ _HEARTBEAT_INTERVAL = 30.0  # seconds
 _TICK_BUFFER_SIZE = 1000
 _MODE_QUOTE = "quote"
 _MODE_LTP = "ltp"
+_MEMORY_CHECK_INTERVAL = 60.0  # seconds
+_MEMORY_WARNING_THRESHOLD = 100 * 1024 * 1024  # 100 MB
+_MEMORY_CRITICAL_THRESHOLD = 200 * 1024 * 1024  # 200 MB
 
 
 _TICK_QUEUE_MAXSIZE = 10000
@@ -50,6 +55,10 @@ class ConnectionStats:
     ticks_received: int = 0
     reconnect_attempts: int = 0
     last_reconnect_at: datetime | None = None
+    memory_usage_bytes: int = 0
+    memory_peak_bytes: int = 0
+    last_memory_check: datetime | None = None
+    cleanup_count: int = 0
 
 
 class TickBuffer:
@@ -336,8 +345,63 @@ class KiteTickerFeed:
         self._stats = ConnectionStats()
         self._reconnect_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
+        self._memory_monitor_task: asyncio.Task[None] | None = None
         self._reconnect_delay = self._initial_reconnect_delay
         self._should_stop = asyncio.Event()
+
+    def _get_memory_usage(self) -> int:
+        """Get current memory usage in bytes.
+
+        Returns:
+            Memory usage in bytes.
+        """
+        try:
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            return int(memory_info.rss)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return 0
+
+    def _check_memory_usage(self) -> None:
+        """Check memory usage and log warnings if needed."""
+        current_memory = self._get_memory_usage()
+        self._stats.memory_usage_bytes = current_memory
+        self._stats.last_memory_check = datetime.now(UTC)
+
+        if current_memory > self._stats.memory_peak_bytes:
+            self._stats.memory_peak_bytes = current_memory
+
+        if current_memory > _MEMORY_CRITICAL_THRESHOLD:
+            _LOGGER.error(
+                "Critical memory usage detected",
+                extra={
+                    "memory_mb": current_memory / (1024 * 1024),
+                    "threshold_mb": _MEMORY_CRITICAL_THRESHOLD / (1024 * 1024),
+                },
+            )
+        elif current_memory > _MEMORY_WARNING_THRESHOLD:
+            _LOGGER.warning(
+                "High memory usage detected",
+                extra={
+                    "memory_mb": current_memory / (1024 * 1024),
+                    "threshold_mb": _MEMORY_WARNING_THRESHOLD / (1024 * 1024),
+                },
+            )
+
+    async def _memory_monitor(self) -> None:
+        """Monitor memory usage periodically."""
+        while not self._should_stop.is_set():
+            await asyncio.sleep(_MEMORY_CHECK_INTERVAL)
+            self._check_memory_usage()
+
+    def _perform_cleanup(self) -> None:
+        """Perform periodic cleanup to prevent memory leaks."""
+        self._tick_buffer.clear()
+        self._stats.cleanup_count += 1
+        _LOGGER.info(
+            "Periodic cleanup performed",
+            extra={"cleanup_count": self._stats.cleanup_count},
+        )
 
     @staticmethod
     def _default_ticker_factory(api_key: str, access_token: str) -> Any:
@@ -413,6 +477,13 @@ class KiteTickerFeed:
             self._heartbeat_task.cancel()
             try:
                 await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+
+        if self._memory_monitor_task:
+            self._memory_monitor_task.cancel()
+            try:
+                await self._memory_monitor_task
             except asyncio.CancelledError:
                 pass
 
@@ -499,6 +570,7 @@ class KiteTickerFeed:
         self._is_running = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_monitor())
         self._reconnect_task = asyncio.create_task(self._auto_reconnect())
+        self._memory_monitor_task = asyncio.create_task(self._memory_monitor())
 
     async def get_tick(
         self,
@@ -600,13 +672,48 @@ class KiteTickerFeed:
                     if self._callback:
                         try:
                             self._callback(snapshot)
-                        except Exception:  # nosec  # Intentional: callback errors shouldn't crash ticker
-                            _LOGGER.exception("Error in callback")
+                        except Exception as exc:
+                            _LOGGER.error(
+                                "Callback execution failed",
+                                extra={
+                                    "symbol": snapshot.symbol,
+                                    "exchange": snapshot.exchange.value,
+                                    "error_type": type(exc).__name__,
+                                    "error_message": str(exc),
+                                },
+                                exc_info=True,
+                            )
+                            self._handle_callback_failure(snapshot, exc)
 
                     self._stats.ticks_received += 1
                     self._stats.last_tick_at = datetime.now(UTC)
-            except (ValueError, TypeError, KeyError):
+            except (ValueError, TypeError, KeyError) as exc:
+                _LOGGER.warning(
+                    "Failed to parse tick data",
+                    extra={
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                        "tick_data": str(tick_data)[:200],
+                    },
+                )
                 continue
+
+    def _handle_callback_failure(self, snapshot: TickerSnapshot, exception: Exception) -> None:
+        """Handle callback failure with alerting.
+
+        Args:
+            snapshot: The snapshot that failed to process.
+            exception: The exception that was raised.
+        """
+        _LOGGER.error(
+            "Callback failure detected",
+            extra={
+                "symbol": snapshot.symbol,
+                "exchange": snapshot.exchange.value,
+                "exception_type": type(exception).__name__,
+                "exception_message": str(exception),
+            },
+        )
 
     def _on_connect(self, ws: Any, response: dict[str, object]) -> None:
         """Handle connection event."""

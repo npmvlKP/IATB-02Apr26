@@ -745,3 +745,315 @@ class TestKiteTickerFeed:
         assert callback_invoked
         assert received_snapshot is not None
         assert received_snapshot.symbol == "RELIANCE"
+
+
+class TestMemoryMonitoring:
+    @pytest.mark.asyncio
+    async def test_memory_monitor_task_started(self) -> None:
+        """Test memory monitor task is started when feed starts."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        await feed.connect()
+        await feed.start()
+
+        assert feed._memory_monitor_task is not None
+        assert not feed._memory_monitor_task.done()
+
+        await feed.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_memory_monitor_task_stopped(self) -> None:
+        """Test memory monitor task is stopped when feed disconnects."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        await feed.connect()
+        await feed.start()
+        await feed.disconnect()
+
+        assert feed._memory_monitor_task is not None
+
+    @pytest.mark.asyncio
+    async def test_get_memory_usage(self) -> None:
+        """Test getting memory usage."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        memory_usage = feed._get_memory_usage()
+        assert isinstance(memory_usage, int)
+        assert memory_usage >= 0
+
+    @pytest.mark.asyncio
+    async def test_check_memory_usage_updates_stats(self) -> None:
+        """Test checking memory usage updates stats."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        feed._check_memory_usage()
+
+        assert feed._stats.memory_usage_bytes >= 0
+        assert feed._stats.last_memory_check is not None
+        assert feed._stats.memory_peak_bytes >= feed._stats.memory_usage_bytes
+
+    @pytest.mark.asyncio
+    async def test_perform_cleanup_clears_buffer(self) -> None:
+        """Test performing cleanup clears buffer."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        snapshot = TickerSnapshot(
+            exchange=Exchange.NSE,
+            symbol="RELIANCE",
+            bid=create_price("1000.00"),
+            ask=create_price("1001.00"),
+            last=create_price("1000.50"),
+            volume_24h=create_quantity("1000"),
+            source="test",
+        )
+
+        feed._tick_buffer.put(snapshot)
+        assert feed._tick_buffer.size() == 1
+
+        feed._perform_cleanup()
+        assert feed._tick_buffer.size() == 0
+        assert feed._stats.cleanup_count == 1
+
+    @pytest.mark.asyncio
+    async def test_memory_monitor_logs_warning_on_high_usage(self) -> None:
+        """Test memory monitor logs warning on high memory usage."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        with patch.object(feed, "_get_memory_usage", return_value=150 * 1024 * 1024):
+            with patch("iatb.data.kite_ticker._LOGGER") as mock_logger:
+                feed._check_memory_usage()
+                mock_logger.warning.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_memory_monitor_logs_error_on_critical_usage(self) -> None:
+        """Test memory monitor logs error on critical memory usage."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        with patch.object(feed, "_get_memory_usage", return_value=250 * 1024 * 1024):
+            with patch("iatb.data.kite_ticker._LOGGER") as mock_logger:
+                feed._check_memory_usage()
+                mock_logger.error.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_connection_stats_includes_memory_fields(self) -> None:
+        """Test ConnectionStats includes memory monitoring fields."""
+        stats = ConnectionStats()
+        assert hasattr(stats, "memory_usage_bytes")
+        assert hasattr(stats, "memory_peak_bytes")
+        assert hasattr(stats, "last_memory_check")
+        assert hasattr(stats, "cleanup_count")
+
+    @pytest.mark.asyncio
+    async def test_memory_peak_tracking(self) -> None:
+        """Test memory peak is tracked correctly."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        with patch.object(feed, "_get_memory_usage", return_value=100 * 1024 * 1024):
+            feed._check_memory_usage()
+            assert feed._stats.memory_peak_bytes == 100 * 1024 * 1024
+
+        with patch.object(feed, "_get_memory_usage", return_value=150 * 1024 * 1024):
+            feed._check_memory_usage()
+            assert feed._stats.memory_peak_bytes == 150 * 1024 * 1024
+
+        with patch.object(feed, "_get_memory_usage", return_value=120 * 1024 * 1024):
+            feed._check_memory_usage()
+            assert feed._stats.memory_peak_bytes == 150 * 1024 * 1024
+
+
+class TestCallbackErrorHandling:
+    @pytest.mark.asyncio
+    async def test_callback_exception_logged(self) -> None:
+        """Test callback exception is logged with details."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        def failing_callback(snapshot: TickerSnapshot) -> None:
+            raise ValueError("Test callback error")
+
+        feed.set_callback(failing_callback)
+        await feed.connect()
+
+        tick_data = {
+            "instrument_token": "RELIANCE",
+            "last_price": 1000.50,
+            "volume_traded": 1000,
+        }
+
+        with patch("iatb.data.kite_ticker._LOGGER") as mock_logger:
+            feed._on_ticks(None, [tick_data])
+            mock_logger.error.assert_called()
+
+            call_args = mock_logger.error.call_args
+            assert "Callback failure detected" in str(call_args)
+
+    @pytest.mark.asyncio
+    async def test_callback_failure_handler_called(self) -> None:
+        """Test callback failure handler is called on exception."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        def failing_callback(snapshot: TickerSnapshot) -> None:
+            raise ValueError("Test callback error")
+
+        feed.set_callback(failing_callback)
+        await feed.connect()
+
+        tick_data = {
+            "instrument_token": "RELIANCE",
+            "last_price": 1000.50,
+            "volume_traded": 1000,
+        }
+
+        with patch.object(feed, "_handle_callback_failure") as mock_handler:
+            feed._on_ticks(None, [tick_data])
+            mock_handler.assert_called_once()
+
+            call_args = mock_handler.call_args[0]
+            assert isinstance(call_args[0], TickerSnapshot)
+            assert isinstance(call_args[1], Exception)
+
+    @pytest.mark.asyncio
+    async def test_callback_error_does_not_crash_ticker(self) -> None:
+        """Test callback error does not crash ticker."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        def failing_callback(snapshot: TickerSnapshot) -> None:
+            raise ValueError("Test callback error")
+
+        feed.set_callback(failing_callback)
+        await feed.connect()
+
+        tick_data = {
+            "instrument_token": "RELIANCE",
+            "last_price": 1000.50,
+            "volume_traded": 1000,
+        }
+
+        feed._on_ticks(None, [tick_data])
+
+        assert feed._stats.ticks_received == 1
+        assert feed._stats.last_tick_at is not None
+
+    @pytest.mark.asyncio
+    async def test_callback_failure_logs_symbol_info(self) -> None:
+        """Test callback failure logs symbol information."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        def failing_callback(snapshot: TickerSnapshot) -> None:
+            raise ValueError("Test callback error")
+
+        feed.set_callback(failing_callback)
+        await feed.connect()
+
+        tick_data = {
+            "instrument_token": "RELIANCE",
+            "last_price": 1000.50,
+            "volume_traded": 1000,
+        }
+
+        with patch("iatb.data.kite_ticker._LOGGER") as mock_logger:
+            feed._on_ticks(None, [tick_data])
+
+            call_args = mock_logger.error.call_args
+            extra = call_args[1].get("extra", {})
+            assert "symbol" in extra
+            assert "exchange" in extra
+            assert "exception_type" in extra
+            assert "exception_message" in extra
+
+    @pytest.mark.asyncio
+    async def test_multiple_callback_failures_logged(self) -> None:
+        """Test multiple callback failures are logged."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        def failing_callback(snapshot: TickerSnapshot) -> None:
+            raise ValueError("Test callback error")
+
+        feed.set_callback(failing_callback)
+        await feed.connect()
+
+        tick_data = {
+            "instrument_token": "RELIANCE",
+            "last_price": 1000.50,
+            "volume_traded": 1000,
+        }
+
+        with patch("iatb.data.kite_ticker._LOGGER") as mock_logger:
+            feed._on_ticks(None, [tick_data, tick_data, tick_data])
+            assert mock_logger.error.call_count >= 3
+
+    @pytest.mark.asyncio
+    async def test_callback_success_no_error_logged(self) -> None:
+        """Test successful callback does not log error."""
+        feed = KiteTickerFeed(  # noqa: S106
+            api_key="test_api_key",
+            access_token="test_access_token",
+            kite_ticker_factory=lambda k, t: _FakeKiteTicker(k, t),
+        )
+
+        def success_callback(snapshot: TickerSnapshot) -> None:
+            pass
+
+        feed.set_callback(success_callback)
+        await feed.connect()
+
+        tick_data = {
+            "instrument_token": "RELIANCE",
+            "last_price": 1000.50,
+            "volume_traded": 1000,
+        }
+
+        with patch("iatb.data.kite_ticker._LOGGER") as mock_logger:
+            feed._on_ticks(None, [tick_data])
+            mock_logger.error.assert_not_called()

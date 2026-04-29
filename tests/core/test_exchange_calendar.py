@@ -2,16 +2,18 @@
 Tests for exchange calendar module.
 """
 
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 import pytest
 from iatb.core.enums import Exchange
-from iatb.core.exceptions import ConfigError
+from iatb.core.exceptions import ConfigError, ExchangeHaltError
 from iatb.core.exchange_calendar import (
     DEFAULT_EXCHANGE_CALENDAR,
     SESSION_EXCHANGES,
     ExchangeCalendar,
+    ExchangeState,
+    ExchangeStatus,
     SessionWindow,
     _default_holidays,
     _default_regular_sessions,
@@ -449,3 +451,288 @@ description = "This is not a year"
         )
         holidays = _load_holidays_from_config(config_file)
         assert holidays[Exchange.NSE] == set()
+
+
+class TestExchangeStatus:
+    def test_get_exchange_status_initial(self) -> None:
+        """Test initial exchange status is UNKNOWN."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        status = calendar.get_exchange_status(Exchange.NSE)
+        assert status == ExchangeStatus.UNKNOWN
+
+    def test_set_exchange_halted(self) -> None:
+        """Test setting exchange as halted."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE, "Test halt")
+        assert calendar.is_exchange_halted(Exchange.NSE)
+        assert calendar.get_exchange_status(Exchange.NSE) == ExchangeStatus.HALTED
+
+    def test_set_exchange_halted_with_reason(self) -> None:
+        """Test setting exchange as halted with reason."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE, "Circuit breaker triggered")
+        states = calendar.get_all_exchange_states()
+        state = states[Exchange.NSE]
+        assert state.status == ExchangeStatus.HALTED
+        assert state.halt_reason == "Circuit breaker triggered"
+        assert state.halted_at is not None
+
+    def test_set_exchange_halted_already_halted_raises(self) -> None:
+        """Test setting already halted exchange raises error."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE)
+        with pytest.raises(ExchangeHaltError, match="already halted"):
+            calendar.set_exchange_halted(Exchange.NSE)
+
+    def test_set_exchange_normal(self) -> None:
+        """Test setting exchange as normal."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE)
+        assert calendar.is_exchange_halted(Exchange.NSE)
+
+        calendar.set_exchange_normal(Exchange.NSE)
+        assert not calendar.is_exchange_halted(Exchange.NSE)
+        assert calendar.get_exchange_status(Exchange.NSE) == ExchangeStatus.NORMAL
+
+    def test_set_exchange_normal_clears_halt_info(self) -> None:
+        """Test setting exchange normal clears halt information."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE, "Test halt")
+        calendar.set_exchange_normal(Exchange.NSE)
+
+        states = calendar.get_all_exchange_states()
+        state = states[Exchange.NSE]
+        assert state.halted_at is None
+        assert state.halt_reason is None
+
+    def test_is_exchange_halted_false_initially(self) -> None:
+        """Test exchange is not halted initially."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        assert not calendar.is_exchange_halted(Exchange.NSE)
+
+    def test_get_all_exchange_states(self) -> None:
+        """Test getting all exchange states."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        states = calendar.get_all_exchange_states()
+        assert Exchange.NSE in states
+        assert Exchange.BSE in states
+        assert Exchange.MCX in states
+        assert Exchange.CDS in states
+
+    def test_multiple_exchanges_halted(self) -> None:
+        """Test halting multiple exchanges independently."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE)
+        calendar.set_exchange_halted(Exchange.BSE)
+
+        assert calendar.is_exchange_halted(Exchange.NSE)
+        assert calendar.is_exchange_halted(Exchange.BSE)
+        assert not calendar.is_exchange_halted(Exchange.MCX)
+
+
+class TestSessionBoundaryChecks:
+    def test_check_session_boundary_within_session(self) -> None:
+        """Test checking session boundary when within session."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=UTC)
+        is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
+        assert is_valid
+        assert message == "Within session boundaries"
+
+    def test_check_session_boundary_before_open(self) -> None:
+        """Test checking session boundary before session open."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 1, 9, 0, 0, tzinfo=UTC)
+        is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
+        assert not is_valid
+        assert message == "Before session open"
+
+    def test_check_session_boundary_after_close(self) -> None:
+        """Test checking session boundary after session close."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 1, 16, 0, 0, tzinfo=UTC)
+        is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
+        assert not is_valid
+        assert message == "After session close"
+
+    def test_check_session_boundary_halted_exchange(self) -> None:
+        """Test checking session boundary when exchange is halted."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE, "Test halt")
+        check_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=UTC)
+        is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
+        assert not is_valid
+        assert "halted" in message.lower()
+
+    def test_check_session_boundary_no_session(self) -> None:
+        """Test checking session boundary when no session exists."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 6, 10, 30, 0, tzinfo=UTC)
+        is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
+        assert not is_valid
+        assert "No active session" in message
+
+    def test_check_session_boundary_default_time(self) -> None:
+        """Test checking session boundary with default time (now)."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        is_valid, message = calendar.check_session_boundary(Exchange.NSE)
+        assert isinstance(is_valid, bool)
+        assert isinstance(message, str)
+
+    def test_validate_trading_time_valid(self) -> None:
+        """Test validating trading time when valid."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=UTC)
+        calendar.validate_trading_time(Exchange.NSE, check_time)
+
+    def test_validate_trading_time_halted_raises(self) -> None:
+        """Test validating trading time when halted raises error."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        calendar.set_exchange_halted(Exchange.NSE, "Test halt")
+        check_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=UTC)
+        with pytest.raises(ExchangeHaltError, match="halted"):
+            calendar.validate_trading_time(Exchange.NSE, check_time)
+
+    def test_validate_trading_time_before_open_raises(self) -> None:
+        """Test validating trading time before open raises error."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 1, 9, 0, 0, tzinfo=UTC)
+        with pytest.raises(ExchangeHaltError, match="Before session open"):
+            calendar.validate_trading_time(Exchange.NSE, check_time)
+
+    def test_validate_trading_time_after_close_raises(self) -> None:
+        """Test validating trading time after close raises error."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 1, 16, 0, 0, tzinfo=UTC)
+        with pytest.raises(ExchangeHaltError, match="After session close"):
+            calendar.validate_trading_time(Exchange.NSE, check_time)
+
+    def test_validate_trading_time_no_session_raises(self) -> None:
+        """Test validating trading time with no session raises error."""
+        calendar = ExchangeCalendar(
+            regular_sessions=_default_regular_sessions(),
+            holidays=_default_holidays(),
+            special_sessions=_default_special_sessions(),
+        )
+        check_time = datetime(2024, 1, 6, 10, 30, 0, tzinfo=UTC)
+        with pytest.raises(ExchangeHaltError, match="No active session"):
+            calendar.validate_trading_time(Exchange.NSE, check_time)
+
+
+class TestExchangeState:
+    def test_exchange_state_initialization(self) -> None:
+        """Test ExchangeState initialization."""
+        state = ExchangeState()
+        assert state.status == ExchangeStatus.UNKNOWN
+        assert state.halted_at is None
+        assert state.last_checked is None
+        assert state.halt_reason is None
+
+    def test_exchange_state_with_values(self) -> None:
+        """Test ExchangeState with values."""
+        halted_at = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)
+        state = ExchangeState(
+            status=ExchangeStatus.HALTED,
+            halted_at=halted_at,
+            last_checked=halted_at,
+            halt_reason="Test halt",
+        )
+        assert state.status == ExchangeStatus.HALTED
+        assert state.halted_at == halted_at
+        assert state.last_checked == halted_at
+        assert state.halt_reason == "Test halt"
+
+
+class TestExchangeStatusEnum:
+    def test_exchange_status_values(self) -> None:
+        """Test ExchangeStatus enum values."""
+        assert ExchangeStatus.NORMAL.value == "normal"
+        assert ExchangeStatus.HALTED.value == "halted"
+        assert ExchangeStatus.PRE_OPEN.value == "pre_open"
+        assert ExchangeStatus.POST_CLOSE.value == "post_close"
+        assert ExchangeStatus.UNKNOWN.value == "unknown"
+
+    def test_exchange_status_comparison(self) -> None:
+        """Test ExchangeStatus comparison."""
+        status1 = ExchangeStatus.NORMAL
+        status2 = ExchangeStatus.NORMAL
+        assert status1 == status2
+
+        status3 = ExchangeStatus.HALTED
+        assert status1 != status3
