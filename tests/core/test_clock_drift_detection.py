@@ -42,20 +42,26 @@ class TestClockDriftDetector:
     def test_check_drift_returns_timedelta(self) -> None:
         """Test check_drift returns timedelta."""
         detector = ClockDriftDetector()
+        now_utc = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=datetime.now(UTC)):
+        with patch.object(detector, "_query_ntp_time", return_value=now_utc), patch.object(
+            detector, "_get_local_time", return_value=now_utc
+        ):
             drift = detector.check_drift()
 
-            assert isinstance(drift, timedelta)
+        assert isinstance(drift, timedelta)
 
     def test_check_drift_updates_sync_count(self) -> None:
         """Test check_drift updates sync count."""
         detector = ClockDriftDetector()
+        now_utc = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=datetime.now(UTC)):
+        with patch.object(detector, "_query_ntp_time", return_value=now_utc), patch.object(
+            detector, "_get_local_time", return_value=now_utc
+        ):
             detector.check_drift()
 
-            assert detector._sync_count == 1
+        assert detector._sync_count == 1
 
     def test_check_drift_handles_ntp_failure(self) -> None:
         """Test check_drift handles NTP failure gracefully."""
@@ -64,38 +70,45 @@ class TestClockDriftDetector:
         with patch.object(detector, "_query_ntp_time", return_value=None):
             drift = detector.check_drift()
 
-            assert detector._sync_failures == 1
-            assert drift == timedelta(0)
+        assert detector._sync_failures == 1
+        assert drift == timedelta(0)
 
     def test_drift_exceeds_threshold(self) -> None:
         """Test drift exceeding threshold is detected."""
         detector = ClockDriftDetector(drift_threshold_seconds=1.0)
+        now_utc = datetime.now(UTC)
+        ntp_time = now_utc + timedelta(seconds=10)
 
-        ntp_time = datetime.now(UTC) + timedelta(seconds=10)
-
-        with patch.object(detector, "_query_ntp_time", return_value=ntp_time):
+        with patch.object(detector, "_query_ntp_time", return_value=ntp_time), patch.object(
+            detector, "_get_local_time", return_value=now_utc
+        ):
             drift = detector.check_drift()
 
-            assert detector.is_drift_exceeded()
-            assert drift.total_seconds() > 1.0
+        assert detector.is_drift_exceeded()
+        assert drift.total_seconds() > 1.0
 
     def test_drift_within_threshold(self) -> None:
         """Test drift within threshold is not exceeded."""
         detector = ClockDriftDetector(drift_threshold_seconds=10.0)
+        now_utc = datetime.now(UTC)
+        ntp_time = now_utc + timedelta(seconds=1)
 
-        ntp_time = datetime.now(UTC) + timedelta(seconds=1)
-
-        with patch.object(detector, "_query_ntp_time", return_value=ntp_time):
+        with patch.object(detector, "_query_ntp_time", return_value=ntp_time), patch.object(
+            detector, "_get_local_time", return_value=now_utc
+        ):
             drift = detector.check_drift()
 
-            assert not detector.is_drift_exceeded()
-            assert drift.total_seconds() < 10.0
+        assert not detector.is_drift_exceeded()
+        assert drift.total_seconds() < 10.0
 
     def test_get_sync_status(self) -> None:
         """Test get_sync_status returns correct information."""
         detector = ClockDriftDetector()
+        now_utc = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=datetime.now(UTC)):
+        with patch.object(detector, "_query_ntp_time", return_value=now_utc), patch.object(
+            detector, "_get_local_time", return_value=now_utc
+        ):
             detector.check_drift()
 
             status = detector.get_sync_status()
@@ -178,26 +191,29 @@ class TestClockDriftDetector:
     def test_negative_drift_detected(self) -> None:
         """Test negative drift (local clock ahead) is detected."""
         detector = ClockDriftDetector(drift_threshold_seconds=1.0)
+        now_utc = datetime.now(UTC)
+        ntp_time = now_utc - timedelta(seconds=10)
 
-        ntp_time = datetime.now(UTC) - timedelta(seconds=10)
-
-        with patch.object(detector, "_query_ntp_time", return_value=ntp_time):
+        with patch.object(detector, "_query_ntp_time", return_value=ntp_time), patch.object(
+            detector, "_get_local_time", return_value=now_utc
+        ):
             drift = detector.check_drift()
 
-            assert detector.is_drift_exceeded()
-            assert drift.total_seconds() < -1.0
+        assert detector.is_drift_exceeded()
+        assert drift.total_seconds() < -1.0
 
     def test_zero_drift(self) -> None:
         """Test zero drift is not exceeded."""
         detector = ClockDriftDetector(drift_threshold_seconds=1.0)
-
         local_time = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=local_time):
+        with patch.object(detector, "_query_ntp_time", return_value=local_time), patch.object(
+            detector, "_get_local_time", return_value=local_time
+        ):
             drift = detector.check_drift()
 
-            assert not detector.is_drift_exceeded()
-            assert drift.total_seconds() == 0.0
+        assert not detector.is_drift_exceeded()
+        assert drift.total_seconds() == 0.0
 
 
 class TestClockIntegration:

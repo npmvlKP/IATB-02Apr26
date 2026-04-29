@@ -134,7 +134,7 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=src",
+    "--cov=src/iatb",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=90",
@@ -149,7 +149,7 @@ markers = [
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src/iatb"]
 branch = true
 parallel = false
 concurrency = ["thread", "multiprocessing"]

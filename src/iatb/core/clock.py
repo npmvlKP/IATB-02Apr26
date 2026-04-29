@@ -76,6 +76,10 @@ class ClockDriftDetector:
         self._sync_count = 0
         self._sync_failures = 0
 
+    def _get_local_time(self) -> datetime:
+        """Get current local time in UTC. Override in tests for deterministic behavior."""
+        return datetime.now(UTC)
+
     def check_drift(self) -> timedelta:
         """Check current clock drift against NTP servers."""
         ntp_time = self._query_ntp_time()
@@ -87,7 +91,7 @@ class ClockDriftDetector:
             )
             return self._current_drift
 
-        local_time = datetime.now(UTC)
+        local_time = self._get_local_time()
         drift = ntp_time - local_time
         self._current_drift = drift
         self._last_sync_utc = local_time
