@@ -2,11 +2,12 @@
 Tests for clock drift detection and NTP sync.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from iatb.core.clock import Clock, ClockDriftDetector
+from iatb.core.clock import Clock, ClockDriftDetector, TradingSessions
+from iatb.core.enums import Exchange
 from iatb.core.exceptions import ClockError
 
 
@@ -202,6 +203,10 @@ class TestClockDriftDetector:
 class TestClockIntegration:
     """Test Clock integration with drift detector."""
 
+    def setup_method(self) -> None:
+        """Reset drift detector before each test."""
+        Clock.set_drift_detector(None)
+
     def test_set_drift_detector(self) -> None:
         """Test setting drift detector on Clock."""
         detector = ClockDriftDetector()
@@ -257,3 +262,150 @@ class TestClockIntegration:
 
         assert timestamp.tzinfo == UTC
         assert timestamp.hour == 12
+
+    def test_clock_to_utc_with_non_utc_timezone(self) -> None:
+        """Test Clock.to_utc with non-UTC timezone."""
+        from datetime import timezone
+
+        tz = timezone(timedelta(hours=-5))
+        dt = datetime(2024, 1, 1, 7, 0, 0, tzinfo=tz)
+        timestamp = Clock.to_utc(dt)
+
+        assert timestamp.tzinfo == UTC
+        assert timestamp.hour == 12
+
+    def test_clock_to_ist_with_naive_datetime_raises_error(self) -> None:
+        """Test Clock.to_ist with naive datetime raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0)  # noqa: DTZ001
+
+        with pytest.raises(ClockError):
+            Clock.to_ist(dt)
+
+    def test_clock_ist_to_utc_with_aware_datetime_raises_error(self) -> None:
+        """Test Clock.ist_to_utc with aware datetime raises error."""
+        from datetime import timezone
+
+        tz = timezone(timedelta(hours=5, minutes=30))
+        dt = datetime(2024, 1, 1, 17, 30, 0, tzinfo=tz)
+
+        with pytest.raises(ClockError):
+            Clock.ist_to_utc(dt)
+
+
+class TestTradingSessions:
+    """Test TradingSessions class."""
+
+    def test_is_market_open_with_naive_datetime_raises_error(self) -> None:
+        """Test is_market_open with naive datetime raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0)  # noqa: DTZ001
+
+        with pytest.raises(ClockError):
+            TradingSessions.is_market_open(dt, Exchange.NSE)
+
+    def test_is_market_open_with_non_utc_datetime_raises_error(self) -> None:
+        """Test is_market_open with non-UTC datetime raises error."""
+        from datetime import timezone
+
+        tz = timezone(timedelta(hours=5, minutes=30))
+        dt = datetime(2024, 1, 1, 17, 30, 0, tzinfo=tz)
+
+        with pytest.raises(ClockError):
+            TradingSessions.is_market_open(dt, Exchange.NSE)
+
+    def test_is_trading_day_with_naive_datetime_raises_error(self) -> None:
+        """Test is_trading_day with naive datetime raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0)  # noqa: DTZ001
+
+        with pytest.raises(ClockError):
+            TradingSessions.is_trading_day(dt, Exchange.NSE)
+
+    def test_is_trading_day_with_non_utc_datetime_raises_error(self) -> None:
+        """Test is_trading_day with non-UTC datetime raises error."""
+        from datetime import timezone
+
+        tz = timezone(timedelta(hours=5, minutes=30))
+        dt = datetime(2024, 1, 1, 17, 30, 0, tzinfo=tz)
+
+        with pytest.raises(ClockError):
+            TradingSessions.is_trading_day(dt, Exchange.NSE)
+
+    def test_next_open_time_with_naive_datetime_raises_error(self) -> None:
+        """Test next_open_time with naive datetime raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0)  # noqa: DTZ001
+
+        with pytest.raises(ClockError):
+            TradingSessions.next_open_time(dt, Exchange.NSE)
+
+    def test_next_open_time_with_non_utc_datetime_raises_error(self) -> None:
+        """Test next_open_time with non-UTC datetime raises error."""
+        from datetime import timezone
+
+        tz = timezone(timedelta(hours=5, minutes=30))
+        dt = datetime(2024, 1, 1, 17, 30, 0, tzinfo=tz)
+
+        with pytest.raises(ClockError):
+            TradingSessions.next_open_time(dt, Exchange.NSE)
+
+    def test_next_open_time_for_unsupported_exchange_raises_error(self) -> None:
+        """Test next_open_time for unsupported exchange raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        with pytest.raises(ClockError):
+            TradingSessions.next_open_time(dt, Exchange.BINANCE)
+
+    def test_is_mis_session_active_with_naive_datetime_raises_error(self) -> None:
+        """Test is_mis_session_active with naive datetime raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0)  # noqa: DTZ001
+
+        with pytest.raises(ClockError):
+            TradingSessions.is_mis_session_active(dt, Exchange.NSE)
+
+    def test_is_mis_session_active_with_non_utc_datetime_raises_error(self) -> None:
+        """Test is_mis_session_active with non-UTC datetime raises error."""
+        from datetime import timezone
+
+        tz = timezone(timedelta(hours=5, minutes=30))
+        dt = datetime(2024, 1, 1, 17, 30, 0, tzinfo=tz)
+
+        with pytest.raises(ClockError):
+            TradingSessions.is_mis_session_active(dt, Exchange.NSE)
+
+    def test_validate_product_type_with_naive_datetime_raises_error(self) -> None:
+        """Test validate_product_type with naive datetime raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0)  # noqa: DTZ001
+
+        with pytest.raises(ClockError):
+            TradingSessions.validate_product_type("MIS", Exchange.NSE, dt)
+
+    def test_validate_product_type_with_invalid_product_type_raises_error(self) -> None:
+        """Test validate_product_type with invalid product type raises error."""
+        dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        with pytest.raises(ClockError):
+            TradingSessions.validate_product_type("INVALID", Exchange.NSE, dt)
+
+    def test_validate_product_type_blocks_cnc_on_mis_exchange(self) -> None:
+        """Test validate_product_type blocks CNC on MIS-supported exchange."""
+        dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        with pytest.raises(ClockError):
+            TradingSessions.validate_product_type("CNC", Exchange.NSE, dt)
+
+    def test_validate_product_type_blocks_mis_when_not_active(self) -> None:
+        """Test validate_product_type blocks MIS when session not active."""
+        dt = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)  # Before market open (7:30 IST)
+
+        with pytest.raises(ClockError):
+            TradingSessions.validate_product_type("MIS", Exchange.NSE, dt)
+
+    def test_get_mis_square_off_time_for_unsupported_exchange(self) -> None:
+        """Test get_mis_square_off_time for unsupported exchange."""
+        result = TradingSessions.get_mis_square_off_time(Exchange.BINANCE, date(2024, 1, 1))
+
+        assert result is None
+
+    def test_get_mis_square_off_time_for_non_trading_day(self) -> None:
+        """Test get_mis_square_off_time for non-trading day."""
+        result = TradingSessions.get_mis_square_off_time(Exchange.NSE, date(2024, 1, 1))  # Monday
+
+        assert result is not None

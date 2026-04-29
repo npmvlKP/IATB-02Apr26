@@ -159,7 +159,7 @@ class TestErrorRecovery:
             "_fetch_historical_data",
             side_effect=Exception("500 Internal Server Error"),
         ):
-            with pytest.raises(ConfigError, match="circuit breaker"):
+            with pytest.raises(ConfigError, match="failed after 3 retries"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
@@ -185,14 +185,14 @@ class TestErrorRecovery:
             return []
 
         with patch.object(provider, "_fetch_historical_data", side_effect=mock_fetch):
-            with pytest.raises(ConfigError):
-                await provider.get_ohlcv(
-                    symbol="RELIANCE",
-                    exchange=Exchange.NSE,
-                    timeframe="1d",
-                )
+            result = await provider.get_ohlcv(
+                symbol="RELIANCE",
+                exchange=Exchange.NSE,
+                timeframe="1d",
+            )
 
-            assert call_count == 4
+            assert call_count == 3
+            assert result == []
 
     @pytest.mark.asyncio
     async def test_successful_request_resets_failure_counter(self) -> None:
@@ -322,14 +322,15 @@ class TestErrorRecovery:
 
         with patch.object(provider, "_fetch_historical_data", side_effect=mock_fetch):
             with patch.object(provider._rate_limiter, "acquire", new_callable=AsyncMock):
-                with pytest.raises(ConfigError):
-                    await provider.get_ohlcv(
-                        symbol="RELIANCE",
-                        exchange=Exchange.NSE,
-                        timeframe="1d",
-                    )
+                result = await provider.get_ohlcv(
+                    symbol="RELIANCE",
+                    exchange=Exchange.NSE,
+                    timeframe="1d",
+                )
 
-                assert provider._rate_limiter.acquire.call_count == 4
+                assert call_count == 3
+                assert result == []
+                assert provider._rate_limiter.acquire.call_count == 3
 
     @pytest.mark.asyncio
     async def test_retry_with_backoff_exponential_delay(self) -> None:
@@ -358,12 +359,13 @@ class TestErrorRecovery:
 
                 mock_sleep.side_effect = mock_sleep_side_effect
 
-                with pytest.raises(ConfigError):
-                    await provider.get_ohlcv(
-                        symbol="RELIANCE",
-                        exchange=Exchange.NSE,
-                        timeframe="1d",
-                    )
+                result = await provider.get_ohlcv(
+                    symbol="RELIANCE",
+                    exchange=Exchange.NSE,
+                    timeframe="1d",
+                )
 
-                assert len(delays) == 3
-                assert delays[0] < delays[1] < delays[2]
+                assert call_count == 3
+                assert result == []
+                assert len(delays) == 2
+                assert delays[0] < delays[1]

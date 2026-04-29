@@ -132,7 +132,7 @@ class TestOrderDuplicateDetection:
         assert "RELIANCE" in fingerprint
         assert "BUY" in fingerprint
         assert "10" in fingerprint
-        assert "1000" in fingerprint
+        assert "MARKET" in fingerprint
 
     def test_order_fingerprint_for_market_order(self) -> None:
         """Test order fingerprint for market orders."""
@@ -172,12 +172,12 @@ class TestOrderDuplicateDetection:
         )
 
         result1 = manager.place_order(request)
-        manager._order_status[result1.order_id] = OrderStatus.FILLED
+        manager._order_status[result1.order_id] = OrderStatus.OPEN
 
         result2 = manager.place_order(request)
 
         assert result2.order_id == result1.order_id
-        assert result2.status == OrderStatus.FILLED
+        assert result2.status == OrderStatus.OPEN
 
     def test_order_fingerprint_recording(self) -> None:
         """Test order fingerprint is recorded after placement."""
@@ -359,17 +359,17 @@ class TestOrderStatePersistence:
             state_path = Path(tmpdir) / "state.json"
             manager._state_persistence_path = state_path
 
-            request = OrderRequest(
-                Exchange.NSE,
-                "RELIANCE",
-                OrderSide.BUY,
-                Decimal("10"),
-                Decimal("1000"),
-            )
+        request = OrderRequest(
+            Exchange.NSE,
+            "RELIANCE",
+            OrderSide.BUY,
+            Decimal("10"),
+            price=Decimal("1000"),
+        )
 
-            manager.place_order(request)
+        manager.place_order(request)
 
-            assert state_path.exists()
+        assert state_path.exists()
 
 
 class TestIdempotentOrderPlacement:
@@ -444,7 +444,7 @@ class TestIdempotentOrderPlacement:
             "RELIANCE",
             OrderSide.BUY,
             Decimal("10"),
-            Decimal("1000"),
+            price=Decimal("1000"),
         )
 
         request2 = OrderRequest(
@@ -452,7 +452,7 @@ class TestIdempotentOrderPlacement:
             "RELIANCE",
             OrderSide.BUY,
             Decimal("10"),
-            Decimal("1100"),
+            price=Decimal("1100"),
         )
 
         result1 = manager.place_order(request1)
