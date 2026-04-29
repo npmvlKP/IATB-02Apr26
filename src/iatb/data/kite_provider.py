@@ -425,21 +425,7 @@ class KiteProvider(DataProvider):
         func: Callable[..., Any],
         *args: object,
     ) -> Any:
-        """Execute function with exponential backoff retry logic.
-
-        Retries on 429 (rate limit) and 5xx errors with exponential backoff.
-        Includes circuit breaker pattern for persistent failures.
-
-        Args:
-            func: Async function to execute.
-            *args: Arguments to pass to func.
-
-        Returns:
-            Result from func.
-
-        Raises:
-            ConfigError: If all retries exhausted.
-        """
+        """Execute func with exponential backoff retry and circuit breaker."""
         delay = self._initial_retry_delay
         consecutive_failures = 0
         max_consecutive_failures = 5

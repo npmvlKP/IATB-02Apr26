@@ -171,6 +171,55 @@ class KiteWebSocketProvider(DataProvider):
         reconnect_backoff_base: float = 2.0,
         reconnect_backoff_max: float = 60.0,
     ) -> None:
+        self._validate_init_params(
+            api_key=api_key,
+            access_token=access_token,
+            max_retries=max_retries,
+            retry_delay_seconds=retry_delay_seconds,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
+            heartbeat_timeout_seconds=heartbeat_timeout_seconds,
+            max_reconnect_attempts=max_reconnect_attempts,
+            reconnect_backoff_base=reconnect_backoff_base,
+            reconnect_backoff_max=reconnect_backoff_max,
+        )
+
+        self._api_key = api_key
+        self._access_token = access_token
+        self._max_retries = max_retries
+        self._retry_delay_seconds = retry_delay_seconds
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._heartbeat_timeout_seconds = heartbeat_timeout_seconds
+        self._max_reconnect_attempts = max_reconnect_attempts
+        self._reconnect_backoff_base = reconnect_backoff_base
+        self._reconnect_backoff_max = reconnect_backoff_max
+        self._kite_ticker_factory = kite_ticker_factory or self._default_ticker_factory
+
+        self._tickers: dict[str, CandleBuilder] = {}
+        self._latest_tickers: dict[str, TickerSnapshot] = {}
+        self._is_connected = False
+        self._connection_state = ConnectionState.DISCONNECTED
+        self._ticker_instance: Any = None
+        self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
+        self._tick_processor_task: asyncio.Task[None] | None = None
+        self._heartbeat_task: asyncio.Task[None] | None = None
+        self._reconnect_task: asyncio.Task[None] | None = None
+        self._last_heartbeat_utc: datetime | None = None
+        self._reconnect_attempt = 0
+        self._should_stop = False
+
+    @staticmethod
+    def _validate_init_params(
+        *,
+        api_key: str,
+        access_token: str,
+        max_retries: int,
+        retry_delay_seconds: float,
+        heartbeat_interval_seconds: float,
+        heartbeat_timeout_seconds: float,
+        max_reconnect_attempts: int,
+        reconnect_backoff_base: float,
+        reconnect_backoff_max: float,
+    ) -> None:
         if not api_key.strip():
             msg = "api_key cannot be empty"
             raise ConfigError(msg)
@@ -198,30 +247,6 @@ class KiteWebSocketProvider(DataProvider):
         if reconnect_backoff_max <= 0:
             msg = "reconnect_backoff_max must be positive"
             raise ConfigError(msg)
-
-        self._api_key = api_key
-        self._access_token = access_token
-        self._max_retries = max_retries
-        self._retry_delay_seconds = retry_delay_seconds
-        self._heartbeat_interval_seconds = heartbeat_interval_seconds
-        self._heartbeat_timeout_seconds = heartbeat_timeout_seconds
-        self._max_reconnect_attempts = max_reconnect_attempts
-        self._reconnect_backoff_base = reconnect_backoff_base
-        self._reconnect_backoff_max = reconnect_backoff_max
-        self._kite_ticker_factory = kite_ticker_factory or self._default_ticker_factory
-
-        self._tickers: dict[str, CandleBuilder] = {}
-        self._latest_tickers: dict[str, TickerSnapshot] = {}
-        self._is_connected = False
-        self._connection_state = ConnectionState.DISCONNECTED
-        self._ticker_instance: Any = None
-        self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
-        self._tick_processor_task: asyncio.Task[None] | None = None
-        self._heartbeat_task: asyncio.Task[None] | None = None
-        self._reconnect_task: asyncio.Task[None] | None = None
-        self._last_heartbeat_utc: datetime | None = None
-        self._reconnect_attempt = 0
-        self._should_stop = False
 
     @staticmethod
     def _default_ticker_factory(api_key: str, access_token: str) -> Any:
