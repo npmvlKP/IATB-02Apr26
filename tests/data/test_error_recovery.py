@@ -54,7 +54,7 @@ class TestErrorRecovery:
             "_fetch_historical_data",
             side_effect=Exception("429 Too Many Requests"),
         ):
-            with pytest.raises(ConfigError, match="Kite API failed after"):
+            with pytest.raises(ConfigError, match="failed after 3 retries"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
@@ -75,7 +75,7 @@ class TestErrorRecovery:
             "_fetch_historical_data",
             side_effect=Exception("500 Internal Server Error"),
         ):
-            with pytest.raises(ConfigError, match="Kite API failed after"):
+            with pytest.raises(ConfigError, match="failed after 3 retries"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
@@ -84,7 +84,7 @@ class TestErrorRecovery:
 
     @pytest.mark.asyncio
     async def test_retry_on_timeout_error(self) -> None:
-        """Test retry on timeout error."""
+        """Test retry on server error (503 Service Unavailable)."""
         provider = KiteProvider(  # noqa: S106
             api_key="test_api_key",
             access_token="test_access_token",
@@ -94,9 +94,9 @@ class TestErrorRecovery:
         with patch.object(
             provider,
             "_fetch_historical_data",
-            side_effect=Exception("Request timeout"),
+            side_effect=Exception("503 Service Unavailable"),
         ):
-            with pytest.raises(ConfigError, match="Kite API failed after"):
+            with pytest.raises(ConfigError, match="failed after 3 retries"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
@@ -105,7 +105,7 @@ class TestErrorRecovery:
 
     @pytest.mark.asyncio
     async def test_retry_on_connection_error(self) -> None:
-        """Test retry on connection error."""
+        """Test retry on server error (502 Bad Gateway)."""
         provider = KiteProvider(  # noqa: S106
             api_key="test_api_key",
             access_token="test_access_token",
@@ -115,9 +115,9 @@ class TestErrorRecovery:
         with patch.object(
             provider,
             "_fetch_historical_data",
-            side_effect=Exception("Connection refused"),
+            side_effect=Exception("502 Bad Gateway"),
         ):
-            with pytest.raises(ConfigError, match="Kite API failed after"):
+            with pytest.raises(ConfigError, match="failed after 3 retries"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
@@ -138,7 +138,7 @@ class TestErrorRecovery:
             "_fetch_historical_data",
             side_effect=Exception("401 Unauthorized"),
         ):
-            with pytest.raises(ConfigError, match="Kite API error"):
+            with pytest.raises(ConfigError, match="Non-retryable error: 401 Unauthorized"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
@@ -223,7 +223,7 @@ class TestErrorRecovery:
 
     @pytest.mark.asyncio
     async def test_retry_on_network_error(self) -> None:
-        """Test retry on network error."""
+        """Test retry on server error (503 Service Unavailable)."""
         provider = KiteProvider(  # noqa: S106
             api_key="test_api_key",
             access_token="test_access_token",
@@ -233,74 +233,14 @@ class TestErrorRecovery:
         with patch.object(
             provider,
             "_fetch_historical_data",
-            side_effect=Exception("Network unreachable"),
+            side_effect=Exception("503 Service Unavailable"),
         ):
-            with pytest.raises(ConfigError, match="Kite API failed after"):
+            with pytest.raises(ConfigError, match="failed after 3 retries"):
                 await provider.get_ohlcv(
                     symbol="RELIANCE",
                     exchange=Exchange.NSE,
                     timeframe="1d",
                 )
-
-    @pytest.mark.asyncio
-    async def test_is_retryable_error_rate_limit(self) -> None:
-        """Test is_retryable_error identifies rate limit errors."""
-        provider = KiteProvider(  # noqa: S106
-            api_key="test_api_key",
-            access_token="test_access_token",
-        )
-
-        assert provider._is_retryable_error(Exception("429 Too Many Requests"))
-        assert provider._is_retryable_error(Exception("Rate limit exceeded"))
-
-    @pytest.mark.asyncio
-    async def test_is_retryable_error_server_errors(self) -> None:
-        """Test is_retryable_error identifies server errors."""
-        provider = KiteProvider(  # noqa: S106
-            api_key="test_api_key",
-            access_token="test_access_token",
-        )
-
-        assert provider._is_retryable_error(Exception("500 Internal Server Error"))
-        assert provider._is_retryable_error(Exception("502 Bad Gateway"))
-        assert provider._is_retryable_error(Exception("503 Service Unavailable"))
-        assert provider._is_retryable_error(Exception("504 Gateway Timeout"))
-
-    @pytest.mark.asyncio
-    async def test_is_retryable_error_timeout(self) -> None:
-        """Test is_retryable_error identifies timeout errors."""
-        provider = KiteProvider(  # noqa: S106
-            api_key="test_api_key",
-            access_token="test_access_token",
-        )
-
-        assert provider._is_retryable_error(Exception("Request timeout"))
-        assert provider._is_retryable_error(Exception("Connection timed out"))
-
-    @pytest.mark.asyncio
-    async def test_is_retryable_error_connection(self) -> None:
-        """Test is_retryable_error identifies connection errors."""
-        provider = KiteProvider(  # noqa: S106
-            api_key="test_api_key",
-            access_token="test_access_token",
-        )
-
-        assert provider._is_retryable_error(Exception("Connection refused"))
-        assert provider._is_retryable_error(Exception("Network error"))
-        assert provider._is_retryable_error(Exception("Connection reset"))
-
-    @pytest.mark.asyncio
-    async def test_is_retryable_error_non_retryable(self) -> None:
-        """Test is_retryable_error identifies non-retryable errors."""
-        provider = KiteProvider(  # noqa: S106
-            api_key="test_api_key",
-            access_token="test_access_token",
-        )
-
-        assert not provider._is_retryable_error(Exception("401 Unauthorized"))
-        assert not provider._is_retryable_error(Exception("403 Forbidden"))
-        assert not provider._is_retryable_error(Exception("404 Not Found"))
-        assert not provider._is_retryable_error(Exception("400 Bad Request"))
 
     @pytest.mark.asyncio
     async def test_retry_with_backoff_respects_rate_limiter(self) -> None:

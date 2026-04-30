@@ -21,11 +21,12 @@ class TestRateLimiterProperties:
     @settings(max_examples=5, deadline=None)  # Disable deadline for timing tests
     def test_rate_limiter_never_exceeds_limit(self, num_requests):
         """Property: Rate limiter never exceeds configured limit."""
-        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=10)
+        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=3)
 
         async def make_requests():
             for _ in range(num_requests):
                 await limiter.acquire()
+                limiter.release()
 
         start = datetime.now(UTC)
         asyncio.run(make_requests())
@@ -41,20 +42,24 @@ class TestRateLimiterProperties:
 
     @given(st.integers(min_value=1, max_value=5))
     @settings(max_examples=5)
-    def test_rate_limiter_respects_window(self, requests_per_window):
-        """Property: Rate limiter respects window parameter."""
-        limiter = RateLimiter(requests_per_window=requests_per_window, window_seconds=0.5)
+    def test_rate_limiter_respects_window(self, requests_per_second):
+        """Property: Rate limiter respects requests_per_second parameter."""
+        limiter = RateLimiter(requests_per_second=float(requests_per_second), burst_capacity=10)
 
         async def make_requests():
-            for _ in range(requests_per_window):
+            for _ in range(requests_per_second):
                 await limiter.acquire()
+                limiter.release()
 
         start = datetime.now(UTC)
         asyncio.run(make_requests())
         elapsed = (datetime.now(UTC) - start).total_seconds()
 
-        # First window should be fast (within 1.5x window time)
-        assert elapsed < 0.5 * 1.5, f"First window took {elapsed}s, expected < 0.75s"
+        # First window should be fast (within 1.5x expected time)
+        expected_time = 1.0 / requests_per_second
+        assert (
+            elapsed < expected_time * 1.5
+        ), f"First window took {elapsed}s, expected < {expected_time * 1.5}s"
 
     @given(st.integers(min_value=1, max_value=10))
     @settings(max_examples=10)

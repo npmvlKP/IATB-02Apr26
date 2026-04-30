@@ -288,6 +288,8 @@ class TestRateLimiterValidation:
     @pytest.mark.asyncio
     async def test_kite_provider_retry_respects_rate_limit(self):
         """Verify KiteProvider retry logic respects rate limit during retries."""
+        from iatb.data.rate_limiter import RetryConfig
+
         call_count = 0
         call_times = []
 
@@ -303,9 +305,10 @@ class TestRateLimiterValidation:
         provider = KiteProvider(
             api_key="key",
             access_token="token",
-            max_retries=3,
-            initial_retry_delay=0.1,  # Short delay for testing
-            requests_per_second=3,
+            retry_config=RetryConfig(
+                max_retries=3,
+                initial_delay=0.1,
+            ),
         )
 
         import time
