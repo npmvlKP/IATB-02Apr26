@@ -1,14 +1,18 @@
 """
 Daily loss guard with automatic kill-switch engagement.
+Provides ``record_trade`` integration for the unified risk pipeline.
 """
 
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from iatb.core.exceptions import ConfigError
-from iatb.risk.kill_switch import KillSwitch
+
+if TYPE_CHECKING:
+    from iatb.risk.kill_switch import KillSwitch
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,7 @@ class DailyLossGuard:
         self,
         max_daily_loss_pct: Decimal,
         starting_nav: Decimal,
-        kill_switch: KillSwitch,
+        kill_switch: "KillSwitch",
     ) -> None:
         if max_daily_loss_pct <= Decimal("0") or max_daily_loss_pct > Decimal("1"):
             msg = "max_daily_loss_pct must be in (0, 1]"

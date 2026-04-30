@@ -4,7 +4,6 @@ Order lifecycle manager with safety pipeline.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -15,11 +14,14 @@ from typing import TYPE_CHECKING
 from iatb.core.enums import OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
 from iatb.execution.base import ExecutionResult, Executor, OrderRequest
+from iatb.execution.order_throttle import OrderThrottle
+from iatb.execution.pre_trade_validator import PreTradeConfig
+from iatb.execution.trade_audit import TradeAuditLogger
+
+# New imports for unified risk pipeline
+from iatb.risk.risk_pipeline import RiskPipeline
 
 if TYPE_CHECKING:
-    from iatb.execution.order_throttle import OrderThrottle
-    from iatb.execution.pre_trade_validator import PreTradeConfig
-    from iatb.execution.trade_audit import TradeAuditLogger
     from iatb.risk.daily_loss_guard import DailyLossGuard
     from iatb.risk.kill_switch import KillSwitch
 
@@ -54,6 +56,15 @@ class OrderManager:
         self._daily_loss_guard = daily_loss_guard
         self._audit_logger = audit_logger
         self._order_throttle = order_throttle
+        # Initialise unified risk pipeline
+        self._risk_pipeline = RiskPipeline(
+            kill_switch=self._kill_switch,
+            order_throttle=self._order_throttle,
+            pre_trade_config=self._pre_trade_config,
+            paper_executor=self._executor,
+            daily_loss_guard=self._daily_loss_guard,
+            trade_audit_logger=self._audit_logger,
+        )
         self._algo_id = algo_id
         self._last_prices: dict[str, Decimal] = {}
         self._positions: dict[str, Decimal] = {}
@@ -74,6 +85,9 @@ class OrderManager:
         self._last_prices = last_prices
         self._positions = positions
         self._total_exposure = total_exposure
+        # Propagate market snapshot to the risk pipeline
+        if hasattr(self, "_risk_pipeline"):
+            self._risk_pipeline.update_market_data(last_prices, positions, total_exposure)
 
     def receive_heartbeat(self, heartbeat_utc: datetime) -> None:
         if heartbeat_utc.tzinfo != UTC:
@@ -130,10 +144,9 @@ class OrderManager:
         algo_id: str = "",
     ) -> ExecutionResult:
         """7-step safety pipeline: kill→throttle→validate→duplicate→execute→loss→audit→return."""
-        self._gate_kill_switch()
-        self._gate_throttle()
-        self._gate_pre_trade(request)
-
+        # Unified risk pipeline handles kill‑switch, throttle, validation, execution,
+        # daily‑loss accounting and audit logging. Duplicate detection remains
+        # upstream of the pipeline.
         existing_order_id = self._check_duplicate_order(request)
         if existing_order_id is not None:
             existing_status = self._order_status.get(existing_order_id)
@@ -145,13 +158,20 @@ class OrderManager:
                     Decimal("0"),
                 )
 
-        result = self._executor.execute_order(request)
+        # Run through the risk pipeline
+        now = datetime.now(UTC)
+        pipeline_result = self._risk_pipeline.process_order(request, now)
+        if not pipeline_result.allowed:
+            # Propagate rejection as ConfigError for consistency with prior behaviour
+            raise ConfigError(pipeline_result.rejection_reason or "order rejected")
+        result = pipeline_result.execution_result
+        if result is None:
+            msg = pipeline_result.rejection_reason or "order rejected"
+            raise ConfigError(msg)
+        # Record order status and fingerprint for downstream tracking
         self._order_status[result.order_id] = result.status
         self._record_order_fingerprint(request, result.order_id)
-        self._record_pnl(request, result)
-        effective_algo_id = algo_id or self._algo_id
-        self._audit(request, result, strategy_id, effective_algo_id)
-
+        # Persist state if configured
         if self._state_persistence_path:
             self.save_state(self._state_persistence_path)
 
@@ -385,10 +405,7 @@ class OrderManager:
         Prevents event loop blocking during live trading by running
         the synchronous executor in a separate thread.
         """
-        self._gate_kill_switch()
-        self._gate_throttle()
-        self._gate_pre_trade(request)
-
+        # Unified risk pipeline handles core steps; duplicate detection stays first.
         existing_order_id = self._check_duplicate_order(request)
         if existing_order_id is not None:
             existing_status = self._order_status.get(existing_order_id)
@@ -400,13 +417,19 @@ class OrderManager:
                     Decimal("0"),
                 )
 
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, self._executor.execute_order, request)
+        # Run through the risk pipeline (synchronous call; it internally uses the injected executor)
+        now = datetime.now(UTC)
+        pipeline_result = self._risk_pipeline.process_order(request, now)
+        if not pipeline_result.allowed:
+            raise ConfigError(pipeline_result.rejection_reason or "order rejected")
+        result = pipeline_result.execution_result
+        if result is None:
+            msg = pipeline_result.rejection_reason or "order rejected"
+            raise ConfigError(msg)
+        # Update order status and fingerprint
         self._order_status[result.order_id] = result.status
         self._record_order_fingerprint(request, result.order_id)
-        self._record_pnl(request, result)
-        effective_algo_id = algo_id or self._algo_id
-        self._audit(request, result, strategy_id, effective_algo_id)
+        # Persist state if needed
 
         if self._state_persistence_path:
             self.save_state(self._state_persistence_path)
