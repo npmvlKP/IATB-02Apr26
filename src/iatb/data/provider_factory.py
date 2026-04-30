@@ -22,6 +22,7 @@ from iatb.data.failover_provider import FailoverProvider
 from iatb.data.instrument_master import InstrumentMaster
 from iatb.data.jugaad_provider import JugaadProvider
 from iatb.data.kite_provider import KiteProvider
+from iatb.data.rate_limiter import CircuitBreaker, RateLimiter, RetryConfig
 from iatb.data.token_resolver import SymbolTokenResolver
 
 if TYPE_CHECKING:
@@ -133,22 +134,8 @@ class DataProviderFactory:
 
         return InstrumentMaster(cache_dir=self._cache_dir)
 
-    def create_kite_provider(
-        self,
-        token_manager: ZerodhaTokenManager | None = None,
-    ) -> KiteProvider:
-        """Create KiteProvider instance.
-
-        Args:
-            token_manager: Optional ZerodhaTokenManager. If not provided,
-                will create a new one.
-
-        Returns:
-            Configured KiteProvider.
-
-        Raises:
-            ConfigError: If access token cannot be obtained.
-        """
+    def _get_access_token(self, token_manager: ZerodhaTokenManager | None) -> str:
+        """Get access token from token manager or create one."""
         tm = token_manager or self.create_token_manager()
 
         # Get access token
@@ -160,10 +147,68 @@ class DataProviderFactory:
             )
             raise ConfigError(msg)
 
+        return access_token
+
+    def _create_rate_limiter(self, rate_limiter: RateLimiter | None) -> RateLimiter:
+        """Create rate limiter with default values if not provided."""
+        return rate_limiter or RateLimiter(
+            requests_per_second=3.0,
+            burst_capacity=10,
+        )
+
+    def _create_circuit_breaker(self, circuit_breaker: CircuitBreaker | None) -> CircuitBreaker:
+        """Create circuit breaker with default values if not provided."""
+        return circuit_breaker or CircuitBreaker(
+            failure_threshold=5,
+            reset_timeout=60.0,
+        )
+
+    def _create_retry_config(self, retry_config: RetryConfig | None) -> RetryConfig:
+        """Create retry config with default values if not provided."""
+        return retry_config or RetryConfig()
+
+    def create_kite_provider(
+        self,
+        token_manager: ZerodhaTokenManager | None = None,
+        rate_limiter: RateLimiter | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
+        retry_config: RetryConfig | None = None,
+    ) -> KiteProvider:
+        """Create KiteProvider instance.
+
+        Args:
+            token_manager: Optional ZerodhaTokenManager. If not provided,
+                will create a new one.
+            rate_limiter: Optional rate limiter instance. If not provided,
+                creates default RateLimiter(3, burst_capacity=10).
+            circuit_breaker: Optional circuit breaker instance. If not provided,
+                creates default CircuitBreaker(5, 60.0).
+            retry_config: Optional retry configuration. If not provided,
+                creates default RetryConfig().
+
+        Returns:
+            Configured KiteProvider.
+
+        Raises:
+            ConfigError: If access token cannot be obtained.
+        """
+        access_token = self._get_access_token(token_manager)
+
+        # Create rate limiter, circuit breaker, and retry config if not provided
+        rl = self._create_rate_limiter(rate_limiter)
+        cb = self._create_circuit_breaker(circuit_breaker)
+        rc = self._create_retry_config(retry_config)
+
         if self._kite_provider_factory:
             return self._kite_provider_factory(self._api_key, access_token)
 
-        return KiteProvider(api_key=self._api_key, access_token=access_token)  # type: ignore[abstract]
+        return KiteProvider(
+            api_key=self._api_key,
+            access_token=access_token,
+            rate_limiter=rl,
+            circuit_breaker=cb,
+            retry_config=rc,
+        )  # type: ignore[abstract]
 
     def create_jugaad_provider(self) -> JugaadProvider:
         """Create JugaadProvider instance.

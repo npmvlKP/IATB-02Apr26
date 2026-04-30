@@ -11,7 +11,7 @@ from decimal import Decimal
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from iatb.core.enums import Exchange
-from iatb.data.kite_provider import _RateLimiter
+from iatb.data.rate_limiter import RateLimiter
 
 
 class TestRateLimiterProperties:
@@ -21,7 +21,7 @@ class TestRateLimiterProperties:
     @settings(max_examples=5, deadline=None)  # Disable deadline for timing tests
     def test_rate_limiter_never_exceeds_limit(self, num_requests):
         """Property: Rate limiter never exceeds configured limit."""
-        limiter = _RateLimiter(requests_per_window=3, window_seconds=1.0)
+        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=10)
 
         async def make_requests():
             for _ in range(num_requests):
@@ -43,7 +43,7 @@ class TestRateLimiterProperties:
     @settings(max_examples=5)
     def test_rate_limiter_respects_window(self, requests_per_window):
         """Property: Rate limiter respects window parameter."""
-        limiter = _RateLimiter(requests_per_window=requests_per_window, window_seconds=0.5)
+        limiter = RateLimiter(requests_per_window=requests_per_window, window_seconds=0.5)
 
         async def make_requests():
             for _ in range(requests_per_window):
@@ -60,7 +60,7 @@ class TestRateLimiterProperties:
     @settings(max_examples=10)
     def test_rate_limiter_refills_after_window(self, num_windows):
         """Property: Rate limiter refills tokens after window expires."""
-        limiter = _RateLimiter(requests_per_window=3, window_seconds=0.1)
+        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=10)
 
         async def make_requests():
             # Consume all tokens in first window

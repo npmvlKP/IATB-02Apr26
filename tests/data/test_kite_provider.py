@@ -217,16 +217,25 @@ class TestKiteProviderInitialization:
             KiteProvider(api_key="key", access_token="  ")
 
     def test_rejects_non_positive_max_retries(self):
-        with pytest.raises(ConfigError, match="max_retries must be positive"):
-            KiteProvider(api_key="key", access_token="token", max_retries=0)
+        """Test that invalid retry config raises error."""
+        from iatb.data.rate_limiter import RetryConfig
+
+        with pytest.raises(ValueError, match="max_retries must be non-negative"):
+            RetryConfig(max_retries=-1)
 
     def test_rejects_negative_retry_delay(self):
-        with pytest.raises(ConfigError, match="initial_retry_delay must be non-negative"):
-            KiteProvider(api_key="key", access_token="token", initial_retry_delay=-1)
+        """Test that invalid retry config raises error."""
+        from iatb.data.rate_limiter import RetryConfig
+
+        with pytest.raises(ValueError, match="initial_delay must be non-negative"):
+            RetryConfig(initial_delay=-1.0)
 
     def test_rejects_non_positive_requests_per_second(self):
-        with pytest.raises(ConfigError, match="requests_per_second must be positive"):
-            KiteProvider(api_key="key", access_token="token", requests_per_second=0)
+        """Test that invalid rate limiter raises error."""
+        from iatb.data.rate_limiter import RateLimiter
+
+        with pytest.raises(ValueError, match="requests_per_second must be positive"):
+            RateLimiter(requests_per_second=0)
 
     def test_accepts_custom_factory(self):
         mock_factory = MagicMock(return_value=MagicMock())
@@ -389,6 +398,8 @@ class TestKiteProviderRateLimiting:
     @pytest.mark.asyncio
     async def test_respects_rate_limit(self):
         """Test that rate limiter respects configured rate."""
+        from iatb.data.rate_limiter import RateLimiter
+
         call_count = 0
         max_calls = 5
 
@@ -397,7 +408,11 @@ class TestKiteProviderRateLimiting:
             call_count += 1
             return f"result_{call_count}"
 
-        provider = KiteProvider(api_key="key", access_token="token", requests_per_second=3)
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            rate_limiter=RateLimiter(requests_per_second=3.0, burst_capacity=10),
+        )
 
         # Make more requests than rate limit allows
         tasks = [provider._retry_with_backoff(mock_func) for _ in range(max_calls)]
@@ -413,6 +428,8 @@ class TestKiteProviderRetryLogic:
     @pytest.mark.asyncio
     async def test_retries_on_rate_limit_error(self):
         """Test retry on 429 rate limit error."""
+        from iatb.data.rate_limiter import RetryConfig
+
         call_count = 0
 
         async def mock_func(*args: Any) -> Any:
@@ -423,7 +440,9 @@ class TestKiteProviderRetryLogic:
             return "success"
 
         provider = KiteProvider(
-            api_key="key", access_token="token", max_retries=3, initial_retry_delay=0.01
+            api_key="key",
+            access_token="token",
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01),
         )
 
         result = await provider._retry_with_backoff(mock_func)
@@ -434,6 +453,8 @@ class TestKiteProviderRetryLogic:
     @pytest.mark.asyncio
     async def test_retries_on_server_error(self):
         """Test retry on 5xx server errors."""
+        from iatb.data.rate_limiter import RetryConfig
+
         call_count = 0
 
         async def mock_func(*args: Any) -> Any:
@@ -444,7 +465,9 @@ class TestKiteProviderRetryLogic:
             return "success"
 
         provider = KiteProvider(
-            api_key="key", access_token="token", max_retries=3, initial_retry_delay=0.01
+            api_key="key",
+            access_token="token",
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01),
         )
 
         result = await provider._retry_with_backoff(mock_func)
@@ -455,12 +478,15 @@ class TestKiteProviderRetryLogic:
     @pytest.mark.asyncio
     async def test_fails_after_max_retries(self):
         """Test that failure after max retries raises error."""
+        from iatb.data.rate_limiter import RetryConfig
 
         async def mock_func(*args: Any) -> Any:
             raise Exception("429 Too Many Requests")
 
         provider = KiteProvider(
-            api_key="key", access_token="token", max_retries=2, initial_retry_delay=0.01
+            api_key="key",
+            access_token="token",
+            retry_config=RetryConfig(max_retries=2, initial_delay=0.01),
         )
 
         with pytest.raises(ConfigError, match="failed after 2 retries"):
@@ -469,15 +495,18 @@ class TestKiteProviderRetryLogic:
     @pytest.mark.asyncio
     async def test_no_retry_on_non_retryable_error(self):
         """Test that non-retryable errors are raised immediately."""
+        from iatb.data.rate_limiter import RetryConfig
 
         async def mock_func(*args: Any) -> Any:
             raise Exception("400 Bad Request")
 
         provider = KiteProvider(
-            api_key="key", access_token="token", max_retries=3, initial_retry_delay=0.01
+            api_key="key",
+            access_token="token",
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01),
         )
 
-        with pytest.raises(ConfigError, match="Kite API error"):
+        with pytest.raises(ConfigError, match="Non-retryable error"):
             await provider._retry_with_backoff(mock_func)
 
 
@@ -881,13 +910,14 @@ class TestKiteProviderEdgeCases:
     @pytest.mark.asyncio
     async def test_rate_limiter_token_refill(self):
         """Test rate limiter refills tokens after waiting."""
-        from iatb.data.kite_provider import _RateLimiter
+        from iatb.data.rate_limiter import RateLimiter
 
         # Create rate limiter with 1 token per second
-        limiter = _RateLimiter(requests_per_window=1, window_seconds=1.0)
+        limiter = RateLimiter(requests_per_second=1.0, burst_capacity=1)
 
         # Consume all tokens
         await limiter.acquire()
+        limiter.release()
 
         # Wait for refill (should take approximately 1 second)
         import time
@@ -898,6 +928,8 @@ class TestKiteProviderEdgeCases:
 
         # Should have waited for token refill
         assert elapsed >= 0.9  # Allow some margin
+
+        limiter.release()
 
     @pytest.mark.asyncio
     async def test_client_missing_historical_data_method(self):
@@ -1040,13 +1072,14 @@ class TestKiteProviderEdgeCases:
     @pytest.mark.asyncio
     async def test_retry_with_backoff_unreachable_fallback(self):
         """Test the unreachable fallback error in retry logic."""
+        from iatb.data.rate_limiter import RetryConfig
+
         # This test verifies the type safety fallback that should never be reached
         # We create a scenario that will fail on all retries
         provider = KiteProvider(
             api_key="key",
             access_token="token",
-            max_retries=1,
-            initial_retry_delay=0.01,
+            retry_config=RetryConfig(max_retries=1, initial_delay=0.01),
         )
 
         # Force the unreachable path by making the loop fail

@@ -29,6 +29,12 @@ from iatb.core.types import (
 )
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 from iatb.data.normalizer import normalize_ohlcv_batch
+from iatb.data.rate_limiter import (
+    CircuitBreaker,
+    RateLimiter,
+    RetryConfig,
+    retry_with_backoff,
+)
 from iatb.data.validator import validate_ticker_snapshot
 
 # Kite API rate limit: 3 requests per second
@@ -134,42 +140,6 @@ def _parse_kite_timestamp(value: object) -> datetime:
     raise ConfigError(msg)
 
 
-class _RateLimiter:
-    """Token bucket rate limiter for Kite API requests."""
-
-    def __init__(
-        self,
-        requests_per_window: int = _RATE_LIMIT_REQUESTS,
-        # Timing configuration (not financial calculation): use float for precision
-        window_seconds: float = _RATE_LIMIT_WINDOW,
-    ) -> None:
-        self._requests_per_window = requests_per_window
-        self._window_seconds = window_seconds
-        self._tokens = requests_per_window
-        self._last_refill = datetime.now(UTC)
-        self._lock = asyncio.Lock()
-
-    async def acquire(self) -> None:
-        """Acquire a token, waiting if necessary."""
-        async with self._lock:
-            now = datetime.now(UTC)
-            elapsed = (now - self._last_refill).total_seconds()
-
-            # Refill tokens based on elapsed time
-            if elapsed >= self._window_seconds:
-                self._tokens = self._requests_per_window
-                self._last_refill = now
-
-            if self._tokens <= 0:
-                # Wait for next window
-                wait_time = self._window_seconds - elapsed
-                await asyncio.sleep(wait_time)
-                self._tokens = self._requests_per_window
-                self._last_refill = datetime.now(UTC)
-
-            self._tokens -= 1
-
-
 class KiteProvider(DataProvider):
     """Kite Connect REST API provider for historical market data.
 
@@ -193,10 +163,9 @@ class KiteProvider(DataProvider):
         api_key: str,
         access_token: str,
         kite_connect_factory: Callable[[str, str], Any] | None = None,
-        max_retries: int = _MAX_RETRIES,
-        # Timing configuration (not financial calculation): use float for precision
-        initial_retry_delay: float = _INITIAL_RETRY_DELAY,
-        requests_per_second: int = _RATE_LIMIT_REQUESTS,
+        rate_limiter: RateLimiter | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> None:
         """Initialize Kite Connect provider.
 
@@ -205,53 +174,41 @@ class KiteProvider(DataProvider):
             access_token: Kite Connect access token.
             kite_connect_factory: Optional factory for creating KiteConnect instance.
                 Useful for testing/mocking.
-            max_retries: Maximum number of retry attempts for failed requests.
-            initial_retry_delay: Initial delay in seconds before first retry.
-            requests_per_second: Rate limit in requests per second.
+            rate_limiter: Optional rate limiter instance. If not provided,
+                creates default RateLimiter(3, burst_capacity=10).
+            circuit_breaker: Optional circuit breaker instance. If not provided,
+                creates default CircuitBreaker(5, 60.0).
+            retry_config: Optional retry configuration. If not provided,
+                creates default RetryConfig().
 
         Raises:
             ConfigError: If api_key or access_token is empty, or if parameters invalid.
         """
-        self._validate_init_params(
-            api_key, access_token, max_retries, initial_retry_delay, requests_per_second
-        )
+        self._validate_init_params(api_key, access_token)
         self._api_key = api_key
         self._access_token = access_token
-        self._max_retries = max_retries
-        self._initial_retry_delay = initial_retry_delay
         self._kite_connect_factory = kite_connect_factory or self._default_kite_factory
 
-        self._rate_limiter = _RateLimiter(
-            requests_per_window=requests_per_second,
-            window_seconds=1.0,
+        self._rate_limiter = rate_limiter or RateLimiter(
+            requests_per_second=3.0,
+            burst_capacity=10,
         )
+        self._circuit_breaker = circuit_breaker or CircuitBreaker(
+            failure_threshold=5,
+            reset_timeout=60.0,
+        )
+        self._retry_config = retry_config or RetryConfig()
 
         self._kite_client: Any = None
 
     @staticmethod
-    def _validate_init_params(
-        api_key: str,
-        access_token: str,
-        max_retries: int,
-        # Timing configuration (not financial calculation): use float for precision
-        initial_retry_delay: float,
-        requests_per_second: int,
-    ) -> None:
+    def _validate_init_params(api_key: str, access_token: str) -> None:
         """Validate initialization parameters."""
         if not api_key.strip():
             msg = "api_key cannot be empty"
             raise ConfigError(msg)
         if not access_token.strip():
             msg = "access_token cannot be empty"
-            raise ConfigError(msg)
-        if max_retries <= 0:
-            msg = "max_retries must be positive"
-            raise ConfigError(msg)
-        if initial_retry_delay < 0:
-            msg = "initial_retry_delay must be non-negative"
-            raise ConfigError(msg)
-        if requests_per_second <= 0:
-            msg = "requests_per_second must be positive"
             raise ConfigError(msg)
 
     @staticmethod
@@ -425,47 +382,24 @@ class KiteProvider(DataProvider):
         func: Callable[..., Any],
         *args: object,
     ) -> Any:
-        """Execute func with exponential backoff retry and circuit breaker."""
-        delay = self._initial_retry_delay
-        consecutive_failures = 0
-        max_consecutive_failures = 5
+        """Execute func with exponential backoff retry and circuit breaker.
 
-        for attempt in range(self._max_retries + 1):
+        Delegates to rate_limiter.retry_with_backoff() with rate limiting.
+        """
+
+        # Wrap the function to include rate limiting
+        async def rate_limited_func(**kwargs: Any) -> Any:
+            await self._rate_limiter.acquire()
             try:
-                await self._rate_limiter.acquire()
-                result = await func(*args)
-                consecutive_failures = 0
-                return result
-            except Exception as exc:
-                consecutive_failures += 1
+                return await func(*args)
+            finally:
+                self._rate_limiter.release()
 
-                if not self._is_retryable_error(exc):
-                    raise ConfigError(f"Kite API error: {exc}") from exc
-
-                if consecutive_failures >= max_consecutive_failures:
-                    msg = (
-                        f"Kite API circuit breaker triggered after "
-                        f"{consecutive_failures} consecutive failures: {exc}"
-                    )
-                    raise ConfigError(msg) from exc
-
-                if attempt >= self._max_retries:
-                    msg = f"Kite API failed after {self._max_retries} retries: {exc}"
-                    raise ConfigError(msg) from exc
-
-                await asyncio.sleep(delay)
-                delay *= _RETRY_BACKOFF_MULTIPLIER
-
-        raise ConfigError("Kite API error")
-
-    def _is_retryable_error(self, exc: Exception) -> bool:
-        """Check if an exception is retryable."""
-        error_str = str(exc).lower()
-        is_rate_limit = "429" in error_str or "rate limit" in error_str
-        is_server_error = any(code in error_str for code in ("500", "502", "503", "504"))
-        is_timeout = "timeout" in error_str or "timed out" in error_str
-        is_connection = "connection" in error_str or "network" in error_str
-        return is_rate_limit or is_server_error or is_timeout or is_connection
+        return await retry_with_backoff(
+            rate_limited_func,
+            config=self._retry_config,
+            circuit_breaker=self._circuit_breaker,
+        )
 
     async def _fetch_historical_data(
         self,
@@ -597,19 +531,18 @@ class KiteProvider(DataProvider):
         *,
         api_key_env_var: str = "ZERODHA_API_KEY",
         access_token_env_var: str = "ZERODHA_ACCESS_TOKEN",  # noqa: S107
-        max_retries: int = _MAX_RETRIES,
-        # Timing configuration (not financial calculation): use float for precision
-        initial_retry_delay: float = _INITIAL_RETRY_DELAY,
-        requests_per_second: int = _RATE_LIMIT_REQUESTS,
+        rate_limiter: RateLimiter | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> "KiteProvider":
         """Create provider from environment variables.
 
         Args:
             api_key_env_var: Environment variable name for API key.
             access_token_env_var: Environment variable name for access token.
-            max_retries: Maximum retry attempts.
-            initial_retry_delay: Initial retry delay in seconds.
-            requests_per_second: Rate limit in requests per second.
+            rate_limiter: Optional rate limiter instance.
+            circuit_breaker: Optional circuit breaker instance.
+            retry_config: Optional retry configuration.
 
         Returns:
             Configured KiteProvider instance.
@@ -632,7 +565,7 @@ class KiteProvider(DataProvider):
         return cls(
             api_key=api_key,
             access_token=access_token,
-            max_retries=max_retries,
-            initial_retry_delay=initial_retry_delay,
-            requests_per_second=requests_per_second,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            retry_config=retry_config,
         )

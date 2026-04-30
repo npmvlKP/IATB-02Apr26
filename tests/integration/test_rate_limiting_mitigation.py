@@ -17,9 +17,10 @@ from unittest.mock import MagicMock
 
 import pytest
 from iatb.core.enums import Exchange
-from iatb.data.kite_provider import KiteProvider, _RateLimiter
+from iatb.data.kite_provider import KiteProvider
 from iatb.data.kite_ws_provider import KiteWebSocketProvider
 from iatb.data.market_data_cache import MarketDataCache
+from iatb.data.rate_limiter import RateLimiter
 from iatb.data.token_resolver import SymbolTokenResolver
 
 
@@ -90,13 +91,12 @@ class TestRateLimitingMitigationIntegration:
             api_key="test_key",
             access_token="test_token",
             kite_connect_factory=lambda k, t: mock_kite_client,
-            requests_per_second=3,
+            rate_limiter=RateLimiter(requests_per_second=3.0, burst_capacity=10),
         )
 
         # Verify rate limiter is initialized
         assert provider._rate_limiter is not None
-        assert provider._rate_limiter._requests_per_window == 3
-        assert provider._rate_limiter._window_seconds == 1.0
+        assert provider._rate_limiter._requests_per_second == 3.0
 
         # Test that rate limiter respects the limit
         call_count = 0
@@ -291,7 +291,7 @@ class TestRateLimitingMitigationIntegration:
     @pytest.mark.asyncio
     async def test_rate_limiter_concurrent_requests(self):
         """Test rate limiter handles concurrent requests correctly."""
-        limiter = _RateLimiter(requests_per_window=3, window_seconds=1.0)
+        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=10)
 
         # Make 10 concurrent requests
         tasks = [limiter.acquire() for _ in range(10)]
@@ -359,7 +359,7 @@ class TestRateLimitingEdgeCases:
     @pytest.mark.asyncio
     async def test_rate_limiter_zero_tokens_waits_for_refill(self):
         """Test that rate limiter waits for refill when tokens are exhausted."""
-        limiter = _RateLimiter(requests_per_window=1, window_seconds=0.5)
+        limiter = RateLimiter(requests_per_second=1.0, burst_capacity=10)
 
         # Consume the only token
         await limiter.acquire()
