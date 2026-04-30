@@ -16,6 +16,7 @@ from starlette.responses import StreamingResponse
 
 from iatb.api import IATBApi, create_api
 from iatb.core.config_manager import WatchlistConfig, get_config_manager
+from iatb.core.engine import Engine
 from iatb.core.exceptions import ConfigError
 from iatb.core.observability import (
     initialize_metrics,
@@ -26,6 +27,38 @@ from iatb.core.sse_broadcaster import get_broadcaster
 from iatb.ml.model_registry import get_registry
 
 _LOGGER = get_logger(__name__)
+
+_engine: Engine | None = None
+
+
+def get_engine() -> Engine:
+    """Get or create Engine instance.
+
+    Returns:
+        Engine instance.
+
+    Raises:
+        HTTPException: If Engine cannot be initialized.
+    """
+    global _engine
+    if _engine is None:
+        _engine = Engine()
+    return _engine
+
+
+class LivenessResponse(BaseModel):
+    """Liveness check response model."""
+
+    status: str
+    timestamp: str
+
+
+class ReadinessResponse(BaseModel):
+    """Readiness check response model."""
+
+    status: str
+    timestamp: str
+    checks: dict[str, dict[str, Any]]
 
 
 @asynccontextmanager
@@ -131,7 +164,7 @@ class OHLCVResponse(BaseModel):
 
 @app.get("/health")
 def health_check() -> dict[str, Any]:
-    """Health check endpoint.
+    """Health check endpoint (legacy, deprecated - use /health/live or /health/ready).
 
     Returns:
         Health status dict.
@@ -146,6 +179,74 @@ def health_check() -> dict[str, Any]:
             "detail": "api_not_initialized",
             "message": "API not configured. Set KITE_API_KEY and KITE_API_SECRET.",
         }
+
+
+@app.get("/health/live", response_model=LivenessResponse)
+def liveness_check() -> dict[str, Any]:
+    """Liveness check endpoint.
+
+    Returns 200 if the process is running. This is a simple liveness probe
+    that indicates the FastAPI server is responsive.
+
+    Returns:
+        Liveness status dict with status and timestamp.
+    """
+    from datetime import UTC, datetime
+
+    return {
+        "status": "alive",
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
+@app.get("/health/ready", response_model=ReadinessResponse)
+def readiness_check() -> dict[str, Any]:
+    """Readiness check endpoint.
+
+    Returns 200 only if all critical components are initialized and ready:
+    - EventBus is running
+    - Engine is running
+    - API is configured (optional - system can function without it)
+
+    Returns:
+        Readiness status dict with component health checks.
+    """
+    from datetime import UTC, datetime
+
+    timestamp = datetime.now(UTC).isoformat()
+    checks: dict[str, dict[str, Any]] = {}
+
+    engine = get_engine()
+    checks["engine"] = {
+        "status": "ready" if engine.is_running else "not_ready",
+        "is_running": engine.is_running,
+    }
+
+    checks["event_bus"] = {
+        "status": "ready" if engine.event_bus.is_running else "not_ready",
+        "is_running": engine.event_bus.is_running,
+    }
+
+    api_ready = False
+    try:
+        api = get_api()
+        api.health_check()
+        api_ready = True
+    except (HTTPException, ConfigError, Exception) as exc:
+        _LOGGER.debug("API not ready for readiness check: %s", exc)
+
+    checks["api"] = {
+        "status": "ready" if api_ready else "not_ready",
+        "is_configured": api_ready,
+    }
+
+    all_ready = all(check["status"] == "ready" for check in checks.values())
+
+    return {
+        "status": "ready" if all_ready else "not_ready",
+        "timestamp": timestamp,
+        "checks": checks,
+    }
 
 
 @app.get("/broker/status", response_model=BrokerStatusResponse)

@@ -11,7 +11,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_run_runtime_starts_and_stops_components(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Runtime should start and stop health server and engine around stop event."""
+    """Runtime should start and stop engine around stop event."""
     lifecycle: list[str] = []
 
     class _FakeEngine:
@@ -21,24 +21,13 @@ async def test_run_runtime_starts_and_stops_components(monkeypatch: pytest.Monke
         async def stop(self) -> None:
             lifecycle.append("engine-stop")
 
-    class _FakeHealthServer:
-        def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-            _ = (host, port)
-
-        def start(self) -> None:
-            lifecycle.append("health-start")
-
-        def stop(self) -> None:
-            lifecycle.append("health-stop")
-
     monkeypatch.setattr(runtime, "Engine", _FakeEngine)
-    monkeypatch.setattr(runtime, "HealthServer", _FakeHealthServer)
     stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event, health_port=8111))
+    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event))
     await asyncio.sleep(0.01)
     stop_event.set()
     await task
-    assert lifecycle == ["health-start", "engine-start", "engine-stop", "health-stop"]
+    assert lifecycle == ["engine-start", "engine-stop"]
 
 
 @pytest.mark.asyncio
@@ -63,9 +52,7 @@ async def test_main_runs_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
     """_main should invoke run_runtime and respect signal handlers."""
     called: list[str] = []
 
-    async def _fake_run_runtime(
-        stop_event: asyncio.Event | None = None, health_port: int = 8000
-    ) -> None:
+    async def _fake_run_runtime(stop_event: asyncio.Event | None = None) -> None:
         called.append("run_runtime")
         if stop_event:
             stop_event.set()
@@ -94,41 +81,6 @@ def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_runtime_with_custom_health_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Runtime should use custom health port when specified."""
-    port_used: list[int] = []
-
-    class _FakeEngine:
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-    class _FakeHealthServer:
-        def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-            _ = host
-            port_used.append(port)
-
-        def start(self) -> None:
-            pass
-
-        def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(runtime, "Engine", _FakeEngine)
-    monkeypatch.setattr(runtime, "HealthServer", _FakeHealthServer)
-
-    stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event, health_port=9000))
-    await asyncio.sleep(0.01)
-    stop_event.set()
-    await task
-
-    assert port_used == [9000]
-
-
-@pytest.mark.asyncio
 async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -> None:
     """Runtime should create its own stop event if not provided."""
     event_created: list[bool] = []
@@ -140,18 +92,7 @@ async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -
         async def stop(self) -> None:
             pass
 
-    class _FakeHealthServer:
-        def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-            _ = (host, port)
-
-        def start(self) -> None:
-            pass
-
-        def stop(self) -> None:
-            pass
-
     monkeypatch.setattr(runtime, "Engine", _FakeEngine)
-    monkeypatch.setattr(runtime, "HealthServer", _FakeHealthServer)
 
     # Mock asyncio.Event to track creation
     original_event = asyncio.Event
@@ -161,7 +102,7 @@ async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -
         return original_event()
 
     with patch.object(asyncio, "Event", tracked_event):
-        task = asyncio.create_task(runtime.run_runtime(health_port=8001))
+        task = asyncio.create_task(runtime.run_runtime())
         await asyncio.sleep(0.01)
         # Cancel the task since we don't have a stop event to set
         task.cancel()
@@ -181,22 +122,10 @@ async def test_run_runtime_handles_engine_start_error(monkeypatch: pytest.Monkey
         async def start(self) -> None:
             raise RuntimeError("Engine start failed")
 
-    class _FakeHealthServer:
-        def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-            _ = (host, port)
-
-        def start(self) -> None:
-            pass
-
-        def stop(self) -> None:
-            pass
-
     monkeypatch.setattr(runtime, "Engine", _FailingEngine)
-    monkeypatch.setattr(runtime, "HealthServer", _FakeHealthServer)
 
     stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event, health_port=8002))
-
+    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event))
     # Should raise the error
     with pytest.raises(RuntimeError, match="Engine start failed"):
         await asyncio.sleep(0.01)
@@ -215,21 +144,10 @@ async def test_run_runtime_handles_engine_stop_error(monkeypatch: pytest.MonkeyP
         async def stop(self) -> None:
             raise RuntimeError("Engine stop failed")
 
-    class _FakeHealthServer:
-        def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-            _ = (host, port)
-
-        def start(self) -> None:
-            pass
-
-        def stop(self) -> None:
-            pass
-
     monkeypatch.setattr(runtime, "Engine", _EngineWithStopError)
-    monkeypatch.setattr(runtime, "HealthServer", _FakeHealthServer)
 
     stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event, health_port=8003))
+    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event))
     await asyncio.sleep(0.01)
     stop_event.set()
 
@@ -243,9 +161,7 @@ async def test_main_handles_signal_handler_error(monkeypatch: pytest.MonkeyPatch
     """_main should propagate errors in signal handler registration."""
     called: list[str] = []
 
-    async def _fake_run_runtime(
-        stop_event: asyncio.Event | None = None, health_port: int = 8000
-    ) -> None:
+    async def _fake_run_runtime(stop_event: asyncio.Event | None = None) -> None:
         called.append("run_runtime")
         if stop_event:
             stop_event.set()
@@ -298,28 +214,17 @@ async def test_multiple_runtime_instances(monkeypatch: pytest.MonkeyPatch) -> No
         async def stop(self) -> None:
             pass
 
-    class _FakeHealthServer:
-        def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
-            _ = (host, port)
-
-        def start(self) -> None:
-            pass
-
-        def stop(self) -> None:
-            pass
-
     monkeypatch.setattr(runtime, "Engine", _CountingEngine)
-    monkeypatch.setattr(runtime, "HealthServer", _FakeHealthServer)
 
     # Run two runtime instances sequentially
     stop_event1 = asyncio.Event()
-    task1 = asyncio.create_task(runtime.run_runtime(stop_event=stop_event1, health_port=8010))
+    task1 = asyncio.create_task(runtime.run_runtime(stop_event=stop_event1))
     await asyncio.sleep(0.01)
     stop_event1.set()
     await task1
 
     stop_event2 = asyncio.Event()
-    task2 = asyncio.create_task(runtime.run_runtime(stop_event=stop_event2, health_port=8011))
+    task2 = asyncio.create_task(runtime.run_runtime(stop_event=stop_event2))
     await asyncio.sleep(0.01)
     stop_event2.set()
     await task2

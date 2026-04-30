@@ -717,3 +717,94 @@ def test_ml_status_response_model_validation() -> None:
     assert response.total_models == 5
     assert response.available_models == 3
     assert "lstm" in response.models
+
+
+def test_liveness_check(client: TestClient) -> None:
+    """Test liveness check endpoint always returns 200."""
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "alive"
+    assert "timestamp" in data
+    assert data["timestamp"] is not None
+
+
+def test_readiness_check_all_ready(client: TestClient) -> None:
+    """Test readiness check endpoint when all components are ready."""
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.json()
+    assert "status" in data
+    assert "timestamp" in data
+    assert "checks" in data
+    assert "engine" in data["checks"]
+    assert "event_bus" in data["checks"]
+    assert "api" in data["checks"]
+
+
+def test_readiness_check_engine_status(client: TestClient) -> None:
+    """Test readiness check endpoint reports engine status."""
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.json()
+    assert "engine" in data["checks"]
+    engine_check = data["checks"]["engine"]
+    assert "status" in engine_check
+    assert "is_running" in engine_check
+    assert isinstance(engine_check["is_running"], bool)
+
+
+def test_readiness_check_event_bus_status(client: TestClient) -> None:
+    """Test readiness check endpoint reports event bus status."""
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.json()
+    assert "event_bus" in data["checks"]
+    event_bus_check = data["checks"]["event_bus"]
+    assert "status" in event_bus_check
+    assert "is_running" in event_bus_check
+    assert isinstance(event_bus_check["is_running"], bool)
+
+
+def test_readiness_check_api_status(client: TestClient) -> None:
+    """Test readiness check endpoint reports API status."""
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.json()
+    assert "api" in data["checks"]
+    api_check = data["checks"]["api"]
+    assert "status" in api_check
+    assert "is_configured" in api_check
+    assert isinstance(api_check["is_configured"], bool)
+
+
+def test_liveness_response_model_validation() -> None:
+    """Test LivenessResponse model validation."""
+    from iatb.fastapi_app import LivenessResponse
+
+    response = LivenessResponse(
+        status="alive",
+        timestamp="2026-01-01T12:00:00",
+    )
+    assert response.status == "alive"
+    assert response.timestamp == "2026-01-01T12:00:00"
+
+
+def test_readiness_response_model_validation() -> None:
+    """Test ReadinessResponse model validation."""
+    from iatb.fastapi_app import ReadinessResponse
+
+    response = ReadinessResponse(
+        status="ready",
+        timestamp="2026-01-01T12:00:00",
+        checks={
+            "engine": {"status": "ready", "is_running": True},
+            "event_bus": {"status": "ready", "is_running": True},
+            "api": {"status": "ready", "is_configured": True},
+        },
+    )
+    assert response.status == "ready"
+    assert response.timestamp == "2026-01-01T12:00:00"
+    assert "engine" in response.checks
+    assert "event_bus" in response.checks
+    assert "api" in response.checks

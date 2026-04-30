@@ -19,13 +19,11 @@ import asyncio
 import logging
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iatb.core.engine import Engine
-    from iatb.core.health import HealthServer
 
 # ── Logging Setup ──
 
@@ -45,14 +43,13 @@ _LOGGER = logging.getLogger("start_master")
 # ── Engine Startup ──
 
 
-async def start_engine() -> tuple["Engine", "HealthServer"]:
-    """Start engine and health server.
+async def start_engine() -> "Engine":
+    """Start engine.
 
     Returns:
-        Tuple of (engine, health_server) instances.
+        Engine instance.
     """
     from iatb.core.engine import Engine
-    from iatb.core.health import HealthServer
     from iatb.execution.paper_executor import PaperExecutor
     from iatb.risk.kill_switch import KillSwitch
 
@@ -61,50 +58,13 @@ async def start_engine() -> tuple["Engine", "HealthServer"]:
     executor = PaperExecutor()
     kill_switch = KillSwitch(executor)
     engine: Engine = Engine(kill_switch=kill_switch)
-    health: HealthServer = HealthServer(port=8000)
 
-    health.start()
     await engine.start()
 
     _LOGGER.info("  ✓ Engine started (running: %s)", engine.is_running)
-    _LOGGER.info("  ✓ Health server started on port 8000")
+    _LOGGER.info("  ✓ Health endpoints available via FastAPI: /health/live, /health/ready")
 
-    return engine, health
-
-
-async def wait_for_health_endpoint(timeout_seconds: int = 30) -> bool:
-    """Wait for /health endpoint to return 200 OK.
-
-    This function is fully async and uses asyncio.sleep() and asyncio.to_thread()
-    to avoid blocking the event loop.
-
-    Args:
-        timeout_seconds: Maximum time to wait.
-
-    Returns:
-        True if health endpoint is responding, False on timeout.
-    """
-    _LOGGER.info("Waiting for health endpoint...")
-    start_time = asyncio.get_event_loop().time()
-
-    while asyncio.get_event_loop().time() - start_time < timeout_seconds:
-        try:
-            # Run blocking urllib.request.urlopen in a thread to avoid blocking event loop
-            result = await asyncio.to_thread(
-                lambda: urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2)  # noqa: S310
-            )
-            with result as resp:
-                if resp.status == 200:
-                    body = resp.read().decode()
-                    _LOGGER.info("  ✓ Health endpoint responding: %s", body)
-                    return True
-        except Exception:
-            _LOGGER.debug("  Health endpoint not ready yet, retrying...")
-            # Use asyncio.sleep instead of time.sleep to avoid blocking
-            await asyncio.sleep(1)
-
-    _LOGGER.error("  ✗ Health endpoint timeout after %d seconds", timeout_seconds)
-    return False
+    return engine
 
 
 # ── Dashboard Startup ──
@@ -150,20 +110,14 @@ async def main_async() -> int:
 
     # Track background processes
     engine: Engine | None = None
-    health: HealthServer | None = None
     dashboard_proc: subprocess.Popen[str] | None = None
     exit_code = 0
 
     try:
-        # Step 1: Start Engine and Health Server
-        engine, health = await start_engine()
+        # Step 1: Start Engine
+        engine = await start_engine()
 
-        # Step 2: Wait for health endpoint
-        if not await wait_for_health_endpoint(timeout_seconds=30):
-            _LOGGER.error("Health endpoint did not become available")
-            return 1
-
-        # Step 3: Start Dashboard
+        # Step 2: Start Dashboard
         dashboard_proc = start_dashboard()
         if not dashboard_proc:
             _LOGGER.error("Dashboard failed to start")
@@ -172,7 +126,8 @@ async def main_async() -> int:
         _LOGGER.info("")
         _LOGGER.info("=" * 70)
         _LOGGER.info("✓ All services started successfully!")
-        _LOGGER.info("  - Engine API:   http://localhost:8000/health")
+        _LOGGER.info("  - Engine API:   http://localhost:8000/health/live")
+        _LOGGER.info("  - Engine API:   http://localhost:8000/health/ready")
         _LOGGER.info("  - Dashboard:    http://localhost:8080")
         _LOGGER.info("  - Press Ctrl+C to stop all services")
         _LOGGER.info("=" * 70)
@@ -210,11 +165,6 @@ async def main_async() -> int:
             _LOGGER.info("Stopping engine...")
             await engine.stop()
             _LOGGER.info("  ✓ Engine stopped")
-
-        if health:
-            _LOGGER.info("Stopping health server...")
-            health.stop()
-            _LOGGER.info("  ✓ Health server stopped")
 
         _LOGGER.info("Shutdown complete.")
 

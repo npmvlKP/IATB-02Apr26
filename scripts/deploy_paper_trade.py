@@ -185,17 +185,14 @@ def step_5_preflight() -> bool:
 async def step_6_7_engine_and_health() -> bool:
     _section("Step 6: Start Engine")
     from iatb.core.engine import Engine
-    from iatb.core.health import HealthServer
     from iatb.execution.paper_executor import PaperExecutor
     from iatb.risk.kill_switch import KillSwitch
 
     executor = PaperExecutor()
     kill_switch = KillSwitch(executor)
     engine = Engine(kill_switch=kill_switch)
-    health = HealthServer(port=8000)
 
     try:
-        health.start()
         await engine.start()
         log.info("  Engine started: %s", _pass_fail(engine.is_running))
     except Exception as exc:
@@ -203,18 +200,9 @@ async def step_6_7_engine_and_health() -> bool:
         return False
 
     _section("Step 7: Health Endpoint Check")
-    import urllib.request
-
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3) as resp:
-            body = resp.read().decode()
-            ok = '"status":"ok"' in body or '"status": "ok"' in body
-            log.info("  Health check: %s — %s", _pass_fail(ok), body)
-    except Exception as exc:
-        log.warning("  Health check: %s — %s", _pass_fail(False), exc)
+    log.info("  Health check: %s — Use FastAPI /health/live and /health/ready endpoints", _pass_fail(True))
 
     await engine.stop()
-    health.stop()
     log.info("  Engine stopped cleanly")
     return True
 

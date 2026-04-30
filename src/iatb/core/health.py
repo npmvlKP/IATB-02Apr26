@@ -1,13 +1,23 @@
 """
 HTTP health endpoint support for runtime/container probes.
+
+DEPRECATED: This module is deprecated in favor of FastAPI health endpoints.
+Use /health/live and /health/ready endpoints from fastapi_app.py instead.
 """
 
 import logging
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from typing import ClassVar
 
 logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "HealthServer is deprecated. Use FastAPI /health/live and /health/ready endpoints instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class _HealthHandler(BaseHTTPRequestHandler):

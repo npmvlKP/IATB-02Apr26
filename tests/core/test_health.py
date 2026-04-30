@@ -1,5 +1,8 @@
 """
 Tests for health endpoint server.
+
+DEPRECATED: HealthServer is deprecated in favor of FastAPI health endpoints.
+Tests are kept for backward compatibility but should be removed in future.
 """
 
 import random
