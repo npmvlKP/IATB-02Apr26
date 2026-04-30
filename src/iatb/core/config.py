@@ -1,13 +1,17 @@
 """
 Configuration management for IATB.
 
-Uses Pydantic BaseSettings for type-safe configuration from environment variables.
+Uses Pydantic BaseSettings for type-safe configuration from environment variables
+and TOML configuration files.
 """
 
 import logging
 from pathlib import Path
+from typing import Any
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import tomli
+from pydantic.fields import FieldInfo
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from iatb.core.exceptions import ConfigError
 
@@ -26,6 +30,129 @@ class Config(BaseSettings):
         env_nested_delimiter="__",
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Customize settings sources to load TOML configuration.
+
+        Priority order (highest to lowest):
+        1. Environment variables
+        2. .env file
+        3. TOML configuration file (config/settings.toml)
+        4. Default values
+
+        Args:
+            settings_cls: Settings class being configured.
+            init_settings: Settings from __init__ kwargs.
+            env_settings: Settings from environment variables.
+            dotenv_settings: Settings from .env file.
+            file_secret_settings: Settings from file secrets.
+
+        Returns:
+            Tuple of settings sources in priority order.
+        """
+        toml_settings = cls._load_toml_settings(settings_cls)
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            toml_settings,
+            file_secret_settings,
+        )
+
+    @classmethod
+    def _load_toml_settings(cls, settings_cls: type[BaseSettings]) -> PydanticBaseSettingsSource:
+        """Load settings from TOML configuration file.
+
+        Returns:
+            PydanticBaseSettingsSource with TOML configuration.
+        """
+        toml_path = Path("config/settings.toml")
+
+        class TomlSettingsSource(PydanticBaseSettingsSource):
+            """Custom settings source for TOML configuration."""
+
+            def __init__(self, settings_cls: type[BaseSettings], toml_path: Path):
+                super().__init__(settings_cls)
+                self.toml_path = toml_path
+                self._toml_data: dict[str, Any] = self._load_toml_data()
+
+            def _load_toml_data(self) -> dict[str, Any]:
+                """Load TOML data from file.
+
+                Returns:
+                    Dictionary of TOML configuration values.
+                """
+                if not self.toml_path.exists():
+                    logger.info(
+                        "TOML config file not found, using defaults",
+                        extra={"toml_path": str(self.toml_path)},
+                    )
+                    return {}
+
+                try:
+                    with self.toml_path.open("rb") as f:
+                        toml_data = tomli.load(f)
+
+                    logger.info(
+                        "Loaded TOML configuration",
+                        extra={"toml_path": str(self.toml_path)},
+                    )
+                    return self._flatten_toml_data(toml_data)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to load TOML config, using defaults",
+                        extra={"toml_path": str(self.toml_path), "error": str(e)},
+                    )
+                    return {}
+
+            def _flatten_toml_data(self, toml_data: dict[str, Any]) -> dict[str, Any]:
+                """Flatten nested TOML data structure.
+
+                Args:
+                    toml_data: Nested TOML data.
+
+                Returns:
+                    Flattened dictionary with dot-notation keys.
+                """
+                flattened: dict[str, Any] = {}
+                for key, value in toml_data.items():
+                    if isinstance(value, dict):
+                        for sub_key, sub_value in value.items():
+                            flattened[sub_key] = sub_value
+                    else:
+                        flattened[key] = value
+                return flattened
+
+            def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+                """Get field value from TOML configuration.
+
+                Args:
+                    field: Pydantic field definition.
+                    field_name: Name of the field.
+
+                Returns:
+                    Tuple of (value, source_name, value_is_complex).
+                """
+                field_value = self._toml_data.get(field_name, field.default)
+                return field_value, "TOML", False
+
+            def __call__(self) -> dict[str, Any]:
+                """Load and parse TOML configuration.
+
+                Returns:
+                    Dictionary of configuration values from TOML.
+                """
+                return self._toml_data
+
+        return TomlSettingsSource(settings_cls, toml_path)
 
     # Application settings
     app_name: str = "IATB"
@@ -62,6 +189,18 @@ class Config(BaseSettings):
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
     cache_dir: Path = Path("cache")
+
+    # Observability settings
+    observability_enabled: bool = True
+    observability_exporter_type: str = "otlp"
+    observability_service_name: str = "iatb"
+    observability_service_version: str = "0.1.0"
+
+    # Storage settings
+    storage_type: str = "duckdb"
+    storage_path: Path = Path("data/iatb.duckdb")
+    storage_backup_enabled: bool = True
+    storage_backup_path: Path = Path("data/backups")
 
     def __init__(self, **kwargs) -> None:  # type: ignore[no-untyped-def]
         """Initialize configuration with validation."""

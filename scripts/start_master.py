@@ -6,11 +6,10 @@ This script ensures the Engine API (port 8000) starts BEFORE the dashboard (port
 preventing the "Loading..." issue when the dashboard attempts to connect.
 
 Startup sequence:
-  1. Start HealthServer on port 8000
-  2. Start Engine with event bus
-  3. Wait for /health endpoint to return 200 OK
-  4. Start Dashboard on port 8080
-  5. Handle graceful shutdown on Ctrl+C
+   1. Start Engine with event bus
+   2. Wait for /health endpoint to return 200 OK
+   3. Start Dashboard on port 8080
+   4. Handle graceful shutdown on Ctrl+C
 
 Run:  poetry run python scripts/start_master.py
 """

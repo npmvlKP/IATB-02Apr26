@@ -2,47 +2,25 @@
 Tests for health endpoint server.
 
 DEPRECATED: HealthServer is deprecated in favor of FastAPI health endpoints.
-Tests are kept for backward compatibility but should be removed in future.
+Tests for HealthServer have been removed as the class has been deleted.
+Comprehensive tests for FastAPI health endpoints are available in test_fastapi_app.py:
+- test_liveness_check
+- test_readiness_check_all_ready
+- test_readiness_check_engine_status
+- test_readiness_check_event_bus_status
+- test_readiness_check_api_status
 """
 
-import random
-import time
-from urllib.error import HTTPError
-from urllib.request import urlopen
-
-import numpy as np
-import pytest
-import torch
-from iatb.core.health import HealthServer
-
-# Set deterministic seeds for reproducibility
-random.seed(42)
-np.random.seed(42)
-torch.manual_seed(42)
+import warnings
 
 
-def test_health_endpoint_returns_ok_payload() -> None:
-    """Health endpoint should return HTTP 200 and status payload."""
-    server = HealthServer(host="127.0.0.1", port=0)
-    server.start()
-    try:
-        time.sleep(0.05)
-        with urlopen(f"http://127.0.0.1:{server.port}/health", timeout=2) as response:  # noqa: S310
-            body = response.read().decode("utf-8")
-            status = response.status
-        assert status == 200
-        assert body == '{"status":"ok"}'
-    finally:
-        server.stop()
+def test_health_module_deprecation_warning() -> None:
+    """Test that importing health module raises deprecation warning."""
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        import iatb.core.health as health_module
 
-
-def test_non_health_endpoint_returns_not_found() -> None:
-    """Unknown endpoint should return 404."""
-    server = HealthServer(host="127.0.0.1", port=0)
-    server.start()
-    try:
-        time.sleep(0.05)
-        with pytest.raises(HTTPError, match="HTTP Error 404"):
-            urlopen(f"http://127.0.0.1:{server.port}/not-found", timeout=2)  # noqa: S310
-    finally:
-        server.stop()
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "deprecated and removed" in str(w[0].message).lower()
+        assert health_module is not None

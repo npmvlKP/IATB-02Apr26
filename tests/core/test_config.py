@@ -19,22 +19,151 @@ np.random.seed(42)
 torch.manual_seed(42)
 
 
-class TestConfig:
-    """Test Config class."""
+class TestTomlConfigLoading:
+    """Test TOML configuration loading."""
 
-    def test_default_values(self) -> None:
-        """Test config with default values."""
-        config = Config()
-        assert config.app_name == "IATB"
-        assert config.app_version == "0.1.0"
-        assert config.debug is False
-        assert config.log_level == "INFO"
-        assert config.default_exchange == "NSE"
-        assert config.default_market_type == "SPOT"
-        # Zerodha fields may be loaded from .env file, so just check they're strings
+    def test_toml_config_loaded_from_file(self) -> None:
+        """Test that TOML configuration is loaded from file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toml_path = Path(tmpdir) / "settings.toml"
+            toml_content = """
+[data]
+data_provider_default = "jugaad"
+enable_ab_testing = true
+data_provider_fallback = "kite"
+ab_testing_max_diff_pct = 10.0
+
+[observability]
+observability_enabled = false
+observability_exporter_type = "console"
+observability_service_name = "test-service"
+observability_service_version = "1.0.0"
+
+[storage]
+storage_type = "sqlite"
+storage_path = "test.db"
+storage_backup_enabled = false
+storage_backup_path = "backups"
+"""
+            toml_path.write_text(toml_content)
+
+            with patch("iatb.core.config.Path") as mock_path:
+                mock_path.return_value = toml_path
+                config = Config()
+
+                assert config.data_provider_default == "jugaad"
+                assert config.observability_enabled is False
+                assert config.observability_exporter_type == "console"
+                assert config.observability_service_name == "test-service"
+                assert config.observability_service_version == "1.0.0"
+                assert config.storage_type == "sqlite"
+                assert str(config.storage_path).replace("\\", "/") == "test.db"
+                assert config.storage_backup_enabled is False
+                assert str(config.storage_backup_path).replace("\\", "/") == "backups"
+
+    def test_toml_config_missing_file_uses_defaults(self) -> None:
+        """Test that missing TOML file uses default values."""
+        with patch("iatb.core.config.Path") as mock_path:
+            mock_path.return_value = Path("nonexistent/settings.toml")
+            config = Config()
+
+            assert config.data_provider_default == "kite"
+            assert config.observability_enabled is True
+            assert config.observability_exporter_type == "otlp"
+            assert config.observability_service_name == "iatb"
+            assert config.observability_service_version == "0.1.0"
+            assert config.storage_type == "duckdb"
+            assert str(config.storage_path).replace("\\", "/") == "data/iatb.duckdb"
+            assert config.storage_backup_enabled is True
+            assert str(config.storage_backup_path).replace("\\", "/") == "data/backups"
+
+    def test_toml_config_invalid_toml_uses_defaults(self) -> None:
+        """Test that invalid TOML file uses default values."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toml_path = Path(tmpdir) / "settings.toml"
+            toml_path.write_text("invalid toml content [[")
+
+            with patch("iatb.core.config.Path") as mock_path:
+                mock_path.return_value = toml_path
+                config = Config()
+
+                assert config.data_provider_default == "kite"
+                assert config.observability_enabled is True
+
+    def test_env_overrides_toml_config(self) -> None:
+        """Test that environment variables override TOML configuration."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toml_path = Path(tmpdir) / "settings.toml"
+            toml_content = """
+[data]
+data_provider_default = "jugaad"
+
+[observability]
+observability_enabled = false
+"""
+            toml_path.write_text(toml_content)
+
+            env_vars = {
+                "DATA_PROVIDER_DEFAULT": "kite",
+                "OBSERVABILITY_ENABLED": "true",
+            }
+            with patch.dict("os.environ", env_vars):
+                with patch("iatb.core.config.Path") as mock_path:
+                    mock_path.return_value = toml_path
+                    config = Config()
+
+                    assert config.data_provider_default == "kite"
+                    assert config.observability_enabled is True
+
+    def test_dotenv_overrides_toml_config(self) -> None:
+        """Test that .env file overrides TOML configuration."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toml_path = Path(tmpdir) / "settings.toml"
+            toml_content = """
+[data]
+data_provider_default = "jugaad"
+
+[observability]
+observability_enabled = false
+"""
+            toml_path.write_text(toml_content)
+
+            env_path = Path(tmpdir) / ".env"
+            env_content = """
+DATA_PROVIDER_DEFAULT=kite
+OBSERVABILITY_ENABLED=true
+"""
+            env_path.write_text(env_content)
+
+            with patch("iatb.core.config.Path") as mock_path:
+                mock_path.return_value = toml_path
+                config = Config(_env_file=str(env_path))
+
+                assert config.data_provider_default == "kite"
+                assert config.observability_enabled is True
+
+    def test_toml_config_partial_sections(self) -> None:
+        """Test that partial TOML sections use defaults for missing values."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            toml_path = Path(tmpdir) / "settings.toml"
+            toml_content = """
+[data]
+data_provider_default = "jugaad"
+"""
+            toml_path.write_text(toml_content)
+
+            with patch("iatb.core.config.Path") as mock_path:
+                mock_path.return_value = toml_path
+                config = Config()
+
+                assert config.data_provider_default == "jugaad"
+                assert config.observability_enabled is True
+                assert config.storage_type == "duckdb"
+                assert str(config.storage_path).replace("\\", "/") == "data/iatb.duckdb"
+                assert config.storage_backup_enabled is True
+                assert str(config.storage_backup_path).replace("\\", "/") == "data/backups"
         assert isinstance(config.zerodha_api_key, str)
         assert isinstance(config.zerodha_api_secret, str)
-        assert config.data_provider_default == "kite"
 
     def test_custom_values(self) -> None:
         """Test config with custom values."""

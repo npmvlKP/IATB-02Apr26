@@ -32,15 +32,41 @@ max_tasks = 100
 [data]
 # Default data provider: "jugaad" | "kite" | "openalgo" | "yfinance"
 # Risk 4 Migration: Feature flag for incremental DataProvider migration
-data_provider_default = "jugaad"
+data_provider_default = "kite"
 
 # Enable dual-path A/B testing for migration validation
 # When true, runs both default and fallback providers in parallel
 enable_ab_testing = false
 
 # Fallback provider for A/B testing (different from default)
-data_provider_fallback = "kite"
+data_provider_fallback = "jugaad"
 
 # Maximum acceptable difference between providers (percentage)
 # Exceeding this threshold will log warnings
 ab_testing_max_diff_pct = 5.0
+
+[observability]
+# Enable observability features (metrics, traces, logs)
+observability_enabled = true
+
+# Exporter type: "otlp" | "prometheus" | "console"
+observability_exporter_type = "otlp"
+
+# Service name for observability
+observability_service_name = "iatb"
+
+# Service version for observability
+observability_service_version = "0.1.0"
+
+[storage]
+# Storage type: "duckdb" | "sqlite" | "postgresql"
+storage_type = "duckdb"
+
+# Path to storage database
+storage_path = "data/iatb.duckdb"
+
+# Enable automatic backups
+storage_backup_enabled = true
+
+# Path to backup directory
+storage_backup_path = "data/backups"
