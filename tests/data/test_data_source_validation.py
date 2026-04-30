@@ -240,15 +240,24 @@ class TestRateLimiterValidation:
     @pytest.mark.asyncio
     async def test_kite_provider_rate_limiter_respects_3_req_sec(self):
         """Verify KiteProvider's internal rate limiter enforces 3 requests/second."""
-        provider = KiteProvider(api_key="key", access_token="token", requests_per_second=3)
+        from iatb.data.rate_limiter import RateLimiter
+
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            rate_limiter=RateLimiter(requests_per_second=3.0, burst_capacity=3),
+        )
 
         # Access the internal rate limiter
         limiter = provider._rate_limiter
 
         # Consume all tokens (3 tokens)
         await limiter.acquire()
+        limiter.release()
         await limiter.acquire()
+        limiter.release()
         await limiter.acquire()
+        limiter.release()
 
         # Fourth request should wait
         import time
@@ -257,8 +266,11 @@ class TestRateLimiterValidation:
         await limiter.acquire()
         elapsed = time.time() - start
 
-        # Should have waited for token refill (approximately 1 second)
-        assert elapsed >= 0.9, f"Expected wait >= 0.9s, got {elapsed}s"
+        # Should have waited for token refill (approximately 0.33 seconds for 1 token at 3 req/sec)
+        assert elapsed >= 0.2, f"Expected wait >= 0.2s, got {elapsed}s"
+
+        # Clean up
+        limiter.release()
 
     @pytest.mark.asyncio
     async def test_scanner_rate_limiter_configurable(self):
