@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from iatb.core.exceptions import ConfigError
+from iatb.core.observability.alerting import get_alerter
 from iatb.execution.base import Executor
 
 logger = logging.getLogger(__name__)
@@ -34,10 +35,23 @@ class KillSwitch:
         on_engage: EngageCallback | None = None,
     ) -> None:
         self._executor = executor
-        self._on_engage = on_engage
+        self._on_engage = on_engage or self._default_engage_callback
         self._engaged = False
         self._reason = ""
         self._triggered_utc: datetime | None = None
+
+    def _default_engage_callback(self, reason: str, engaged_utc: datetime) -> None:
+        """Default callback to send kill switch alert via Telegram.
+
+        Args:
+            reason: Reason for kill switch engagement.
+            engaged_utc: UTC timestamp when kill switch was engaged.
+        """
+        try:
+            alerter = get_alerter()
+            alerter.send_kill_switch_alert(reason, engaged_utc)
+        except Exception as exc:
+            logger.error("Failed to send kill switch alert: %s", exc)
 
     @property
     def is_engaged(self) -> bool:

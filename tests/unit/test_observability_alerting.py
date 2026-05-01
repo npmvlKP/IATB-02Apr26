@@ -2,38 +2,39 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from iatb.core.observability.alerting import (
+    AlertLevel,
     TelegramAlerter,
-    TelegramAlertLevel,
     get_alerter,
 )
 from telegram.error import TelegramError
 
 
-class TestTelegramAlertLevel:
-    """Test cases for TelegramAlertLevel."""
+class TestAlertLevel:
+    """Test cases for AlertLevel."""
 
     def test_alert_level_info_exists(self) -> None:
         """Test that INFO level exists."""
-        assert hasattr(TelegramAlertLevel, "INFO")
-        assert TelegramAlertLevel.INFO == "INFO"
+        assert hasattr(AlertLevel, "INFO")
+        assert AlertLevel.INFO == "INFO"
 
     def test_alert_level_warning_exists(self) -> None:
         """Test that WARNING level exists."""
-        assert hasattr(TelegramAlertLevel, "WARNING")
-        assert TelegramAlertLevel.WARNING == "WARNING"
+        assert hasattr(AlertLevel, "WARNING")
+        assert AlertLevel.WARNING == "WARNING"
 
     def test_alert_level_error_exists(self) -> None:
         """Test that ERROR level exists."""
-        assert hasattr(TelegramAlertLevel, "ERROR")
-        assert TelegramAlertLevel.ERROR == "ERROR"
+        assert hasattr(AlertLevel, "ERROR")
+        assert AlertLevel.ERROR == "ERROR"
 
     def test_alert_level_critical_exists(self) -> None:
         """Test that CRITICAL level exists."""
-        assert hasattr(TelegramAlertLevel, "CRITICAL")
-        assert TelegramAlertLevel.CRITICAL == "CRITICAL"
+        assert hasattr(AlertLevel, "CRITICAL")
+        assert AlertLevel.CRITICAL == "CRITICAL"
 
 
 class TestTelegramAlerter:
@@ -72,7 +73,7 @@ class TestTelegramAlerter:
             bot_token="test_token",  # noqa: S106
             chat_id="test_chat",
         )
-        result = alerter.send_alert("Test message", TelegramAlertLevel.INFO)
+        result = alerter.send_alert("Test message", AlertLevel.INFO)
 
         assert result is True
         mock_bot_instance.send_message.assert_called_once()
@@ -84,7 +85,7 @@ class TestTelegramAlerter:
     ) -> None:
         """Test that send_alert returns False when disabled."""
         alerter = TelegramAlerter(enabled=False)
-        result = alerter.send_alert("Test message", TelegramAlertLevel.INFO)
+        result = alerter.send_alert("Test message", AlertLevel.INFO)
 
         assert result is False
         mock_bot.assert_not_called()
@@ -103,7 +104,7 @@ class TestTelegramAlerter:
             bot_token="test_token",  # noqa: S106
             chat_id="test_chat",
         )
-        result = alerter.send_alert("Test message", TelegramAlertLevel.INFO)
+        result = alerter.send_alert("Test message", AlertLevel.INFO)
 
         # Returns True because alerter is enabled (fire-and-forget pattern)
         # Error is logged asynchronously but doesn't affect return value
@@ -126,7 +127,7 @@ class TestTelegramAlerter:
             ticker="RELIANCE",
             side="BUY",
             quantity=100,
-            price=2500.0,
+            price=Decimal("2500.0"),
         )
 
         assert result is True
@@ -193,8 +194,8 @@ class TestTelegramAlerter:
             chat_id="test_chat",
         )
         result = alerter.send_pnl_alert(
-            pnl=5000.0,
-            daily_pnl=1000.0,
+            pnl=Decimal("5000.0"),
+            daily_pnl=Decimal("1000.0"),
             open_positions=3,
         )
 
@@ -239,7 +240,7 @@ class TestTelegramAlerter:
         result = alerter.send_with_actions(
             message="Test with actions",
             buttons=[("Button 1", "action1"), ("Button 2", "action2")],
-            level=TelegramAlertLevel.INFO,
+            level=AlertLevel.INFO,
         )
 
         assert result is True
@@ -257,7 +258,7 @@ class TestTelegramAlerter:
         )
         message = alerter._format_message(
             "Test message",
-            TelegramAlertLevel.INFO,
+            AlertLevel.INFO,
         )
 
         assert "INFO" in message
@@ -289,21 +290,21 @@ class TestGetAlerter:
         assert alerter1 is alerter2
 
 
-class TestTelegramAlertLevels:
+class TestAlertLevels:
     """Test alert level values."""
 
     def test_info_level_value(self) -> None:
         """Test INFO level value."""
-        assert TelegramAlertLevel.INFO == "INFO"
+        assert AlertLevel.INFO == "INFO"
 
     def test_warning_level_value(self) -> None:
         """Test WARNING level value."""
-        assert TelegramAlertLevel.WARNING == "WARNING"
+        assert AlertLevel.WARNING == "WARNING"
 
     def test_error_level_value(self) -> None:
         """Test ERROR level value."""
-        assert TelegramAlertLevel.ERROR == "ERROR"
+        assert AlertLevel.ERROR == "ERROR"
 
     def test_critical_level_value(self) -> None:
         """Test CRITICAL level value."""
-        assert TelegramAlertLevel.CRITICAL == "CRITICAL"
+        assert AlertLevel.CRITICAL == "CRITICAL"

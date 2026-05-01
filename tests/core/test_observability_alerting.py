@@ -6,35 +6,35 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from iatb.core.observability.alerting import (
+    AlertLevel,
     TelegramAlerter,
-    TelegramAlertLevel,
     get_alerter,
 )
 from telegram.error import TelegramError
 
 
-class TestTelegramAlertLevel:
-    """Tests for TelegramAlertLevel class."""
+class TestAlertLevel:
+    """Tests for AlertLevel class."""
 
     def test_info_level_exists(self) -> None:
         """Test that INFO level exists."""
-        assert hasattr(TelegramAlertLevel, "INFO")
-        assert TelegramAlertLevel.INFO == "INFO"
+        assert hasattr(AlertLevel, "INFO")
+        assert AlertLevel.INFO == "INFO"
 
     def test_warning_level_exists(self) -> None:
         """Test that WARNING level exists."""
-        assert hasattr(TelegramAlertLevel, "WARNING")
-        assert TelegramAlertLevel.WARNING == "WARNING"
+        assert hasattr(AlertLevel, "WARNING")
+        assert AlertLevel.WARNING == "WARNING"
 
     def test_error_level_exists(self) -> None:
         """Test that ERROR level exists."""
-        assert hasattr(TelegramAlertLevel, "ERROR")
-        assert TelegramAlertLevel.ERROR == "ERROR"
+        assert hasattr(AlertLevel, "ERROR")
+        assert AlertLevel.ERROR == "ERROR"
 
     def test_critical_level_exists(self) -> None:
         """Test that CRITICAL level exists."""
-        assert hasattr(TelegramAlertLevel, "CRITICAL")
-        assert TelegramAlertLevel.CRITICAL == "CRITICAL"
+        assert hasattr(AlertLevel, "CRITICAL")
+        assert AlertLevel.CRITICAL == "CRITICAL"
 
 
 class TestTelegramAlerter:
@@ -107,7 +107,7 @@ class TestTelegramAlerter:
         mock_get_loop.return_value = mock_loop
 
         alerter = TelegramAlerter()
-        result = alerter.send_alert("Test message", TelegramAlertLevel.INFO)
+        result = alerter.send_alert("Test message", AlertLevel.INFO)
 
         assert result is True
         mock_create_task.assert_called_once()
@@ -129,7 +129,7 @@ class TestTelegramAlerter:
         mock_get_loop.side_effect = RuntimeError("No running loop")
 
         alerter = TelegramAlerter()
-        result = alerter.send_alert("Test message", TelegramAlertLevel.INFO)
+        result = alerter.send_alert("Test message", AlertLevel.INFO)
 
         assert result is True
         mock_asyncio_run.assert_called_once()
@@ -146,7 +146,7 @@ class TestTelegramAlerter:
             alerter = TelegramAlerter()
             alerter.send_alert(
                 "Test message",
-                TelegramAlertLevel.INFO,
+                AlertLevel.INFO,
                 context={"user_id": "123", "action": "test"},
             )
 
@@ -513,7 +513,7 @@ class TestTelegramAlerter:
             result = alerter.send_with_actions(
                 message="System alert",
                 buttons=buttons,
-                level=TelegramAlertLevel.WARNING,
+                level=AlertLevel.WARNING,
             )
             assert result is True
 
@@ -541,7 +541,7 @@ class TestTelegramAlerter:
         mock_bot_class.return_value = mock_bot
 
         alerter = TelegramAlerter()
-        message = alerter._format_message("Test message", TelegramAlertLevel.INFO, {})
+        message = alerter._format_message("Test message", AlertLevel.INFO, {})
 
         assert "2026-" in message  # Contains date
 
@@ -553,7 +553,7 @@ class TestTelegramAlerter:
         mock_bot_class.return_value = mock_bot
 
         alerter = TelegramAlerter()
-        message = alerter._format_message("Test message", TelegramAlertLevel.CRITICAL, {})
+        message = alerter._format_message("Test message", AlertLevel.CRITICAL, {})
 
         assert "CRITICAL" in message
 
@@ -636,10 +636,10 @@ class TestIntegration:
 
             # Test all alert levels
             levels = [
-                TelegramAlertLevel.INFO,
-                TelegramAlertLevel.WARNING,
-                TelegramAlertLevel.ERROR,
-                TelegramAlertLevel.CRITICAL,
+                AlertLevel.INFO,
+                AlertLevel.WARNING,
+                AlertLevel.ERROR,
+                AlertLevel.CRITICAL,
             ]
 
             for level in levels:

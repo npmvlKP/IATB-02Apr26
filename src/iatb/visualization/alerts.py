@@ -1,25 +1,44 @@
 """
 Telegram alert helpers with deterministic rate limiting.
+
+DEPRECATED: This module is deprecated. All alerting functionality has been
+consolidated into iatb.core.observability.alerting. Please import from there instead.
+
+Migration guide:
+- AlertType -> iatb.core.observability.alerting.AlertType
+- TelegramAlertDispatcher -> iatb.core.observability.alerting.TelegramAlerter
 """
 
-import importlib
+import warnings
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
 from iatb.core.exceptions import ConfigError
 
+warnings.warn(
+    "iatb.visualization.alerts is deprecated. "
+    "Please import from iatb.core.observability.alerting instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 AlertSender = Callable[[str, str], None]
 
 
 class AlertType(StrEnum):
+    """Alert type categories."""
+
     BREAKOUT = "breakout"
     REGIME_CHANGE = "regime_change"
     KILL_SWITCH = "kill_switch"
 
 
 class TelegramAlertDispatcher:
-    """Rate-limited Telegram alert sender (default 20 messages per minute)."""
+    """Rate-limited Telegram alert sender (default 20 messages per minute).
+
+    DEPRECATED: Use iatb.core.observability.alerting.TelegramAlerter instead.
+    """
 
     def __init__(
         self,
@@ -60,7 +79,7 @@ class TelegramAlertDispatcher:
 
 def _build_sender(bot_token: str) -> AlertSender:
     try:
-        telegram = importlib.import_module("telegram")
+        telegram = __import__("telegram")
     except ModuleNotFoundError as exc:
         msg = "python-telegram-bot dependency is required for alerts"
         raise ConfigError(msg) from exc

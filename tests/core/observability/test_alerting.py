@@ -68,6 +68,15 @@ class TestAlertLevel:
         assert AlertLevel.CRITICAL == "CRITICAL"
 
 
+class TestAlertType:
+    def test_values(self) -> None:
+        from iatb.core.observability.alerting import AlertType
+
+        assert AlertType.BREAKOUT == "breakout"
+        assert AlertType.REGIME_CHANGE == "regime_change"
+        assert AlertType.KILL_SWITCH == "kill_switch"
+
+
 class TestAlertThrottler:
     def test_first_send_allowed(self) -> None:
         from iatb.core.observability.alerting import AlertThrottler
@@ -281,3 +290,83 @@ class TestGetMultiChannelManager:
             assert m1 is m2
         finally:
             _mod._multi_channel_manager = original
+
+
+class TestTelegramAlerterRateLimiting:
+    def test_rate_limiting_enforced(self) -> None:
+        from iatb.core.observability.alerting import TelegramAlerter
+
+        sent: list[str] = []
+        alerter = TelegramAlerter(
+            bot_token="test-token",
+            chat_id="test-chat",
+            enabled=True,
+            max_per_minute=2,
+        )
+        alerter._send_message_async = lambda text, **kwargs: sent.append(text)
+
+        assert alerter.send_alert("msg-1")
+        assert alerter.send_alert("msg-2")
+        assert not alerter.send_alert("msg-3")
+        assert len(sent) == 2
+
+    def test_rate_limiting_resets_after_minute(self) -> None:
+        from datetime import timedelta
+
+        from iatb.core.observability.alerting import TelegramAlerter
+
+        sent: list[str] = []
+        alerter = TelegramAlerter(
+            bot_token="test-token",
+            chat_id="test-chat",
+            enabled=True,
+            max_per_minute=2,
+        )
+        alerter._send_message_async = lambda text, **kwargs: sent.append(text)
+
+        assert alerter.send_alert("msg-1")
+        assert alerter.send_alert("msg-2")
+        assert not alerter.send_alert("msg-3")
+
+        alerter._sent_timestamps = [ts - timedelta(minutes=2) for ts in alerter._sent_timestamps]
+        assert alerter.send_alert("msg-4")
+        assert len(sent) == 3
+
+
+class TestTelegramAlerterKillSwitchAlert:
+    def test_send_kill_switch_alert(self) -> None:
+        from datetime import UTC, datetime
+
+        from iatb.core.observability.alerting import TelegramAlerter
+
+        sent: list[str] = []
+        alerter = TelegramAlerter(
+            bot_token="test-token",
+            chat_id="test-chat",
+            enabled=True,
+        )
+        alerter._send_message_async = lambda text, **kwargs: sent.append(text)
+
+        now = datetime(2026, 1, 5, 10, 0, tzinfo=UTC)
+        result = alerter.send_kill_switch_alert("test reason", now)
+
+        assert result is True
+        assert len(sent) == 1
+        assert "KILL SWITCH ENGAGED" in sent[0]
+        assert "test reason" in sent[0]
+
+    def test_send_kill_switch_alert_rejects_naive_datetime(self) -> None:
+        from datetime import datetime
+
+        from iatb.core.observability.alerting import TelegramAlerter
+
+        alerter = TelegramAlerter(
+            bot_token="test-token",
+            chat_id="test-chat",
+            enabled=True,
+        )
+
+        naive = datetime(2026, 1, 5, 10, 0)  # noqa: DTZ001
+        result = alerter.send_kill_switch_alert("test", naive)
+
+        assert result is False

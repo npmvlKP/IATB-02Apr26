@@ -22,20 +22,6 @@ from iatb.core.observability.logging_config import get_logger
 _LOGGER = get_logger(__name__)
 
 
-class TelegramAlertLevel:
-    """Alert severity levels."""
-
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
-
-
-# =============================================================================
-# MULTI-CHANNEL ALERTING SYSTEM
-# =============================================================================
-
-
 class AlertLevel:
     """Standardized alert severity levels."""
 
@@ -43,6 +29,19 @@ class AlertLevel:
     WARNING = "WARNING"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
+
+
+class AlertType:
+    """Alert type categories."""
+
+    BREAKOUT = "breakout"
+    REGIME_CHANGE = "regime_change"
+    KILL_SWITCH = "kill_switch"
+
+
+# =============================================================================
+# MULTI-CHANNEL ALERTING SYSTEM
+# =============================================================================
 
 
 @dataclass
@@ -91,6 +90,7 @@ class TelegramAlerter(AlertChannel):
         bot_token: str | None = None,
         chat_id: str | None = None,
         enabled: bool = True,
+        max_per_minute: int = 20,
     ) -> None:
         """Initialize Telegram alerter.
 
@@ -100,6 +100,7 @@ class TelegramAlerter(AlertChannel):
             chat_id: Telegram chat ID to send alerts to. If None,
                 reads from TELEGRAM_CHAT_ID env var.
             enabled: Whether alerts are enabled.
+            max_per_minute: Maximum messages per minute (rate limiting).
         """
         super().__init__(enabled)
         self.bot_token = bot_token or os.getenv(
@@ -110,6 +111,8 @@ class TelegramAlerter(AlertChannel):
         )
         self.enabled = enabled and bool(self.bot_token and self.chat_id)
         self.bot: Bot | None = None
+        self._max_per_minute = max_per_minute
+        self._sent_timestamps: list[datetime] = []
 
         if self.enabled and self.bot_token:
             self.bot = Bot(token=self.bot_token)
@@ -161,7 +164,7 @@ class TelegramAlerter(AlertChannel):
     def send_alert(
         self,
         message: str,
-        level: str = TelegramAlertLevel.INFO,
+        level: str = AlertLevel.INFO,
         context: dict[str, Any] | None = None,
     ) -> bool:
         """Send an alert message to Telegram.
@@ -178,8 +181,18 @@ class TelegramAlerter(AlertChannel):
             return False
 
         try:
+            now_utc = datetime.now(UTC)
+            self._sent_timestamps = _keep_recent(self._sent_timestamps, now_utc)
+            if len(self._sent_timestamps) >= self._max_per_minute:
+                _LOGGER.warning(
+                    "Telegram alert rate-limited: %d messages in last minute",
+                    len(self._sent_timestamps),
+                )
+                return False
+
             formatted_message = self._format_message(message, level, context)
             self._send_message_async(text=formatted_message)
+            self._sent_timestamps.append(now_utc)
             return True
         except Exception as exc:
             _LOGGER.error("Unexpected error sending Telegram alert: %s", exc)
@@ -217,7 +230,7 @@ class TelegramAlerter(AlertChannel):
 *Price:* {price:.2f}
 *Time:* {timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")}
 """
-        return self.send_alert(message, TelegramAlertLevel.INFO)
+        return self.send_alert(message, AlertLevel.INFO)
 
     def send_error_alert(
         self,
@@ -244,7 +257,7 @@ class TelegramAlerter(AlertChannel):
         if exc_type:
             message += f"*Type:* {exc_type}\n"
 
-        return self.send_alert(message, TelegramAlertLevel.ERROR)
+        return self.send_alert(message, AlertLevel.ERROR)
 
     def send_health_alert(
         self,
@@ -271,7 +284,7 @@ class TelegramAlerter(AlertChannel):
         if details:
             message += f"*Details:* {details}\n"
 
-        level = TelegramAlertLevel.CRITICAL if status == "DOWN" else TelegramAlertLevel.WARNING
+        level = AlertLevel.CRITICAL if status == "DOWN" else AlertLevel.WARNING
 
         return self.send_alert(message, level)
 
@@ -302,7 +315,7 @@ class TelegramAlerter(AlertChannel):
 
         message += f"*Open Positions:* {open_positions}"
 
-        return self.send_alert(message, TelegramAlertLevel.INFO)
+        return self.send_alert(message, AlertLevel.INFO)
 
     def send_model_alert(
         self,
@@ -329,7 +342,7 @@ class TelegramAlerter(AlertChannel):
         if details:
             message += f"*Details:* {details}\n"
 
-        level = TelegramAlertLevel.ERROR if status != "AVAILABLE" else TelegramAlertLevel.INFO
+        level = AlertLevel.ERROR if status != "AVAILABLE" else AlertLevel.INFO
 
         return self.send_alert(message, level)
 
@@ -358,7 +371,7 @@ class TelegramAlerter(AlertChannel):
 
 Immediate attention required. Check connection and logs.
 """
-        return self.send_alert(message, TelegramAlertLevel.CRITICAL)
+        return self.send_alert(message, AlertLevel.CRITICAL)
 
     def send_fallback_source_alert(
         self,
@@ -387,7 +400,7 @@ Immediate attention required. Check connection and logs.
 
         message += "\nSystem is operating on fallback source."
 
-        return self.send_alert(message, TelegramAlertLevel.WARNING)
+        return self.send_alert(message, AlertLevel.WARNING)
 
     def send_token_expiry_alert(
         self,
@@ -411,9 +424,7 @@ Immediate attention required. Check connection and logs.
 
 Action required: Refresh token immediately to avoid service disruption.
 """
-        level = (
-            TelegramAlertLevel.CRITICAL if minutes_remaining <= 5 else TelegramAlertLevel.WARNING
-        )
+        level = AlertLevel.CRITICAL if minutes_remaining <= 5 else AlertLevel.WARNING
 
         return self.send_alert(message, level)
 
@@ -421,7 +432,7 @@ Action required: Refresh token immediately to avoid service disruption.
         self,
         message: str,
         buttons: Sequence[tuple[str, str]] | None = None,
-        level: str = TelegramAlertLevel.INFO,
+        level: str = AlertLevel.INFO,
     ) -> bool:
         """Send an alert with action buttons.
 
@@ -457,6 +468,35 @@ Action required: Refresh token immediately to avoid service disruption.
             _LOGGER.error("Unexpected error sending Telegram alert: %s", exc)
             return False
 
+    def send_kill_switch_alert(
+        self,
+        reason: str,
+        engaged_utc: datetime,
+    ) -> bool:
+        """Send a kill switch engagement alert.
+
+        Args:
+            reason: Reason for kill switch engagement.
+            engaged_utc: UTC timestamp when kill switch was engaged.
+
+        Returns:
+            True if alert was sent successfully, False otherwise.
+        """
+        if engaged_utc.tzinfo != UTC:
+            _LOGGER.error("engaged_utc must be timezone-aware UTC datetime")
+            return False
+
+        message = f"""
+*🚨 KILL SWITCH ENGAGED 🚨*
+
+*Reason:* {reason}
+*Engaged At:* {engaged_utc.strftime("%Y-%m-%d %H:%M:%S UTC")}
+
+All open orders have been cancelled. New orders are blocked.
+Manual disengagement required to resume trading.
+"""
+        return self.send_alert(message, AlertLevel.CRITICAL)
+
     def _format_message(
         self,
         message: str,
@@ -474,10 +514,10 @@ Action required: Refresh token immediately to avoid service disruption.
             Formatted message.
         """
         level_emoji = {
-            TelegramAlertLevel.INFO: "INFO",
-            TelegramAlertLevel.WARNING: "WARNING",
-            TelegramAlertLevel.ERROR: "ERROR",
-            TelegramAlertLevel.CRITICAL: "CRITICAL",
+            AlertLevel.INFO: "INFO",
+            AlertLevel.WARNING: "WARNING",
+            AlertLevel.ERROR: "ERROR",
+            AlertLevel.CRITICAL: "CRITICAL",
         }.get(level, "INFO")
 
         formatted = f"""
@@ -504,6 +544,20 @@ Action required: Refresh token immediately to avoid service disruption.
             True if sent successfully, False otherwise.
         """
         return self.send_alert(alert.message, alert.level, alert.context)
+
+
+def _keep_recent(history: list[datetime], now_utc: datetime) -> list[datetime]:
+    """Keep only timestamps from the last minute.
+
+    Args:
+        history: List of timestamps.
+        now_utc: Current UTC datetime.
+
+    Returns:
+        Filtered list of timestamps from the last minute.
+    """
+    threshold = now_utc - timedelta(minutes=1)
+    return [stamp for stamp in history if stamp >= threshold]
 
 
 class EmailChannel(AlertChannel):

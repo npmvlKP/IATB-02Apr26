@@ -1,4 +1,5 @@
 import random
+import warnings
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -6,7 +7,10 @@ import numpy as np
 import pytest
 import torch
 from iatb.core.exceptions import ConfigError
-from iatb.visualization.alerts import AlertType, TelegramAlertDispatcher
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    from iatb.visualization.alerts import AlertType, TelegramAlertDispatcher
 
 # Set deterministic seeds for reproducibility
 random.seed(42)

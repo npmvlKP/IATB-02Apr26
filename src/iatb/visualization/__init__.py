@@ -2,7 +2,8 @@
 Visualization and operator dashboard utilities.
 """
 
-from iatb.visualization.alerts import AlertType, TelegramAlertDispatcher
+from iatb.core.observability.alerting import AlertType
+from iatb.visualization.alerts import TelegramAlertDispatcher
 from iatb.visualization.breakout_scanner import (
     BreakoutCandidate,
     FactorHealth,

@@ -35,7 +35,8 @@ class TestKillSwitchInit:
 
     def test_init_without_callback(self, mock_executor):
         ks = KillSwitch(executor=mock_executor)
-        assert ks._on_engage is None
+        assert ks._on_engage is not None
+        assert callable(ks._on_engage)
 
 
 class TestEngage:
@@ -145,3 +146,39 @@ class TestStateProperty:
             reason="test reason",
             triggered_utc=now,
         )
+
+
+class TestDefaultEngageCallback:
+    def test_default_callback_sends_alert(self, mock_executor):
+        from unittest.mock import patch
+
+        from iatb.risk.kill_switch import KillSwitch
+
+        now = datetime(2026, 1, 5, 10, 0, tzinfo=UTC)
+
+        with patch("iatb.risk.kill_switch.get_alerter") as mock_get_alerter:
+            mock_alerter = MagicMock()
+            mock_get_alerter.return_value = mock_alerter
+
+            ks = KillSwitch(executor=mock_executor)
+            ks.engage("test reason", now)
+
+            mock_alerter.send_kill_switch_alert.assert_called_once_with("test reason", now)
+
+    def test_default_callback_handles_errors(self, mock_executor):
+        from unittest.mock import patch
+
+        from iatb.risk.kill_switch import KillSwitch
+
+        now = datetime(2026, 1, 5, 10, 0, tzinfo=UTC)
+
+        with patch("iatb.risk.kill_switch.get_alerter") as mock_get_alerter:
+            mock_alerter = MagicMock()
+            mock_alerter.send_kill_switch_alert.side_effect = Exception("test error")
+            mock_get_alerter.return_value = mock_alerter
+
+            ks = KillSwitch(executor=mock_executor)
+            state = ks.engage("test reason", now)
+
+            assert state.engaged is True
+            assert state.reason == "test reason"
