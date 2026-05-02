@@ -882,10 +882,33 @@ class KiteWebSocketProvider(DataProvider):
             source="kite-ws",
         )
 
+    def _resolve_exchange_from_token(self, instrument_token: object) -> Exchange:
+        """Resolve exchange from instrument token using instrument_master.
+
+        Args:
+            instrument_token: The instrument token to resolve.
+
+        Returns:
+            Exchange enum value (defaults to NSE if not found).
+        """
+        exchange = Exchange.NSE  # Default fallback
+        if self._instrument_master:
+            try:
+                token_int = (
+                    int(instrument_token) if isinstance(instrument_token, int | str) else None
+                )
+                if token_int:
+                    instrument = self._instrument_master.get_instrument_by_token(token_int)
+                    if instrument:
+                        exchange = instrument.exchange
+            except (ValueError, TypeError):
+                pass
+        return exchange
+
     def _parse_tick(self, tick_data: dict[str, object]) -> Tick | None:
         """Parse raw Kite tick data into normalized Tick.
 
-        Uses SymbolTokenResolver to resolve exchange from instrument token.
+        Uses instrument_master to resolve exchange from instrument token.
         """
         try:
             instrument_token = tick_data.get("instrument_token")
@@ -903,22 +926,7 @@ class KiteWebSocketProvider(DataProvider):
             if exchange_ts and isinstance(exchange_ts, datetime):
                 timestamp = exchange_ts if exchange_ts.tzinfo else exchange_ts.replace(tzinfo=UTC)
 
-            # Resolve exchange from instrument token if instrument_master is available
-            exchange = Exchange.NSE  # Default fallback
-            if self._instrument_master:
-                try:
-                    token_int = (
-                        int(instrument_token) if isinstance(instrument_token, int | str) else None
-                    )
-                    if token_int:
-                        # Look up instrument by token to get exchange
-                        instrument = self._instrument_master.get_instrument_by_token(token_int)
-                        if instrument:
-                            exchange = instrument.exchange
-                except (ValueError, TypeError):
-                    pass
-
-            # Use instrument token as symbol for now
+            exchange = self._resolve_exchange_from_token(instrument_token)
             symbol = str(instrument_token)
 
             return Tick(
