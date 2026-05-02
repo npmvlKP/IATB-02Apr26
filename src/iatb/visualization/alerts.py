@@ -7,14 +7,20 @@ consolidated into iatb.core.observability.alerting. Please import from there ins
 Migration guide:
 - AlertType -> iatb.core.observability.alerting.AlertType
 - TelegramAlertDispatcher -> iatb.core.observability.alerting.TelegramAlerter
+- AlertLevel -> iatb.core.observability.alerting.AlertLevel
 """
 
 import warnings
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
-from enum import StrEnum
+from datetime import UTC, datetime
 
 from iatb.core.exceptions import ConfigError
+from iatb.core.observability.alerting import (
+    AlertLevel,
+    AlertType,
+    TelegramAlerter,
+    _keep_recent,
+)
 
 warnings.warn(
     "iatb.visualization.alerts is deprecated. "
@@ -24,14 +30,6 @@ warnings.warn(
 )
 
 AlertSender = Callable[[str, str], None]
-
-
-class AlertType(StrEnum):
-    """Alert type categories."""
-
-    BREAKOUT = "breakout"
-    REGIME_CHANGE = "regime_change"
-    KILL_SWITCH = "kill_switch"
 
 
 class TelegramAlertDispatcher:
@@ -95,6 +93,4 @@ def _build_sender(bot_token: str) -> AlertSender:
     return lambda chat_id, text: send_message(chat_id=chat_id, text=text)
 
 
-def _keep_recent(history: list[datetime], now_utc: datetime) -> list[datetime]:
-    threshold = now_utc - timedelta(minutes=1)
-    return [stamp for stamp in history if stamp >= threshold]
+__all__ = ["AlertType", "AlertLevel", "TelegramAlertDispatcher", "TelegramAlerter"]

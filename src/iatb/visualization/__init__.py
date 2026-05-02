@@ -2,8 +2,7 @@
 Visualization and operator dashboard utilities.
 """
 
-from iatb.core.observability.alerting import AlertType
-from iatb.visualization.alerts import TelegramAlertDispatcher
+from iatb.core.observability.alerting import AlertLevel, AlertType, TelegramAlerter
 from iatb.visualization.breakout_scanner import (
     BreakoutCandidate,
     FactorHealth,
@@ -35,6 +34,7 @@ from iatb.visualization.portfolio_view import build_portfolio_snapshot
 
 __all__ = [
     "ALL_TABS",
+    "AlertLevel",
     "AlertType",
     "BreakoutCandidate",
     "FactorHealth",
@@ -43,7 +43,7 @@ __all__ = [
     "InstrumentHealthMatrix",
     "REQUIRED_MARKET_TABS",
     "ScannerHealthResult",
-    "TelegramAlertDispatcher",
+    "TelegramAlerter",
     "build_candlestick_chart",
     "build_dashboard_payload",
     "build_instrument_health_matrix",

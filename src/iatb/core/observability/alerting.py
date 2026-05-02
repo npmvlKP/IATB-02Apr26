@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
+from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
 
@@ -22,7 +23,7 @@ from iatb.core.observability.logging_config import get_logger
 _LOGGER = get_logger(__name__)
 
 
-class AlertLevel:
+class AlertLevel(StrEnum):
     """Standardized alert severity levels."""
 
     INFO = "INFO"
@@ -31,7 +32,7 @@ class AlertLevel:
     CRITICAL = "CRITICAL"
 
 
-class AlertType:
+class AlertType(StrEnum):
     """Alert type categories."""
 
     BREAKOUT = "breakout"
@@ -178,6 +179,10 @@ class TelegramAlerter(AlertChannel):
             True if alert was sent successfully, False otherwise.
         """
         if not self.enabled or not self.bot:
+            return False
+
+        if not message.strip():
+            _LOGGER.error("Telegram alert message cannot be empty")
             return False
 
         try:
@@ -513,12 +518,15 @@ Manual disengagement required to resume trading.
         Returns:
             Formatted message.
         """
-        level_emoji = {
+        level_key = (
+            AlertLevel(level) if level in AlertLevel.__members__.values() else AlertLevel.INFO
+        )
+        level_emoji: str = {
             AlertLevel.INFO: "INFO",
             AlertLevel.WARNING: "WARNING",
             AlertLevel.ERROR: "ERROR",
             AlertLevel.CRITICAL: "CRITICAL",
-        }.get(level, "INFO")
+        }.get(level_key, "INFO")
 
         formatted = f"""
 *{level_emoji} Alert*

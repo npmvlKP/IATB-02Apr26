@@ -67,6 +67,13 @@ class TestAlertLevel:
         assert AlertLevel.ERROR == "ERROR"
         assert AlertLevel.CRITICAL == "CRITICAL"
 
+    def test_is_strenum(self) -> None:
+        from enum import StrEnum
+
+        from iatb.core.observability.alerting import AlertLevel
+
+        assert issubclass(AlertLevel, StrEnum)
+
 
 class TestAlertType:
     def test_values(self) -> None:
@@ -75,6 +82,13 @@ class TestAlertType:
         assert AlertType.BREAKOUT == "breakout"
         assert AlertType.REGIME_CHANGE == "regime_change"
         assert AlertType.KILL_SWITCH == "kill_switch"
+
+    def test_is_strenum(self) -> None:
+        from enum import StrEnum
+
+        from iatb.core.observability.alerting import AlertType
+
+        assert issubclass(AlertType, StrEnum)
 
 
 class TestAlertThrottler:
@@ -332,6 +346,17 @@ class TestTelegramAlerterRateLimiting:
         assert alerter.send_alert("msg-4")
         assert len(sent) == 3
 
+    def test_empty_message_rejected(self) -> None:
+        from iatb.core.observability.alerting import TelegramAlerter
+
+        alerter = TelegramAlerter(
+            bot_token="test-token",
+            chat_id="test-chat",
+            enabled=True,
+        )
+        assert alerter.send_alert("") is False
+        assert alerter.send_alert("   ") is False
+
 
 class TestTelegramAlerterKillSwitchAlert:
     def test_send_kill_switch_alert(self) -> None:
@@ -370,3 +395,38 @@ class TestTelegramAlerterKillSwitchAlert:
         result = alerter.send_kill_switch_alert("test", naive)
 
         assert result is False
+
+
+class TestConsolidatedImports:
+    def test_alert_level_importable_from_deprecated_module(self) -> None:
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from iatb.visualization.alerts import AlertLevel as VizAlertLevel
+
+        from iatb.core.observability.alerting import AlertLevel
+
+        assert VizAlertLevel is AlertLevel
+
+    def test_alert_type_importable_from_deprecated_module(self) -> None:
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from iatb.visualization.alerts import AlertType as VizAlertType
+
+        from iatb.core.observability.alerting import AlertType
+
+        assert VizAlertType is AlertType
+
+    def test_telegram_alerter_importable_from_deprecated_module(self) -> None:
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from iatb.visualization.alerts import TelegramAlerter as VizAlerter
+
+        from iatb.core.observability.alerting import TelegramAlerter
+
+        assert VizAlerter is TelegramAlerter
