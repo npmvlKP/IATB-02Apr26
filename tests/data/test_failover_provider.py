@@ -738,6 +738,129 @@ class TestFailoverProviderSourceTagging:
             assert bars[0].source == "kiteconnect"
 
 
+class TestCircuitBreakerEdgeCases:
+    """Tests for circuit breaker edge cases and error handling."""
+
+    def test_circuit_breaker_invalid_cooldown_raises_value_error(self) -> None:
+        """Test that CircuitBreaker raises ValueError for invalid cooldown."""
+        with pytest.raises(ValueError, match="cooldown_seconds must be positive"):
+            CircuitBreaker(provider_name="test", cooldown_seconds=0.0)
+
+    def test_circuit_breaker_invalid_failure_threshold_raises_value_error(self) -> None:
+        """Test that CircuitBreaker raises ValueError for invalid failure_threshold."""
+        with pytest.raises(ValueError, match="failure_threshold must be positive"):
+            CircuitBreaker(provider_name="test", failure_threshold=0)
+
+    def test_circuit_breaker_properties(self) -> None:
+        """Test CircuitBreaker property accessors."""
+        circuit = CircuitBreaker(
+            provider_name="test_provider",
+            cooldown_seconds=60.0,
+            failure_threshold=3,
+        )
+        assert circuit.provider_name == "test_provider"
+        assert circuit.cooldown_seconds == 60.0
+        assert circuit.failure_count == 0
+        assert circuit.last_failure_time is None
+
+    def test_half_open_failure_opens_circuit(self) -> None:
+        """Test that failure in HALF_OPEN state opens circuit."""
+        circuit = CircuitBreaker(
+            provider_name="test",
+            cooldown_seconds=30.0,
+            failure_threshold=2,
+        )
+        # Open circuit
+        circuit.record_failure()
+        circuit.record_failure()
+        assert circuit.state == CircuitState.OPEN
+
+        # Set last failure time in past to trigger HALF_OPEN
+        from datetime import timedelta
+
+        circuit._last_failure_time = datetime.now(UTC) - timedelta(seconds=31)
+        # Check availability to transition to HALF_OPEN
+        assert circuit.is_available()
+        assert circuit.state == CircuitState.HALF_OPEN
+
+        # Record failure in HALF_OPEN should open circuit
+        circuit.record_failure()
+        assert circuit.state == CircuitState.OPEN
+        assert not circuit.is_available()
+
+    def test_half_open_success_closes_circuit(self) -> None:
+        """Test that success in HALF_OPEN state closes circuit."""
+        circuit = CircuitBreaker(
+            provider_name="test",
+            cooldown_seconds=30.0,
+            failure_threshold=2,
+        )
+        # Open circuit
+        circuit.record_failure()
+        circuit.record_failure()
+        assert circuit.state == CircuitState.OPEN
+
+        # Set last failure time in past to trigger HALF_OPEN
+        from datetime import timedelta
+
+        circuit._last_failure_time = datetime.now(UTC) - timedelta(seconds=31)
+        # Check availability to transition to HALF_OPEN
+        assert circuit.is_available()
+        assert circuit.state == CircuitState.HALF_OPEN
+
+        # Record success in HALF_OPEN should close circuit
+        circuit.record_success()
+        assert circuit.state == CircuitState.CLOSED
+        assert circuit.failure_count == 0
+        assert circuit.last_failure_time is None
+
+    def test_half_open_state_is_available(self) -> None:
+        """Test that HALF_OPEN state is considered available."""
+        circuit = CircuitBreaker(
+            provider_name="test",
+            cooldown_seconds=30.0,
+            failure_threshold=2,
+        )
+        # Open circuit
+        circuit.record_failure()
+        circuit.record_failure()
+        assert circuit.state == CircuitState.OPEN
+
+        # Set last failure time in past to trigger HALF_OPEN
+        from datetime import timedelta
+
+        circuit._last_failure_time = datetime.now(UTC) - timedelta(seconds=31)
+        # Transition to HALF_OPEN
+        assert circuit.is_available()
+        assert circuit.state == CircuitState.HALF_OPEN
+
+        # HALF_OPEN should still be available
+        assert circuit.is_available()
+
+    def test_open_state_with_none_last_failure_time(self) -> None:
+        """Test that OPEN state with None last_failure_time is available."""
+        circuit = CircuitBreaker(provider_name="test")
+        # Manually set state to OPEN without setting last_failure_time
+        circuit._state = CircuitState.OPEN
+        assert circuit.is_available()
+
+
+class TestFailoverProviderEdgeCases:
+    """Tests for FailoverProvider edge cases."""
+
+    def test_negative_failure_threshold_raises_error(self) -> None:
+        """Test that negative failure_threshold raises ConfigError."""
+        provider = MockProvider("test")
+        with pytest.raises(ConfigError, match="failure_threshold must be positive"):
+            FailoverProvider(providers=[provider], failure_threshold=-1)
+
+    def test_zero_failure_threshold_raises_error(self) -> None:
+        """Test that zero failure_threshold raises ConfigError."""
+        provider = MockProvider("test")
+        with pytest.raises(ConfigError, match="failure_threshold must be positive"):
+            FailoverProvider(providers=[provider], failure_threshold=0)
+
+
 class TestFailoverProviderNaming:
     """Tests for provider name extraction logic."""
 
