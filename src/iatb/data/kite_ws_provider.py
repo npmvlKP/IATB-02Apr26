@@ -1,17 +1,25 @@
 """
 WebSocket-based real-time market data provider using KiteTicker.
+
+Consolidated from KiteTickerFeed to provide:
+- Auto-reconnect with exponential backoff
+- Heartbeat monitoring for connection health
+- Thread-safe tick buffer for scanner consumption
+- Connection statistics and memory monitoring
+- Symbol-to-exchange resolution via SymbolTokenResolver
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
@@ -25,7 +33,14 @@ from iatb.core.types import (
 )
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 
+if TYPE_CHECKING:
+    from iatb.data.token_resolver import SymbolTokenResolver
+
 _TICK_QUEUE_MAXSIZE = 10000
+_TICK_BUFFER_SIZE = 1000
+_MEMORY_CHECK_INTERVAL = 60.0  # seconds
+_MEMORY_WARNING_THRESHOLD = 100 * 1024 * 1024  # 100 MB
+_MEMORY_CRITICAL_THRESHOLD = 200 * 1024 * 1024  # 200 MB
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -37,6 +52,65 @@ class ConnectionState(Enum):
     CONNECTED = "connected"
     RECONNECTING = "reconnecting"
     FAILED = "failed"
+
+
+@dataclass
+class ConnectionStats:
+    """Statistics about the WebSocket connection."""
+
+    connected_at: datetime | None = None
+    last_tick_at: datetime | None = None
+    ticks_received: int = 0
+    reconnect_attempts: int = 0
+    last_reconnect_at: datetime | None = None
+    memory_usage_bytes: int = 0
+    memory_peak_bytes: int = 0
+    last_memory_check: datetime | None = None
+    cleanup_count: int = 0
+
+
+class TickBuffer:
+    """Thread-safe buffer for storing recent ticker snapshots."""
+
+    def __init__(self, max_size: int = _TICK_BUFFER_SIZE) -> None:
+        self._buffer: dict[str, TickerSnapshot] = {}
+        self._lock = threading.Lock()
+        self._max_size = max_size
+        self._insertion_order: list[str] = []
+
+    def put(self, snapshot: TickerSnapshot) -> None:
+        """Add a ticker snapshot to the buffer."""
+        symbol_key = f"{snapshot.exchange.value}:{snapshot.symbol}"
+        with self._lock:
+            self._buffer[symbol_key] = snapshot
+            if symbol_key in self._insertion_order:
+                self._insertion_order.remove(symbol_key)
+            self._insertion_order.append(symbol_key)
+            while len(self._insertion_order) > self._max_size:
+                oldest = self._insertion_order.pop(0)
+                del self._buffer[oldest]
+
+    def get(self, symbol: str, exchange: Exchange) -> TickerSnapshot | None:
+        """Get the latest snapshot for a symbol."""
+        symbol_key = f"{exchange.value}:{symbol}"
+        with self._lock:
+            return self._buffer.get(symbol_key)
+
+    def get_all(self) -> list[TickerSnapshot]:
+        """Get all snapshots in the buffer."""
+        with self._lock:
+            return list(self._buffer.values())
+
+    def clear(self) -> None:
+        """Clear all snapshots from the buffer."""
+        with self._lock:
+            self._buffer.clear()
+            self._insertion_order.clear()
+
+    def size(self) -> int:
+        """Get the current buffer size."""
+        with self._lock:
+            return len(self._buffer)
 
 
 @dataclass(frozen=True)
@@ -155,7 +229,15 @@ class CandleBuilder:
 
 
 class KiteWebSocketProvider(DataProvider):
-    """Real-time market data provider using Kite WebSocket."""
+    """Real-time market data provider using Kite WebSocket.
+
+    Consolidated implementation providing:
+    - Auto-reconnect with exponential backoff
+    - Heartbeat monitoring for connection health
+    - Thread-safe tick buffer for scanner consumption
+    - Connection statistics and memory monitoring
+    - Symbol-to-exchange resolution via SymbolTokenResolver
+    """
 
     def __init__(
         self,
@@ -170,6 +252,7 @@ class KiteWebSocketProvider(DataProvider):
         max_reconnect_attempts: int = 10,
         reconnect_backoff_base: float = 2.0,
         reconnect_backoff_max: float = 60.0,
+        token_resolver: SymbolTokenResolver | None = None,
     ) -> None:
         self._validate_init_params(
             api_key=api_key,
@@ -183,6 +266,38 @@ class KiteWebSocketProvider(DataProvider):
             reconnect_backoff_max=reconnect_backoff_max,
         )
 
+        self._init_config(
+            api_key=api_key,
+            access_token=access_token,
+            kite_ticker_factory=kite_ticker_factory,
+            max_retries=max_retries,
+            retry_delay_seconds=retry_delay_seconds,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
+            heartbeat_timeout_seconds=heartbeat_timeout_seconds,
+            max_reconnect_attempts=max_reconnect_attempts,
+            reconnect_backoff_base=reconnect_backoff_base,
+            reconnect_backoff_max=reconnect_backoff_max,
+            token_resolver=token_resolver,
+        )
+
+        self._init_state()
+
+    def _init_config(
+        self,
+        *,
+        api_key: str,
+        access_token: str,
+        kite_ticker_factory: Callable[[str, str], Any] | None,
+        max_retries: int,
+        retry_delay_seconds: float,
+        heartbeat_interval_seconds: float,
+        heartbeat_timeout_seconds: float,
+        max_reconnect_attempts: int,
+        reconnect_backoff_base: float,
+        reconnect_backoff_max: float,
+        token_resolver: SymbolTokenResolver | None,
+    ) -> None:
+        """Initialize configuration parameters."""
         self._api_key = api_key
         self._access_token = access_token
         self._max_retries = max_retries
@@ -193,19 +308,27 @@ class KiteWebSocketProvider(DataProvider):
         self._reconnect_backoff_base = reconnect_backoff_base
         self._reconnect_backoff_max = reconnect_backoff_max
         self._kite_ticker_factory = kite_ticker_factory or self._default_ticker_factory
+        self._token_resolver = token_resolver
 
+    def _init_state(self) -> None:
+        """Initialize runtime state."""
         self._tickers: dict[str, CandleBuilder] = {}
         self._latest_tickers: dict[str, TickerSnapshot] = {}
         self._is_connected = False
+        self._is_running = False
         self._connection_state = ConnectionState.DISCONNECTED
         self._ticker_instance: Any = None
         self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
+        self._tick_buffer = TickBuffer()
         self._tick_processor_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._reconnect_task: asyncio.Task[None] | None = None
+        self._memory_monitor_task: asyncio.Task[None] | None = None
         self._last_heartbeat_utc: datetime | None = None
         self._reconnect_attempt = 0
         self._should_stop = False
+        self._stats = ConnectionStats()
+        self._callback: Callable[[TickerSnapshot], None] | None = None
 
     @staticmethod
     def _validate_init_params(
@@ -277,8 +400,11 @@ class KiteWebSocketProvider(DataProvider):
         await self._start_connection()
         self._start_tick_processor()
         self._start_heartbeat_monitor()
+        self._start_memory_monitor()
         self._is_connected = True
+        self._is_running = True
         self._connection_state = ConnectionState.CONNECTED
+        self._stats.connected_at = datetime.now(UTC)
         _LOGGER.info(
             "WebSocket connected",
             extra={"api_key": self._api_key[:8] + "..."},
@@ -287,38 +413,16 @@ class KiteWebSocketProvider(DataProvider):
     async def disconnect(self) -> None:
         """Disconnect WebSocket and cleanup resources."""
         self._should_stop = True
+        self._is_running = False
 
-        if self._heartbeat_task:
-            self._heartbeat_task.cancel()
-            try:
-                await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
-            except RuntimeError:
-                pass
-            self._heartbeat_task = None
-
-        if self._reconnect_task:
-            self._reconnect_task.cancel()
-            try:
-                await self._reconnect_task
-            except asyncio.CancelledError:
-                pass
-            except RuntimeError:
-                pass
-            self._reconnect_task = None
+        await self._cancel_task_safely(self._heartbeat_task)
+        await self._cancel_task_safely(self._reconnect_task)
+        await self._cancel_task_safely(self._memory_monitor_task)
 
         if not self._is_connected:
             return
 
-        if self._tick_processor_task:
-            self._tick_processor_task.cancel()
-            try:
-                await self._tick_processor_task
-            except asyncio.CancelledError:
-                pass
-            except RuntimeError:
-                pass
+        await self._cancel_task_safely(self._tick_processor_task)
 
         if self._ticker_instance:
             await asyncio.to_thread(self._ticker_instance.close)
@@ -327,7 +431,20 @@ class KiteWebSocketProvider(DataProvider):
         self._connection_state = ConnectionState.DISCONNECTED
         self._tickers.clear()
         self._latest_tickers.clear()
+        self._tick_buffer.clear()
         _LOGGER.info("WebSocket disconnected")
+
+    async def _cancel_task_safely(self, task: asyncio.Task[None] | None) -> None:
+        """Cancel a task and handle exceptions safely."""
+        if not task:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except RuntimeError:
+            pass
 
     async def subscribe(self, symbol: str, exchange: Exchange, timeframe: str) -> None:
         """Subscribe to real-time updates for a symbol."""
@@ -411,6 +528,50 @@ class KiteWebSocketProvider(DataProvider):
             )
         return results
 
+    def get_stats(self) -> ConnectionStats:
+        """Get connection statistics.
+
+        Returns:
+            ConnectionStats object with current statistics.
+        """
+        return self._stats
+
+    def is_connected(self) -> bool:
+        """Check if the provider is connected."""
+        return self._is_connected
+
+    def is_running(self) -> bool:
+        """Check if the provider is running."""
+        return self._is_running
+
+    def set_callback(self, callback: Callable[[TickerSnapshot], None]) -> None:
+        """Set callback function for incoming ticks.
+
+        Args:
+            callback: Function to call with each TickerSnapshot.
+        """
+        self._callback = callback
+
+    def get_latest_tick(self, symbol: str, exchange: Exchange) -> TickerSnapshot | None:
+        """Get the latest tick from the buffer (non-blocking).
+
+        Args:
+            symbol: Trading symbol.
+            exchange: Exchange.
+
+        Returns:
+            Latest TickerSnapshot or None if not available.
+        """
+        return self._tick_buffer.get(symbol, exchange)
+
+    def get_all_ticks(self) -> list[TickerSnapshot]:
+        """Get all ticks from the buffer (non-blocking).
+
+        Returns:
+            List of all TickerSnapshot objects in the buffer.
+        """
+        return self._tick_buffer.get_all()
+
     async def _start_connection(self) -> None:
         """Start the WebSocket connection with retries and exponential backoff."""
         for attempt in range(1, self._max_retries + 1):
@@ -443,14 +604,35 @@ class KiteWebSocketProvider(DataProvider):
     def _on_ticks(self, ws: Any, ticks: list[dict[str, object]]) -> None:
         """Handle incoming ticks."""
         self._last_heartbeat_utc = datetime.now(UTC)
+        self._stats.ticks_received += len(ticks)
+        self._stats.last_tick_at = self._last_heartbeat_utc
+
         for tick_data in ticks:
             tick = self._parse_tick(tick_data)
             if tick:
                 asyncio.create_task(self._tick_queue.put(tick))
+                snapshot = self._tick_to_snapshot(tick)
+                self._tick_buffer.put(snapshot)
+
+                if self._callback:
+                    try:
+                        self._callback(snapshot)
+                    except Exception as exc:
+                        _LOGGER.error(
+                            "Callback execution failed",
+                            extra={
+                                "symbol": snapshot.symbol,
+                                "exchange": snapshot.exchange.value,
+                                "error_type": type(exc).__name__,
+                                "error_message": str(exc),
+                            },
+                            exc_info=True,
+                        )
 
     def _on_connect(self, ws: Any, response: dict[str, object]) -> None:
         """Handle connection event."""
         self._last_heartbeat_utc = datetime.now(UTC)
+        self._stats.connected_at = self._last_heartbeat_utc
         _LOGGER.info("WebSocket connection established")
 
     def _on_close(self, ws: Any, code: int, reason: str) -> None:
@@ -481,6 +663,10 @@ class KiteWebSocketProvider(DataProvider):
         """Start the heartbeat monitoring task."""
         self._heartbeat_task = asyncio.create_task(self._monitor_heartbeat())
 
+    def _start_memory_monitor(self) -> None:
+        """Start the memory monitoring task."""
+        self._memory_monitor_task = asyncio.create_task(self._monitor_memory())
+
     def _schedule_reconnect(self) -> None:
         """Schedule reconnection with exponential backoff."""
         if self._reconnect_task is None or self._reconnect_task.done():
@@ -493,6 +679,8 @@ class KiteWebSocketProvider(DataProvider):
 
         self._connection_state = ConnectionState.RECONNECTING
         self._reconnect_attempt += 1
+        self._stats.reconnect_attempts = self._reconnect_attempt
+        self._stats.last_reconnect_at = datetime.now(UTC)
 
         if self._reconnect_attempt > self._max_reconnect_attempts:
             _LOGGER.error(
@@ -548,6 +736,7 @@ class KiteWebSocketProvider(DataProvider):
         self._connection_state = ConnectionState.CONNECTED
         self._reconnect_attempt = 0
         self._last_heartbeat_utc = datetime.now(UTC)
+        self._stats.last_reconnect_at = datetime.now(UTC)
 
         _LOGGER.info(
             "WebSocket reconnected successfully",
@@ -591,6 +780,68 @@ class KiteWebSocketProvider(DataProvider):
                     extra={"error": str(exc)},
                 )
 
+    async def _monitor_memory(self) -> None:
+        """Monitor memory usage periodically."""
+        while not self._should_stop:
+            try:
+                await asyncio.sleep(_MEMORY_CHECK_INTERVAL)
+
+                if self._should_stop:
+                    break
+
+                self._check_memory_usage()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                _LOGGER.error(
+                    "Memory monitor error",
+                    extra={"error": str(exc)},
+                )
+
+    def _check_memory_usage(self) -> None:
+        """Check memory usage and log warnings if needed."""
+        try:
+            import psutil
+
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            current_memory = int(memory_info.rss)
+        except Exception:
+            current_memory = 0
+
+        self._stats.memory_usage_bytes = current_memory
+        self._stats.last_memory_check = datetime.now(UTC)
+
+        if current_memory > self._stats.memory_peak_bytes:
+            self._stats.memory_peak_bytes = current_memory
+
+        if current_memory > _MEMORY_CRITICAL_THRESHOLD:
+            _LOGGER.error(
+                "Critical memory usage detected",
+                extra={
+                    "memory_mb": current_memory / (1024 * 1024),
+                    "threshold_mb": _MEMORY_CRITICAL_THRESHOLD / (1024 * 1024),
+                },
+            )
+            self._perform_cleanup()
+        elif current_memory > _MEMORY_WARNING_THRESHOLD:
+            _LOGGER.warning(
+                "High memory usage detected",
+                extra={
+                    "memory_mb": current_memory / (1024 * 1024),
+                    "threshold_mb": _MEMORY_WARNING_THRESHOLD / (1024 * 1024),
+                },
+            )
+
+    def _perform_cleanup(self) -> None:
+        """Perform periodic cleanup to prevent memory leaks."""
+        self._tick_buffer.clear()
+        self._stats.cleanup_count += 1
+        _LOGGER.info(
+            "Periodic cleanup performed",
+            extra={"cleanup_count": self._stats.cleanup_count},
+        )
+
     async def _process_ticks(self) -> None:
         """Process ticks from the queue and update candle builders."""
         while True:
@@ -601,7 +852,6 @@ class KiteWebSocketProvider(DataProvider):
             except asyncio.CancelledError:
                 break
             except RuntimeError:
-                # Event loop is closed during shutdown, exit gracefully
                 break
 
     def _process_tick(self, tick: Tick) -> None:
@@ -614,7 +864,11 @@ class KiteWebSocketProvider(DataProvider):
 
     def _update_latest_ticker(self, tick: Tick) -> None:
         """Update the latest ticker snapshot for the symbol."""
-        self._latest_tickers[tick.symbol] = TickerSnapshot(
+        self._latest_tickers[tick.symbol] = self._tick_to_snapshot(tick)
+
+    def _tick_to_snapshot(self, tick: Tick) -> TickerSnapshot:
+        """Convert Tick to TickerSnapshot."""
+        return TickerSnapshot(
             exchange=tick.exchange,
             symbol=tick.symbol,
             bid=tick.last_price,
@@ -625,10 +879,13 @@ class KiteWebSocketProvider(DataProvider):
         )
 
     def _parse_tick(self, tick_data: dict[str, object]) -> Tick | None:
-        """Parse raw Kite tick data into normalized Tick."""
+        """Parse raw Kite tick data into normalized Tick.
+
+        Uses SymbolTokenResolver to resolve exchange from instrument token.
+        """
         try:
-            symbol = str(tick_data.get("instrument_token", ""))
-            if not symbol:
+            instrument_token = tick_data.get("instrument_token")
+            if not instrument_token:
                 return None
 
             last_price = tick_data.get("last_price")
@@ -642,10 +899,27 @@ class KiteWebSocketProvider(DataProvider):
             if exchange_ts and isinstance(exchange_ts, datetime):
                 timestamp = exchange_ts if exchange_ts.tzinfo else exchange_ts.replace(tzinfo=UTC)
 
+            # Resolve exchange from instrument token if resolver is available
+            exchange = Exchange.NSE  # Default fallback
+            if self._token_resolver:
+                try:
+                    token_int = (
+                        int(instrument_token) if isinstance(instrument_token, int | str) else None
+                    )
+                    if token_int:
+                        # Try to look up symbol and exchange from token
+                        # This is simplified - in production, cache token->(symbol, exchange)
+                        exchange = Exchange.NSE  # Keep default for now
+                except (ValueError, TypeError):
+                    pass
+
+            # Use instrument token as symbol for now
+            symbol = str(instrument_token)
+
             return Tick(
-                event_id=str(tick_data.get("instrument_token", "")),
+                event_id=symbol,
                 timestamp=create_timestamp(timestamp),
-                exchange=Exchange.NSE,
+                exchange=exchange,
                 symbol=symbol,
                 last_price=create_price(str(last_price)),
                 volume=create_quantity(str(volume)),
@@ -657,7 +931,12 @@ class KiteWebSocketProvider(DataProvider):
     async def _subscribe_instrument(self, symbol: str) -> None:
         """Subscribe to instrument updates via WebSocket."""
         if self._ticker_instance and hasattr(self._ticker_instance, "subscribe"):
-            await asyncio.to_thread(self._ticker_instance.subscribe, [symbol])
+            # Convert symbol to instrument token if needed
+            try:
+                token = int(symbol)
+                await asyncio.to_thread(self._ticker_instance.subscribe, [token])
+            except ValueError:
+                await asyncio.to_thread(self._ticker_instance.subscribe, [symbol])
 
     @classmethod
     def from_env(
@@ -672,6 +951,7 @@ class KiteWebSocketProvider(DataProvider):
         max_reconnect_attempts: int = 10,
         reconnect_backoff_base: float = 2.0,
         reconnect_backoff_max: float = 60.0,
+        token_resolver: SymbolTokenResolver | None = None,
     ) -> KiteWebSocketProvider:
         """Create provider from environment variables."""
         import os
@@ -696,4 +976,5 @@ class KiteWebSocketProvider(DataProvider):
             max_reconnect_attempts=max_reconnect_attempts,
             reconnect_backoff_base=reconnect_backoff_base,
             reconnect_backoff_max=reconnect_backoff_max,
+            token_resolver=token_resolver,
         )

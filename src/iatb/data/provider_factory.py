@@ -22,6 +22,7 @@ from iatb.data.failover_provider import FailoverProvider
 from iatb.data.instrument_master import InstrumentMaster
 from iatb.data.jugaad_provider import JugaadProvider
 from iatb.data.kite_provider import KiteProvider
+from iatb.data.kite_ws_provider import KiteWebSocketProvider
 from iatb.data.rate_limiter import CircuitBreaker, RateLimiter, RetryConfig
 from iatb.data.token_resolver import SymbolTokenResolver
 
@@ -36,6 +37,7 @@ class ProviderChain:
     primary_provider: KiteProvider
     fallback_provider: JugaadProvider
     failover_provider: FailoverProvider
+    ws_provider: KiteWebSocketProvider
     token_manager: ZerodhaTokenManager
     token_resolver: SymbolTokenResolver
     instrument_master: InstrumentMaster
@@ -156,7 +158,10 @@ class DataProviderFactory:
             burst_capacity=10,
         )
 
-    def _create_circuit_breaker(self, circuit_breaker: CircuitBreaker | None) -> CircuitBreaker:
+    def _create_circuit_breaker(
+        self,
+        circuit_breaker: CircuitBreaker | None,
+    ) -> CircuitBreaker:
         """Create circuit breaker with default values if not provided."""
         return circuit_breaker or CircuitBreaker(
             failure_threshold=5,
@@ -266,6 +271,33 @@ class DataProviderFactory:
         # If not provided, cache misses will raise ConfigError
         return SymbolTokenResolver(instrument_master=im, kite_provider=kite_provider)
 
+    def create_ws_provider(
+        self,
+        token_manager: ZerodhaTokenManager | None = None,
+        token_resolver: SymbolTokenResolver | None = None,
+    ) -> KiteWebSocketProvider:
+        """Create KiteWebSocketProvider for real-time market data.
+
+        Args:
+            token_manager: Optional ZerodhaTokenManager. If not provided,
+                will create a new one.
+            token_resolver: Optional SymbolTokenResolver for exchange resolution.
+
+        Returns:
+            Configured KiteWebSocketProvider.
+        """
+        tm = token_manager or self.create_token_manager()
+        tr = token_resolver or self.create_token_resolver(
+            kite_provider=self.create_kite_provider(tm),
+        )
+        access_token = self._get_access_token(tm)
+
+        return KiteWebSocketProvider(
+            api_key=self._api_key,
+            access_token=access_token,
+            token_resolver=tr,
+        )
+
     def _create_core_components(
         self,
     ) -> tuple[
@@ -343,10 +375,17 @@ class DataProviderFactory:
             cooldown_seconds,
         )
 
+        # Create WebSocket provider with token resolver
+        ws_provider = self.create_ws_provider(
+            token_manager=token_manager,
+            token_resolver=token_resolver,
+        )
+
         return ProviderChain(
             primary_provider=primary,
             fallback_provider=fallback,
             failover_provider=failover,
+            ws_provider=ws_provider,
             token_manager=token_manager,
             token_resolver=token_resolver,
             instrument_master=instrument_master,
