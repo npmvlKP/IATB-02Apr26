@@ -903,17 +903,18 @@ class KiteWebSocketProvider(DataProvider):
             if exchange_ts and isinstance(exchange_ts, datetime):
                 timestamp = exchange_ts if exchange_ts.tzinfo else exchange_ts.replace(tzinfo=UTC)
 
-            # Resolve exchange from instrument token if resolver is available
+            # Resolve exchange from instrument token if instrument_master is available
             exchange = Exchange.NSE  # Default fallback
-            if self._token_resolver:
+            if self._instrument_master:
                 try:
                     token_int = (
                         int(instrument_token) if isinstance(instrument_token, int | str) else None
                     )
                     if token_int:
-                        # Try to look up symbol and exchange from token
-                        # This is simplified - in production, cache token->(symbol, exchange)
-                        exchange = Exchange.NSE  # Keep default for now
+                        # Look up instrument by token to get exchange
+                        instrument = self._instrument_master.get_instrument_by_token(token_int)
+                        if instrument:
+                            exchange = instrument.exchange
                 except (ValueError, TypeError):
                     pass
 
