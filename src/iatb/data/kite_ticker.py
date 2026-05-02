@@ -38,7 +38,7 @@ warnings.warn(
 )
 
 # Export for backward compatibility
-KiteTickerFeed = KiteWebSocketProvider  # type: ignore[misc]
+KiteTickerFeed = KiteWebSocketProvider
 
 __all__ = [
     "KiteTickerFeed",

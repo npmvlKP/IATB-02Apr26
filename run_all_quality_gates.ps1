@@ -94,7 +94,7 @@ Write-Host "G6: Running pytest with 90% coverage requirement..." -ForegroundColo
 try {
     poetry run pytest --cov=src/iatb --cov-fail-under=90 -x --tb=short
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✓ G6 PASS: Test coverage ≥90%" -ForegroundColor Green
+        Write-Host "✓ G6 PASS: Test coverage >=90%" -ForegroundColor Green
     } else {
         Write-Host "✗ G6 FAIL: Test coverage below 90% or tests failed" -ForegroundColor Red
         $allPassed = $false
@@ -126,7 +126,7 @@ Write-Host ""
 Write-Host "G8: Checking for naive datetime.now()..." -ForegroundColor Yellow
 try {
     $output = python check_datetime_print_fixed.py 2>&1
-    if ($output -match "PASS: No naive datetime.now()") {
+    if ($output -match "PASS: No naive datetime.now\(\)") {
         Write-Host "✓ G8 PASS: No naive datetime.now() found" -ForegroundColor Green
     } else {
         Write-Host "✗ G8 FAIL: Naive datetime.now() found" -ForegroundColor Red
@@ -156,12 +156,12 @@ try {
 }
 Write-Host ""
 
-# G10: Function size ≤50 LOC
-Write-Host "G10: Checking function size (≤50 LOC)..." -ForegroundColor Yellow
+# G10: Function size <=50 LOC
+Write-Host "G10: Checking function size (<=50 LOC)..." -ForegroundColor Yellow
 try {
     $output = python check_g10_function_size.py 2>&1
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✓ G10 PASS: All functions ≤50 LOC" -ForegroundColor Green
+        Write-Host "✓ G10 PASS: All functions <=50 LOC" -ForegroundColor Green
     } else {
         Write-Host "✗ G10 FAIL: Functions exceed 50 LOC" -ForegroundColor Red
         Write-Host $output

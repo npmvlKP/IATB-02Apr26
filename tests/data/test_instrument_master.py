@@ -1,6 +1,6 @@
 """Tests for InstrumentMaster SQLite-cached instrument service."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -46,7 +46,12 @@ def _equity() -> Instrument:
     )
 
 
-def _nifty_ce(strike: str, token: int) -> Instrument:
+def _nifty_ce(strike: str, token: int, expiry: date | None = None) -> Instrument:
+    if expiry is None:
+        # Default to a future date (tomorrow) to ensure tests pass
+        from datetime import UTC, timedelta
+
+        expiry = datetime.now(UTC).date() + timedelta(days=1)
     return Instrument(
         instrument_token=token,
         exchange_token=token,
@@ -58,7 +63,7 @@ def _nifty_ce(strike: str, token: int) -> Instrument:
         lot_size=Decimal("75"),
         tick_size=Decimal("0.05"),
         strike=Decimal(strike),
-        expiry=date(2026, 5, 1),
+        expiry=expiry,
     )
 
 
@@ -117,9 +122,12 @@ class TestGetAvailableTypes:
 
 class TestGetNearestExpiry:
     def test_finds_expiry(self, master: InstrumentMaster) -> None:
-        _insert(master, _nifty_ce("25000", 1001))
+        from datetime import UTC, timedelta
+
+        expected_expiry = datetime.now(UTC).date() + timedelta(days=1)
+        _insert(master, _nifty_ce("25000", 1001, expiry=expected_expiry))
         expiry = master.get_nearest_expiry("NIFTY", Exchange.NSE, InstrumentType.OPTION_CE)
-        assert expiry == date(2026, 5, 1)
+        assert expiry == expected_expiry
 
     def test_no_expiry_raises(self, master: InstrumentMaster) -> None:
         with pytest.raises(ConfigError, match="No expiry found"):
