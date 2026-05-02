@@ -365,75 +365,93 @@ class TestCircuitBreaker:
         assert circuit.is_available()
 
     def test_record_failure_opens_circuit(self) -> None:
-        """Test that recording failure opens circuit."""
-        circuit = CircuitBreaker(provider_name="test")
+        """Test that recording failure opens circuit after threshold."""
+        circuit = CircuitBreaker(provider_name="test", failure_threshold=3)
+        # Record 3 failures to reach threshold
+        circuit.record_failure()
+        circuit.record_failure()
         circuit.record_failure()
 
         assert circuit.state == CircuitState.OPEN
-        assert circuit.failure_count == 1
+        assert circuit.failure_count == 3
         assert circuit.last_failure_time is not None
         assert not circuit.is_available()
 
     def test_record_success_closes_circuit(self) -> None:
-        """Test that recording success closes circuit."""
+        """Test that recording success resets failure count when circuit is CLOSED."""
         circuit = CircuitBreaker(provider_name="test")
+        # Record failure (circuit remains CLOSED with default threshold of 5)
         circuit.record_failure()
+        assert circuit.failure_count == 1
+
+        # Record success resets failure count but not last_failure_time
         circuit.record_success()
 
         assert circuit.state == CircuitState.CLOSED
         assert circuit.failure_count == 0
-        assert circuit.last_failure_time is None
+        # last_failure_time is not reset when circuit is CLOSED
+        assert circuit.last_failure_time is not None
         assert circuit.is_available()
 
     def test_cooldown_prevents_availability(self) -> None:
         """Test that cooldown period prevents availability."""
-        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0)
+        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0, failure_threshold=2)
+        # Record 2 failures to reach threshold
+        circuit.record_failure()
         circuit.record_failure()
 
         # Immediately after failure, should not be available
         assert not circuit.is_available()
 
         # After 20 seconds, still in cooldown
-        circuit.last_failure_time = datetime.now(UTC) - timedelta(seconds=20)
+        circuit._last_failure_time = datetime.now(UTC) - timedelta(seconds=20)
         assert not circuit.is_available()
 
-        # After 30 seconds, cooldown expired
-        circuit.last_failure_time = datetime.now(UTC) - timedelta(seconds=30)
+        # After 30 seconds, cooldown expired, transitions to HALF_OPEN
+        circuit._last_failure_time = datetime.now(UTC) - timedelta(seconds=30)
         assert circuit.is_available()
-        assert circuit.state == CircuitState.CLOSED
+        assert circuit.state == CircuitState.HALF_OPEN
 
     def test_multiple_failures_tracked(self) -> None:
         """Test that multiple failures are tracked."""
-        circuit = CircuitBreaker(provider_name="test")
+        circuit = CircuitBreaker(provider_name="test", failure_threshold=5)
+        # Record 3 failures (below threshold)
         circuit.record_failure()
         circuit.record_failure()
         circuit.record_failure()
 
         assert circuit.failure_count == 3
-        assert circuit.state == CircuitState.OPEN
+        assert circuit.state == CircuitState.CLOSED  # Not yet at threshold
 
     def test_cooldown_reset_on_success(self) -> None:
-        """Test that cooldown is reset on success."""
-        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0)
+        """Test that success resets circuit state."""
+        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0, failure_threshold=2)
+        # Record 2 failures to open circuit
+        circuit.record_failure()
         circuit.record_failure()
         assert not circuit.is_available()
 
-        # Manually set last failure time
-        circuit.last_failure_time = datetime.now(UTC) - timedelta(seconds=20)
-
-        # Record success should reset
+        # Record success should reset the circuit to CLOSED
         circuit.record_success()
         assert circuit.is_available()
+        assert circuit.state == CircuitState.CLOSED
+        assert circuit.failure_count == 0
+        # last_failure_time is reset to None when circuit transitions from OPEN to CLOSED
         assert circuit.last_failure_time is None
 
-    def test_is_available_with_open_circuit_and_no_failure_time(self) -> None:
-        """Test is_available when circuit is OPEN but last_failure_time is None (edge case)."""
-        circuit = CircuitBreaker(provider_name="test")
-        # Manually set state to OPEN without calling record_failure
-        circuit.state = CircuitState.OPEN
-        circuit.last_failure_time = None
-        # Should be available since last_failure_time is None
+    def test_is_available_with_half_open_state(self) -> None:
+        """Test is_available when circuit is in HALF_OPEN state."""
+        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0, failure_threshold=2)
+        # Record 2 failures to open circuit
+        circuit.record_failure()
+        circuit.record_failure()
+
+        # Manually set last failure time to be in the past to trigger HALF_OPEN
+        circuit._last_failure_time = datetime.now(UTC) - timedelta(seconds=31)
+
+        # Check if available (should be in HALF_OPEN state now)
         assert circuit.is_available()
+        assert circuit.state == CircuitState.HALF_OPEN
 
 
 class TestFailoverProviderCircuitBreaker:
@@ -449,6 +467,7 @@ class TestFailoverProviderCircuitBreaker:
         failover = FailoverProvider(
             providers=[primary, secondary, tertiary],
             cooldown_seconds=5.0,
+            failure_threshold=1,  # Open circuit on first failure for this test
         )
 
         # First call: primary fails, falls back to secondary
@@ -533,6 +552,7 @@ class TestFailoverProviderCircuitBreaker:
         failover = FailoverProvider(
             providers=[primary, secondary],
             cooldown_seconds=30.0,
+            failure_threshold=1,  # Open circuit on first failure for this test
         )
 
         # Cause both providers to fail
@@ -596,6 +616,7 @@ class TestFailoverProviderAllProvidersFail:
         failover = FailoverProvider(
             providers=[primary, secondary],
             cooldown_seconds=60.0,
+            failure_threshold=1,  # Open circuit on first failure for this test
         )
 
         # Cause both to fail

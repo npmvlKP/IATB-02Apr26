@@ -19,23 +19,21 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum, auto
 from typing import Any, cast
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import Timestamp
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
+from iatb.data.rate_limiter import CircuitState
 
-# Default circuit breaker cooldown period (30 seconds)
-_DEFAULT_COOLDOWN_SECONDS = 30.0
+# Re-export CircuitState for backward compatibility
+__all__ = ["FailoverProvider", "CircuitState", "CircuitBreaker", "ProviderRecord"]
 
-
-class CircuitState(Enum):
-    """Circuit breaker state."""
-
-    CLOSED = auto()
-    OPEN = auto()
+# Default circuit breaker cooldown period (60 seconds)
+_DEFAULT_COOLDOWN_SECONDS = 60.0
+# Default failure threshold before opening circuit
+_DEFAULT_FAILURE_THRESHOLD = 5
 
 
 @dataclass(frozen=True)
@@ -48,46 +46,138 @@ class ProviderRecord:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-@dataclass
 class CircuitBreaker:
-    """Circuit breaker for a single provider.
+    """Synchronous circuit breaker for FailoverProvider.
 
-    Tracks failure count, state transitions, and cooldown periods.
+    Implements a three-state circuit breaker (CLOSED, OPEN, HALF_OPEN) with
+    configurable failure threshold and cooldown period.
+
+    Features:
+    - Configurable failure threshold (default: 5 failures)
+    - Cooldown period before retry (default: 60 seconds)
+    - Three states: CLOSED, OPEN, HALF_OPEN (for recovery probing)
+    - Automatic state transitions based on failures and cooldown
+
+    State transitions:
+    - CLOSED -> OPEN: When failure count reaches threshold
+    - OPEN -> HALF_OPEN: When cooldown period expires
+    - HALF_OPEN -> CLOSED: On successful request
+    - HALF_OPEN -> OPEN: On failed request
     """
 
-    provider_name: str
-    cooldown_seconds: float = _DEFAULT_COOLDOWN_SECONDS
-    state: CircuitState = CircuitState.CLOSED
-    failure_count: int = 0
-    last_failure_time: datetime | None = None
+    def __init__(
+        self,
+        *,
+        provider_name: str,
+        cooldown_seconds: float = _DEFAULT_COOLDOWN_SECONDS,
+        failure_threshold: int = _DEFAULT_FAILURE_THRESHOLD,
+    ) -> None:
+        """Initialize circuit breaker.
+
+        Args:
+            provider_name: Name of the provider this circuit monitors.
+            cooldown_seconds: Cooldown period in seconds after circuit opens.
+                Default: 60 seconds.
+            failure_threshold: Number of consecutive failures before opening.
+                Default: 5 failures.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
+        if cooldown_seconds <= 0:
+            msg = "cooldown_seconds must be positive"
+            raise ValueError(msg)
+        if failure_threshold <= 0:
+            msg = "failure_threshold must be positive"
+            raise ValueError(msg)
+
+        self._provider_name = provider_name
+        self._cooldown_seconds = cooldown_seconds
+        self._failure_threshold = failure_threshold
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time: datetime | None = None
+
+    @property
+    def provider_name(self) -> str:
+        """Get provider name."""
+        return self._provider_name
+
+    @property
+    def cooldown_seconds(self) -> float:
+        """Get cooldown seconds."""
+        return self._cooldown_seconds
+
+    @property
+    def state(self) -> CircuitState:
+        """Get current circuit state."""
+        return self._state
+
+    @property
+    def failure_count(self) -> int:
+        """Get current failure count."""
+        return self._failure_count
+
+    @property
+    def last_failure_time(self) -> datetime | None:
+        """Get last failure time."""
+        return self._last_failure_time
 
     def record_failure(self) -> None:
-        """Record a provider failure and potentially open circuit."""
-        self.failure_count += 1
-        self.last_failure_time = datetime.now(UTC)
-        self.state = CircuitState.OPEN
+        """Record a provider failure and update circuit state.
+
+        Increments failure count and potentially opens circuit if threshold
+        is reached. If in HALF_OPEN state, immediately opens circuit.
+        """
+        self._failure_count += 1
+        self._last_failure_time = datetime.now(UTC)
+
+        if self._state == CircuitState.HALF_OPEN:
+            # Failure in HALF_OPEN means recovery failed, open circuit
+            self._state = CircuitState.OPEN
+        elif self._failure_count >= self._failure_threshold:
+            # Threshold reached, open circuit
+            self._state = CircuitState.OPEN
 
     def record_success(self) -> None:
-        """Record a provider success and close circuit."""
-        self.failure_count = 0
-        self.last_failure_time = None
-        self.state = CircuitState.CLOSED
+        """Record a provider success and update circuit state.
+
+        Resets failure count. If in HALF_OPEN state, closes circuit
+        indicating successful recovery.
+        """
+        self._failure_count = 0
+
+        if self._state == CircuitState.HALF_OPEN:
+            # Successful recovery, close circuit
+            self._state = CircuitState.CLOSED
+            self._last_failure_time = None
+        elif self._state == CircuitState.OPEN:
+            # Success while OPEN shouldn't normally happen, but reset anyway
+            self._state = CircuitState.CLOSED
+            self._last_failure_time = None
 
     def is_available(self) -> bool:
-        """Check if provider is available for requests."""
-        if self.state == CircuitState.CLOSED:
+        """Check if provider is available for requests.
+
+        Returns:
+            True if circuit is CLOSED or HALF_OPEN, or if OPEN but cooldown
+            has expired (transitions to HALF_OPEN). False if OPEN and in
+            cooldown period.
+        """
+        if self._state == CircuitState.CLOSED:
             return True
 
-        if self.last_failure_time is None:
+        if self._state == CircuitState.HALF_OPEN:
             return True
 
-        # Check if cooldown period has elapsed
-        elapsed = (datetime.now(UTC) - self.last_failure_time).total_seconds()
-        if elapsed >= self.cooldown_seconds:
-            # Cooldown expired, reset to closed state
-            self.state = CircuitState.CLOSED
-            self.failure_count = 0
-            self.last_failure_time = None
+        # State is OPEN, check if cooldown has expired
+        if self._last_failure_time is None:
+            return True
+
+        elapsed = (datetime.now(UTC) - self._last_failure_time).total_seconds()
+        if elapsed >= self._cooldown_seconds:
+            # Cooldown expired, transition to HALF_OPEN for recovery probe
+            self._state = CircuitState.HALF_OPEN
             return True
 
         return False
@@ -120,6 +210,7 @@ class FailoverProvider(DataProvider):
         *,
         providers: list[DataProvider],
         cooldown_seconds: float = _DEFAULT_COOLDOWN_SECONDS,
+        failure_threshold: int = _DEFAULT_FAILURE_THRESHOLD,
         metrics_switches: Callable[[str, str, str], None] | None = None,
         metrics_latency: Callable[[str, str, float], None] | None = None,
     ) -> None:
@@ -129,14 +220,16 @@ class FailoverProvider(DataProvider):
             providers: Ordered list of providers (primary first).
                 Must not be empty.
             cooldown_seconds: Circuit breaker cooldown period in seconds.
-                Default: 30 seconds.
+                Default: 60 seconds.
+            failure_threshold: Number of consecutive failures before opening circuit.
+                Default: 5 failures.
             metrics_switches: Optional callback to record source switches.
                 Called with (from_provider, to_provider, method_name).
             metrics_latency: Optional callback to record provider latency.
                 Called with (provider_name, method_name, latency_seconds).
 
         Raises:
-            ConfigError: If providers list is empty.
+            ConfigError: If providers list is empty or parameters invalid.
         """
         if not providers:
             msg = "providers list cannot be empty"
@@ -144,20 +237,44 @@ class FailoverProvider(DataProvider):
         if cooldown_seconds <= 0:
             msg = "cooldown_seconds must be positive"
             raise ConfigError(msg)
+        if failure_threshold <= 0:
+            msg = "failure_threshold must be positive"
+            raise ConfigError(msg)
 
         self._providers = providers
         self._cooldown_seconds = cooldown_seconds
+        self._failure_threshold = failure_threshold
         self._metrics_switches = metrics_switches
         self._metrics_latency = metrics_latency
 
         # Create circuit breakers for each provider
-        self._circuits: dict[str, CircuitBreaker] = {}
+        self._circuits = self._initialize_circuits(providers, cooldown_seconds, failure_threshold)
+
+    def _initialize_circuits(
+        self,
+        providers: list[DataProvider],
+        cooldown_seconds: float,
+        failure_threshold: int,
+    ) -> dict[str, CircuitBreaker]:
+        """Initialize circuit breakers for all providers.
+
+        Args:
+            providers: List of providers.
+            cooldown_seconds: Circuit breaker cooldown period.
+            failure_threshold: Failure threshold for opening circuits.
+
+        Returns:
+            Dictionary mapping provider names to circuit breakers.
+        """
+        circuits: dict[str, CircuitBreaker] = {}
         for idx, provider in enumerate(providers):
             provider_name = self._get_provider_name(provider, idx)
-            self._circuits[provider_name] = CircuitBreaker(
+            circuits[provider_name] = CircuitBreaker(
                 provider_name=provider_name,
                 cooldown_seconds=cooldown_seconds,
+                failure_threshold=failure_threshold,
             )
+        return circuits
 
     async def get_ohlcv(
         self,
@@ -478,6 +595,7 @@ class FailoverProvider(DataProvider):
             raise ConfigError(msg)
 
         circuit = self._circuits[provider_name]
-        circuit.state = CircuitState.CLOSED
-        circuit.failure_count = 0
-        circuit.last_failure_time = None
+        # Reset the circuit breaker state
+        circuit._state = CircuitState.CLOSED
+        circuit._failure_count = 0
+        circuit._last_failure_time = None
