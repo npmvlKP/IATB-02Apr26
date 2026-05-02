@@ -27,7 +27,7 @@ class TestSecretMetadata:
             created_at=now,
             expires_at=now + timedelta(hours=24),
         )
-        assert meta.is_expired is False
+        assert meta.is_expired(now) is False
 
     def test_is_expired_true(self) -> None:
         past = datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC)

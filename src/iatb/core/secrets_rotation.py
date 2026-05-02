@@ -48,10 +48,14 @@ class SecretMetadata:
     rotation_count: int = 0
     last_rotated_at: datetime | None = None
 
-    @property
-    def is_expired(self) -> bool:
-        """Check if secret has expired."""
-        now = datetime.now(UTC)
+    def is_expired(self, now_utc: datetime | None = None) -> bool:
+        """Check if secret has expired.
+
+        Args:
+            now_utc: Optional UTC datetime for calculation.
+                     If None, uses current UTC time.
+        """
+        now = now_utc if now_utc is not None else datetime.now(UTC)
         return now >= self.expires_at
 
     @property
@@ -232,7 +236,7 @@ class SecretsRotationManager:
         meta = self._metadata.get(key_name)
         if meta is None:
             return False
-        return not meta.is_expired
+        return not meta.is_expired()
 
     def schedule_rotation(self, key_name: str, rotate_at: datetime) -> None:
         """Schedule a rotation for a specific time."""
