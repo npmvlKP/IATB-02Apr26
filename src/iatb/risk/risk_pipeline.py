@@ -99,6 +99,7 @@ class RiskPipeline:
     _last_prices: dict[str, Decimal] = field(default_factory=dict)
     _positions: dict[str, Decimal] = field(default_factory=dict)
     _total_exposure: Decimal = field(default_factory=lambda: Decimal("0"))
+    _position_state: dict[str, tuple[Decimal, Decimal]] = field(default_factory=dict)
 
     def update_market_data(
         self,
@@ -111,12 +112,20 @@ class RiskPipeline:
         self._positions = positions.copy()
         self._total_exposure = total_exposure
 
-    def process_order(self, order: OrderRequest, now_utc: datetime) -> RiskPipelineResult:
+    def process_order(
+        self,
+        order: OrderRequest,
+        now_utc: datetime,
+        strategy_id: str = "",
+        algo_id: str = "",
+    ) -> RiskPipelineResult:
         """Process order through 7-step risk pipeline.
 
         Args:
             order: Order request to process
             now_utc: Current UTC timestamp
+            strategy_id: Strategy identifier for audit logging
+            algo_id: Algorithm identifier for audit logging
 
         Returns:
             RiskPipelineResult with execution status and audit trail
@@ -133,7 +142,9 @@ class RiskPipeline:
 
         execution_result = self._step_4_paper_execution(order)
         daily_loss_state = self._step_5_daily_loss_recording(order, execution_result, now_utc)
-        audit_record_id = self._step_6_trade_audit_logging(order, execution_result, now_utc)
+        audit_record_id = self._step_6_trade_audit_logging(
+            order, execution_result, now_utc, strategy_id, algo_id
+        )
 
         return RiskPipelineResult(
             order_id=execution_result.order_id,
@@ -168,10 +179,12 @@ class RiskPipeline:
                 now_utc=now_utc,
             )
 
-        if not self._step_3_pre_trade_validation(order):
+        try:
+            self._step_3_pre_trade_validation(order)
+        except ConfigError as exc:
             return RiskPipelineResult.create_rejected(
                 order_id=order_id,
-                rejection_reason="pre-trade validation failed",
+                rejection_reason=str(exc),
                 pre_trade_passed=False,
                 now_utc=now_utc,
             )
@@ -204,7 +217,7 @@ class RiskPipeline:
             )
             return True
         except ConfigError:
-            return False
+            raise
 
     def _step_4_paper_execution(self, order: OrderRequest) -> ExecutionResult:
         """Step 4: Execute order with paper trading."""
@@ -227,7 +240,6 @@ class RiskPipeline:
             )
             return dummy_guard.state
 
-        # Calculate realized PnL for closing trades
         pnl = self._calculate_realized_pnl(order, result)
         if pnl != Decimal("0"):
             return self.daily_loss_guard.record_trade(pnl, now_utc)
@@ -238,40 +250,79 @@ class RiskPipeline:
         order: OrderRequest,
         result: ExecutionResult,
         now_utc: datetime,
+        strategy_id: str = "",
+        algo_id: str = "",
     ) -> str:
         """Step 6: Log trade to audit database."""
         if self.trade_audit_logger is None:
             return ""
-        self.trade_audit_logger.log_order(order, result, strategy_id="risk_pipeline", algo_id="")
+        self.trade_audit_logger.log_order(order, result, strategy_id=strategy_id, algo_id=algo_id)
         return result.order_id
 
     def _calculate_realized_pnl(self, order: OrderRequest, result: ExecutionResult) -> Decimal:
-        """Calculate realized PnL for closing trades.
+        """Calculate realized PnL for closing trades with full position tracking.
 
         For long positions (positive qty):
-        - BUY opens position → no realized PnL
-        - SELL closes position → realized PnL = (exit_price - entry_price) * qty_closed
+        - BUY opens position -> no realized PnL
+        - SELL closes position -> realized PnL = (exit_price - entry_price) * qty_closed
 
         For short positions (negative qty):
-        - BUY closes position → realized PnL = (entry_price - exit_price) * qty_closed
-        - SELL opens position → no realized PnL
+        - BUY closes position -> realized PnL = (entry_price - exit_price) * qty_closed
+        - SELL opens position -> no realized PnL
         """
         if result.filled_quantity <= Decimal("0"):
             return Decimal("0")
 
-        # Get current position state
-        current_qty = self._positions.get(order.symbol, Decimal("0"))
+        symbol = order.symbol
+        fill_qty = result.filled_quantity
+        fill_price = result.average_price
 
-        # Simple PnL calculation based on position direction
-        # This is a simplified version - full implementation would track avg entry price
-        if order.side.value == "BUY" and current_qty < Decimal("0"):
-            # Closing short position
-            return result.average_price * result.filled_quantity
-        elif order.side.value == "SELL" and current_qty > Decimal("0"):
-            # Closing long position
-            return result.average_price * result.filled_quantity
+        current_qty, avg_entry_price = self._position_state.get(
+            symbol, (Decimal("0"), Decimal("0"))
+        )
 
-        return Decimal("0")
+        realized_pnl = Decimal("0")
+
+        if order.side.value == "BUY":
+            if current_qty < Decimal("0"):
+                qty_to_close = min(fill_qty, abs(current_qty))
+                realized_pnl = (avg_entry_price - fill_price) * qty_to_close
+                remaining_short = abs(current_qty) - qty_to_close
+                if remaining_short > Decimal("0"):
+                    self._position_state[symbol] = (-remaining_short, avg_entry_price)
+                else:
+                    qty_opening_long = fill_qty - qty_to_close
+                    if qty_opening_long > Decimal("0"):
+                        self._position_state[symbol] = (qty_opening_long, fill_price)
+                    else:
+                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+            else:
+                total_cost = (current_qty * avg_entry_price) + (fill_qty * fill_price)
+                new_qty = current_qty + fill_qty
+                new_avg = total_cost / new_qty if new_qty > Decimal("0") else Decimal("0")
+                self._position_state[symbol] = (new_qty, new_avg)
+
+        elif order.side.value == "SELL":
+            if current_qty > Decimal("0"):
+                qty_to_close = min(fill_qty, current_qty)
+                realized_pnl = (fill_price - avg_entry_price) * qty_to_close
+                remaining_long = current_qty - qty_to_close
+                if remaining_long > Decimal("0"):
+                    self._position_state[symbol] = (remaining_long, avg_entry_price)
+                else:
+                    qty_opening_short = fill_qty - qty_to_close
+                    if qty_opening_short > Decimal("0"):
+                        self._position_state[symbol] = (-qty_opening_short, fill_price)
+                    else:
+                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
+            else:
+                abs_current_qty = abs(current_qty)
+                total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
+                new_abs_qty = abs_current_qty + fill_qty
+                new_avg = total_cost / new_abs_qty if new_abs_qty > Decimal("0") else Decimal("0")
+                self._position_state[symbol] = (-new_abs_qty, new_avg)
+
+        return realized_pnl
 
 
 def _validate_utc(dt: datetime) -> None:

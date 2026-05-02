@@ -91,7 +91,7 @@ def make_order(symbol="TEST", side=OrderSide.BUY, qty=Decimal("10"), price=Decim
 def test_pipeline_success(pipeline):
     order = make_order()
     now = datetime.now(UTC)
-    result = pipeline.process_order(order, now)
+    result = pipeline.process_order(order, now, strategy_id="test", algo_id="test")
     assert isinstance(result, RiskPipelineResult)
     assert result.allowed is True
     assert result.execution_result is not None
@@ -114,11 +114,11 @@ def test_throttle_exceeded(throttle, pipeline):
     # Use a throttle that only allows one order per second
     order1 = make_order()
     now = datetime.now(UTC)
-    res1 = pipeline.process_order(order1, now)
+    res1 = pipeline.process_order(order1, now, strategy_id="test1", algo_id="test")
     assert res1.allowed is True
     # Second order same second should be throttled
     order2 = make_order(symbol="TEST2")
-    res2 = pipeline.process_order(order2, now)
+    res2 = pipeline.process_order(order2, now, strategy_id="test2", algo_id="test")
     assert res2.allowed is False
     assert "throttle" in res2.rejection_reason.lower()
 
@@ -128,4 +128,4 @@ def test_pre_trade_validation_failure(pre_trade_config, pipeline):
     order = make_order(qty=Decimal("200"))  # exceeds max_order_quantity of 100
     result = pipeline.process_order(order, datetime.now(UTC))
     assert result.allowed is False
-    assert "pre-trade" in result.rejection_reason.lower()
+    assert result.pre_trade_passed is False

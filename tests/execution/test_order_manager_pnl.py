@@ -72,6 +72,8 @@ class TestLongPositionPnL:
         # Open long at 100
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
         order_manager.place_order(request_buy)
 
@@ -92,6 +94,7 @@ class TestLongPositionPnL:
         # Open long at 100
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
         order_manager.place_order(request_buy)
 
@@ -122,6 +125,7 @@ class TestShortPositionPnL:
         # Open short at 100
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_sell = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
         order_manager.place_order(request_sell)
 
@@ -140,6 +144,7 @@ class TestShortPositionPnL:
         # Open short at 100
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_sell = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
         order_manager.place_order(request_sell)
 
@@ -162,6 +167,7 @@ class TestPartialCloses:
         # Open long at 100, qty 10
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
         order_manager.place_order(request_buy)
 
@@ -180,6 +186,7 @@ class TestPartialCloses:
         # Open short at 100, qty 10
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_sell = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
         order_manager.place_order(request_sell)
 
@@ -202,6 +209,7 @@ class TestPositionFlips:
         # Open long at 100, qty 10
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
         order_manager.place_order(request_buy)
 
@@ -220,6 +228,7 @@ class TestPositionFlips:
         # Open short at 100, qty 10
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_sell = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
         order_manager.place_order(request_sell)
 
@@ -241,6 +250,7 @@ class TestMultipleAdds:
         """Multiple BUY orders use weighted average entry price."""
         executor = _MockExecutor()
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
 
         # Buy 10 at 100
         executor.fill_price = Decimal("100")
@@ -267,6 +277,7 @@ class TestMultipleAdds:
         """Multiple SELL orders use weighted average entry price."""
         executor = _MockExecutor()
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
 
         # Sell 10 at 100
         executor.fill_price = Decimal("100")
@@ -297,6 +308,7 @@ class TestEdgeCases:
         """Zero fill quantity should not record PnL."""
         executor = _MockExecutor()
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
 
         # First, open a position
         executor.fill_price = Decimal("100")
@@ -339,6 +351,7 @@ class TestEdgeCases:
         """Multiple symbols track positions independently."""
         executor = _MockExecutor()
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
 
         # Buy NIFTY at 100
         executor.fill_price = Decimal("100")
@@ -368,6 +381,7 @@ class TestPrecisionAndTimezone:
         """PnL calculation maintains Decimal precision."""
         executor = _MockExecutor()
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
 
         # Buy at precise price
         executor.fill_price = Decimal("100.50")
@@ -390,6 +404,7 @@ class TestPrecisionAndTimezone:
         """PnL recording uses UTC timezone."""
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
 
         # Open position
         request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
@@ -434,6 +449,7 @@ class TestRegressionBug1:
         # Open long at 100
         executor = _MockExecutor(fill_price=Decimal("100"))
         order_manager._executor = executor
+        order_manager._risk_pipeline.paper_executor = executor
         request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
         order_manager.place_order(request_buy)
 

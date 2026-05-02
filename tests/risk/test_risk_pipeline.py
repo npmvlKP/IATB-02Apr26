@@ -228,7 +228,7 @@ def test_risk_pipeline_step_3_pre_trade_validation_failed() -> None:
 
     assert result.allowed is False
     assert result.pre_trade_passed is False
-    assert result.rejection_reason == "pre-trade validation failed"
+    assert "fat-finger" in result.rejection_reason
 
 
 def test_risk_pipeline_step_4_paper_execution() -> None:
@@ -257,13 +257,35 @@ def test_risk_pipeline_step_4_paper_execution() -> None:
 
 def test_risk_pipeline_step_5_daily_loss_recording() -> None:
     """Test Step 5: Daily loss recording updates state."""
-    executor = MockExecutor()
-    kill_switch = KillSwitch(executor)
+    kill_switch = KillSwitch(MockExecutor())
     daily_loss_guard = DailyLossGuard(
         max_daily_loss_pct=Decimal("0.02"),
         starting_nav=Decimal("1000000"),
         kill_switch=kill_switch,
     )
+
+    # Create an executor that returns different prices for different calls
+    class _PriceChangingExecutor(Executor):
+        def __init__(self) -> None:
+            self._call_count = 0
+
+        def execute_order(self, request: OrderRequest) -> ExecutionResult:
+            self._call_count += 1
+            price = Decimal("100") if self._call_count == 1 else Decimal("110")
+            return ExecutionResult(
+                f"MOCK-{self._call_count}",
+                OrderStatus.FILLED,
+                request.quantity,
+                price,
+            )
+
+        def cancel_all(self) -> int:
+            return 0
+
+        def close_order(self, order_id: str) -> bool:
+            return False
+
+    executor = _PriceChangingExecutor()
 
     pipeline = RiskPipeline(
         kill_switch=None,
@@ -274,15 +296,13 @@ def test_risk_pipeline_step_5_daily_loss_recording() -> None:
         trade_audit_logger=None,
     )
 
-    # Set up position to close
-    pipeline.update_market_data(
-        last_prices={"NIFTY": Decimal("100")},
-        positions={"NIFTY": Decimal("10")},
-        total_exposure=Decimal("1000"),
-    )
+    # Open a long position at 100
+    buy_order = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
+    pipeline.process_order(buy_order, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
 
-    order = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
-    result = pipeline.process_order(order, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
+    # Close the long position at 110 - this should realize PnL of (110-100)*10 = 100
+    sell_order = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
+    result = pipeline.process_order(sell_order, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
 
     assert result.allowed is True
     assert result.daily_loss_state is not None
@@ -329,7 +349,12 @@ def test_risk_pipeline_step_6_trade_audit_logging() -> None:
         )
 
         order = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
-        result = pipeline.process_order(order, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
+        result = pipeline.process_order(
+            order,
+            datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+            strategy_id="test_strategy",
+            algo_id="test_algo",
+        )
 
         assert result.allowed is True
         assert result.audit_record_id == result.execution_result.order_id
@@ -387,7 +412,12 @@ def test_risk_pipeline_full_integration() -> None:
         order = OrderRequest(
             Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"), price=Decimal("100")
         )
-        result = pipeline.process_order(order, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
+        result = pipeline.process_order(
+            order,
+            datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+            strategy_id="integration_test",
+            algo_id="test",
+        )
 
         # Verify all steps passed
         assert result.allowed is True

@@ -1,0 +1,63 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Scripts\python.exe
+hypothesis profile 'default'
+rootdir: G:\IATB-02Apr26\IATB
+configfile: pyproject.toml
+plugins: anyio-4.13.0, hypothesis-6.151.11, asyncio-0.23.8, cov-4.1.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO
+collecting ... {"timestamp": "2026-05-01T08:47:18.166820+00:00", "level": "INFO", "logger": "iatb.core.config", "message": "Loaded TOML configuration", "toml_path": "config\\settings.toml", "thread": 22588, "process": 22808}
+collected 1 item
+
+tests/execution/test_order_manager_pnl.py::TestLongPositionPnL::test_sell_closes_long_with_profit FAILED
+
+================================== FAILURES ===================================
+____________ TestLongPositionPnL.test_sell_closes_long_with_profit ____________
+
+self = <tests.execution.test_order_manager_pnl.TestLongPositionPnL object at 0x00000216A4982960>
+order_manager = <iatb.execution.order_manager.OrderManager object at 0x00000216A4983D10>
+daily_loss_guard = <MagicMock id='2296273969920'>
+
+    def test_sell_closes_long_with_profit(self, order_manager, daily_loss_guard):
+        """SELL order closes long position with profit."""
+        # Open long at 100
+        executor = _MockExecutor(fill_price=Decimal("100"))
+        order_manager._executor = executor
+        request_buy = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"))
+        order_manager.place_order(request_buy)
+    
+        # Close long at 110 (profit)
+        executor.fill_price = Decimal("110")
+        request_sell = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"))
+        order_manager.place_order(request_sell)
+    
+        # PnL = (110 - 100) * 10 = 100
+        expected_pnl = Decimal("100")
+>       daily_loss_guard.record_trade.assert_called_once()
+
+tests\execution\test_order_manager_pnl.py:85: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <MagicMock name='mock.record_trade' id='2296232394336'>
+
+    def assert_called_once(self):
+        """assert that the mock was called only once.
+        """
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to have been called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'record_trade' to have been called once. Called 0 times.
+
+C:\Program Files\Python312\Lib\unittest\mock.py:928: AssertionError
+============================== warnings summary ===============================
+C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11
+  C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: DeprecationWarning: pythonjsonlogger.jsonlogger has been moved to pythonjsonlogger.json
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/execution/test_order_manager_pnl.py::TestLongPositionPnL::test_sell_closes_long_with_profit - AssertionError: Expected 'record_trade' to have been called once. Called 0 times.
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+======================== 1 failed, 1 warning in 3.92s =========================

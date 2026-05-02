@@ -127,7 +127,7 @@ Features:
 
 Usage:
 ```python
-from iatb.core.observability import get_alerter, TelegramAlertLevel
+from iatb.core.observability import get_alerter, AlertLevel
 
 alerter = get_alerter()
 

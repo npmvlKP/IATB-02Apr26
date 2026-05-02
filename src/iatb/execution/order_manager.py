@@ -160,9 +160,11 @@ class OrderManager:
 
         # Run through the risk pipeline
         now = datetime.now(UTC)
-        pipeline_result = self._risk_pipeline.process_order(request, now)
+        pipeline_result = self._risk_pipeline.process_order(
+            request, now, strategy_id=strategy_id, algo_id=algo_id
+        )
         if not pipeline_result.allowed:
-            # Propagate rejection as ConfigError for consistency with prior behaviour
+            # Propagate rejection as ConfigError with specific reason
             raise ConfigError(pipeline_result.rejection_reason or "order rejected")
         result = pipeline_result.execution_result
         if result is None:
@@ -419,7 +421,9 @@ class OrderManager:
 
         # Run through the risk pipeline (synchronous call; it internally uses the injected executor)
         now = datetime.now(UTC)
-        pipeline_result = self._risk_pipeline.process_order(request, now)
+        pipeline_result = self._risk_pipeline.process_order(
+            request, now, strategy_id=strategy_id, algo_id=algo_id
+        )
         if not pipeline_result.allowed:
             raise ConfigError(pipeline_result.rejection_reason or "order rejected")
         result = pipeline_result.execution_result

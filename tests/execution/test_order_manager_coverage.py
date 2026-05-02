@@ -56,6 +56,14 @@ class _MockOrderThrottle:
 class _MockDailyLossGuard:
     def __init__(self) -> None:
         self.recorded_trades: list[tuple[Decimal, datetime]] = []
+        from iatb.risk.daily_loss_guard import DailyLossState
+
+        self.state = DailyLossState(
+            cumulative_pnl=Decimal("0"),
+            limit=Decimal("20000"),
+            breached=False,
+            trade_count=0,
+        )
 
     def record_trade(self, pnl: Decimal, timestamp: datetime) -> None:
         self.recorded_trades.append((pnl, timestamp))
@@ -87,7 +95,7 @@ def test_order_manager_kill_switch_engaged():
     manager = OrderManager(executor, kill_switch=kill_switch)
 
     request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"))
-    with pytest.raises(ConfigError, match="order rejected: kill switch engaged"):
+    with pytest.raises(ConfigError, match="kill switch engaged"):
         manager.place_order(request)
 
     # Order should not be executed
@@ -101,7 +109,7 @@ def test_order_manager_throttle_exceeded():
     manager = OrderManager(executor, order_throttle=throttle)
 
     request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"))
-    with pytest.raises(ConfigError, match="order rejected: OPS throttle exceeded"):
+    with pytest.raises(ConfigError, match="OPS throttle exceeded"):
         manager.place_order(request)
 
     # Order should not be executed
