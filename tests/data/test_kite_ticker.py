@@ -229,34 +229,32 @@ class TestKiteTickerFeed:
 
     @pytest.mark.asyncio
     async def test_invalid_initial_reconnect_delay_raises(self) -> None:
-        """Test invalid initial_reconnect_delay raises ConfigError."""
-        with pytest.raises(ConfigError, match="initial_reconnect_delay must be non-negative"):
+        """Test invalid retry_delay_seconds raises ConfigError."""
+        with pytest.raises(ConfigError, match="retry_delay_seconds must be non-negative"):
             KiteTickerFeed(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
-                initial_reconnect_delay=-1.0,
+                retry_delay_seconds=-1.0,
             )
 
     @pytest.mark.asyncio
     async def test_invalid_max_reconnect_delay_raises(self) -> None:
-        """Test invalid max_reconnect_delay raises ConfigError."""
-        with pytest.raises(ConfigError, match="max_reconnect_delay must be positive"):
+        """Test invalid reconnect_backoff_max raises ConfigError."""
+        with pytest.raises(ConfigError, match="reconnect_backoff_max must be positive"):
             KiteTickerFeed(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
-                max_reconnect_delay=0,
+                reconnect_backoff_max=0,
             )
 
     @pytest.mark.asyncio
     async def test_invalid_reconnect_backoff_raises(self) -> None:
-        """Test invalid reconnect_backoff_multiplier raises ConfigError."""
-        with pytest.raises(
-            ConfigError, match="reconnect_backoff_multiplier must be greater than 1.0"
-        ):
+        """Test invalid reconnect_backoff_factor raises ConfigError."""
+        with pytest.raises(ConfigError, match="reconnect_backoff_factor must be greater than 1.0"):
             KiteTickerFeed(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
-                reconnect_backoff_multiplier=1.0,
+                reconnect_backoff_factor=1.0,
             )
 
     @pytest.mark.asyncio

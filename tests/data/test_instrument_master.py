@@ -95,10 +95,14 @@ class TestGetOptionChain:
         assert len(chain) == 3
 
     def test_filter_by_expiry(self, master: InstrumentMaster) -> None:
-        _insert(master, _nifty_ce("25000", 1001))
-        chain = master.get_option_chain("NIFTY", Exchange.NSE, expiry=date(2026, 5, 1))
+        from datetime import UTC, timedelta
+
+        test_expiry = datetime.now(UTC).date() + timedelta(days=1)
+        _insert(master, _nifty_ce("25000", 1001, expiry=test_expiry))
+        chain = master.get_option_chain("NIFTY", Exchange.NSE, expiry=test_expiry)
         assert len(chain) == 1
-        chain_empty = master.get_option_chain("NIFTY", Exchange.NSE, expiry=date(2026, 6, 1))
+        future_expiry = test_expiry + timedelta(days=30)
+        chain_empty = master.get_option_chain("NIFTY", Exchange.NSE, expiry=future_expiry)
         assert len(chain_empty) == 0
 
 

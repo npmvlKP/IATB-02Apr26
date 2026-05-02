@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check for naive datetime and print statements."""
+import re
 import os
 
 # Check G8: No naive datetime.now()
@@ -18,6 +19,8 @@ for root, _, files in os.walk('src'):
             pass
 
 # Check G9: No print() statements in src/
+# Use regex to match actual print() calls, not function names containing "print"
+print_pattern = re.compile(r'\bprint\(')
 print_matches = []
 for root, _, files in os.walk('src'):
     for f in files:
@@ -27,7 +30,11 @@ for root, _, files in os.walk('src'):
         try:
             with open(filepath, encoding='utf-8') as fp:
                 for i, line in enumerate(fp, 1):
-                    if 'print(' in line and not line.strip().startswith('#'):
+                    # Skip comments and strings
+                    if line.strip().startswith('#'):
+                        continue
+                    # Match actual print() function calls
+                    if print_pattern.search(line):
                         print_matches.append((filepath, i, line.strip()))
         except Exception:
             pass
