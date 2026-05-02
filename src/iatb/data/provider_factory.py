@@ -275,6 +275,7 @@ class DataProviderFactory:
         self,
         token_manager: ZerodhaTokenManager | None = None,
         token_resolver: SymbolTokenResolver | None = None,
+        instrument_master: InstrumentMaster | None = None,
     ) -> KiteWebSocketProvider:
         """Create KiteWebSocketProvider for real-time market data.
 
@@ -282,6 +283,7 @@ class DataProviderFactory:
             token_manager: Optional ZerodhaTokenManager. If not provided,
                 will create a new one.
             token_resolver: Optional SymbolTokenResolver for exchange resolution.
+            instrument_master: Optional InstrumentMaster for token->exchange resolution.
 
         Returns:
             Configured KiteWebSocketProvider.
@@ -290,12 +292,14 @@ class DataProviderFactory:
         tr = token_resolver or self.create_token_resolver(
             kite_provider=self.create_kite_provider(tm),
         )
+        im = instrument_master or self.create_instrument_master()
         access_token = self._get_access_token(tm)
 
         return KiteWebSocketProvider(
             api_key=self._api_key,
             access_token=access_token,
             token_resolver=tr,
+            instrument_master=im,
         )
 
     def _create_core_components(
@@ -375,10 +379,11 @@ class DataProviderFactory:
             cooldown_seconds,
         )
 
-        # Create WebSocket provider with token resolver
+        # Create WebSocket provider with token resolver and instrument master
         ws_provider = self.create_ws_provider(
             token_manager=token_manager,
             token_resolver=token_resolver,
+            instrument_master=instrument_master,
         )
 
         return ProviderChain(

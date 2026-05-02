@@ -253,6 +253,7 @@ class KiteWebSocketProvider(DataProvider):
         reconnect_backoff_base: float = 2.0,
         reconnect_backoff_max: float = 60.0,
         token_resolver: SymbolTokenResolver | None = None,
+        instrument_master: Any | None = None,
     ) -> None:
         self._validate_init_params(
             api_key=api_key,
@@ -278,6 +279,7 @@ class KiteWebSocketProvider(DataProvider):
             reconnect_backoff_base=reconnect_backoff_base,
             reconnect_backoff_max=reconnect_backoff_max,
             token_resolver=token_resolver,
+            instrument_master=instrument_master,
         )
 
         self._init_state()
@@ -296,6 +298,7 @@ class KiteWebSocketProvider(DataProvider):
         reconnect_backoff_base: float,
         reconnect_backoff_max: float,
         token_resolver: SymbolTokenResolver | None,
+        instrument_master: Any | None,
     ) -> None:
         """Initialize configuration parameters."""
         self._api_key = api_key
@@ -309,6 +312,7 @@ class KiteWebSocketProvider(DataProvider):
         self._reconnect_backoff_max = reconnect_backoff_max
         self._kite_ticker_factory = kite_ticker_factory or self._default_ticker_factory
         self._token_resolver = token_resolver
+        self._instrument_master = instrument_master
 
     def _init_state(self) -> None:
         """Initialize runtime state."""

@@ -272,6 +272,22 @@ class InstrumentMaster:
             "max_size_mb": Decimal(str(_MAX_CACHE_SIZE_MB)),
         }
 
+    def get_instrument_by_token(self, instrument_token: int) -> Instrument | None:
+        """Lookup an instrument by its instrument token.
+
+        Args:
+            instrument_token: The instrument token to look up.
+
+        Returns:
+            Instrument object or None if not found.
+        """
+        query = "SELECT * FROM instruments WHERE instrument_token = ? LIMIT 1"
+        with self._connect() as conn:
+            row = conn.execute(query, (instrument_token,)).fetchone()
+        if row is None:
+            return None
+        return _row_to_instrument(row)
+
 
 def _csv_row_to_db_tuple(
     row: dict[str, str], exchange: Exchange, now_utc: str
