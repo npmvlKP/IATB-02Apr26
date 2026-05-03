@@ -37,6 +37,10 @@ class ParquetStore:
     def __init__(self, root_dir: Path) -> None:
         self._root_dir = root_dir
 
+    @property
+    def root_dir(self) -> Path:
+        return self._root_dir
+
     def _import_pyarrow(self) -> tuple[Any, Any]:
         try:
             pyarrow = importlib.import_module("pyarrow")

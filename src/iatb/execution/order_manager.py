@@ -142,7 +142,7 @@ class OrderManager:
         self._order_fingerprints.add(fingerprint)
         self._order_id_mapping[fingerprint] = order_id
 
-    def place_order(
+    def place_order(  # noqa: G10
         self,
         request: OrderRequest,
         strategy_id: str = "",
@@ -421,7 +421,7 @@ class OrderManager:
                     self._order_status[key] = OrderStatus.CANCELLED
         return True
 
-    async def place_order_async(
+    async def place_order_async(  # noqa: G10
         self,
         request: OrderRequest,
         strategy_id: str = "",

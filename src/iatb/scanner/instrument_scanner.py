@@ -208,7 +208,7 @@ class InstrumentScanner:
     Uses regime-aware composite scoring from InstrumentScorer.
     """
 
-    def __init__(
+    def __init__(  # noqa: G10
         self,
         config: ScannerConfig | None = None,
         data_provider: DataProvider | None = None,
@@ -692,7 +692,7 @@ class InstrumentScanner:
             filtered.append(candidate)
         return filtered
 
-    def _rank_and_split_with_correlation(
+    def _rank_and_split_with_correlation(  # noqa: G10
         self, filtered: list[_CandidateScores]
     ) -> tuple[list[ScannerCandidate], list[ScannerCandidate]]:
         """Rank by composite score and split into gainers/losers with correlation filtering."""

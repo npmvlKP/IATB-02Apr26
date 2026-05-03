@@ -1092,7 +1092,7 @@ def _handle_scan_result_or_early_return(
     return _create_final_result(scanner_result, trades_executed, total_pnl, errors, timestamp_utc)
 
 
-def _execute_full_scan_cycle(
+def _execute_full_scan_cycle(  # noqa: G10
     timestamp_utc: datetime,
     symbols: Sequence[str],
     sentiment_aggregator: SentimentAggregator | None,
