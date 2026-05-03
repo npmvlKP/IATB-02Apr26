@@ -26,8 +26,14 @@ from iatb.data.rate_limiter import (
     retry_with_backoff,
 )
 from iatb.market_strength.indicators import IndicatorSnapshot, PandasTaIndicators
-from iatb.market_strength.regime_detector import MarketRegime
+from iatb.market_strength.regime_detector import MarketRegime, RegimeDetector
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
+from iatb.selection._util import DirectionalIntent
+from iatb.selection.drl_signal import BacktestConclusion, compute_drl_signal
+from iatb.selection.instrument_scorer import InstrumentScorer
+from iatb.selection.ranking import RankingConfig
+from iatb.selection.sentiment_signal import SentimentSignalInput, compute_sentiment_signal
+from iatb.sentiment.aggregator import SentimentAggregator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -196,9 +202,10 @@ class InstrumentScanner:
     - VERY_STRONG sentiment (|score| >= 0.75)
     - strength_scorer.is_tradable() == True
     - volume_ratio >= 2.0
-    - RL positive exit probability
+    - DRL exit probability
 
     Emits only if ALL factors pass.
+    Uses regime-aware composite scoring from InstrumentScorer.
     """
 
     def __init__(
@@ -206,8 +213,11 @@ class InstrumentScanner:
         config: ScannerConfig | None = None,
         data_provider: DataProvider | None = None,
         strength_scorer: StrengthScorer | None = None,
-        sentiment_analyzer: Callable[[str], tuple[Decimal, bool]] | None = None,
-        rl_predictor: Callable[[list[Decimal]], Decimal] | None = None,
+        sentiment_aggregator: SentimentAggregator | None = None,
+        regime_detector: RegimeDetector | None = None,
+        instrument_scorer: InstrumentScorer | None = None,
+        correlations: dict[tuple[str, str], Decimal] | None = None,
+        ranking_config: RankingConfig | None = None,
         symbols: Sequence[str] | None = None,
         cache_ttl_seconds: int = 60,
         rate_limiter: AsyncRateLimiter | None = None,
@@ -218,11 +228,15 @@ class InstrumentScanner:
         self._data_provider = data_provider
 
         self._strength_scorer = strength_scorer or StrengthScorer()
-        self._sentiment_analyzer = sentiment_analyzer
-        self._rl_predictor = rl_predictor
+        self._sentiment_aggregator = sentiment_aggregator
+        self._regime_detector = regime_detector or RegimeDetector()
+        self._instrument_scorer = instrument_scorer or InstrumentScorer()
+        self._correlations = correlations or {}
+        self._ranking_config = ranking_config or RankingConfig()
         self._symbols = symbols or []
         self._cache = MarketDataCache(default_ttl_seconds=cache_ttl_seconds)
         self._indicators: PandasTaIndicators | None = None
+        self._current_regime: MarketRegime = MarketRegime.SIDEWAYS
 
         # Rate limiter for controlling concurrent API requests
         # Default: 10 req/sec with burst capacity of 20 for parallel fetching
@@ -275,9 +289,11 @@ class InstrumentScanner:
                 )
                 raise ConfigError(msg)
             all_candidates = self._fetch_market_data()
-        scored = self._score_candidates(all_candidates)
+
+        self._current_regime = self._detect_regime(all_candidates)
+        scored = self._score_candidates_with_pipeline(all_candidates)
         filtered = self._apply_filters(scored)
-        gainers, losers = self._rank_and_split(filtered)
+        gainers, losers = self._rank_and_split_with_correlation(filtered)
         return ScannerResult(
             gainers=gainers[: self._config.top_n],
             losers=losers[: self._config.top_n],
@@ -543,13 +559,48 @@ class InstrumentScanner:
             return InstrumentCategory.OPTION
         return InstrumentCategory.STOCK
 
-    def _score_candidates(self, candidates: list[MarketData]) -> list[_CandidateScores]:
-        """Score each candidate with sentiment, strength, and RL."""
-        scored: list[_CandidateScores] = []
+    def _detect_regime(self, candidates: list[MarketData]) -> MarketRegime:
+        """Detect market regime from candidate data using RegimeDetector."""
+        if len(candidates) < 3:
+            return MarketRegime.SIDEWAYS
+        try:
+            features = self._build_regime_features(candidates)
+            result = self._regime_detector.detect(features)
+            _LOGGER.info(
+                "Regime detected: %s (confidence: %s)", result.regime.value, result.confidence
+            )
+            return result.regime
+        except ConfigError as exc:
+            _LOGGER.warning("Regime detection failed, defaulting to SIDEWAYS: %s", exc)
+            return MarketRegime.SIDEWAYS
+        except Exception as exc:  # nosec - B112: fallback to default on error  # noqa: S112
+            _LOGGER.warning("Regime detection error, defaulting to SIDEWAYS: %s", exc)
+            return MarketRegime.SIDEWAYS
+
+    def _build_regime_features(self, candidates: list[MarketData]) -> list[list[Decimal]]:
+        """Build feature matrix for regime detection from candidates."""
+        features: list[list[Decimal]] = []
         for data in candidates:
-            sentiment_score, is_very_strong = self._get_sentiment(data)
+            feature_row = [
+                data.pct_change / Decimal("100"),
+                data.adx / Decimal("100"),
+                data.breadth_ratio,
+                data.volume_ratio,
+            ]
+            features.append(feature_row)
+        return features
+
+    def _score_candidates_with_pipeline(
+        self, candidates: list[MarketData]
+    ) -> list[_CandidateScores]:
+        """Score candidates using the wired selection pipeline."""
+        scored: list[_CandidateScores] = []
+        current_utc = datetime.now(UTC)
+
+        for data in candidates:
+            sentiment_score, is_very_strong = self._get_sentiment_pipeline(data, current_utc)
             strength_score, is_tradable = self._get_strength(data)
-            exit_prob = self._get_exit_probability(data)
+            exit_prob = self._get_exit_probability_pipeline(data, current_utc)
             scored.append(
                 _CandidateScores(
                     market_data=data,
@@ -562,8 +613,72 @@ class InstrumentScanner:
             )
         return scored
 
+    def _get_sentiment_pipeline(
+        self, data: MarketData, current_utc: datetime
+    ) -> tuple[Decimal, bool]:
+        """Get sentiment score using compute_sentiment_signal with SentimentAggregator."""
+        if self._sentiment_aggregator is None:
+            return Decimal("0"), False
+        try:
+            inputs = SentimentSignalInput(
+                text=f"{data.symbol} market analysis",
+                volume_ratio=data.volume_ratio,
+                instrument_symbol=data.symbol,
+                exchange=data.exchange,
+                timestamp_utc=data.timestamp_utc,
+            )
+            intent = (
+                DirectionalIntent.LONG
+                if data.pct_change > Decimal("0")
+                else DirectionalIntent.SHORT
+            )
+            signal = compute_sentiment_signal(
+                self._sentiment_aggregator, inputs, current_utc, intent
+            )
+            is_very_strong = abs(signal.score) >= self._config.very_strong_threshold
+            return signal.score, is_very_strong
+        except Exception as exc:  # nosec - B112: fallback to defaults on error  # noqa: S112
+            _LOGGER.debug("Sentiment pipeline failed for %s: %s", data.symbol, exc)
+            return Decimal("0"), False
+
+    def _get_strength(self, data: MarketData) -> tuple[Decimal, bool]:
+        """Get strength score and tradability flag."""
+        inputs = StrengthInputs(
+            breadth_ratio=data.breadth_ratio,
+            regime=self._current_regime,
+            adx=data.adx,
+            volume_ratio=data.volume_ratio,
+            volatility_atr_pct=data.atr_pct,
+        )
+        try:
+            score = self._strength_scorer.score(data.exchange, inputs)
+            is_tradable = self._strength_scorer.is_tradable(data.exchange, inputs)
+            return score, is_tradable
+        except ConfigError:
+            return Decimal("0"), False
+
+    def _get_exit_probability_pipeline(self, data: MarketData, current_utc: datetime) -> Decimal:
+        """Get DRL exit probability using compute_drl_signal."""
+        try:
+            conclusion = BacktestConclusion(
+                instrument_symbol=data.symbol,
+                out_of_sample_sharpe=data.pct_change / Decimal("100"),
+                max_drawdown_pct=data.atr_pct * Decimal("10"),
+                win_rate=Decimal("0.5"),
+                total_trades=10,
+                monte_carlo_robust=True,
+                walk_forward_overfit_detected=False,
+                mean_overfit_ratio=Decimal("1.0"),
+                timestamp_utc=data.timestamp_utc,
+            )
+            drl_output = compute_drl_signal(conclusion, current_utc)
+            return drl_output.score
+        except Exception as exc:  # nosec - B112: fallback to zero on error  # noqa: S112
+            _LOGGER.debug("DRL signal failed for %s: %s", data.symbol, exc)
+            return Decimal("0")
+
     def _apply_filters(self, scored: list[_CandidateScores]) -> list[_CandidateScores]:
-        """Apply all filters: sentiment, strength, volume, RL."""
+        """Apply all filters: sentiment, strength, volume, DRL."""
         filtered: list[_CandidateScores] = []
         for candidate in scored:
             if not candidate.is_very_strong:
@@ -577,23 +692,129 @@ class InstrumentScanner:
             filtered.append(candidate)
         return filtered
 
-    def _rank_and_split(
+    def _rank_and_split_with_correlation(
         self, filtered: list[_CandidateScores]
     ) -> tuple[list[ScannerCandidate], list[ScannerCandidate]]:
-        """Rank by % change and split into gainers/losers."""
+        """Rank by composite score and split into gainers/losers with correlation filtering."""
+        if not filtered:
+            return [], []
+
+        # Build InstrumentSignals for InstrumentScorer
+        from iatb.selection.drl_signal import DRLSignalOutput
+        from iatb.selection.instrument_scorer import InstrumentSignals
+        from iatb.selection.sentiment_signal import SentimentSignalOutput
+        from iatb.selection.strength_signal import StrengthSignalOutput
+        from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+
+        instrument_signals = []
+        for c in filtered:
+            # Build signal outputs from candidate data
+            directional_bias = "BULLISH" if c.market_data.pct_change > Decimal("0") else "BEARISH"
+            sentiment_output = SentimentSignalOutput(
+                score=c.sentiment_score,
+                confidence=Decimal("0.8") if c.is_very_strong else Decimal("0.5"),
+                directional_bias=directional_bias,
+                metadata={"symbol": c.market_data.symbol},
+            )
+
+            strength_output = StrengthSignalOutput(
+                score=c.strength_score,
+                confidence=Decimal("0.8") if c.is_strength_tradable else Decimal("0.5"),
+                regime=self._current_regime,
+                tradable=c.is_strength_tradable,
+                metadata={"symbol": c.market_data.symbol},
+            )
+
+            # Volume profile score based on volume ratio
+            from iatb.selection.volume_profile_signal import ProfileShape
+
+            volume_score = min(Decimal("1"), c.market_data.volume_ratio / Decimal("5"))
+            vp_output = VolumeProfileSignalOutput(
+                score=volume_score,
+                confidence=Decimal("0.7"),
+                shape=ProfileShape.D_BALANCED,  # Default balanced shape
+                poc_distance_pct=Decimal("0"),
+                va_width_pct=Decimal("10"),
+                metadata={"symbol": c.market_data.symbol},
+            )
+
+            # DRL signal from exit probability
+            drl_output = DRLSignalOutput(
+                score=c.exit_probability,
+                confidence=Decimal("0.7"),
+                robust=True,
+                metadata={"symbol": c.market_data.symbol},
+            )
+
+            # Build strength inputs
+            strength_inputs = StrengthInputs(
+                breadth_ratio=c.market_data.breadth_ratio,
+                regime=self._current_regime,
+                adx=c.market_data.adx,
+                volume_ratio=c.market_data.volume_ratio,
+                volatility_atr_pct=c.market_data.atr_pct,
+            )
+
+            signals = InstrumentSignals(
+                symbol=c.market_data.symbol,
+                exchange=c.market_data.exchange,
+                sentiment=sentiment_output,
+                strength=strength_output,
+                volume_profile=vp_output,
+                drl=drl_output,
+                strength_inputs=strength_inputs,
+            )
+            instrument_signals.append(signals)
+
+        # Use InstrumentScorer to compute regime-aware composite scores
+        selection_result = self._instrument_scorer.score_and_select(
+            instrument_signals, self._current_regime, self._correlations
+        )
+
+        # Build symbol to composite score mapping from selection result
+        symbol_to_composite = {
+            s.symbol: s.composite
+            for s in self._instrument_scorer.score_instruments(
+                instrument_signals, self._current_regime
+            )
+        }
+
+        # Split into gainers and losers
         gainers_data = [c for c in filtered if c.market_data.pct_change > Decimal("0")]
         losers_data = [c for c in filtered if c.market_data.pct_change < Decimal("0")]
-        gainers_sorted = sorted(gainers_data, key=lambda c: c.market_data.pct_change, reverse=True)
-        losers_sorted = sorted(losers_data, key=lambda c: c.market_data.pct_change)
-        gainers = self._to_scanner_candidates(gainers_sorted)
-        losers = self._to_scanner_candidates(losers_sorted)
-        return gainers, losers
 
-    def _to_scanner_candidates(self, scored: list[_CandidateScores]) -> list[ScannerCandidate]:
-        """Convert scored candidates to ScannerCandidate with ranks."""
+        gainers = self._to_scanner_candidates_with_scores(
+            gainers_data, selection_result.selected, symbol_to_composite
+        )
+        losers = self._to_scanner_candidates_with_scores(
+            losers_data, selection_result.selected, symbol_to_composite
+        )
+
+        gainers_sorted = sorted(gainers, key=lambda c: c.composite_score, reverse=True)
+        losers_sorted = sorted(losers, key=lambda c: c.composite_score)
+        return gainers_sorted, losers_sorted
+
+    def _build_metadata(self, scored: _CandidateScores) -> dict[str, str]:
+        """Build metadata dictionary for a scored candidate."""
+        return {
+            "adx": str(scored.market_data.adx),
+            "atr_pct": str(scored.market_data.atr_pct),
+            "strength_score": str(scored.strength_score),
+            "regime": self._current_regime.value,
+        }
+
+    def _to_scanner_candidates_with_scores(
+        self,
+        scored: list[_CandidateScores],
+        ranked: list[Any],
+        symbol_to_composite: dict[str, Any],
+    ) -> list[ScannerCandidate]:
+        """Convert scored candidates to ScannerCandidate using pre-computed composite scores."""
         candidates: list[ScannerCandidate] = []
         for idx, s in enumerate(scored):
-            composite = self._compute_composite_score(s)
+            # Get composite score from the pre-computed mapping
+            composite = symbol_to_composite.get(s.market_data.symbol, Decimal("0"))
+
             candidates.append(
                 ScannerCandidate(
                     symbol=s.market_data.symbol,
@@ -605,7 +826,7 @@ class InstrumentScanner:
                     volume_ratio=s.market_data.volume_ratio,
                     exit_probability=s.exit_probability,
                     is_tradable=s.is_strength_tradable,
-                    regime=MarketRegime.SIDEWAYS,
+                    regime=self._current_regime,
                     rank=idx + 1,
                     timestamp_utc=s.market_data.timestamp_utc,
                     close_price=s.market_data.close_price,
@@ -613,68 +834,11 @@ class InstrumentScanner:
                         "adx": str(s.market_data.adx),
                         "atr_pct": str(s.market_data.atr_pct),
                         "strength_score": str(s.strength_score),
+                        "regime": self._current_regime.value,
                     },
                 )
             )
         return candidates
-
-    def _get_sentiment(self, data: MarketData) -> tuple[Decimal, bool]:
-        """Get sentiment score and VERY_STRONG flag."""
-        if self._sentiment_analyzer is None:
-            return Decimal("0"), False
-        score, is_strong = self._sentiment_analyzer(data.symbol)
-        is_very_strong = abs(score) >= self._config.very_strong_threshold
-        return score, is_very_strong
-
-    def _get_strength(self, data: MarketData) -> tuple[Decimal, bool]:
-        """Get strength score and tradability flag."""
-        inputs = StrengthInputs(
-            breadth_ratio=data.breadth_ratio,
-            regime=MarketRegime.SIDEWAYS,
-            adx=data.adx,
-            volume_ratio=data.volume_ratio,
-            volatility_atr_pct=data.atr_pct,
-        )
-        try:
-            score = self._strength_scorer.score(data.exchange, inputs)
-            is_tradable = self._strength_scorer.is_tradable(data.exchange, inputs)
-            return score, is_tradable
-        except ConfigError:
-            return Decimal("0"), False
-
-    def _get_exit_probability(self, data: MarketData) -> Decimal:
-        """Get RL-based exit probability."""
-        if self._rl_predictor is None:
-            return Decimal("0")
-        observation = self._build_observation(data)
-        return self._rl_predictor(observation)
-
-    def _build_observation(self, data: MarketData) -> list[Decimal]:
-        """Build observation vector for RL predictor."""
-        return [
-            data.pct_change / Decimal("100"),
-            data.volume_ratio,
-            data.adx / Decimal("100"),
-            data.atr_pct,
-            data.breadth_ratio,
-        ]
-
-    def _compute_composite_score(self, scored: _CandidateScores) -> Decimal:
-        """Compute weighted composite score from all factors."""
-        weights = {
-            "sentiment": Decimal("0.30"),
-            "strength": Decimal("0.30"),
-            "volume": Decimal("0.20"),
-            "rl": Decimal("0.20"),
-        }
-        volume_score = min(Decimal("1"), scored.market_data.volume_ratio / Decimal("5"))
-        composite = (
-            abs(scored.sentiment_score) * weights["sentiment"]
-            + scored.strength_score * weights["strength"]
-            + volume_score * weights["volume"]
-            + scored.exit_probability * weights["rl"]
-        )
-        return min(Decimal("1"), max(Decimal("0"), composite))
 
 
 # Mock helpers for testing

@@ -20,8 +20,6 @@ from iatb.scanner.instrument_scanner import (
     ScannerResult,
     _last_decimal,
     _to_decimal,
-    create_mock_rl_predictor,
-    create_mock_sentiment_analyzer,
 )
 
 # Set deterministic seeds for reproducibility
@@ -87,11 +85,7 @@ class TestInstrumentScanner:
             )
         ]
 
-        scanner = InstrumentScanner(
-            sentiment_analyzer=create_mock_sentiment_analyzer({"TCS": (Decimal("0.8"), True)}),
-            rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
-            symbols=[],
-        )
+        scanner = InstrumentScanner(symbols=[])
 
         result = scanner.scan(custom_data=custom_data)
         assert isinstance(result, ScannerResult)
@@ -202,7 +196,7 @@ class TestEventLoopManagement:
         @dataclass
         class MockBar:
             timestamp: datetime
-            open: Decimal
+            open_price: Decimal
             high: Decimal
             low: Decimal
             close: Decimal
@@ -216,7 +210,7 @@ class TestEventLoopManagement:
             bars.append(
                 MockBar(
                     timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=UTC) - timedelta(days=i),
-                    open=Decimal("100") + Decimal(str(i)),
+                    open_price=Decimal("100") + Decimal(str(i)),
                     high=Decimal("105") + Decimal(str(i)),
                     low=Decimal("95") + Decimal(str(i)),
                     close=Decimal("100") + Decimal(str(i)),

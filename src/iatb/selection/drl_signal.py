@@ -11,6 +11,7 @@ from iatb.backtesting.event_driven import EventDrivenResult
 from iatb.backtesting.monte_carlo import MonteCarloResult
 from iatb.backtesting.walk_forward import WalkForwardResult
 from iatb.core.exceptions import ConfigError
+from iatb.rl.agent import RLAgent
 from iatb.selection._util import clamp_01
 from iatb.selection.decay import temporal_decay
 
@@ -191,3 +192,46 @@ def _estimate_drawdown(result: EventDrivenResult) -> Decimal:
         if dd > max_dd:
             max_dd = dd
     return max_dd
+
+
+def _action_to_score(action: int) -> Decimal:
+    """Map RL action to base score: HOLD->0.2, BUY->0.8, SELL->0.2."""
+    if action == 0:  # HOLD
+        return Decimal("0.2")
+    elif action == 1:  # BUY
+        return Decimal("0.8")
+    elif action == 2:  # SELL
+        return Decimal("0.2")
+    else:
+        msg = f"invalid action: {action}"
+        raise ConfigError(msg)
+
+
+def compute_drl_signal_from_agent(
+    agent: RLAgent,
+    observation: list[Decimal],
+    current_utc: datetime,
+    conclusion: BacktestConclusion | None = None,
+) -> DRLSignalOutput:
+    """Compute DRL signal from RL agent prediction with fallback to backtest conclusion."""
+    if agent.has_model:
+        action, confidence = agent.predict_with_confidence(observation)
+        base_score = _action_to_score(action)
+        # Combine base score with confidence:
+        # high confidence -> base_score, low confidence -> neutral (0.5)
+        score = base_score * confidence + Decimal("0.5") * (Decimal("1") - confidence)
+        return DRLSignalOutput(
+            score=clamp_01(score),
+            confidence=confidence,
+            robust=False,
+            metadata={
+                "action": str(action),
+                "agent_confidence": str(confidence),
+                "source": "rl_agent",
+            },
+        )
+    else:
+        if conclusion is None:
+            msg = "Fallback to backtest conclusion requires conclusion when agent has no model"
+            raise ConfigError(msg)
+        return compute_drl_signal(conclusion, current_utc)

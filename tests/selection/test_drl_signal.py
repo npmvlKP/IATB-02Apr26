@@ -13,6 +13,7 @@ from iatb.core.exceptions import ConfigError
 from iatb.selection.drl_signal import (
     BacktestConclusion,
     DRLSignalOutput,
+    _action_to_score,
     _derive_confidence,
     _drawdown_factor,
     _estimate_drawdown,
@@ -22,6 +23,7 @@ from iatb.selection.drl_signal import (
     _sigmoid_normalize,
     _validate_conclusion,
     compute_drl_signal,
+    compute_drl_signal_from_agent,
 )
 
 # Set deterministic seeds for reproducibility
@@ -660,3 +662,107 @@ class TestComputeDRLSignal:
         confidence_with_decay = _derive_confidence(conclusion, Decimal("0.5"))
         confidence_no_decay = _derive_confidence(conclusion, Decimal("1.0"))
         assert confidence_with_decay < confidence_no_decay
+
+
+class TestComputeDRLSignalFromAgent:
+    """Test DRL signal computation from RL agent."""
+
+    def test_action_to_score_mapping(self) -> None:
+        """Test action to score mapping."""
+
+        # HOLD -> 0.2
+        assert _action_to_score(0) == Decimal("0.2")
+        # BUY -> 0.8
+        assert _action_to_score(1) == Decimal("0.8")
+        # SELL -> 0.2
+        assert _action_to_score(2) == Decimal("0.2")
+        # Invalid action -> raises ConfigError
+        with pytest.raises(ConfigError):
+            _action_to_score(3)
+
+    def test_compute_drl_signal_from_agent_with_model(self) -> None:
+        """Test DRL signal computation when agent has a trained model."""
+        from unittest.mock import Mock
+
+        # Mock RLAgent with model
+        mock_agent = Mock()
+        mock_agent.has_model = True
+        mock_agent.predict_with_confidence.return_value = (
+            1,
+            Decimal("0.9"),
+        )  # BUY with high confidence
+
+        observation = [Decimal("0.5"), Decimal("0.3")]
+        current_utc = datetime.now(UTC)
+
+        result = compute_drl_signal_from_agent(mock_agent, observation, current_utc)
+
+        # Verify agent method was called
+        mock_agent.predict_with_confidence.assert_called_once_with(observation)
+
+        # Verify result
+        assert isinstance(result, DRLSignalOutput)
+        # BUY action (0.8) with high confidence (0.9) should give score close to 0.8
+        # score = base_score * confidence + 0.5 * (1 - confidence)
+        # score = 0.8 * 0.9 + 0.5 * 0.1 = 0.72 + 0.05 = 0.77
+        assert result.score > Decimal("0.7")
+        assert result.score < Decimal("0.8")
+        assert result.confidence == Decimal("0.9")
+        assert result.robust is False  # From agent source
+        assert result.metadata["source"] == "rl_agent"
+        assert result.metadata["action"] == "1"
+
+    def test_compute_drl_signal_from_agent_without_model_fallback(self) -> None:
+        """Test fallback to backtest conclusion when agent has no model."""
+        from unittest.mock import Mock
+
+        # Mock RLAgent without model
+        mock_agent = Mock()
+        mock_agent.has_model = False
+
+        # Create a valid backtest conclusion
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("5"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=datetime.now(UTC),
+        )
+
+        observation = [Decimal("0.5"), Decimal("0.3")]
+        current_utc = datetime.now(UTC)
+
+        # Import the function we're testing
+        from iatb.selection.drl_signal import compute_drl_signal, compute_drl_signal_from_agent
+
+        result = compute_drl_signal_from_agent(mock_agent, observation, current_utc, conclusion)
+
+        # Should fall back to regular compute_drl_signal
+        assert isinstance(result, DRLSignalOutput)
+        expected = compute_drl_signal(conclusion, current_utc)
+        assert result == expected
+
+    def test_compute_drl_signal_from_agent_without_model_no_fallback_raises(self) -> None:
+        """Test that missing conclusion when no model raises error."""
+        from unittest.mock import Mock
+
+        # Mock RLAgent without model
+        mock_agent = Mock()
+        mock_agent.has_model = False
+
+        observation = [Decimal("0.5"), Decimal("0.3")]
+        current_utc = datetime.now(UTC)
+
+        # Import the function we're testing
+        from iatb.selection.drl_signal import compute_drl_signal_from_agent
+
+        # Should raise ConfigError when no conclusion provided for fallback
+        with pytest.raises(
+            ConfigError,
+            match="Fallback to backtest conclusion requires conclusion",
+        ):
+            compute_drl_signal_from_agent(mock_agent, observation, current_utc)
