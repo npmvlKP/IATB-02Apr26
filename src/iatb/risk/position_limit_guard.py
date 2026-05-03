@@ -513,6 +513,41 @@ class PositionLimitGuard:
             return limit_config
         return None
 
+    def _build_limit_alert_message(
+        self,
+        config: PositionLimitConfig,
+        symbol: str,
+        qty: Decimal,
+        notional: Decimal,
+        qty_pct: Decimal,
+        notional_pct: Decimal,
+        now_utc: datetime,
+    ) -> str:
+        """Build alert message for approaching limit.
+
+        Args:
+            config: Limit configuration.
+            symbol: Trading symbol.
+            qty: Current quantity.
+            notional: Current notional.
+            qty_pct: Quantity as percentage of limit.
+            notional_pct: Notional as percentage of limit.
+            now_utc: Current UTC datetime.
+
+        Returns:
+            Formatted alert message.
+        """
+        return (
+            f"Position approaching limit:\n"
+            f"  Exchange: {config.exchange.value}\n"
+            f"  Symbol: {symbol}\n"
+            f"  Quantity: {qty} / {config.max_quantity_per_symbol} "
+            f"({qty_pct:.1%})\n"
+            f"  Notional: {notional} / {config.max_notional_per_symbol} "
+            f"({notional_pct:.1%})\n"
+            f"  Time (UTC): {now_utc.isoformat()}"
+        )
+
     def _send_limit_alert(
         self,
         config: PositionLimitConfig,
@@ -537,15 +572,8 @@ class PositionLimitGuard:
         if self._alert_manager is None:
             return
 
-        message = (
-            f"Position approaching limit:\n"
-            f"  Exchange: {config.exchange.value}\n"
-            f"  Symbol: {symbol}\n"
-            f"  Quantity: {qty} / {config.max_quantity_per_symbol} "
-            f"({qty_pct:.1%})\n"
-            f"  Notional: {notional} / {config.max_notional_per_symbol} "
-            f"({notional_pct:.1%})\n"
-            f"  Time (UTC): {now_utc.isoformat()}"
+        message = self._build_limit_alert_message(
+            config, symbol, qty, notional, qty_pct, notional_pct, now_utc
         )
 
         _LOGGER.warning(

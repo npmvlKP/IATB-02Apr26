@@ -259,6 +259,93 @@ class RiskPipeline:
         self.trade_audit_logger.log_order(order, result, strategy_id=strategy_id, algo_id=algo_id)
         return result.order_id
 
+    def _process_buy_pnl(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+    ) -> tuple[Decimal, tuple[Decimal, Decimal]]:
+        """Process PnL for BUY order.
+
+        Args:
+            symbol: Trading symbol.
+            fill_qty: Filled quantity.
+            fill_price: Fill price.
+            current_qty: Current quantity.
+            avg_entry_price: Average entry price.
+
+        Returns:
+            Tuple of (realized_pnl, new_position_state).
+        """
+        realized_pnl = Decimal("0")
+        new_position_state = (Decimal("0"), Decimal("0"))
+
+        if current_qty < Decimal("0"):
+            qty_to_close = min(fill_qty, abs(current_qty))
+            realized_pnl = (avg_entry_price - fill_price) * qty_to_close
+            remaining_short = abs(current_qty) - qty_to_close
+            if remaining_short > Decimal("0"):
+                new_position_state = (-remaining_short, avg_entry_price)
+            else:
+                qty_opening_long = fill_qty - qty_to_close
+                if qty_opening_long > Decimal("0"):
+                    new_position_state = (qty_opening_long, fill_price)
+                else:
+                    new_position_state = (Decimal("0"), Decimal("0"))
+        else:
+            total_cost = (current_qty * avg_entry_price) + (fill_qty * fill_price)
+            new_qty = current_qty + fill_qty
+            new_avg = total_cost / new_qty if new_qty > Decimal("0") else Decimal("0")
+            new_position_state = (new_qty, new_avg)
+
+        return realized_pnl, new_position_state
+
+    def _process_sell_pnl(
+        self,
+        symbol: str,
+        fill_qty: Decimal,
+        fill_price: Decimal,
+        current_qty: Decimal,
+        avg_entry_price: Decimal,
+    ) -> tuple[Decimal, tuple[Decimal, Decimal]]:
+        """Process PnL for SELL order.
+
+        Args:
+            symbol: Trading symbol.
+            fill_qty: Filled quantity.
+            fill_price: Fill price.
+            current_qty: Current quantity.
+            avg_entry_price: Average entry price.
+
+        Returns:
+            Tuple of (realized_pnl, new_position_state).
+        """
+        realized_pnl = Decimal("0")
+        new_position_state = (Decimal("0"), Decimal("0"))
+
+        if current_qty > Decimal("0"):
+            qty_to_close = min(fill_qty, current_qty)
+            realized_pnl = (fill_price - avg_entry_price) * qty_to_close
+            remaining_long = current_qty - qty_to_close
+            if remaining_long > Decimal("0"):
+                new_position_state = (remaining_long, avg_entry_price)
+            else:
+                qty_opening_short = fill_qty - qty_to_close
+                if qty_opening_short > Decimal("0"):
+                    new_position_state = (-qty_opening_short, fill_price)
+                else:
+                    new_position_state = (Decimal("0"), Decimal("0"))
+        else:
+            abs_current_qty = abs(current_qty)
+            total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
+            new_abs_qty = abs_current_qty + fill_qty
+            new_avg = total_cost / new_abs_qty if new_abs_qty > Decimal("0") else Decimal("0")
+            new_position_state = (-new_abs_qty, new_avg)
+
+        return realized_pnl, new_position_state
+
     def _calculate_realized_pnl(self, order: OrderRequest, result: ExecutionResult) -> Decimal:
         """Calculate realized PnL for closing trades with full position tracking.
 
@@ -282,46 +369,18 @@ class RiskPipeline:
         )
 
         realized_pnl = Decimal("0")
+        new_position_state = (Decimal("0"), Decimal("0"))
 
         if order.side.value == "BUY":
-            if current_qty < Decimal("0"):
-                qty_to_close = min(fill_qty, abs(current_qty))
-                realized_pnl = (avg_entry_price - fill_price) * qty_to_close
-                remaining_short = abs(current_qty) - qty_to_close
-                if remaining_short > Decimal("0"):
-                    self._position_state[symbol] = (-remaining_short, avg_entry_price)
-                else:
-                    qty_opening_long = fill_qty - qty_to_close
-                    if qty_opening_long > Decimal("0"):
-                        self._position_state[symbol] = (qty_opening_long, fill_price)
-                    else:
-                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
-            else:
-                total_cost = (current_qty * avg_entry_price) + (fill_qty * fill_price)
-                new_qty = current_qty + fill_qty
-                new_avg = total_cost / new_qty if new_qty > Decimal("0") else Decimal("0")
-                self._position_state[symbol] = (new_qty, new_avg)
-
+            realized_pnl, new_position_state = self._process_buy_pnl(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price
+            )
         elif order.side.value == "SELL":
-            if current_qty > Decimal("0"):
-                qty_to_close = min(fill_qty, current_qty)
-                realized_pnl = (fill_price - avg_entry_price) * qty_to_close
-                remaining_long = current_qty - qty_to_close
-                if remaining_long > Decimal("0"):
-                    self._position_state[symbol] = (remaining_long, avg_entry_price)
-                else:
-                    qty_opening_short = fill_qty - qty_to_close
-                    if qty_opening_short > Decimal("0"):
-                        self._position_state[symbol] = (-qty_opening_short, fill_price)
-                    else:
-                        self._position_state[symbol] = (Decimal("0"), Decimal("0"))
-            else:
-                abs_current_qty = abs(current_qty)
-                total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
-                new_abs_qty = abs_current_qty + fill_qty
-                new_avg = total_cost / new_abs_qty if new_abs_qty > Decimal("0") else Decimal("0")
-                self._position_state[symbol] = (-new_abs_qty, new_avg)
+            realized_pnl, new_position_state = self._process_sell_pnl(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price
+            )
 
+        self._position_state[symbol] = new_position_state
         return realized_pnl
 
 

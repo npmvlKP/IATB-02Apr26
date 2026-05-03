@@ -144,6 +144,38 @@ class EventPersistence:
             msg = f"Failed to load events for topic '{topic}'"
             raise EventBusError(msg) from exc
 
+    async def _replay_single_event(
+        self,
+        event: PersistedEvent,
+        callback: Any,
+        delay_ms: int,
+    ) -> bool:
+        """Replay a single event with optional delay.
+
+        Args:
+            event: Event to replay.
+            callback: Callback function to receive the event.
+            delay_ms: Delay in milliseconds.
+
+        Returns:
+            True if replay succeeded, False otherwise.
+        """
+        try:
+            event_obj = self._deserialize_event(event.event_data)
+
+            if asyncio.iscoroutinefunction(callback):
+                await callback(event_obj)
+            else:
+                callback(event_obj)
+
+            if delay_ms > 0:
+                await asyncio.sleep(delay_ms / 1000)
+
+            return True
+        except Exception as exc:
+            logger.error("Error replaying event %s: %s", event.event_id, exc)
+            return False
+
     async def replay_events(
         self,
         topic: str,
@@ -172,25 +204,8 @@ class EventPersistence:
 
         replayed_count = 0
         for event in events:
-            try:
-                # Deserialize event
-                event_obj = self._deserialize_event(event.event_data)
-
-                # Call callback
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(event_obj)
-                else:
-                    callback(event_obj)
-
+            if await self._replay_single_event(event, callback, delay_ms):
                 replayed_count += 1
-
-                # Apply delay if specified
-                if delay_ms > 0:
-                    await asyncio.sleep(delay_ms / 1000)
-
-            except Exception as exc:
-                logger.error("Error replaying event %s: %s", event.event_id, exc)
-                continue
 
         logger.info(f"Replayed {replayed_count} events for topic: {topic}")
         return replayed_count

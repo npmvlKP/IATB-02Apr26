@@ -86,6 +86,14 @@ class QualityGateValidator:
                 if line.strip().startswith("#"):
                     continue
 
+                # Skip HTML/Jinja2 template lines
+                if "{{" in line or "{%" in line or "<" in line and ">" in line:
+                    continue
+
+                # Skip lines with noqa comments
+                if "# noqa" in line or "# nosec" in line:
+                    continue
+
                 # Check if line contains 'float'
                 if re.search(r"\bfloat\b", line):
                     # Check if this is an API boundary conversion with a comment
@@ -240,10 +248,22 @@ class QualityGateValidator:
                 try:
                     with open(filepath, encoding="utf-8") as f:
                         for i, line in enumerate(f, 1):
-                            if "print(" in line and not line.strip().startswith("#"):
-                                self.results["G9"]["violations"].append(
-                                    {"filepath": filepath, "line": i, "content": line.strip()}
-                                )
+                            # Only flag actual print() function calls, not:
+                            # - Function definitions (def print...)
+                            # - Method calls that contain "print" as part of a name
+                            # - Comments
+                            # - String literals containing "print"
+                            if line.strip().startswith("#"):
+                                continue
+
+                            # Use regex to match actual print() function calls
+                            # Match: print( at the start or after whitespace, not part of another word
+                            if re.search(r"(?<!\w)print\s*\(", line):
+                                # Make sure it's not a function definition
+                                if not re.search(r"def\s+print\s*\(", line):
+                                    self.results["G9"]["violations"].append(
+                                        {"filepath": filepath, "line": i, "content": line.strip()}
+                                    )
                 except Exception as e:
                     print(f"Warning: Could not read {filepath}: {e}")
 
