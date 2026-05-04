@@ -169,14 +169,38 @@ Write-Host ""
 
 # Step 6: Docker Compose validation (optional, requires Docker)
 Write-Host "[Step 6] Docker Compose validation (optional)..." -ForegroundColor Yellow
-Write-Host "  To validate the observability stack in Docker, run:" -ForegroundColor Gray
-Write-Host "    docker-compose config" -ForegroundColor Cyan
-Write-Host "    docker-compose up -d prometheus grafana otel-collector jaeger" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Then verify:" -ForegroundColor Gray
-Write-Host "    - Prometheus UI: http://localhost:9090" -ForegroundColor Cyan
-Write-Host "    - Grafana UI: http://localhost:3000 (admin/admin)" -ForegroundColor Cyan
-Write-Host "    - Jaeger UI: http://localhost:16686" -ForegroundColor Cyan
+
+# Check if Docker is running
+try {
+    $dockerVersion = docker --version 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  ✓ Docker is running" -ForegroundColor Green
+        
+        # Try docker-compose config
+        Write-Host "  Running docker-compose config..." -ForegroundColor Gray
+        $composeConfig = docker-compose config 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "    ✓ docker-compose config successful" -ForegroundColor Green
+        } else {
+            Write-Host "    ⚠ docker-compose config has warnings (expected if .env missing)" -ForegroundColor Yellow
+        }
+        
+        Write-Host ""
+        Write-Host "  To start observability services:" -ForegroundColor Gray
+        Write-Host "    docker-compose up -d prometheus grafana otel-collector jaeger" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  Then verify:" -ForegroundColor Gray
+        Write-Host "    - Prometheus UI: http://localhost:9090" -ForegroundColor Cyan
+        Write-Host "    - Grafana UI: http://localhost:3000 (admin/admin)" -ForegroundColor Cyan
+        Write-Host "    - Jaeger UI: http://localhost:16686" -ForegroundColor Cyan
+    } else {
+        Write-Host "  ⚠ Docker not running - skip Docker validation" -ForegroundColor Yellow
+        Write-Host "  To validate with Docker, start Docker Desktop and re-run this script" -ForegroundColor Gray
+    }
+} catch {
+    Write-Host "  ⚠ Docker not available - skip Docker validation" -ForegroundColor Yellow
+    Write-Host "  To validate with Docker, start Docker Desktop and re-run this script" -ForegroundColor Gray
+}
 Write-Host ""
 
 # Step 7: Summary
