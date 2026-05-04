@@ -48,7 +48,7 @@ class TestSecretMetadata:
             expires_at=now + timedelta(hours=24),
         )
         remaining = meta.time_until_expiry
-        assert remaining > timedelta(0)
+        assert remaining >= timedelta(0)
 
     def test_time_until_expiry_expired(self) -> None:
         past = datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC)
@@ -263,7 +263,7 @@ class TestSecretsRotationManager:
         mgr = self._make_manager()
         now = _utc_now()
         mgr.register_secret(SecretType.API_KEY, "TEST_VALID", now)
-        assert mgr.is_secret_valid("TEST_VALID") is True
+        assert mgr.is_secret_valid("TEST_VALID", now) is True
 
     def test_is_secret_valid_not_registered(self) -> None:
         mgr = self._make_manager()

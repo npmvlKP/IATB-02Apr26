@@ -154,31 +154,9 @@ class OrderManager:
         # upstream of the pipeline.
         existing_order_id = self._check_duplicate_order(request)
         if existing_order_id is not None:
-            existing_status = self._order_status.get(existing_order_id)
-            # In crash recovery mode, skip orders that were already filled
-            if self._crash_recovery_mode and existing_status == OrderStatus.FILLED:
-                _LOGGER.info(
-                    "Skipping already filled order in crash recovery mode",
-                    extra={
-                        "order_id": existing_order_id,
-                        "symbol": request.symbol,
-                        "side": request.side.value,
-                    },
-                )
-                return ExecutionResult(
-                    existing_order_id,
-                    existing_status,
-                    Decimal("0"),
-                    Decimal("0"),
-                )
-            # Normal duplicate detection logic for open/pending orders
-            if existing_status in {OrderStatus.OPEN, OrderStatus.PENDING}:
-                return ExecutionResult(
-                    existing_order_id,
-                    existing_status,
-                    Decimal("0"),
-                    Decimal("0"),
-                )
+            result = self._handle_duplicate_order(request, existing_order_id)
+            if result is not None:
+                return result
 
         # Run through the risk pipeline
         now = datetime.now(UTC)
@@ -186,23 +164,57 @@ class OrderManager:
             request, now, strategy_id=strategy_id, algo_id=algo_id
         )
         if not pipeline_result.allowed:
-            # Propagate rejection as ConfigError with specific reason
             raise ConfigError(pipeline_result.rejection_reason or "order rejected")
         result = pipeline_result.execution_result
         if result is None:
-            msg = pipeline_result.rejection_reason or "order rejected"
-            raise ConfigError(msg)
-        # Record order status and fingerprint for downstream tracking
+            raise ConfigError(pipeline_result.rejection_reason or "order rejected")
+
         self._order_status[result.order_id] = result.status
         self._record_order_fingerprint(request, result.order_id)
-        # Persist state if configured
-        if self._state_persistence_path:
-            self.save_state(self._state_persistence_path)
-            # Export trading state for crash recovery on every order fill
-            if result.status == OrderStatus.FILLED:
-                self._export_trading_state()
-
+        self._persist_order_state(result)
         return result
+
+    def _handle_duplicate_order(
+        self, request: OrderRequest, existing_order_id: str
+    ) -> ExecutionResult | None:
+        """Handle duplicate order detection.
+
+        Returns ExecutionResult if duplicate should short‑circuit, else None.
+        """
+        existing_status = self._order_status.get(existing_order_id)
+        # In crash recovery mode, skip orders that were already filled
+        if self._crash_recovery_mode and existing_status == OrderStatus.FILLED:
+            _LOGGER.info(
+                "Skipping already filled order in crash recovery mode",
+                extra={
+                    "order_id": existing_order_id,
+                    "symbol": request.symbol,
+                    "side": request.side.value,
+                },
+            )
+            return ExecutionResult(
+                existing_order_id,
+                existing_status,
+                Decimal("0"),
+                Decimal("0"),
+            )
+        # Normal duplicate detection for open/pending orders
+        if existing_status in {OrderStatus.OPEN, OrderStatus.PENDING}:
+            return ExecutionResult(
+                existing_order_id,
+                existing_status,
+                Decimal("0"),
+                Decimal("0"),
+            )
+        return None
+
+    def _persist_order_state(self, result: ExecutionResult) -> None:
+        """Persist order state to disk if configured."""
+        if not self._state_persistence_path:
+            return
+        self.save_state(self._state_persistence_path)
+        if result.status == OrderStatus.FILLED:
+            self._export_trading_state()
 
     def _gate_kill_switch(self) -> None:
         if self._kill_switch and not self._kill_switch.check_order_allowed():
@@ -432,34 +444,11 @@ class OrderManager:
         Prevents event loop blocking during live trading by running
         the synchronous executor in a separate thread.
         """
-        # Unified risk pipeline handles core steps; duplicate detection stays first.
         existing_order_id = self._check_duplicate_order(request)
         if existing_order_id is not None:
-            existing_status = self._order_status.get(existing_order_id)
-            # In crash recovery mode, skip orders that were already filled
-            if self._crash_recovery_mode and existing_status == OrderStatus.FILLED:
-                _LOGGER.info(
-                    "Skipping already filled order in crash recovery mode",
-                    extra={
-                        "order_id": existing_order_id,
-                        "symbol": request.symbol,
-                        "side": request.side.value,
-                    },
-                )
-                return ExecutionResult(
-                    existing_order_id,
-                    existing_status,
-                    Decimal("0"),
-                    Decimal("0"),
-                )
-            # Normal duplicate detection logic for open/pending orders
-            if existing_status in {OrderStatus.OPEN, OrderStatus.PENDING}:
-                return ExecutionResult(
-                    existing_order_id,
-                    existing_status,
-                    Decimal("0"),
-                    Decimal("0"),
-                )
+            result = self._handle_duplicate_order(request, existing_order_id)
+            if result is not None:
+                return result
 
         # Run through the risk pipeline (synchronous call; it internally uses the injected executor)
         now = datetime.now(UTC)
@@ -470,13 +459,10 @@ class OrderManager:
             raise ConfigError(pipeline_result.rejection_reason or "order rejected")
         result = pipeline_result.execution_result
         if result is None:
-            msg = pipeline_result.rejection_reason or "order rejected"
-            raise ConfigError(msg)
-        # Update order status and fingerprint
+            raise ConfigError(pipeline_result.rejection_reason or "order rejected")
+
         self._order_status[result.order_id] = result.status
         self._record_order_fingerprint(request, result.order_id)
-        # Persist state if needed
-
         if self._state_persistence_path:
             self.save_state(self._state_persistence_path)
 

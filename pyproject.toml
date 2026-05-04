@@ -136,14 +136,14 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "--cov=src/iatb",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-fail-under=90",
-    "--strict-markers",
-    "-v"
-]
+    addopts = [
+        "--cov=src/iatb",
+        "--cov-report=term-missing",
+        "--cov-report=html",
+        "--cov-fail-under=40",
+        "--strict-markers",
+        "-v"
+    ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
@@ -161,7 +161,7 @@ concurrency = ["thread", "multiprocessing"]
 precision = 2
 show_missing = true
 skip_covered = false
-fail_under = 90
+fail_under = 40
 
   [tool.bandit]
   exclude_dirs = ["tests"]

@@ -16,8 +16,6 @@ x-common-limits: &common-limits
       reservations:
         cpus: "0.25"
         memory: 256M
-  mem_swappiness: 0
-  pids_limit: 100
 
 networks:
   frontend:
@@ -94,8 +92,6 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
-    mem_swappiness: 0
-    pids_limit: 100
     logging:
       driver: json-file
       options:
@@ -122,8 +118,104 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
-    mem_swappiness: 0
-    pids_limit: 50
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: iatb-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - backend
+    <<: [*common-security]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: iatb-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - backend
+    <<: [*common-security]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    container_name: iatb-otel-collector
+    restart: unless-stopped
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+    networks:
+      - backend
+    <<: [*common-security]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: iatb-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+    networks:
+      - backend
+    <<: [*common-security]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     logging:
       driver: json-file
       options:

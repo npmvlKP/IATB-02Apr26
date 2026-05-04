@@ -295,49 +295,8 @@ class DuckDBStore:
             )
         return result
 
-    def query_moving_averages(  # noqa: G10
-        self,
-        symbol: str,
-        exchange: Exchange,
-        window: int,
-        start: Timestamp,
-        end: Timestamp,
-    ) -> list[dict[str, Any]]:
-        if window <= 0:
-            msg = "window must be positive"
-            raise ConfigError(msg)
-        connection = self._get_connection()
-        try:
-            rows = connection.execute(
-                """
-                SELECT
-                    timestamp_utc,
-                    CAST(close_price AS DOUBLE) AS close,
-                    AVG(CAST(close_price AS DOUBLE)) OVER (
-                        ORDER BY timestamp_utc
-                        ROWS BETWEEN ? PRECEDING AND CURRENT ROW
-                    ) AS sma,
-                    EXP(AVG(LN(CAST(close_price AS DOUBLE))) OVER (
-                        ORDER BY timestamp_utc
-                        ROWS BETWEEN ? PRECEDING AND CURRENT ROW
-                    )) AS ema_approx
-                FROM ohlcv_bars
-                WHERE symbol = ? AND exchange = ?
-                AND timestamp_utc >= ? AND timestamp_utc <= ?
-                ORDER BY timestamp_utc
-                """,
-                (
-                    window - 1,
-                    window - 1,
-                    symbol,
-                    exchange.value,
-                    start.isoformat(),
-                    end.isoformat(),
-                ),
-            ).fetchall()
-        finally:
-            if self._connection is None:
-                connection.close()
+    def _process_moving_average_rows(self, rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+        """Process rows from moving average query."""
         result: list[dict[str, Any]] = []
         for row in rows:
             result.append(
@@ -350,6 +309,28 @@ class DuckDBStore:
             )
         return result
 
+    def _process_performance_rows(
+        self, rows: list[tuple[Any, ...]], limit: int
+    ) -> list[dict[str, Any]]:
+        """Process rows from performance ranking query."""
+        rankings: list[dict[str, Any]] = []
+        for row in rows:
+            symbol = row[0]
+            end_price = row[1]
+            start_price = row[2]
+            if start_price is not None and end_price is not None and start_price != 0:
+                return_pct = ((end_price - start_price) / start_price) * 100
+                rankings.append(
+                    {
+                        "symbol": symbol,
+                        "start_price": create_price(str(start_price)),
+                        "end_price": create_price(str(end_price)),
+                        "return_pct": create_price(str(return_pct)),
+                    }
+                )
+        rankings.sort(key=lambda x: float(x["return_pct"]), reverse=True)
+        return rankings[:limit]
+
     def query_performance_ranking(  # noqa: G10
         self,
         exchange: Exchange,
@@ -357,6 +338,7 @@ class DuckDBStore:
         end: Timestamp,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
+        """Rank symbols by performance (return %) over a period."""
         if limit <= 0:
             msg = "limit must be positive"
             raise ConfigError(msg)
@@ -390,23 +372,7 @@ class DuckDBStore:
         finally:
             if self._connection is None:
                 connection.close()
-        rankings: list[dict[str, Any]] = []
-        for row in rows:
-            symbol = row[0]
-            end_price = row[1]
-            start_price = row[2]
-            if start_price is not None and end_price is not None and start_price != 0:
-                return_pct = ((end_price - start_price) / start_price) * 100
-                rankings.append(
-                    {
-                        "symbol": symbol,
-                        "start_price": create_price(str(start_price)),
-                        "end_price": create_price(str(end_price)),
-                        "return_pct": create_price(str(return_pct)),
-                    }
-                )
-        rankings.sort(key=lambda x: float(x["return_pct"]), reverse=True)
-        return rankings[:limit]
+        return self._process_performance_rows(rows, limit)
 
     def query_volatility(
         self,
@@ -458,6 +424,7 @@ class DuckDBStore:
         start: Timestamp,
         end: Timestamp,
     ) -> dict[str, dict[str, float]]:
+        """Compute correlation matrix between symbols based on daily returns."""
         if len(symbols) < 2:
             msg = "At least 2 symbols required for correlation"
             raise ConfigError(msg)
@@ -481,6 +448,12 @@ class DuckDBStore:
         finally:
             if self._connection is None:
                 connection.close()
+        pivot = self._build_price_pivot(rows)
+        returns = self._compute_returns(pivot, symbols)
+        return self._compute_correlation_matrix(returns)
+
+    def _build_price_pivot(self, rows: list[tuple[Any, ...]]) -> dict[str, dict[str, float]]:
+        """Build pivot table: symbol -> {timestamp: close}."""
         pivot: dict[str, dict[str, float]] = {}
         for row in rows:
             sym = row[0]
@@ -488,6 +461,12 @@ class DuckDBStore:
             if sym not in pivot:
                 pivot[sym] = {}
             pivot[sym][_normalize_timestamp(row[1]).isoformat()] = close
+        return pivot
+
+    def _compute_returns(
+        self, pivot: dict[str, dict[str, float]], symbols: list[str]
+    ) -> dict[str, list[float]]:
+        """Compute daily returns for each symbol."""
         all_timestamps: set[str] = set()
         for sym_data in pivot.values():
             all_timestamps.update(sym_data.keys())
@@ -506,6 +485,12 @@ class DuckDBStore:
                     sym_returns.append(ret)
             if sym_returns:
                 returns[sym] = sym_returns
+        return returns
+
+    def _compute_correlation_matrix(
+        self, returns: dict[str, list[float]]
+    ) -> dict[str, dict[str, float]]:
+        """Compute covariance-based correlation matrix."""
         common_symbols = list(returns.keys())
         correlation_matrix: dict[str, dict[str, float]] = {}
         for sym1 in common_symbols:

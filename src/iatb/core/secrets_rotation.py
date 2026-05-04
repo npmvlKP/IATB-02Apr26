@@ -231,12 +231,17 @@ class SecretsRotationManager:
         """Get status of all managed secrets."""
         return list(self._metadata.values())
 
-    def is_secret_valid(self, key_name: str) -> bool:
-        """Check if a secret is valid (not expired)."""
+    def is_secret_valid(self, key_name: str, now_utc: datetime | None = None) -> bool:
+        """Check if a secret is valid (not expired).
+
+        Args:
+            key_name: The secret key to check.
+            now_utc: Optional UTC datetime for validation. If None, uses current UTC time.
+        """
         meta = self._metadata.get(key_name)
         if meta is None:
             return False
-        return not meta.is_expired()
+        return not meta.is_expired(now_utc)
 
     def schedule_rotation(self, key_name: str, rotate_at: datetime) -> None:
         """Schedule a rotation for a specific time."""

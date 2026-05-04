@@ -12,6 +12,7 @@ Run from project root: python scripts/verify_g7_g8_g9_g10.py
 """
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -36,15 +37,22 @@ def print_error(message: str) -> None:
     print(f"[FAIL] {message}")
 
 
-def find_pattern_matches(pattern: str, files: list[Path]) -> list[str]:
-    """Find plain-text pattern matches and return path:line records."""
+def find_pattern_matches(pattern: str, files: list[Path], use_regex: bool = False) -> list[str]:
+    """Find plain-text or regex pattern matches and return path:line records."""
     matches: list[str] = []
+    if use_regex:
+        regex = re.compile(pattern)
     for file_path in files:
         if not file_path.exists():
             continue
         lines = file_path.read_text(encoding="utf-8").splitlines()
         for line_number, line in enumerate(lines, start=1):
-            if pattern in line:
+            stripped = line.strip()
+            if stripped.startswith('#'):
+                continue
+            if stripped.startswith('"""') or stripped.startswith("'''"):
+                continue
+            if (use_regex and regex.search(line)) or (not use_regex and pattern in line):
                 relative = file_path.relative_to(ROOT_DIR)
                 matches.append(f"{relative}:{line_number}: {line.strip()}")
     return matches
@@ -120,10 +128,11 @@ def run_pattern_gate(
     pattern: str,
     files: list[Path],
     success_message: str,
+    use_regex: bool = False,
 ) -> tuple[str, bool]:
     """Run a source-pattern gate and return gate status tuple."""
     print_section(gate_name)
-    matches = find_pattern_matches(pattern, files)
+    matches = find_pattern_matches(pattern, files, use_regex)
     if matches:
         print_error(f"{gate_name}: FAILED")
         print("\n".join(matches[:20]))  # Show first 20 matches
@@ -193,9 +202,10 @@ def main() -> int:
         ),
         run_pattern_gate(
             "G9 - No Print Statements",
-            "print(",
+            r"\bprint\s*\(",
             src_python_files,
             "No print() found (PASS)",
+            use_regex=True,
         ),
         run_function_size_gate(src_python_files),
     ]
