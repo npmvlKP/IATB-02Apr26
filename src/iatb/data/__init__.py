@@ -4,6 +4,7 @@ Data layer foundations for market data ingestion.
 
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 from iatb.data.ccxt_provider import CCXTProvider
+from iatb.data.failover_provider import FailoverProvider
 from iatb.data.instrument import (
     Instrument,
     InstrumentProvider,
@@ -13,6 +14,10 @@ from iatb.data.instrument import (
 from iatb.data.instrument_master import InstrumentMaster
 from iatb.data.jugaad_provider import JugaadProvider
 from iatb.data.kite_provider import KiteProvider
+from iatb.data.kite_ticker import KiteTickerFeed
+from iatb.data.kite_ws_provider import KiteWebSocketProvider
+from iatb.data.market_data_cache import MarketDataCache
+from iatb.data.migration_provider import MigrationProvider
 from iatb.data.normalizer import normalize_ohlcv_batch, normalize_ohlcv_record
 from iatb.data.openalgo_provider import OpenAlgoProvider
 from iatb.data.price_reconciler import (
@@ -20,6 +25,12 @@ from iatb.data.price_reconciler import (
     PriceReconciler,
     ReconciliationConfig,
     ReconciliationResult,
+)
+from iatb.data.rate_limiter import (
+    CircuitBreaker,
+    RateLimiter,
+    RetryConfig,
+    retry_with_backoff,
 )
 from iatb.data.token_resolver import SymbolTokenResolver
 from iatb.data.validator import (
@@ -38,6 +49,10 @@ __all__ = [
     "CCXTProvider",
     "OpenAlgoProvider",
     "KiteProvider",
+    "KiteWebSocketProvider",
+    "KiteTickerFeed",
+    "FailoverProvider",
+    "MigrationProvider",
     "normalize_ohlcv_record",
     "normalize_ohlcv_batch",
     "validate_ohlcv_bar",
@@ -53,4 +68,9 @@ __all__ = [
     "PriceReconciler",
     "ReconciliationConfig",
     "ReconciliationResult",
+    "RateLimiter",
+    "CircuitBreaker",
+    "RetryConfig",
+    "retry_with_backoff",
+    "MarketDataCache",
 ]
