@@ -13,8 +13,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from iatb.core.config import Config
 from iatb.core.engine import Engine
 from iatb.core.enums import Exchange
+from iatb.core.event_bus import EventBus
+from iatb.core.sse_broadcaster import SSEBroadcaster
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs
 from iatb.selection.drl_signal import DRLSignalOutput
@@ -27,10 +30,20 @@ from iatb.selection.strength_signal import StrengthSignalOutput
 from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
 
 
+@pytest.fixture
+def mock_engine_dependencies():
+    """Provide mock core dependencies for Engine initialization."""
+    return {
+        "event_bus": MagicMock(spec=EventBus),
+        "sse_broadcaster": MagicMock(spec=SSEBroadcaster),
+        "config": MagicMock(spec=Config),
+    }
+
+
 class TestEngineWiring:
     """Test engine wiring with dynamic dependencies."""
 
-    def test_engine_initialization_with_all_dependencies(self) -> None:
+    def test_engine_initialization_with_all_dependencies(self, mock_engine_dependencies) -> None:
         """Test engine initialization with all pipeline dependencies."""
         mock_scorer = MagicMock()
         mock_kill_switch = MagicMock()
@@ -40,6 +53,7 @@ class TestEngineWiring:
         mock_scanner_config = MagicMock()
 
         engine = Engine(
+            **mock_engine_dependencies,
             instrument_scorer=mock_scorer,
             kill_switch=mock_kill_switch,
             data_provider=mock_data_provider,
@@ -54,9 +68,9 @@ class TestEngineWiring:
         assert engine.instrument_scanner is mock_scanner
         assert engine.order_manager is mock_order_manager
 
-    def test_engine_wiring_default_dependencies(self) -> None:
+    def test_engine_wiring_default_dependencies(self, mock_engine_dependencies) -> None:
         """Test engine creates default dependencies when not provided."""
-        engine = Engine()
+        engine = Engine(**mock_engine_dependencies)
 
         assert engine.instrument_scorer is not None
         assert isinstance(engine.instrument_scorer, type(engine.instrument_scorer))
@@ -65,7 +79,7 @@ class TestEngineWiring:
         assert engine.instrument_scanner is None
         assert engine.order_manager is None
 
-    def test_engine_pipeline_data_flow(self) -> None:
+    def test_engine_pipeline_data_flow(self, mock_engine_dependencies) -> None:
         """Test data flows correctly through pipeline components."""
         mock_data_provider = MagicMock()
         mock_scanner = MagicMock()
@@ -73,6 +87,7 @@ class TestEngineWiring:
         mock_scanner_config = MagicMock()
 
         engine = Engine(
+            **mock_engine_dependencies,
             data_provider=mock_data_provider,
             instrument_scanner=mock_scanner,
             order_manager=mock_order_manager,
