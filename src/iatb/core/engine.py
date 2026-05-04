@@ -12,9 +12,11 @@ from collections.abc import Coroutine, Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from iatb.core.config import Config
 from iatb.core.enums import OrderSide
 from iatb.core.event_bus import EventBus
 from iatb.core.exceptions import EngineError
+from iatb.core.sse_broadcaster import SSEBroadcaster
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs
 from iatb.risk.kill_switch import KillSwitch
@@ -48,6 +50,9 @@ class Engine:
 
     def __init__(
         self,
+        event_bus: EventBus,
+        sse_broadcaster: SSEBroadcaster,
+        config: Config,
         instrument_scorer: InstrumentScorer | None = None,
         kill_switch: KillSwitch | None = None,
         data_provider: DataProvider | None = None,
@@ -55,8 +60,10 @@ class Engine:
         order_manager: OrderManager | None = None,
         scanner_config: ScannerConfig | None = None,
     ) -> None:
-        """Initialize the engine with optional pipeline dependencies."""
-        self._event_bus = EventBus()
+        """Initialize the engine with core components and optional pipeline dependencies."""
+        self._event_bus = event_bus
+        self._sse_broadcaster = sse_broadcaster
+        self._config = config
         self._scorer = instrument_scorer or InstrumentScorer()
         self._kill_switch = kill_switch
         self._data_provider = data_provider
@@ -75,8 +82,17 @@ class Engine:
                 return
 
             logger.info("Starting engine")
+
+            # Preflight checks
+            if self._config.execution_mode == "live" and not self._config.live_trading_enabled:
+                raise EngineError(
+                    "Live trading enabled in config but live_trading_enabled is False",
+                )
+
             self._running = True
             await self._event_bus.start()
+            await self._sse_broadcaster.start(self._event_bus)
+
             logger.info("Engine started")
 
     async def stop(self) -> None:
@@ -98,6 +114,7 @@ class Engine:
             if self._tasks:
                 await asyncio.gather(*self._tasks, return_exceptions=True)
 
+            await self._sse_broadcaster.stop()
             await self._event_bus.stop()
             self._tasks.clear()
             logger.info("Engine stopped")
@@ -283,3 +300,15 @@ class Engine:
     def is_running(self) -> bool:
         """Check if the engine is running."""
         return self._running
+
+    def health_status(self) -> dict[str, str]:
+        """Return aggregated health status of core components."""
+        # Determine SSE broadcaster status without accessing private attribute
+        sse_status = "ok" if self._running and self._event_bus.is_running else "stopped"
+
+        return {
+            "engine": "running" if self._running else "stopped",
+            "event_bus": "ok" if self._event_bus.is_running else "stopped",
+            "sse_broadcaster": sse_status,
+            "config": "loaded",
+        }

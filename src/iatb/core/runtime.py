@@ -14,7 +14,21 @@ logger = logging.getLogger(__name__)
 async def run_runtime(stop_event: asyncio.Event | None = None) -> None:
     """Run engine until stop event is set."""
     event = stop_event or asyncio.Event()
-    engine = Engine()
+
+    from iatb.core.config import get_config
+    from iatb.core.event_bus import EventBus
+    from iatb.core.sse_broadcaster import SSEBroadcaster
+
+    config = get_config()
+    event_bus = EventBus()
+    sse_broadcaster = SSEBroadcaster()
+
+    engine = Engine(
+        event_bus=event_bus,
+        sse_broadcaster=sse_broadcaster,
+        config=config,
+    )
+
     await engine.start()
     logger.info("IATB runtime started")
     try:

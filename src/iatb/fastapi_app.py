@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from iatb.api import IATBApi, create_api
+from iatb.core.config import get_config
 from iatb.core.config_manager import WatchlistConfig, get_config_manager
 from iatb.core.engine import Engine
 from iatb.core.exceptions import ConfigError
@@ -31,7 +32,7 @@ _LOGGER = get_logger(__name__)
 _engine: Engine | None = None
 
 
-def get_engine() -> Engine:
+async def get_engine() -> Engine:
     """Get or create Engine instance.
 
     Returns:
@@ -42,7 +43,17 @@ def get_engine() -> Engine:
     """
     global _engine
     if _engine is None:
-        _engine = Engine()
+        from iatb.core.event_bus import EventBus
+
+        event_bus = EventBus()
+        broadcaster = await get_broadcaster()
+        config = get_config()
+
+        _engine = Engine(
+            event_bus=event_bus,
+            sse_broadcaster=broadcaster,
+            config=config,
+        )
     return _engine
 
 
@@ -200,7 +211,7 @@ def liveness_check() -> dict[str, Any]:
 
 
 @app.get("/health/ready", response_model=ReadinessResponse)
-def readiness_check() -> dict[str, Any]:
+async def readiness_check() -> dict[str, Any]:
     """Readiness check endpoint.
 
     Returns 200 only if all critical components are initialized and ready:
@@ -216,7 +227,7 @@ def readiness_check() -> dict[str, Any]:
     timestamp = datetime.now(UTC).isoformat()
     checks: dict[str, dict[str, Any]] = {}
 
-    engine = get_engine()
+    engine = await get_engine()
     checks["engine"] = {
         "status": "ready" if engine.is_running else "not_ready",
         "is_running": engine.is_running,
