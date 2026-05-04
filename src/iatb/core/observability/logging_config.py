@@ -7,6 +7,7 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from opentelemetry import trace
 from pythonjsonlogger import jsonlogger
 
 from iatb.core.config import get_config
@@ -39,6 +40,25 @@ class JsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc,name-defined
         log_record["logger"] = record.name
         log_record["thread"] = record.thread
         log_record["process"] = record.process
+
+        # Add trace and span IDs from OpenTelemetry context
+        span = trace.get_current_span()
+        if span.is_recording():
+            ctx = span.get_span_context()
+            log_record["trace_id"] = format(ctx.trace_id, "032x")
+            log_record["span_id"] = format(ctx.span_id, "016x")
+
+        # Add service.name resource attribute
+        provider = trace.get_tracer_provider()
+        resource = getattr(provider, "resource", None)
+        if resource and "service.name" in resource.attributes:
+            log_record["service.name"] = resource.attributes["service.name"]
+        else:
+            try:
+                config = get_config()
+                log_record["service.name"] = getattr(config, "service", {}).get("name", "iatb")
+            except Exception:
+                log_record["service.name"] = "iatb"
 
         # Add exception info if present
         if record.exc_info:
