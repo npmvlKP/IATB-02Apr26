@@ -7,7 +7,6 @@ trailing stop management that adapts to ATR, market regime, and time.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
@@ -157,10 +156,8 @@ class TimeDecayTrailingStop:
         self._previous_stop: Decimal | None = None
 
     def compute_stop(self, state: PositionState) -> Decimal:
-        # API boundary: math.exp requires float; result immediately converted to Decimal.
-        decay_factor = Decimal(
-            str(math.exp(-float(self._decay) * state.bars_held))
-        )  # API boundary: float required for math.exp
+        # Use Decimal.exp() to avoid float conversion entirely (G7 compliance)
+        decay_factor = (-self._decay * Decimal(state.bars_held)).exp()
         multiplier = max(self._min, self._initial * decay_factor)
         distance = state.current_atr * multiplier
         if state.side == OrderSide.BUY:
