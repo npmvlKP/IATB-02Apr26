@@ -2,11 +2,16 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from iatb.core.exceptions import ConfigError
-from iatb.risk.daily_loss_guard import DailyLossGuard, DailyLossState
+from iatb.risk.daily_loss_guard import (
+    DailyLossGuard,
+    DailyLossState,
+    _DailyLossStateStore,
+)
 from iatb.risk.kill_switch import KillSwitch
 
 
@@ -238,3 +243,271 @@ class TestDailyLossState:
         daily_loss_guard.record_trade(Decimal("-4999"), now)
         state = daily_loss_guard.state
         assert not state.breached
+
+
+class TestStateStore:
+    """Test _DailyLossStateStore SQLite persistence."""
+
+    def test_save_and_load(self, tmp_path):
+        """Test saving and loading state."""
+        db = _DailyLossStateStore(tmp_path / "state.sqlite")
+        db.save("2026-05-05", Decimal("-1234.56"), 7)
+        loaded = db.load("2026-05-05")
+        assert loaded is not None
+        assert loaded[0] == Decimal("-1234.56")
+        assert loaded[1] == 7
+
+    def test_load_missing_returns_none(self, tmp_path):
+        """Test loading a non-existent date returns None."""
+        db = _DailyLossStateStore(tmp_path / "state.sqlite")
+        loaded = db.load("2026-05-05")
+        assert loaded is None
+
+    def test_save_overwrites_existing(self, tmp_path):
+        """Test saving twice for same date overwrites."""
+        db = _DailyLossStateStore(tmp_path / "state.sqlite")
+        db.save("2026-05-05", Decimal("-100"), 1)
+        db.save("2026-05-05", Decimal("-200"), 2)
+        loaded = db.load("2026-05-05")
+        assert loaded == (Decimal("-200"), 2)
+
+    def test_purge_before_removes_old(self, tmp_path):
+        """Test purging old records."""
+        db = _DailyLossStateStore(tmp_path / "state.sqlite")
+        db.save("2026-05-01", Decimal("-100"), 1)
+        db.save("2026-05-05", Decimal("-200"), 2)
+        deleted = db.purge_before("2026-05-04")
+        assert deleted == 1
+        assert db.load("2026-05-01") is None
+        assert db.load("2026-05-05") is not None
+
+
+class TestPersistence:
+    """Test integrated persistence in DailyLossGuard."""
+
+    def test_persists_and_loads_state(self, tmp_path, mock_kill_switch):
+        """Test full persist / reload cycle."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-1000"), now)
+        # New instance with same DB
+        guard2 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        assert guard2.state.cumulative_pnl == Decimal("-1000")
+        assert guard2.state.trade_count == 1
+
+    def test_no_persistence_without_db_path(self, mock_kill_switch, tmp_path):
+        """Test that without state_db_path nothing is persisted."""
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+        )
+        guard.record_trade(Decimal("-1000"), now)
+        # No state_db_path means no persistence
+        assert not (tmp_path / "state.sqlite").exists()
+
+    def test_load_state_explicit(self, tmp_path, mock_kill_switch):
+        """Test explicit load_state method."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-2000"), now)
+        # Create a new guard with no prior state
+        guard2 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        loaded = guard2.load_state(now)
+        assert loaded is True
+        assert guard2.state.cumulative_pnl == Decimal("-2000")
+        assert guard2.state.trade_count == 1
+
+    def test_load_state_without_db(self, mock_kill_switch):
+        """Test load_state returns False if no DB configured."""
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+        )
+        assert guard.load_state(now) is False
+
+    def test_save_state_explicit(self, tmp_path, mock_kill_switch):
+        """Test explicit save_state."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-3000"), now)
+        guard.save_state(now)
+        # Verify via new instance
+        guard2 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        assert guard2.state.cumulative_pnl == Decimal("-3000")
+
+    def test_reset_clears_persisted_state(self, tmp_path, mock_kill_switch):
+        """Test reset clears persisted state."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-4000"), now)
+        guard.reset(Decimal("100000"), now)
+        guard2 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        assert guard2.state.cumulative_pnl == Decimal("0")
+        assert guard2.state.trade_count == 0
+
+    def test_persistence_survives_crash(self, tmp_path, mock_kill_switch):
+        """Simulate crash and recovery: PnL continuity."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-1000"), now)
+        guard.record_trade(Decimal("-2000"), now)
+        # Simulate crash: create new instance
+        guard2 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        assert guard2.state.cumulative_pnl == Decimal("-3000")
+        assert guard2.state.trade_count == 2
+        # Continue trading after recovery
+        guard2.record_trade(Decimal("-500"), now)
+        assert guard2.state.cumulative_pnl == Decimal("-3500")
+        assert guard2.state.trade_count == 3
+
+    def test_persists_on_record_trade(self, tmp_path, mock_kill_switch):
+        """Test that each record_trade call persists."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-500"), now)
+        # Inspect DB directly
+        store = _DailyLossStateStore(db_path)
+        loaded = store.load("2026-05-05")
+        assert loaded == (Decimal("-500"), 1)
+
+    def test_different_dates_isolated(self, tmp_path, mock_kill_switch):
+        """Test different dates have isolated state."""
+        db_path = tmp_path / "state.sqlite"
+        now1 = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        now2 = datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC)
+        guard1 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+            now_utc=now1,
+        )
+        guard1.record_trade(Decimal("-1000"), now1)
+        guard2 = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+            now_utc=now2,
+        )
+        guard2.record_trade(Decimal("-2000"), now2)
+        store = _DailyLossStateStore(db_path)
+        assert store.load("2026-05-05") == (Decimal("-1000"), 1)
+        assert store.load("2026-05-06") == (Decimal("-2000"), 1)
+
+
+class TestPersistenceFailureRecovery:
+    """Test graceful degradation when persistence fails."""
+
+    @staticmethod
+    def _make_unwritable(path: Path) -> None:  # noqa: S103
+        """Make a directory unwritable (Windows-only test helper)."""
+        import stat
+
+        path.chmod(stat.S_IREAD)  # nosec B103
+
+    @staticmethod
+    def _make_writable(path: Path) -> None:  # noqa: S103
+        """Make a directory writable again (Windows-only test helper)."""
+        import stat
+
+        path.chmod(stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)  # nosec B103
+
+    def test_graceful_on_write_error(self, tmp_path, mock_kill_switch, caplog):
+        """Test that write errors are logged and not raised."""
+        db_path = tmp_path / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        self._make_unwritable(db_path.parent)
+        guard.record_trade(Decimal("-1000"), now)
+        # Should not raise; state remains in memory
+        assert guard.state.cumulative_pnl == Decimal("-1000")
+        # Cleanup
+        self._make_writable(db_path.parent)
+
+
+class TestPersistencePathHandling:
+    """Test various path handling scenarios."""
+
+    def test_nested_path_created(self, tmp_path, mock_kill_switch):
+        """Test that nested DB paths are created."""
+        db_path = tmp_path / "risk" / "state.sqlite"
+        now = datetime(2026, 5, 5, 12, 0, 0, tzinfo=UTC)
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.05"),
+            starting_nav=Decimal("100000"),
+            kill_switch=mock_kill_switch,
+            state_db_path=db_path,
+        )
+        guard.record_trade(Decimal("-1000"), now)
+        assert db_path.exists()
