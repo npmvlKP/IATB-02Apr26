@@ -5,8 +5,9 @@ Covers happy path, edge cases, error paths, type handling,
 and external API mocking.
 """
 
+from datetime import timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from iatb.core.exceptions import ConfigError
@@ -68,21 +69,30 @@ class TestRunCheck:
 class TestCheckClockDrift:
     """Tests for _check_clock_drift function."""
 
-    def test_check_clock_drift_normal(self) -> None:
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_check_clock_drift_normal(self, mock_detector_class: MagicMock) -> None:
         """Test clock drift check with normal drift."""
-        # Should not raise with default max_drift_seconds
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        mock_detector_class.return_value = mock_detector
         _check_clock_drift()
 
-    def test_check_clock_drift_custom_threshold(self) -> None:
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_check_clock_drift_custom_threshold(self, mock_detector_class: MagicMock) -> None:
         """Test clock drift check with custom threshold."""
-        # Should not raise with high threshold
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=500)
+        mock_detector_class.return_value = mock_detector
         _check_clock_drift(max_drift_seconds=1000)
 
-    def test_check_clock_drift_always_passes(self) -> None:
-        """Test that clock drift check always passes (implementation detail)."""
-        # The current implementation compares now to itself, so drift is always 0
-        # This test documents this behavior
-        _check_clock_drift(max_drift_seconds=0)  # Should still pass
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_check_clock_drift_exceeds_threshold(self, mock_detector_class: MagicMock) -> None:
+        """Test clock drift check fails when drift exceeds threshold."""
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=10)
+        mock_detector_class.return_value = mock_detector
+        with pytest.raises(ConfigError, match="clock drift .* exceeds"):
+            _check_clock_drift(max_drift_seconds=2)
 
 
 class TestCheckExecutor:

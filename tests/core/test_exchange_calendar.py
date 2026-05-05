@@ -574,7 +574,7 @@ class TestSessionBoundaryChecks:
             holidays=_default_holidays(),
             special_sessions=_default_special_sessions(),
         )
-        check_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=UTC)
+        check_time = datetime(2024, 1, 2, 4, 30, 0, tzinfo=UTC)
         is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
         assert is_valid
         assert message == "Within session boundaries"
@@ -586,7 +586,7 @@ class TestSessionBoundaryChecks:
             holidays=_default_holidays(),
             special_sessions=_default_special_sessions(),
         )
-        check_time = datetime(2024, 1, 1, 9, 0, 0, tzinfo=UTC)
+        check_time = datetime(2024, 1, 2, 2, 0, 0, tzinfo=UTC)
         is_valid, message = calendar.check_session_boundary(Exchange.NSE, check_time)
         assert not is_valid
         assert message == "Before session open"
@@ -646,7 +646,7 @@ class TestSessionBoundaryChecks:
             holidays=_default_holidays(),
             special_sessions=_default_special_sessions(),
         )
-        check_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=UTC)
+        check_time = datetime(2024, 1, 2, 4, 30, 0, tzinfo=UTC)
         calendar.validate_trading_time(Exchange.NSE, check_time)
 
     def test_validate_trading_time_halted_raises(self) -> None:
@@ -668,7 +668,7 @@ class TestSessionBoundaryChecks:
             holidays=_default_holidays(),
             special_sessions=_default_special_sessions(),
         )
-        check_time = datetime(2024, 1, 1, 9, 0, 0, tzinfo=UTC)
+        check_time = datetime(2024, 1, 2, 2, 0, 0, tzinfo=UTC)
         with pytest.raises(ExchangeHaltError, match="Before session open"):
             calendar.validate_trading_time(Exchange.NSE, check_time)
 

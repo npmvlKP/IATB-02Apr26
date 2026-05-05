@@ -6,7 +6,7 @@ Loads official session timings and holiday calendar from config files.
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from threading import Lock
@@ -18,6 +18,8 @@ from iatb.core.exceptions import ConfigError, ExchangeHaltError
 logger = logging.getLogger(__name__)
 
 SESSION_EXCHANGES = frozenset({Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS})
+
+IST_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 
 
 class ExchangeStatus(Enum):
@@ -190,7 +192,8 @@ class ExchangeCalendar:
         if check_time is None:
             check_time = datetime.now(UTC)
 
-        trading_date = check_time.date()
+        check_time_ist = check_time.astimezone(IST_TIMEZONE).replace(tzinfo=None)
+        trading_date = check_time_ist.date()
         session = self.session_for(exchange, trading_date)
 
         if session is None:
@@ -199,7 +202,6 @@ class ExchangeCalendar:
         if self.is_exchange_halted(exchange):
             return False, f"Exchange {exchange.value} is halted"
 
-        check_time_ist = check_time.replace(tzinfo=None)
         session_open = datetime.combine(trading_date, session.open_time)
         session_close = datetime.combine(trading_date, session.close_time)
 

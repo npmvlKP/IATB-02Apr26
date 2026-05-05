@@ -10,11 +10,29 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
+from iatb.core.enums import Exchange, OrderSide, OrderStatus, OrderType
+from iatb.core.events import (
+    MarketTickEvent,
+    OrderUpdateEvent,
+    PnLUpdateEvent,
+    RegimeChangeEvent,
+    ScanUpdateEvent,
+    SignalEvent,
+)
 from iatb.core.exceptions import EventBusError
-from iatb.core.types import create_timestamp
+from iatb.core.types import (
+    Price,
+    Quantity,
+    Timestamp,
+    create_price,
+    create_quantity,
+    create_timestamp,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -277,16 +295,21 @@ class EventPersistence:
             Serialized event data.
         """
         if hasattr(event, "model_dump"):
-            # Pydantic model
             result = event.model_dump()
-            return result if isinstance(result, dict) else {"data": str(result)}
+            if isinstance(result, dict):
+                result["_event_type"] = event.__class__.__name__
+                return result
+            return {"data": str(result), "_event_type": event.__class__.__name__}
         elif isinstance(event, dict):
             return event
         elif hasattr(event, "__dict__"):
-            # Fallback: use __dict__ if available
-            return event.__dict__ if isinstance(event.__dict__, dict) else {"data": str(event)}
+            result = event.__dict__
+            if isinstance(result, dict):
+                result["_event_type"] = event.__class__.__name__
+                return result
+            return {"data": str(event), "_event_type": event.__class__.__name__}
         else:
-            return {"data": str(event)}
+            return {"data": str(event), "_event_type": "unknown"}
 
     def _deserialize_event(self, event_data: dict[str, Any]) -> Any:
         """Deserialize event from dictionary.
@@ -297,5 +320,177 @@ class EventPersistence:
         Returns:
             Deserialized event object.
         """
-        # Return as dictionary; caller should handle reconstruction
+        if "_event_type" in event_data:
+            event_type = event_data.pop("_event_type")
+        elif "filled_quantity" in event_data and "order_id" in event_data:
+            event_type = "OrderUpdateEvent"
+        elif "strategy_id" in event_data and "confidence" in event_data:
+            event_type = "SignalEvent"
+        elif "regime_type" in event_data:
+            event_type = "RegimeChangeEvent"
+        elif "total_candidates" in event_data:
+            event_type = "ScanUpdateEvent"
+        elif "trade_pnl" in event_data:
+            event_type = "PnLUpdateEvent"
+        elif "bid_price" in event_data and "ask_price" in event_data:
+            event_type = "MarketTickEvent"
+        else:
+            return event_data
+
+        if event_type == "MarketTickEvent":
+            return self._deserialize_market_tick_event(event_data)
+        if event_type == "OrderUpdateEvent":
+            return self._deserialize_order_update_event(event_data)
+        if event_type == "SignalEvent":
+            return self._deserialize_signal_event(event_data)
+        if event_type == "RegimeChangeEvent":
+            return self._deserialize_regime_change_event(event_data)
+        if event_type == "ScanUpdateEvent":
+            return self._deserialize_scan_update_event(event_data)
+        if event_type == "PnLUpdateEvent":
+            return self._deserialize_pnl_update_event(event_data)
         return event_data
+
+    def _to_uuid(self, value: Any) -> UUID:
+        if isinstance(value, UUID):
+            return value
+        return UUID(value)
+
+    def _to_datetime(self, value: Any) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        msg = f"Cannot convert {type(value)} to datetime"
+        raise TypeError(msg)
+
+    def _to_decimal(self, value: Any) -> Decimal:
+        if isinstance(value, Decimal):
+            return value
+        if value is None:
+            return Decimal("0")
+        return Decimal(str(value))
+
+    def _to_price(self, value: Any) -> Price:
+        if isinstance(value, str):
+            return create_price(value)
+        return create_price(str(value))
+
+    def _to_quantity(self, value: Any) -> Quantity:
+        if isinstance(value, str):
+            return create_quantity(value)
+        return create_quantity(str(value))
+
+    def _to_timestamp(self, value: Any) -> Timestamp:
+        if isinstance(value, datetime):
+            return create_timestamp(value)
+        dt = self._to_datetime(value)
+        return create_timestamp(dt)
+
+    def _deserialize_market_tick_event(self, data: dict[str, Any]) -> MarketTickEvent:
+        return MarketTickEvent(
+            event_id=self._to_uuid(data["event_id"]),
+            timestamp=self._to_timestamp(data["timestamp"]),
+            exchange=Exchange(data["exchange"]) if data.get("exchange") else Exchange.NSE,
+            symbol=data.get("symbol", "UNKNOWN"),
+            price=self._to_price(data["price"])
+            if data.get("price") is not None
+            else create_price("0.0"),
+            quantity=self._to_quantity(data["quantity"])
+            if data.get("quantity") is not None
+            else create_quantity("0.0"),
+            volume=self._to_quantity(data["volume"])
+            if data.get("volume") is not None
+            else create_quantity("0.0"),
+            bid_price=self._to_price(data["bid_price"])
+            if data.get("bid_price") is not None
+            else None,
+            ask_price=self._to_price(data["ask_price"])
+            if data.get("ask_price") is not None
+            else None,
+        )
+
+    def _deserialize_order_update_event(self, data: dict[str, Any]) -> OrderUpdateEvent:
+        return OrderUpdateEvent(
+            event_id=self._to_uuid(data["event_id"]),
+            timestamp=self._to_timestamp(data["timestamp"]),
+            order_id=data.get("order_id", "UNKNOWN_ORDER"),
+            exchange=Exchange(data["exchange"]) if data.get("exchange") else Exchange.NSE,
+            symbol=data.get("symbol", "UNKNOWN"),
+            side=OrderSide(data["side"]) if data.get("side") else OrderSide.BUY,
+            order_type=OrderType(data["order_type"])
+            if data.get("order_type")
+            else OrderType.MARKET,
+            quantity=self._to_quantity(data["quantity"])
+            if data.get("quantity") is not None
+            else create_quantity("0.0"),
+            price=self._to_price(data["price"]) if data.get("price") is not None else None,
+            filled_quantity=self._to_quantity(data["filled_quantity"])
+            if data.get("filled_quantity") is not None
+            else create_quantity("0.0"),
+            avg_price=self._to_price(data["avg_price"])
+            if data.get("avg_price") is not None
+            else None,
+            status=OrderStatus(data["status"]) if data.get("status") else OrderStatus.PENDING,
+        )
+
+    def _deserialize_signal_event(self, data: dict[str, Any]) -> SignalEvent:
+        return SignalEvent(
+            event_id=self._to_uuid(data["event_id"]),
+            timestamp=self._to_timestamp(data["timestamp"]),
+            strategy_id=data.get("strategy_id", "UNKNOWN_STRATEGY"),
+            exchange=Exchange(data["exchange"]) if data.get("exchange") else Exchange.NSE,
+            symbol=data.get("symbol", "UNKNOWN"),
+            side=OrderSide(data["side"]) if data.get("side") else OrderSide.BUY,
+            quantity=self._to_quantity(data["quantity"])
+            if data.get("quantity") is not None
+            else create_quantity("0.0"),
+            price=self._to_price(data["price"]) if data.get("price") is not None else None,
+            confidence=self._to_decimal(data.get("confidence"))
+            if data.get("confidence") is not None
+            else Decimal("0.0"),
+        )
+
+    def _deserialize_regime_change_event(self, data: dict[str, Any]) -> RegimeChangeEvent:
+        return RegimeChangeEvent(
+            event_id=self._to_uuid(data["event_id"]),
+            timestamp=self._to_timestamp(data["timestamp"]),
+            regime_type=data.get("regime_type", "UNSPECIFIED"),
+            description=data.get("description", "UNSPECIFIED"),
+            confidence=self._to_decimal(data.get("confidence"))
+            if data.get("confidence") is not None
+            else Decimal("0.0"),
+            metadata=data.get("metadata", {}),
+        )
+
+    def _deserialize_scan_update_event(self, data: dict[str, Any]) -> ScanUpdateEvent:
+        return ScanUpdateEvent(
+            event_id=self._to_uuid(data["event_id"]),
+            timestamp=self._to_timestamp(data["timestamp"]),
+            total_candidates=data.get("total_candidates", 0),
+            approved_candidates=data.get("approved_candidates", 0),
+            trades_executed=data.get("trades_executed", 0),
+            duration_ms=data.get("duration_ms", 0),
+            errors=data.get("errors", []),
+        )
+
+    def _deserialize_pnl_update_event(self, data: dict[str, Any]) -> PnLUpdateEvent:
+        return PnLUpdateEvent(
+            event_id=self._to_uuid(data["event_id"]),
+            timestamp=self._to_timestamp(data["timestamp"]),
+            order_id=data.get("order_id", "UNKNOWN"),
+            symbol=data.get("symbol", "UNKNOWN"),
+            side=data.get("side", "UNKNOWN"),
+            quantity=self._to_quantity(data["quantity"])
+            if data.get("quantity") is not None
+            else create_quantity("0.0"),
+            price=self._to_price(data["price"])
+            if data.get("price") is not None
+            else create_price("0.0"),
+            trade_pnl=self._to_decimal(data.get("trade_pnl"))
+            if data.get("trade_pnl") is not None
+            else Decimal("0.0"),
+            cumulative_pnl=self._to_decimal(data.get("cumulative_pnl"))
+            if data.get("cumulative_pnl") is not None
+            else Decimal("0.0"),
+        )

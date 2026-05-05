@@ -7,9 +7,9 @@ Fail-closed: engine must not start if any check fails.
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 
+from iatb.core.clock import ClockDriftDetector
 from iatb.core.exceptions import ConfigError
 from iatb.execution.base import Executor
 from iatb.risk.kill_switch import KillSwitch
@@ -48,10 +48,10 @@ def _run_check(name: str, check: Callable[[], None], current: bool) -> bool:
 
 
 def _check_clock_drift(max_drift_seconds: int = 2) -> None:
-    now = datetime.now(UTC)
-    drift = abs((now - now).total_seconds())
-    if drift > max_drift_seconds:
-        msg = f"clock drift {drift}s exceeds {max_drift_seconds}s"
+    detector = ClockDriftDetector()
+    drift = detector.check_drift()
+    if abs(drift.total_seconds()) > max_drift_seconds:
+        msg = f"clock drift {drift.total_seconds()}s exceeds {max_drift_seconds}s"
         raise ConfigError(msg)
 
 
