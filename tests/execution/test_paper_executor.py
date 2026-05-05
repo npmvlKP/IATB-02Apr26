@@ -5,14 +5,23 @@ from decimal import Decimal
 import numpy as np
 import pytest
 import torch
-from iatb.core.enums import Exchange, OrderSide, OrderStatus
+from iatb.core.enums import Exchange, MarketType, OrderSide, OrderStatus
 from iatb.execution.base import OrderRequest
-from iatb.execution.paper_executor import PaperExecutor
+from iatb.execution.paper_executor import (
+    PaperExecutor,
+    _resolve_base_slippage,
+    _volume_adjustment_factor,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
+
+
+# ---------------------------------------------------------------------------
+# Existing tests (backward compatible)
+# ---------------------------------------------------------------------------
 
 
 def test_paper_executor_end_to_end_buy_and_sell() -> None:
@@ -170,7 +179,7 @@ def test_paper_executor_concurrent_lifecycle_operations() -> None:
 
     def execute_and_close() -> int:
         """Execute orders and close half of them."""
-        order_ids = []
+        order_ids: list[str] = []
         for _ in range(orders_per_thread):
             result = executor.execute_order(request)
             order_ids.append(result.order_id)
@@ -199,3 +208,176 @@ def test_paper_executor_concurrent_lifecycle_operations() -> None:
     cancelled = executor.cancel_all()
     assert cancelled == remaining_orders
     assert len(executor._open_orders) == 0
+
+
+# ---------------------------------------------------------------------------
+# New slippage model tests
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_base_slippage_nse_spot() -> None:
+    assert _resolve_base_slippage(Exchange.NSE, MarketType.SPOT) == Decimal("3")
+
+
+def test_resolve_base_slippage_nse_futures() -> None:
+    assert _resolve_base_slippage(Exchange.NSE, MarketType.FUTURES) == Decimal("2")
+
+
+def test_resolve_base_slippage_nse_options() -> None:
+    assert _resolve_base_slippage(Exchange.NSE, MarketType.OPTIONS) == Decimal("2")
+
+
+def test_resolve_base_slippage_bse() -> None:
+    assert _resolve_base_slippage(Exchange.BSE, MarketType.SPOT) == Decimal("5")
+
+
+def test_resolve_base_slippage_mcx() -> None:
+    assert _resolve_base_slippage(Exchange.MCX, MarketType.SPOT) == Decimal("8")
+    assert _resolve_base_slippage(Exchange.MCX, MarketType.FUTURES) == Decimal("8")
+    assert _resolve_base_slippage(Exchange.MCX, MarketType.OPTIONS) == Decimal("8")
+
+
+def test_resolve_base_slippage_fallback() -> None:
+    # Any unmapped combination defaults to 5 bps
+    assert _resolve_base_slippage(Exchange.BINANCE, MarketType.SPOT) == Decimal("5")
+    assert _resolve_base_slippage(Exchange.CDS, MarketType.FUTURES) == Decimal("5")
+
+
+# Volume adjustment tests
+
+
+def test_volume_adjustment_factor_small_quantity() -> None:
+    factor = _volume_adjustment_factor(Decimal("1"))
+    assert Decimal("0.9") < factor <= Decimal("1.0")
+
+
+def test_volume_adjustment_factor_large_quantity() -> None:
+    factor = _volume_adjustment_factor(Decimal("100000"))
+    # Should be reduced but floored at 0.5
+    assert Decimal("0.5") <= factor < Decimal("1.0")
+
+
+def test_volume_adjustment_factor_monotonic() -> None:
+    """Ensure that higher quantity never increases slippage factor."""
+    prev = Decimal("1.0")
+    for qty in [1, 10, 100, 1000, 10000, 100000]:
+        factor = _volume_adjustment_factor(Decimal(str(qty)))
+        assert factor <= prev, f"factor increased at quantity={qty}"
+        prev = factor
+
+
+def test_volume_adjustment_factor_floor() -> None:
+    """Very large quantities should asymptotically approach (but not exceed) 0.5."""
+    factor = _volume_adjustment_factor(Decimal("9999999999"))
+    assert Decimal("0.5") <= factor < Decimal("0.52")
+
+
+# Exchange-specific slippage e2e tests (no slippage_bps override)
+
+
+def test_exchange_specific_slippage_nse_spot() -> None:
+    executor = PaperExecutor()  # no override
+    request = OrderRequest(
+        Exchange.NSE, "RELIANCE", OrderSide.BUY, Decimal("10"), price=Decimal("1000")
+    )
+    result = executor.execute_order(request)
+    # base 3 bps, volume adjustment ~0.9057
+    # effective ~2.717 bps
+    # slippage = 1000 * 2.71705 / 10000 = 0.271705
+    # price ≈ 1000.271705
+    expected = Decimal("1000.271704855134133785418023")
+    assert result.average_price == expected
+
+
+def test_exchange_specific_slippage_nse_futures() -> None:
+    executor = PaperExecutor()
+    request = OrderRequest(
+        Exchange.NSE,
+        "NIFTY25JUNFUT",
+        OrderSide.BUY,
+        Decimal("50"),
+        price=Decimal("20000"),
+        market_type=MarketType.FUTURES,
+    )
+    result = executor.execute_order(request)
+    # base 2 bps * ~0.854148 factor = ~1.708 bps
+    # slippage = 20000 * 1.708296 / 10000 = 3.41659
+    expected = Decimal("20003.41659280263496680169746")
+    assert result.average_price == expected
+
+
+def test_exchange_specific_slippage_bse() -> None:
+    executor = PaperExecutor()
+    request = OrderRequest(Exchange.BSE, "TCS", OrderSide.BUY, Decimal("5"), price=Decimal("500"))
+    result = executor.execute_order(request)
+    # base 5 bps * ~0.927803 = ~4.639 bps
+    # slippage = 500 * 4.639015 / 10000 = 0.231951
+    expected = Decimal("500.2319507253074606453236064")
+    assert result.average_price == expected
+
+
+def test_exchange_specific_slippage_mcx() -> None:
+    executor = PaperExecutor()
+    request = OrderRequest(Exchange.MCX, "GOLD", OrderSide.BUY, Decimal("2"), price=Decimal("3000"))
+    result = executor.execute_order(request)
+    # base 8 bps * ~0.954461 = ~7.636 bps
+    # slippage = 3000 * 7.635685 / 10000 = 2.290706
+    expected = Decimal("3002.290705568496560347363350")
+    assert result.average_price == expected
+
+
+def test_exchange_specific_slippage_sell_side() -> None:
+    executor = PaperExecutor()
+    request = OrderRequest(Exchange.NSE, "INFY", OrderSide.SELL, Decimal("1"), price=Decimal("100"))
+    result = executor.execute_order(request)
+    # base 3 bps * ~0.970777 = ~2.912 bps
+    # slippage = 100 * 2.91233 / 10000 = 0.0291233
+    # sell => 100 - 0.0291233 = 99.970877
+    expected = Decimal("99.97087669872563431211794223")
+    assert result.average_price == expected
+
+
+# Volume adjustment e2e tests
+
+
+def test_volume_adjustment_lowers_slippage() -> None:
+    """Higher volume should result in lower effective slippage."""
+    executor = PaperExecutor()
+    # Low quantity
+    req_low = OrderRequest(Exchange.NSE, "A", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    # High quantity
+    req_high = OrderRequest(
+        Exchange.NSE, "A", OrderSide.BUY, Decimal("100000"), price=Decimal("100")
+    )
+
+    result_low = executor.execute_order(req_low)
+    result_high = executor.execute_order(req_high)
+
+    slip_low = result_low.average_price - Decimal("100")
+    slip_high = result_high.average_price - Decimal("100")
+
+    assert slip_high < slip_low, "Higher volume should have lower slippage per unit"
+
+
+# Override still takes priority
+
+
+def test_override_bps_takes_priority() -> None:
+    """When slippage_bps is explicitly provided, it should override exchange-specific."""
+    executor = PaperExecutor(slippage_bps=Decimal("50"))
+    request = OrderRequest(Exchange.NSE, "X", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    result = executor.execute_order(request)
+    # 50 bps = 0.5%
+    # slippage = 100 * 0.005 = 0.50
+    assert result.average_price == Decimal("100.50")
+
+
+# Edge case: zero / negative quantity should not crash
+
+
+def test_quantity_zero_slippage_computation() -> None:
+    """Zero quantity should use max factor (1.0 -> no adjustment)."""
+    # We avoid actual qty=0 because OrderRequest validates qty>0,
+    # but the internal _volume_adjustment_factor must be robust.
+    factor = _volume_adjustment_factor(Decimal("0.0001"))
+    assert Decimal("0.9") < factor <= Decimal("1.0")
