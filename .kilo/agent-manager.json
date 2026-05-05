@@ -1,0 +1,17 @@
+{
+  "worktrees": {
+    "wt-1775737180146-1": {
+      "branch": "checker-season",
+      "path": "g:\\IATB-02Apr26\\IATB\\.kilo\\worktrees\\checker-season",
+      "parentBranch": "optimize/local-paper-deployment",
+      "createdAt": "2026-04-09T12:19:40.146Z",
+      "remote": "origin"
+    }
+  },
+  "sessions": {
+    "ses_28dd0ebe1ffe27YDMAYbGBsKO5": {
+      "worktreeId": "wt-1775737180146-1",
+      "createdAt": "2026-04-09T12:19:41.220Z"
+    }
+  }
+}

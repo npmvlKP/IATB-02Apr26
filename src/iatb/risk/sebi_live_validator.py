@@ -102,7 +102,7 @@ class SEBILiveValidationHarness:
     def __init__(
         self,
         market_hours: dict[str, SEBIMarketHours] | None = None,
-        max_order_rate_per_sec: Decimal = Decimal("3"),
+        max_order_rate_per_sec: Decimal = Decimal("10"),
         max_daily_orders: int = 1000,
         min_audit_trail_entries: int = 1,
     ) -> None:
