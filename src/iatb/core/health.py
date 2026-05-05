@@ -12,9 +12,12 @@ All health check functionality is now provided by FastAPI endpoints:
 
 import warnings
 
-warnings.warn(
-    "HealthServer module is deprecated and removed. "
-    "Use FastAPI /health/live and /health/ready endpoints instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
+
+class HealthServer:
+    def __init__(self) -> None:
+        warnings.warn(
+            "HealthServer is deprecated and removed. "
+            "Use FastAPI /health/live and /health/ready endpoints instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )

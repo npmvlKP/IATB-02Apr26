@@ -2,18 +2,23 @@
 DRL backtest conclusion signal for instrument selection.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from iatb.backtesting.event_driven import EventDrivenResult
 from iatb.backtesting.monte_carlo import MonteCarloResult
 from iatb.backtesting.walk_forward import WalkForwardResult
 from iatb.core.exceptions import ConfigError
 from iatb.rl.agent import RLAgent
 from iatb.selection._util import clamp_01
 from iatb.selection.decay import temporal_decay
+
+if TYPE_CHECKING:
+    from iatb.backtesting.event_driven import EventDrivenResult
 
 
 @dataclass(frozen=True)

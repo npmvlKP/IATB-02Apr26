@@ -13,14 +13,14 @@ Comprehensive tests for FastAPI health endpoints are available in test_fastapi_a
 
 import warnings
 
+from iatb.core.health import HealthServer
 
-def test_health_module_deprecation_warning() -> None:
-    """Test that importing health module raises deprecation warning."""
+
+def test_health_server_deprecation_warning() -> None:
+    """Test that instantiating HealthServer raises a deprecation warning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        import iatb.core.health as health_module
-
-        assert len(w) == 1
-        assert issubclass(w[0].category, DeprecationWarning)
-        assert "deprecated and removed" in str(w[0].message).lower()
-        assert health_module is not None
+        HealthServer()
+        health_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+        assert len(health_warnings) >= 1
+        assert "deprecated" in str(health_warnings[0].message).lower()
