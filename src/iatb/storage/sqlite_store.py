@@ -113,6 +113,7 @@ class SQLiteStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
         return connection
 
     def initialize(self) -> None:
@@ -210,6 +211,108 @@ class SQLiteStore:
                 (limit,),
             ).fetchall()
         return [_row_to_record(row) for row in rows]
+
+    def list_trades_by_range(
+        self,
+        start_utc: datetime,
+        end_utc: datetime,
+        limit: int = 100,
+    ) -> list[TradeAuditRecord]:
+        """List trades within an UTC time range, ordered by timestamp DESC."""
+        if limit <= 0:
+            msg = "limit must be positive"
+            raise ConfigError(msg)
+        self.initialize()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM trade_audit_log
+                WHERE timestamp_utc >= ? AND timestamp_utc <= ?
+                ORDER BY timestamp_utc DESC
+                LIMIT ?
+                """,
+                (start_utc.isoformat(), end_utc.isoformat(), limit),
+            ).fetchall()
+        return [_row_to_record(row) for row in rows]
+
+    def list_trades_by_symbol(
+        self,
+        symbol: str,
+        exchange: Exchange | None = None,
+        limit: int = 100,
+    ) -> list[TradeAuditRecord]:
+        """List trades by symbol, optionally filtered by exchange."""
+        _require_non_empty_text(symbol, "symbol")
+        if limit <= 0:
+            msg = "limit must be positive"
+            raise ConfigError(msg)
+        self.initialize()
+        with self._connect() as connection:
+            if exchange is not None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM trade_audit_log
+                    WHERE symbol = ? AND exchange = ?
+                    ORDER BY timestamp_utc DESC
+                    LIMIT ?
+                    """,
+                    (symbol, exchange.value, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM trade_audit_log
+                    WHERE symbol = ?
+                    ORDER BY timestamp_utc DESC
+                    LIMIT ?
+                    """,
+                    (symbol, limit),
+                ).fetchall()
+        return [_row_to_record(row) for row in rows]
+
+    def list_trades_by_strategy(
+        self,
+        strategy_id: str,
+        limit: int = 100,
+    ) -> list[TradeAuditRecord]:
+        """List trades by strategy_id, ordered by timestamp DESC."""
+        _require_non_empty_text(strategy_id, "strategy_id")
+        if limit <= 0:
+            msg = "limit must be positive"
+            raise ConfigError(msg)
+        self.initialize()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM trade_audit_log
+                WHERE strategy_id = ?
+                ORDER BY timestamp_utc DESC
+                LIMIT ?
+                """,
+                (strategy_id, limit),
+            ).fetchall()
+        return [_row_to_record(row) for row in rows]
+
+    def append_trades_batch(self, records: list[TradeAuditRecord]) -> None:
+        """Batch insert audit records for high-throughput writes."""
+        if not records:
+            return
+        self.initialize()
+        rows = [_record_to_row(record) for record in records]
+        with self._connect() as connection:
+            try:
+                connection.executemany(
+                    """
+                    INSERT INTO trade_audit_log (
+                        trade_id, timestamp_utc, exchange, symbol, side,
+                        quantity, price, status, strategy_id, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            except sqlite3.IntegrityError as exc:
+                msg = "Batch insert conflict: duplicate trade_id"
+                raise ConfigError(msg) from exc
 
     @staticmethod
     def _build_query(conditions: list[str]) -> str:

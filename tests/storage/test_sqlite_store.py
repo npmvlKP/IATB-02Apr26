@@ -192,6 +192,204 @@ class TestSQLiteStoreQueryTrades:
             assert trade.timestamp <= end
 
 
+class TestSQLiteStoreListTradesByRange:
+    """Test list_trades_by_range time-range query."""
+
+    def test_range_filters_correctly(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "range_audit.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        store.append_trade(_record("t1", base))
+        store.append_trade(_record("t2", base + timedelta(hours=1)))
+        store.append_trade(_record("t3", base + timedelta(hours=2)))
+        store.append_trade(_record("t4", base + timedelta(hours=3)))
+        trades = store.list_trades_by_range(
+            start_utc=base + timedelta(hours=1),
+            end_utc=base + timedelta(hours=2),
+        )
+        assert len(trades) == 2
+        assert {t.trade_id for t in trades} == {"t2", "t3"}
+
+    def test_range_returns_empty_when_no_match(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "range_audit2.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        store.append_trade(_record("t1", base))
+        trades = store.list_trades_by_range(
+            start_utc=base + timedelta(days=1),
+            end_utc=base + timedelta(days=2),
+        )
+        assert trades == []
+
+    def test_range_orders_desc(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "range_audit3.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        store.append_trade(_record("t1", base))
+        store.append_trade(_record("t2", base + timedelta(hours=1)))
+        trades = store.list_trades_by_range(
+            start_utc=base,
+            end_utc=base + timedelta(hours=2),
+        )
+        assert trades[0].timestamp >= trades[1].timestamp
+
+    def test_range_respects_limit(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "range_audit4.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        for i in range(5):
+            store.append_trade(_record(f"t{i}", base + timedelta(hours=i)))
+        trades = store.list_trades_by_range(
+            start_utc=base,
+            end_utc=base + timedelta(hours=10),
+            limit=2,
+        )
+        assert len(trades) == 2
+
+    def test_range_rejects_non_positive_limit(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "range_audit5.sqlite3")
+        with pytest.raises(ConfigError, match="limit must be positive"):
+            store.list_trades_by_range(
+                start_utc=datetime(2026, 1, 1, tzinfo=UTC),
+                end_utc=datetime(2026, 1, 2, tzinfo=UTC),
+                limit=0,
+            )
+
+
+class TestSQLiteStoreListTradesBySymbol:
+    """Test list_trades_by_symbol filter."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_store(self, tmp_path: Path) -> None:
+        self.store = SQLiteStore(tmp_path / "symbol_audit.sqlite3")
+        self.now = datetime(2026, 1, 1, 10, 0, 0, tzinfo=UTC)
+        self._seed_trades()
+
+    def _seed_trades(self) -> None:
+        symbols = ["RELIANCE", "TCS", "RELIANCE", "INFY", "TCS"]
+        exchanges = [Exchange.NSE, Exchange.BSE, Exchange.NSE, Exchange.NSE, Exchange.BSE]
+        for i, (sym, exc) in enumerate(zip(symbols, exchanges, strict=False)):
+            record = TradeAuditRecord(
+                trade_id=f"trade-{i}",
+                timestamp=create_timestamp(self.now + timedelta(minutes=i)),
+                exchange=exc,
+                symbol=sym,
+                side=OrderSide.BUY,
+                quantity=create_quantity("10"),
+                price=create_price("1000"),
+                status=OrderStatus.FILLED,
+                strategy_id="strat-1",
+                metadata={},
+            )
+            self.store.append_trade(record)
+
+    def test_filter_by_symbol(self) -> None:
+        trades = self.store.list_trades_by_symbol("RELIANCE")
+        assert len(trades) == 2
+        for t in trades:
+            assert t.symbol == "RELIANCE"
+
+    def test_filter_by_symbol_and_exchange(self) -> None:
+        trades = self.store.list_trades_by_symbol("RELIANCE", exchange=Exchange.NSE)
+        assert len(trades) == 2
+        for t in trades:
+            assert t.symbol == "RELIANCE"
+            assert t.exchange == Exchange.NSE
+
+    def test_filter_by_symbol_no_match(self) -> None:
+        trades = self.store.list_trades_by_symbol("NONEXISTENT")
+        assert trades == []
+
+    def test_filter_respects_limit(self) -> None:
+        trades = self.store.list_trades_by_symbol("TCS", limit=1)
+        assert len(trades) == 1
+
+    def test_rejects_empty_symbol(self) -> None:
+        with pytest.raises(ConfigError, match="symbol cannot be empty"):
+            self.store.list_trades_by_symbol("")
+
+    def test_rejects_non_positive_limit(self) -> None:
+        with pytest.raises(ConfigError, match="limit must be positive"):
+            self.store.list_trades_by_symbol("RELIANCE", limit=0)
+
+
+class TestSQLiteStoreListTradesByStrategy:
+    """Test list_trades_by_strategy filter."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_store(self, tmp_path: Path) -> None:
+        self.store = SQLiteStore(tmp_path / "strategy_audit.sqlite3")
+        self.now = datetime(2026, 1, 1, 10, 0, 0, tzinfo=UTC)
+        self._seed_trades()
+
+    def _seed_trades(self) -> None:
+        strategies = ["strat-a", "strat-a", "strat-b", "strat-a", "strat-b"]
+        for i, strat in enumerate(strategies):
+            record = TradeAuditRecord(
+                trade_id=f"trade-{i}",
+                timestamp=create_timestamp(self.now + timedelta(minutes=i)),
+                exchange=Exchange.NSE,
+                symbol="RELIANCE",
+                side=OrderSide.BUY,
+                quantity=create_quantity("10"),
+                price=create_price("1000"),
+                status=OrderStatus.FILLED,
+                strategy_id=strat,
+                metadata={},
+            )
+            self.store.append_trade(record)
+
+    def test_filter_by_strategy(self) -> None:
+        trades = self.store.list_trades_by_strategy("strat-a")
+        assert len(trades) == 3
+        for t in trades:
+            assert t.strategy_id == "strat-a"
+
+    def test_filter_by_strategy_no_match(self) -> None:
+        trades = self.store.list_trades_by_strategy("nonexistent")
+        assert trades == []
+
+    def test_filter_respects_limit(self) -> None:
+        trades = self.store.list_trades_by_strategy("strat-a", limit=2)
+        assert len(trades) == 2
+
+    def test_rejects_empty_strategy_id(self) -> None:
+        with pytest.raises(ConfigError, match="strategy_id cannot be empty"):
+            self.store.list_trades_by_strategy("")
+
+    def test_rejects_non_positive_limit(self) -> None:
+        with pytest.raises(ConfigError, match="limit must be positive"):
+            self.store.list_trades_by_strategy("strat-a", limit=0)
+
+
+class TestSQLiteStoreBatchInsert:
+    """Test batch INSERT for high-throughput writes."""
+
+    def test_batch_insert_all_records_persisted(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "batch_audit.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        records = [_record(f"batch-{i}", base + timedelta(minutes=i)) for i in range(100)]
+        store.append_trades_batch(records)
+        for i in range(100):
+            assert store.get_trade(f"batch-{i}") is not None
+
+    def test_batch_insert_orders_by_timestamp(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "batch_audit2.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        records = [_record(f"batch-{i}", base + timedelta(minutes=i)) for i in range(5)]
+        store.append_trades_batch(records)
+        trades = store.list_trades(limit=5)
+        assert trades[0].timestamp >= trades[-1].timestamp
+
+    def test_batch_insert_empty_list_no_op(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "batch_audit3.sqlite3")
+        store.append_trades_batch([])
+        assert store.list_trades() == []
+
+    def test_batch_insert_duplicate_raises(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path / "batch_audit4.sqlite3")
+        base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
+        records = [_record("dup", base), _record("dup", base + timedelta(minutes=1))]
+        with pytest.raises(ConfigError, match="Batch insert conflict"):
+            store.append_trades_batch(records)
+
+
 class TestSQLiteStoreWalMode:
     """Test WAL mode is enabled on SQLite connections."""
 
