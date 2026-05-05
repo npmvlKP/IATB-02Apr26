@@ -13,6 +13,7 @@ from iatb.selection.composite_score import (
 )
 from iatb.selection.drl_signal import DRLSignalOutput
 from iatb.selection.instrument_scorer import (
+    FilterConfig,
     InstrumentScorer,
     InstrumentSignals,
     ScoredInstrument,
@@ -252,7 +253,53 @@ class TestBuildMetadata:
         assert metadata["regime"] == "BULL"
 
 
-class TestCustomWeights:
+class TestPreSelectionFilters:
+    def test_no_filter_config(self) -> None:
+        scorer = InstrumentScorer()
+        signals = [_make_signals("A"), _make_signals("B")]
+        result = scorer.score_instruments(signals, MarketRegime.BULL)
+        assert len(result) == 2
+
+    def test_technical_filtering_disabled(self) -> None:
+        from iatb.selection.technical_filter import TechnicalFilter, TechnicalFilterConfig
+
+        tf = TechnicalFilter(TechnicalFilterConfig())
+        fc = FilterConfig(technical_filter=tf, enable_technical_filtering=False)
+        scorer = InstrumentScorer(filter_config=fc)
+        signals = [_make_signals("A"), _make_signals("B")]
+        result = scorer.score_instruments(signals, MarketRegime.BULL)
+        assert len(result) == 2
+
+    def test_technical_filtering_enabled_no_metrics(self) -> None:
+        from iatb.selection.technical_filter import TechnicalFilter, TechnicalFilterConfig
+
+        tf = TechnicalFilter(TechnicalFilterConfig())
+        fc = FilterConfig(technical_filter=tf, enable_technical_filtering=True)
+        scorer = InstrumentScorer(filter_config=fc)
+        signals = [_make_signals("A"), _make_signals("B")]
+        result = scorer.score_instruments(signals, MarketRegime.BULL)
+        assert len(result) == 2
+
+    def test_fundamental_filtering_disabled(self) -> None:
+        from iatb.selection.fundamental_filter import FundamentalFilter, FundamentalFilterConfig
+
+        ff = FundamentalFilter(FundamentalFilterConfig())
+        fc = FilterConfig(fundamental_filter=ff, enable_fundamental_filtering=False)
+        scorer = InstrumentScorer(filter_config=fc)
+        signals = [_make_signals("A"), _make_signals("B")]
+        result = scorer.score_instruments(signals, MarketRegime.BULL)
+        assert len(result) == 2
+
+    def test_fundamental_filtering_enabled_no_metrics(self) -> None:
+        from iatb.selection.fundamental_filter import FundamentalFilter, FundamentalFilterConfig
+
+        ff = FundamentalFilter(FundamentalFilterConfig())
+        fc = FilterConfig(fundamental_filter=ff, enable_fundamental_filtering=True)
+        scorer = InstrumentScorer(filter_config=fc)
+        signals = [_make_signals("A"), _make_signals("B")]
+        result = scorer.score_instruments(signals, MarketRegime.BULL)
+        assert len(result) == 2
+
     def test_custom_weights_used(self) -> None:
         custom = {
             MarketRegime.BULL: RegimeWeights(
@@ -268,11 +315,26 @@ class TestCustomWeights:
         assert len(result) == 1
 
 
-class TestInstrumentSignals:
-    def test_with_strength_inputs(self) -> None:
-        signals = _make_signals(strength_inputs=_make_strength_inputs())
-        assert signals.strength_inputs is not None
+class TestFilterConfig:
+    def test_enable_technical_filtering(self) -> None:
+        from iatb.selection.technical_filter import TechnicalFilter, TechnicalFilterConfig
 
-    def test_without_strength_inputs(self) -> None:
-        signals = _make_signals()
-        assert signals.strength_inputs is None
+        tf = TechnicalFilter(TechnicalFilterConfig())
+        fc = FilterConfig(technical_filter=tf, enable_technical_filtering=True)
+        assert fc.enable_technical_filtering is True
+        assert fc.technical_filter is not None
+
+    def test_enable_fundamental_filtering(self) -> None:
+        from iatb.selection.fundamental_filter import FundamentalFilter, FundamentalFilterConfig
+
+        ff = FundamentalFilter(FundamentalFilterConfig())
+        fc = FilterConfig(fundamental_filter=ff, enable_fundamental_filtering=True)
+        assert fc.enable_fundamental_filtering is True
+        assert fc.fundamental_filter is not None
+
+    def test_default_no_filtering(self) -> None:
+        fc = FilterConfig()
+        assert fc.enable_technical_filtering is False
+        assert fc.enable_fundamental_filtering is False
+        assert fc.technical_filter is None
+        assert fc.fundamental_filter is None

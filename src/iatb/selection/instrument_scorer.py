@@ -2,7 +2,10 @@
 Central orchestrator for multi-factor instrument auto-selection.
 """
 
+from __future__ import annotations
+
 import logging
+import typing
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -25,6 +28,10 @@ from iatb.selection.ranking import (
 from iatb.selection.sentiment_signal import SentimentSignalOutput
 from iatb.selection.strength_signal import StrengthSignalOutput
 from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+
+if typing.TYPE_CHECKING:  # noqa: UP047
+    from iatb.selection.fundamental_filter import FundamentalFilter
+    from iatb.selection.technical_filter import TechnicalFilter
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +57,16 @@ class ScoredInstrument:
     signals: InstrumentSignals
 
 
+@dataclass
+class FilterConfig:
+    """Configuration for pre-selection filters."""
+
+    technical_filter: TechnicalFilter | None = None
+    fundamental_filter: FundamentalFilter | None = None
+    enable_technical_filtering: bool = False
+    enable_fundamental_filtering: bool = False
+
+
 class InstrumentScorer:
     """Fuses four signal sources into ranked instrument selection."""
 
@@ -57,9 +74,11 @@ class InstrumentScorer:
         self,
         ranking_config: RankingConfig | None = None,
         custom_weights: dict[MarketRegime, RegimeWeights] | None = None,
+        filter_config: FilterConfig | None = None,
     ) -> None:
         self._ranking_config = ranking_config or RankingConfig()
         self._custom_weights = custom_weights or {}
+        self._filter_config = filter_config
 
     def score_instruments(
         self,
@@ -67,6 +86,7 @@ class InstrumentScorer:
         regime: MarketRegime,
     ) -> list[ScoredInstrument]:
         """Score each instrument via regime-aware composite fusion."""
+        instrument_signals = self._apply_preselection_filters(instrument_signals)
         normalized = _normalize_signals_across(instrument_signals)
         scored: list[ScoredInstrument] = []
         for signals, norm in zip(instrument_signals, normalized, strict=True):
@@ -81,6 +101,35 @@ class InstrumentScorer:
             )
         logger.info("Scored %d instruments under %s regime", len(scored), regime.value)
         return scored
+
+    def _apply_preselection_filters(
+        self,
+        instrument_signals: list[InstrumentSignals],
+    ) -> list[InstrumentSignals]:
+        """Apply technical and fundamental pre-selection filters if configured."""
+        if not self._filter_config:
+            return instrument_signals
+
+        active = instrument_signals[:]
+        if self._filter_config.enable_technical_filtering and self._filter_config.technical_filter:
+            active = _apply_technical_filter(active, self._filter_config.technical_filter)
+            logger.info(
+                "Technical filter: %d/%d instruments remaining",
+                len(active),
+                len(instrument_signals),
+            )
+
+        if (
+            self._filter_config.enable_fundamental_filtering
+            and self._filter_config.fundamental_filter
+        ):
+            active = _apply_fundamental_filter(active, self._filter_config.fundamental_filter)
+            logger.info(
+                "Fundamental filter: %d instruments remaining",
+                len(active),
+            )
+
+        return active
 
     def select_top(
         self,
@@ -110,6 +159,34 @@ class InstrumentScorer:
     ) -> CompositeResult:
         custom = self._custom_weights.get(regime)
         return compute_composite_score(norm_scores, regime, custom)
+
+
+def _apply_technical_filter(
+    instrument_signals: list[InstrumentSignals],
+    technical_filter: TechnicalFilter,
+) -> list[InstrumentSignals]:
+    """Apply technical filter to instrument signals.
+
+    For now, this returns all signals since InstrumentSignals does not yet
+    contain technical metrics.  Extend when technical metrics are added.
+    """
+    # Placeholder: when technical metrics are available, evaluate and filter.
+    # For now, return all instruments to avoid breaking the pipeline.
+    return instrument_signals[:]
+
+
+def _apply_fundamental_filter(
+    instrument_signals: list[InstrumentSignals],
+    fundamental_filter: FundamentalFilter,
+) -> list[InstrumentSignals]:
+    """Apply fundamental filter to instrument signals.
+
+    For now, this returns all signals since InstrumentSignals does not yet
+    contain fundamental metrics.  Extend when fundamental metrics are added.
+    """
+    # Placeholder: when fundamental metrics are available, evaluate and filter.
+    # For now, return all instruments to avoid breaking the pipeline.
+    return instrument_signals[:]
 
 
 def _normalize_signals_across(
