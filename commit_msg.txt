@@ -1,0 +1,8 @@
+feat(storage): enhance SQLite audit trail with time-range, symbol, strategy filters and batch insert
+
+- Add list_trades_by_range(start_utc, end_utc) for time-range queries
+- Add list_trades_by_symbol(symbol, exchange, limit) for symbol filtering
+- Add list_trades_by_strategy(strategy_id, limit) for strategy filtering
+- Enable WAL mode in _connect() for all connections
+- Add append_trades_batch() for high-throughput batch writes
+- Add comprehensive test coverage for all new methods
