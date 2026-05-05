@@ -9,10 +9,13 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from iatb.core.exceptions import ConfigError
 from iatb.sentiment.base import SentimentScore, sentiment_label_from_score
+
+if TYPE_CHECKING:
+    from iatb.sentiment.news_scraper import NewsHeadline
 
 logger = logging.getLogger(__name__)
 
@@ -162,11 +165,33 @@ class NewsAnalyzer:
             timestamp=datetime.now(UTC),
         )
 
+    def analyze_headlines(
+        self,
+        headlines: list["NewsHeadline"],
+        symbol: str,
+    ) -> NewsSentimentResult:
+        """Convert NewsHeadline objects to NewsArticle and analyze.
+
+        Provides a direct bridge from NewsScraper.fetch_headlines()
+        output to NewsAnalyzer analysis.
+
+        Args:
+            headlines: List of NewsHeadline from NewsScraper.
+            symbol: The financial instrument symbol.
+
+        Returns:
+            NewsSentimentResult with aggregated sentiment.
+        """
+        from iatb.sentiment.news_scraper import headlines_to_articles
+
+        articles = headlines_to_articles(headlines)
+        return self.analyze(articles, symbol)
+
     def analyze_batch(
         self, articles_by_symbol: dict[str, list[NewsArticle]]
     ) -> dict[str, NewsSentimentResult]:
         """Analyze news for multiple symbols."""
-        results = {}
+        results: dict[str, NewsSentimentResult] = {}
         for symbol, articles in articles_by_symbol.items():
             results[symbol] = self.analyze(articles, symbol)
         logger.info("Analyzed news for %d symbols", len(results))
@@ -182,7 +207,7 @@ class NewsAnalyzer:
             age_hours = (now - article.published_at).total_seconds() / 3600
             if age_hours > self._config.max_age_hours:
                 continue
-            if symbol not in article.symbols and symbol not in article.title.lower():
+            if symbol not in article.symbols and symbol.lower() not in article.title.lower():
                 continue
             filtered.append(article)
         return filtered

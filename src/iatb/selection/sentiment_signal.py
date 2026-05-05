@@ -2,15 +2,20 @@
 Normalize sentiment aggregator output to [0, 1] selection signal.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.selection._util import DirectionalIntent, clamp_01
 from iatb.selection.decay import temporal_decay
-from iatb.sentiment.aggregator import SentimentAggregator
+
+if TYPE_CHECKING:
+    from iatb.sentiment.aggregator import SentimentAggregator
 
 
 @dataclass(frozen=True)

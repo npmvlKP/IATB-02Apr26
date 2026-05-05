@@ -7,10 +7,15 @@ import time
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol, cast
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Protocol, cast
 from xml.etree import ElementTree as XmlElementTree  # nosec B405
 
 from iatb.core.exceptions import ConfigError
+
+if TYPE_CHECKING:
+    from iatb.sentiment.news_analyzer import NewsArticle
 
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 DEFAULT_RSS_FEEDS = {
@@ -40,6 +45,67 @@ class NewsHeadline:
     url: str
     published: str
     article_text: str
+
+
+def _parse_rss_date(published: str) -> datetime:
+    """Parse RSS date strings into UTC datetime.
+
+    Handles common RSS date formats with fallback to current UTC time.
+    """
+    from email.utils import parsedate_to_datetime
+
+    if not published:
+        return datetime.now(UTC)
+    try:
+        # RFC 2822 / RFC 822 date format (most common in RSS)
+        dt = parsedate_to_datetime(published)
+        if dt.tzinfo is None:
+            # Naive datetime: treat as UTC
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
+    except (ValueError, TypeError):
+        pass
+    # Fallback: try ISO format
+    try:
+        dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
+    except (ValueError, TypeError):
+        pass
+    # Last resort
+    return datetime.now(UTC)
+
+
+def headlines_to_articles(
+    headlines: list[NewsHeadline],
+) -> list["NewsArticle"]:
+    """Convert NewsHeadline objects to NewsArticle format for NewsAnalyzer.
+
+    Args:
+        headlines: List of NewsHeadline objects from NewsScraper.
+
+    Returns:
+        List of NewsArticle instances ready for NewsAnalyzer.analyze().
+    """
+    from iatb.sentiment.news_analyzer import NewsArticle
+
+    articles: list[NewsArticle] = []
+    for headline in headlines:
+        published_dt = _parse_rss_date(headline.published)
+        articles.append(
+            NewsArticle(
+                title=headline.title,
+                content=headline.article_text or headline.title,
+                source=headline.source,
+                published_at=published_dt,
+                url=headline.url,
+                symbols=[],
+                author="",
+                relevance_score=Decimal("1.0"),
+            )
+        )
+    return articles
 
 
 def _default_fetcher(url: str) -> str:

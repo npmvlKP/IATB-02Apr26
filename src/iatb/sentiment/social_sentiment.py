@@ -182,11 +182,43 @@ class SocialSentimentAnalyzer:
             timestamp=datetime.now(UTC),
         )
 
+    def analyze_to_sentiment_score(
+        self,
+        posts: list[SocialPost],
+        symbol: str,
+    ) -> SentimentScore:
+        """Analyze social posts and return a single SentimentScore for the aggregator.
+
+        Provides a bridge from SocialSentimentAnalyzer output to the
+        SentimentAggregator's weighted ensemble.
+
+        Args:
+            posts: List of SocialPost objects.
+            symbol: The financial instrument symbol.
+
+        Returns:
+            A SentimentScore representing the aggregated social sentiment.
+        """
+        result = self.analyze(posts, symbol)
+        label = sentiment_label_from_score(result.overall_score)
+        return SentimentScore(
+            source="social",
+            score=result.overall_score,
+            confidence=result.overall_confidence,
+            label=label,
+            text_excerpt=f"Social sentiment for {symbol}: {label}",
+            metadata={
+                "post_count": str(result.post_count),
+                "total_engagement": str(result.total_engagement),
+                "timestamp": result.timestamp.isoformat(),
+            },
+        )
+
     def analyze_batch(
         self, posts_by_symbol: dict[str, list[SocialPost]]
     ) -> dict[str, SocialSentimentResult]:
         """Analyze social posts for multiple symbols."""
-        results = {}
+        results: dict[str, SocialSentimentResult] = {}
         for symbol, posts in posts_by_symbol.items():
             results[symbol] = self.analyze(posts, symbol)
         logger.info("Analyzed social sentiment for %d symbols", len(results))

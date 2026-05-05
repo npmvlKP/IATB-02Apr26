@@ -2,13 +2,18 @@
 Sentiment-driven strategy using VERY_STRONG sentiment and volume confirmation.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from iatb.core.enums import OrderSide
 from iatb.core.events import SignalEvent
-from iatb.sentiment.aggregator import SentimentAggregator
 from iatb.strategies.base import StrategyBase, StrategyContext
+
+if TYPE_CHECKING:
+    from iatb.sentiment.aggregator import SentimentAggregator
 
 
 @dataclass(frozen=True)
@@ -22,6 +27,8 @@ class SentimentDrivenStrategy(StrategyBase):
     """Directional strategy based on tradable VERY_STRONG sentiment output."""
 
     def __init__(self, sentiment_aggregator: SentimentAggregator | None = None) -> None:
+        from iatb.sentiment.aggregator import SentimentAggregator
+
         super().__init__(strategy_id="sentiment_driven")
         self._aggregator = sentiment_aggregator or SentimentAggregator()
 
