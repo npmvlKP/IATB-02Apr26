@@ -64,7 +64,7 @@ class TestRecordToEntry:
         assert entry.status == "FILLED"
         assert entry.strategy_id == "STRAT-1"
         assert entry.algo_id == "ALG-101"
-        assert entry.timestamp_utc.tzinfo == UTC
+        assert entry.timestamp_utc.tzinfo is UTC
 
     def test_missing_algo_id_in_metadata(self) -> None:
         ts = create_timestamp(datetime(2026, 4, 26, 10, 0, 0, tzinfo=UTC))
@@ -185,3 +185,11 @@ class TestTradeAuditLogger:
         db_file = tmp_path / "audit_init.db"
         TradeAuditLogger(db_file)
         assert db_file.exists()
+
+    def test_verify_chain_passes(self, tmp_path: Path) -> None:
+        logger = TradeAuditLogger(tmp_path / "audit.db")
+        for i in range(3):
+            request = _make_request()
+            result = _make_result(order_id=f"OID-CHAIN-{i}")
+            logger.log_order(request, result, "STRAT-1", "ALG-101")
+        assert logger.verify_chain() is True

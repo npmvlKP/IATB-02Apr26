@@ -118,28 +118,53 @@ class SQLiteStore:
     def initialize(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS trade_audit_log (
-                    trade_id TEXT PRIMARY KEY,
-                    timestamp_utc TEXT NOT NULL,
-                    exchange TEXT NOT NULL,
-                    symbol TEXT NOT NULL,
-                    side TEXT NOT NULL,
-                    quantity TEXT NOT NULL,
-                    price TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    strategy_id TEXT NOT NULL,
-                    metadata_json TEXT NOT NULL
-                )
-                """
+            self._enable_wal(connection)
+            self._create_schema(connection)
+
+    def _enable_wal(self, connection: sqlite3.Connection) -> None:
+        connection.execute("PRAGMA journal_mode=WAL")
+
+    def _create_schema(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trade_audit_log (
+                trade_id TEXT PRIMARY KEY,
+                timestamp_utc TEXT NOT NULL,
+                exchange TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                quantity TEXT NOT NULL,
+                price TEXT NOT NULL,
+                status TEXT NOT NULL,
+                strategy_id TEXT NOT NULL,
+                metadata_json TEXT NOT NULL
             )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_trade_audit_timestamp
-                ON trade_audit_log (timestamp_utc)
-                """
-            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_trade_audit_timestamp
+            ON trade_audit_log (timestamp_utc)
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_trade_audit_exchange
+            ON trade_audit_log (exchange)
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_trade_audit_symbol
+            ON trade_audit_log (symbol)
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_trade_audit_strategy
+            ON trade_audit_log (strategy_id)
+            """
+        )
 
     def append_trade(self, record: TradeAuditRecord) -> None:
         self.initialize()
@@ -184,6 +209,103 @@ class SQLiteStore:
                 """,
                 (limit,),
             ).fetchall()
+        return [_row_to_record(row) for row in rows]
+
+    @staticmethod
+    def _build_query(conditions: list[str]) -> str:
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+        if where_clause:
+            parts = [
+                "SELECT * FROM trade_audit_log",
+                where_clause,
+                "ORDER BY timestamp_utc DESC LIMIT ?",
+            ]
+            return " ".join(parts)
+        return "SELECT * FROM trade_audit_log ORDER BY timestamp_utc DESC LIMIT ?"
+
+    @staticmethod
+    def _build_filter_conditions(
+        conditions: list[str],
+        params: list[object],
+        *,
+        start_time: datetime | None,
+        end_time: datetime | None,
+        exchange: Exchange | None,
+        symbol: str | None,
+        strategy_id: str | None,
+        side: OrderSide | None,
+        status: OrderStatus | None,
+    ) -> None:
+        if start_time is not None:
+            conditions.append("timestamp_utc >= ?")
+            params.append(start_time.isoformat())
+        if end_time is not None:
+            conditions.append("timestamp_utc <= ?")
+            params.append(end_time.isoformat())
+        if exchange is not None:
+            conditions.append("exchange = ?")
+            params.append(exchange.value)
+        if symbol is not None:
+            conditions.append("symbol = ?")
+            params.append(symbol)
+        if strategy_id is not None:
+            conditions.append("strategy_id = ?")
+            params.append(strategy_id)
+        if side is not None:
+            conditions.append("side = ?")
+            params.append(side.value)
+        if status is not None:
+            conditions.append("status = ?")
+            params.append(status.value)
+
+    def query_trades(
+        self,
+        *,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        exchange: Exchange | None = None,
+        symbol: str | None = None,
+        strategy_id: str | None = None,
+        side: OrderSide | None = None,
+        status: OrderStatus | None = None,
+        limit: int = 100,
+    ) -> list[TradeAuditRecord]:
+        """Query trades with optional filtering.
+
+        Args:
+            start_time: Optional UTC-aware start timestamp (inclusive).
+            end_time: Optional UTC-aware end timestamp (inclusive).
+            exchange: Optional exchange filter.
+            symbol: Optional symbol filter (exact match).
+            strategy_id: Optional strategy filter (exact match).
+            side: Optional side filter.
+            status: Optional status filter.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of matching TradeAuditRecord ordered by timestamp DESC.
+        """
+        if limit <= 0:
+            msg = "limit must be positive"
+            raise ConfigError(msg)
+        self.initialize()
+        conditions: list[str] = []
+        params: list[object] = []
+        self._build_filter_conditions(
+            conditions,
+            params,
+            start_time=start_time,
+            end_time=end_time,
+            exchange=exchange,
+            symbol=symbol,
+            strategy_id=strategy_id,
+            side=side,
+            status=status,
+        )
+        params.append(limit)
+        query = self._build_query(conditions)
+        with self._connect() as connection:
+            rows = connection.execute(query, params).fetchall()
         return [_row_to_record(row) for row in rows]
 
     def purge_expired(self, reference_time: datetime | None = None) -> int:

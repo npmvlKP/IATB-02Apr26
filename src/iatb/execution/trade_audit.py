@@ -143,11 +143,9 @@ class TradeAuditLogger:
         start_time = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
         end_time = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
 
-        # Fetch all trades and filter by date
-        all_trades = self._store.list_trades(limit=10000)
-        filtered = [trade for trade in all_trades if start_time <= trade.timestamp <= end_time]
+        trades = self._store.query_trades(start_time=start_time, end_time=end_time, limit=10000)
 
-        return [_record_to_entry(trade) for trade in filtered]
+        return [_record_to_entry(trade) for trade in trades]
 
 
 def _record_to_entry(record: TradeAuditRecord) -> TradeAuditEntry:
