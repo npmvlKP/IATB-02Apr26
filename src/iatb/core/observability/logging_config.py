@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import logging.handlers
+import os
 import sys
 from datetime import UTC, datetime
 from typing import Any
@@ -83,6 +85,58 @@ def _create_console_handler() -> logging.StreamHandler[Any]:
     return console_handler
 
 
+def _create_file_handler() -> logging.Handler | None:
+    """Create file handler with JSON formatter and rotation.
+
+    Returns:
+        Configured file handler or None if file logging is disabled.
+    """
+    try:
+        config = get_config()
+        logging_config = getattr(config, "logging", None)
+        if not logging_config:
+            return None
+
+        file_config = getattr(logging_config, "file", None)
+        if not file_config or not getattr(file_config, "enabled", False):
+            return None
+
+        # Get file configuration with defaults
+        log_path = getattr(file_config, "path", "logs/iatb.json")
+        max_bytes = getattr(file_config, "max_bytes", 10485760)  # 10MB
+        backup_count = getattr(file_config, "backup_count", 5)
+
+        # Ensure log directory exists
+        log_dir = os.path.dirname(log_path)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+
+        # Create rotating file handler
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_path,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(logging.DEBUG)
+
+        # Use JSON formatter
+        formatter = JsonFormatter(
+            "%(timestamp)s %(level)s %(logger)s %(message)s",
+            timestamp=True,
+        )
+        file_handler.setFormatter(formatter)
+
+        return file_handler
+    except Exception as exc:
+        # If config fails to load, log warning and return None
+        logging.getLogger(__name__).warning(
+            "Failed to load file logging config: %s",
+            exc,
+        )
+        return None
+
+
 def _configure_logging_format(
     console_handler: logging.StreamHandler[Any],
 ) -> None:
@@ -115,6 +169,31 @@ def _configure_logging_format(
         )
 
 
+def _configure_module_levels() -> None:
+    """Configure per-module log levels from config file."""
+    try:
+        config = get_config()
+        logging_config = getattr(config, "logging", None)
+        if not logging_config:
+            return
+
+        modules_config = getattr(logging_config, "modules", None)
+        if not modules_config:
+            return
+
+        # Set level for each module
+        for module_name, level_str in modules_config.items():
+            level = getattr(logging, level_str.upper(), logging.INFO)
+            logger = logging.getLogger(module_name)
+            logger.setLevel(level)
+    except Exception as exc:
+        # If config fails to load, continue without module-specific levels
+        logging.getLogger(__name__).warning(
+            "Failed to load module logging config: %s",
+            exc,
+        )
+
+
 def setup_structured_logging(level: str = "INFO") -> logging.Logger:
     """Configure structured JSON logging for the application.
 
@@ -134,11 +213,19 @@ def setup_structured_logging(level: str = "INFO") -> logging.Logger:
     # Create console handler with JSON formatter
     console_handler = _create_console_handler()
 
-    # Add handler to root logger
+    # Create file handler if enabled
+    file_handler = _create_file_handler()
+
+    # Add handlers to root logger
     root_logger.addHandler(console_handler)
+    if file_handler is not None:
+        root_logger.addHandler(file_handler)
 
     # Configure logging from config file if exists
     _configure_logging_format(console_handler)
+
+    # Configure per-module log levels
+    _configure_module_levels()
 
     return root_logger
 

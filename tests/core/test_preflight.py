@@ -212,6 +212,11 @@ class TestRunPreflightChecks:
 
         audit_db_path = tmp_path / "audit" / "db.sqlite"
 
+        # Mock clock drift to return a small drift within threshold
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        monkeypatch.setattr("iatb.core.preflight.ClockDriftDetector", lambda: mock_detector)
+
         result = run_preflight_checks(
             executor=mock_executor,
             kill_switch=mock_kill_switch,
@@ -329,6 +334,7 @@ class TestRunPreflightChecks:
     def test_run_preflight_checks_audit_db_not_writable(
         self,
         tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test pre-flight checks fail when audit DB is not writable."""
         mock_executor = MagicMock()
@@ -344,6 +350,11 @@ class TestRunPreflightChecks:
         audit_db_path = tmp_path / "audit_dir" / "db.sqlite"
         audit_db_path.parent.mkdir()
         audit_db_path.touch()
+
+        # Mock clock drift to return a small drift within threshold
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        monkeypatch.setattr("iatb.core.preflight.ClockDriftDetector", lambda: mock_detector)
 
         result = run_preflight_checks(
             executor=mock_executor,
