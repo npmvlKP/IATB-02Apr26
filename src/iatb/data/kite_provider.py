@@ -307,6 +307,67 @@ class KiteProvider(DataProvider):
             source="kiteconnect",
         )
 
+    async def get_ohlcv_batch(
+        self,
+        *,
+        symbols: list[str],
+        exchange: Exchange,
+        timeframe: str,
+        since: Timestamp | None = None,
+        limit: int = 500,
+    ) -> dict[str, list[OHLCVBar]]:
+        """Fetch OHLCV bars for multiple symbols in parallel with rate limiting.
+
+        Uses asyncio.gather for concurrent fetches while respecting the
+        configured rate limit (3 req/sec, burst=10).
+
+        Args:
+            symbols: List of trading symbols (e.g., ["RELIANCE", "TCS"]).
+            exchange: Exchange for all symbols (NSE, BSE, MCX, or CDS).
+            timeframe: Timeframe (1m, 5m, 15m, 30m, 1h, 1d).
+            since: Optional timestamp to filter from.
+            limit: Maximum number of bars per symbol.
+
+        Returns:
+            Dictionary mapping symbol to list of OHLCVBar objects.
+
+        Raises:
+            ConfigError: If exchange/timeframe unsupported or API errors occur.
+        """
+        if not symbols:
+            return {}
+
+        if limit <= 0:
+            msg = "limit must be positive"
+            raise ConfigError(msg)
+
+        _ensure_supported_exchange(exchange)
+
+        async def _fetch_single(symbol: str) -> tuple[str, list[OHLCVBar]]:
+            bars = await self.get_ohlcv(
+                symbol=symbol,
+                exchange=exchange,
+                timeframe=timeframe,
+                since=since,
+                limit=limit,
+            )
+            return symbol, bars
+
+        tasks = [_fetch_single(symbol) for symbol in symbols]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        batch_results: dict[str, list[OHLCVBar]] = {}
+        for symbol, result in zip(symbols, results, strict=False):
+            if isinstance(result, Exception):
+                msg = f"Failed to fetch OHLCV for {symbol}: {result}"
+                raise ConfigError(msg) from result
+            # At this point result is tuple[str, list[OHLCVBar]]
+            if isinstance(result, tuple) and len(result) == 2:
+                key, bars = result
+                batch_results[key] = bars
+
+        return batch_results
+
     async def get_ticker(
         self,
         *,

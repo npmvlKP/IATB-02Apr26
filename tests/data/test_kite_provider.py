@@ -878,6 +878,190 @@ class TestKiteProviderBacktestingValidation:
             )
 
 
+class TestKiteProviderGetOhlcvBatch:
+    """Test get_ohlcv_batch method."""
+
+    @pytest.fixture
+    def mock_kite_client(self):
+        """Create a mock KiteConnect client."""
+        client = MagicMock()
+        client.historical_data.return_value = [
+            {
+                "date": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "open": 100.0,
+                "high": 105.0,
+                "low": 98.0,
+                "close": 103.0,
+                "volume": 1000000,
+            },
+            {
+                "date": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "open": 103.0,
+                "high": 108.0,
+                "low": 102.0,
+                "close": 107.0,
+                "volume": 1200000,
+            },
+        ]
+        return client
+
+    @pytest.mark.asyncio
+    async def test_fetches_batch_ohlcv_data(self, mock_kite_client):
+        """Test successful batch OHLCV data fetch."""
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        result = await provider.get_ohlcv_batch(
+            symbols=["RELIANCE", "TCS"],
+            exchange=Exchange.NSE,
+            timeframe="1d",
+            limit=10,
+        )
+
+        assert len(result) == 2
+        assert "RELIANCE" in result
+        assert "TCS" in result
+        assert len(result["RELIANCE"]) == 2
+        assert len(result["TCS"]) == 2
+        assert result["RELIANCE"][0].symbol == "RELIANCE"
+        assert result["TCS"][0].symbol == "TCS"
+
+    @pytest.mark.asyncio
+    async def test_empty_symbols_list_returns_empty(self, mock_kite_client):
+        """Test that empty symbols list returns empty dict."""
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        result = await provider.get_ohlcv_batch(
+            symbols=[],
+            exchange=Exchange.NSE,
+            timeframe="1d",
+        )
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_respects_rate_limit_during_batch(self, mock_kite_client):
+        """Test that batch fetches respect rate limiter."""
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        # Fetch 5 symbols - should not exceed burst capacity
+        symbols = ["RELIANCE", "TCS", "INFY", "HDFC", "SBIN"]
+        result = await provider.get_ohlcv_batch(
+            symbols=symbols,
+            exchange=Exchange.NSE,
+            timeframe="1d",
+            limit=5,
+        )
+
+        assert len(result) == 5
+        for symbol in symbols:
+            assert symbol in result
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_positive_limit(self, mock_kite_client):
+        """Test that non-positive limit raises error."""
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        with pytest.raises(ConfigError, match="limit must be positive"):
+            await provider.get_ohlcv_batch(
+                symbols=["RELIANCE", "TCS"],
+                exchange=Exchange.NSE,
+                timeframe="1d",
+                limit=0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_raises_on_unsupported_exchange(self, mock_kite_client):
+        """Test that unsupported exchange raises ConfigError."""
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        # Use a mock exchange with unsupported value
+        class UnsupportedExchange:
+            value = "UNSUPPORTED"
+
+        with pytest.raises(ConfigError, match="Unsupported exchange"):
+            await provider.get_ohlcv_batch(
+                symbols=["RELIANCE"],
+                exchange=UnsupportedExchange(),  # type: ignore[arg-type]
+                timeframe="1d",
+            )
+
+    @pytest.mark.asyncio
+    async def test_propagates_fetch_error(self, mock_kite_client):
+        """Test that errors during individual fetches are propagated."""
+        call_count = 0
+
+        def side_effect(*args: Any, **kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                raise Exception("API Error")
+            return [
+                {
+                    "date": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                    "open": 100.0,
+                    "high": 105.0,
+                    "low": 98.0,
+                    "close": 103.0,
+                    "volume": 1000000,
+                }
+            ]
+
+        mock_kite_client.historical_data.side_effect = side_effect
+
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        with pytest.raises(ConfigError, match="Failed to fetch OHLCV"):
+            await provider.get_ohlcv_batch(
+                symbols=["RELIANCE", "TCS"],
+                exchange=Exchange.NSE,
+                timeframe="1d",
+            )
+
+    @pytest.mark.asyncio
+    async def test_single_symbol_batch(self, mock_kite_client):
+        """Test batch fetch with single symbol."""
+        provider = KiteProvider(
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
+        )
+
+        result = await provider.get_ohlcv_batch(
+            symbols=["RELIANCE"],
+            exchange=Exchange.NSE,
+            timeframe="1d",
+            limit=5,
+        )
+
+        assert len(result) == 1
+        assert "RELIANCE" in result
+        assert len(result["RELIANCE"]) == 2
+
+
 class TestKiteProviderEdgeCases:
     """Test edge cases and error paths for 90% coverage."""
 
