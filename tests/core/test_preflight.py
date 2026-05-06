@@ -429,12 +429,13 @@ class TestPreflightEdgeCases:
         mock_kill_switch = MagicMock()
         mock_kill_switch.is_engaged = False
 
-        # Should still work with Path objects
-        result = run_preflight_checks(
-            executor=mock_executor,
-            kill_switch=mock_kill_switch,
-            data_dir=tmp_path,
-            audit_db_path=tmp_path / "test.db",
-        )
+        # Patch clock drift check to avoid environment-specific failure
+        with patch("iatb.core.preflight._check_clock_drift", return_value=None):
+            result = run_preflight_checks(
+                executor=mock_executor,
+                kill_switch=mock_kill_switch,
+                data_dir=tmp_path,
+                audit_db_path=tmp_path / "test.db",
+            )
 
         assert result is True

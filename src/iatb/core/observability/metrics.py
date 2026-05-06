@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from prometheus_client import (
@@ -157,7 +158,7 @@ def record_trade(
     exchange: str,
     side: str,
     status: str,
-    pnl: float | None = None,
+    pnl: Decimal | None = None,
     ticker: str | None = None,
 ) -> None:
     """Record a trade execution.
@@ -172,7 +173,7 @@ def record_trade(
     trade_counter.labels(exchange=exchange, side=side, status=status).inc()
 
     if pnl is not None and ticker is not None:
-        trade_pnl.labels(exchange=exchange, ticker=ticker).set(pnl)
+        trade_pnl.labels(exchange=exchange, ticker=ticker).set(float(pnl))  # noqa: G7 – API boundary conversion to float for Prometheus
 
 
 def update_open_positions(exchange: str, count: int) -> None:
@@ -185,22 +186,22 @@ def update_open_positions(exchange: str, count: int) -> None:
     open_positions.labels(exchange=exchange).set(count)
 
 
-def update_portfolio_value(value: float) -> None:
+def update_portfolio_value(value: Decimal) -> None:
     """Update portfolio value.
 
     Args:
         value: Current portfolio value.
     """
-    portfolio_value.set(value)
+    portfolio_value.set(float(value))  # noqa: G7 – API boundary conversion to float for Prometheus
 
 
-def update_daily_pnl(pnl: float) -> None:
+def update_daily_pnl(pnl: Decimal) -> None:
     """Update daily profit/loss.
 
     Args:
         pnl: Daily profit/loss amount.
     """
-    daily_pnl.set(pnl)
+    daily_pnl.set(float(pnl))  # noqa: G7 – API boundary conversion to float for Prometheus
 
 
 def record_scan_cycle(scanner_type: str, duration: float) -> None:

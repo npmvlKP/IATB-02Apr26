@@ -122,7 +122,7 @@ class TestOptionResolution:
             lot_size=Decimal("75"),
             tick_size=Decimal("0.05"),
             strike=Decimal("24500"),
-            expiry=date(2026, 5, 1),
+            expiry=date(2026, 6, 1),
         )
         _insert_instrument(master, ce2)
         resolver = InstrumentResolver(master)

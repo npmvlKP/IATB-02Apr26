@@ -28,7 +28,6 @@ Price impact      = (total_slippage_bps / 10_000) * base_price
 """
 
 import logging
-import math
 from decimal import Decimal
 from itertools import count
 from pathlib import Path
@@ -73,12 +72,12 @@ def _volume_adjustment_factor(quantity: Decimal) -> Decimal:
     Higher quantities receive a lower effective slippage (better fill).
     The factor is bounded to prevent unrealistic extremes.
     """
-    qty_float = float(quantity)  # float here is for math.log10 only
-    if qty_float <= 0:
+    if quantity <= 0:
         return _VOLUME_ADJUSTMENT_MAX_FACTOR
 
-    log_val = math.log10(qty_float + 1.0)  # float used in scientific computation
-    factor = Decimal("1") / (Decimal("1") + _VOLUME_ADJUSTMENT_MULTIPLIER * Decimal(str(log_val)))
+    # Use Decimal arithmetic to avoid float (G7 compliance)
+    log_val = (quantity + Decimal("1")).log10()
+    factor = Decimal("1") / (Decimal("1") + _VOLUME_ADJUSTMENT_MULTIPLIER * log_val)
 
     # Clamp to [0.5, 1.0]
     if factor < _VOLUME_ADJUSTMENT_MIN_FACTOR:
@@ -138,28 +137,7 @@ def validate_fill_against_market(
     target_slippage_bps: Decimal,
     tolerance_bps: Decimal = _VALIDATION_TOLERANCE_BPS,
 ) -> tuple[bool, str, Decimal]:
-    """Validate that a paper fill is within acceptable slippage bounds.
-
-    Compares the actual fill price against an expected price based on
-    the market price and target slippage. This validates that the
-    deterministic slippage model produces realistic fills.
-
-    Args:
-        fill_price: The actual price from paper executor.
-        market_price: The reference market price (base price).
-        side: Order side (BUY or SELL).
-        target_slippage_bps: Expected slippage in basis points.
-        tolerance_bps: Acceptable deviation from target (default: 2 bps).
-
-    Returns:
-        A tuple of (is_valid, message, actual_slippage_bps).
-        - is_valid: True if fill is within tolerance
-        - message: Human-readable validation result
-        - actual_slippage_bps: Actual slippage applied in basis points
-    """
-    # Calculate expected slippage amount (for reference)
-    _expected_slippage_amount = (target_slippage_bps / Decimal("10000")) * market_price
-
+    """Validate that a paper fill is within acceptable slippage bounds."""
     # Calculate actual slippage in bps
     price_diff = abs(fill_price - market_price)
     actual_slippage_bps = (price_diff / market_price) * Decimal("10000")

@@ -140,6 +140,22 @@ def _parse_kite_timestamp(value: object) -> datetime:
     raise ConfigError(msg)
 
 
+def _process_ohlcv_batch_results(
+    symbols: list[str],
+    results: list[Any],
+) -> dict[str, list[OHLCVBar]]:
+    """Process the batch fetch results, raising on errors."""
+    batch_results: dict[str, list[OHLCVBar]] = {}
+    for symbol, result in zip(symbols, results, strict=False):
+        if isinstance(result, Exception):
+            msg = f"Failed to fetch OHLCV for {symbol}: {result}"
+            raise ConfigError(msg) from result
+        if isinstance(result, tuple) and len(result) == 2:
+            key, bars = result
+            batch_results[key] = bars
+    return batch_results
+
+
 class KiteProvider(DataProvider):
     """Kite Connect REST API provider for historical market data.
 
@@ -336,7 +352,6 @@ class KiteProvider(DataProvider):
         """
         if not symbols:
             return {}
-
         if limit <= 0:
             msg = "limit must be positive"
             raise ConfigError(msg)
@@ -356,17 +371,7 @@ class KiteProvider(DataProvider):
         tasks = [_fetch_single(symbol) for symbol in symbols]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        batch_results: dict[str, list[OHLCVBar]] = {}
-        for symbol, result in zip(symbols, results, strict=False):
-            if isinstance(result, Exception):
-                msg = f"Failed to fetch OHLCV for {symbol}: {result}"
-                raise ConfigError(msg) from result
-            # At this point result is tuple[str, list[OHLCVBar]]
-            if isinstance(result, tuple) and len(result) == 2:
-                key, bars = result
-                batch_results[key] = bars
-
-        return batch_results
+        return _process_ohlcv_batch_results(symbols, results)
 
     async def get_ticker(
         self,

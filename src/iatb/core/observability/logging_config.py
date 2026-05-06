@@ -96,7 +96,6 @@ def _create_file_handler() -> logging.Handler | None:
         logging_config = getattr(config, "logging", None)
         if not logging_config:
             return None
-
         file_config = getattr(logging_config, "file", None)
         if not file_config or not getattr(file_config, "enabled", False):
             return None

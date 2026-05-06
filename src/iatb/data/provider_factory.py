@@ -213,7 +213,7 @@ class DataProviderFactory:
             rate_limiter=rl,
             circuit_breaker=cb,
             retry_config=rc,
-        )  # type: ignore[abstract]
+        )
 
     def create_jugaad_provider(self) -> JugaadProvider:
         """Create JugaadProvider instance.

@@ -15,6 +15,9 @@ async def test_run_runtime_starts_and_stops_components(monkeypatch: pytest.Monke
     lifecycle: list[str] = []
 
     class _FakeEngine:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         async def start(self) -> None:
             lifecycle.append("engine-start")
 
@@ -86,6 +89,9 @@ async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -
     event_created: list[bool] = []
 
     class _FakeEngine:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         async def start(self) -> None:
             pass
 
@@ -119,6 +125,9 @@ async def test_run_runtime_handles_engine_start_error(monkeypatch: pytest.Monkey
     """Runtime should handle errors during engine startup gracefully."""
 
     class _FailingEngine:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         async def start(self) -> None:
             raise RuntimeError("Engine start failed")
 
@@ -138,6 +147,9 @@ async def test_run_runtime_handles_engine_stop_error(monkeypatch: pytest.MonkeyP
     """Runtime should handle errors during engine stop gracefully."""
 
     class _EngineWithStopError:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         async def start(self) -> None:
             pass
 
@@ -205,7 +217,7 @@ async def test_multiple_runtime_instances(monkeypatch: pytest.MonkeyPatch) -> No
     instance_count: list[int] = []
 
     class _CountingEngine:
-        def __init__(self) -> None:
+        def __init__(self, *args, **kwargs) -> None:
             instance_count.append(len(instance_count))
 
         async def start(self) -> None:

@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from email.mime.text import MIMEText
 from enum import StrEnum
 from typing import Any
@@ -208,7 +209,7 @@ class TelegramAlerter(AlertChannel):
         ticker: str,
         side: str,
         quantity: int,
-        price: float,
+        price: Decimal,
         timestamp: datetime | None = None,
     ) -> bool:
         """Send a trade execution alert.
@@ -295,8 +296,8 @@ class TelegramAlerter(AlertChannel):
 
     def send_pnl_alert(
         self,
-        pnl: float,
-        daily_pnl: float | None = None,
+        pnl: Decimal,
+        daily_pnl: Decimal | None = None,
         open_positions: int = 0,
     ) -> bool:
         """Send a PnL alert.
@@ -893,9 +894,11 @@ class AlertRulesEngine:
         Returns:
             True if daily loss exceeds threshold.
         """
-        # G7 exemption: threshold comparison for alerting (not financial calc)
-        daily_pnl = float(context.get("daily_pnl", 0))  # noqa: G7
-        threshold = float(context.get("loss_threshold", -999999))  # noqa: G7
+        # Use Decimal for financial comparison to avoid float precision issues
+        daily_pnl_raw = context.get("daily_pnl", 0)
+        threshold_raw = context.get("loss_threshold", -999999)
+        daily_pnl = Decimal(str(daily_pnl_raw))
+        threshold = Decimal(str(threshold_raw))
         return daily_pnl <= threshold
 
     def _check_data_source_failure(self, context: dict[str, Any]) -> bool:
