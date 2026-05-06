@@ -1,0 +1,17 @@
+[weights.BULL]
+sentiment = "0.25"
+strength = "0.30"
+volume_profile = "0.20"
+drl = "0.25"
+
+[weights.BEAR]
+sentiment = "0.25"
+strength = "0.30"
+volume_profile = "0.20"
+drl = "0.25"
+
+[weights.SIDEWAYS]
+sentiment = "0.25"
+strength = "0.30"
+volume_profile = "0.20"
+drl = "0.25"

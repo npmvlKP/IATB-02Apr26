@@ -28,6 +28,7 @@ from iatb.selection.ranking import (
 from iatb.selection.sentiment_signal import SentimentSignalOutput
 from iatb.selection.strength_signal import StrengthSignalOutput
 from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
+from iatb.selection.weight_optimizer import _load_weights_from_config
 
 if typing.TYPE_CHECKING:  # noqa: UP047
     from iatb.selection.fundamental_filter import FundamentalFilter
@@ -75,10 +76,16 @@ class InstrumentScorer:
         ranking_config: RankingConfig | None = None,
         custom_weights: dict[MarketRegime, RegimeWeights] | None = None,
         filter_config: FilterConfig | None = None,
+        load_from_config: bool = True,
     ) -> None:
         self._ranking_config = ranking_config or RankingConfig()
-        self._custom_weights = custom_weights or {}
         self._filter_config = filter_config
+
+        # Load custom weights from config if requested and not provided
+        if custom_weights is None and load_from_config:
+            self._custom_weights = _load_weights_from_config()
+        else:
+            self._custom_weights = custom_weights or {}
 
     def score_instruments(
         self,

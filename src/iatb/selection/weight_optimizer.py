@@ -11,6 +11,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
+from iatb.core.config_manager import get_config_manager
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.selection._util import clamp_01
@@ -20,6 +21,9 @@ from iatb.selection.ic_monitor import compute_information_coefficient
 logger = logging.getLogger(__name__)
 
 _IC_THRESHOLD = Decimal("0.03")
+
+# Weight config file path
+WEIGHTS_CONFIG_PATH = "config/weights.toml"
 
 
 @dataclass(frozen=True)
@@ -90,13 +94,15 @@ def optimize_weights_for_regime(
     forward_returns: Sequence[Decimal],
     n_trials: int = 50,
     seed: int = 42,
+    persist: bool = True,
 ) -> OptimizationResult:
     """Find optimal regime weights via Optuna TPE search.
 
     signal_history: list of dicts with keys
-        'sentiment', 'strength', 'volume_profile', 'drl'
-        each value ∈ [0, 1].
+    'sentiment', 'strength', 'volume_profile', 'drl'
+    each value in [0, 1].
     forward_returns: realised returns aligned with signal_history.
+    persist: whether to save optimized weights to config.
     """
     _validate_inputs(signal_history, forward_returns, n_trials)
     optuna = _load_optuna()
@@ -111,6 +117,9 @@ def optimize_weights_for_regime(
     improved = best_ic >= _IC_THRESHOLD
 
     _log_optimization_result(regime, best_ic, improved)
+
+    if persist:
+        _save_weights_to_config(regime, best_weights)
 
     return OptimizationResult(
         regime=regime,
@@ -231,3 +240,119 @@ def _best_value(study: object) -> float:
         msg = "study.best_value unavailable"
         raise ConfigError(msg)
     return float(value)  # noqa: G7
+
+
+def _weights_to_dict(weights: RegimeWeights) -> dict[str, str]:
+    """Convert RegimeWeights to dictionary with string values.
+
+    Args:
+        weights: RegimeWeights object to convert.
+
+    Returns:
+        Dictionary with string representations of weights.
+    """
+    return {
+        "sentiment": str(weights.sentiment),
+        "strength": str(weights.strength),
+        "volume_profile": str(weights.volume_profile),
+        "drl": str(weights.drl),
+    }
+
+
+def _save_weights_to_config(regime: MarketRegime, weights: RegimeWeights) -> None:
+    """Save optimized weights to ConfigManager TOML persistence.
+
+    Args:
+        regime: Market regime for which weights were optimized.
+        weights: Optimized weights to save.
+    """
+    try:
+        config_manager = get_config_manager()
+        weights_dict = _weights_to_dict(weights)
+        config_manager.set_regime_weights(regime.value, weights_dict)
+        logger.info(
+            "Saved optimized weights for regime %s to config",
+            regime.value,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to save weights for regime %s: %s",
+            regime.value,
+            str(e),
+        )
+        raise ConfigError(f"Failed to save weights: {e}") from e
+
+
+def _load_weights_from_config() -> dict[MarketRegime, RegimeWeights]:
+    """Load custom weights from ConfigManager.
+
+    Returns:
+        Dictionary mapping regimes to their weights.
+    """
+    try:
+        config_manager = get_config_manager()
+        weights_config = config_manager.get_weights_config()
+        result: dict[MarketRegime, RegimeWeights] = {}
+
+        for regime_str, weights_dict in weights_config.items():
+            try:
+                regime = MarketRegime(regime_str)
+                weights = RegimeWeights(
+                    sentiment=Decimal(weights_dict["sentiment"]),
+                    strength=Decimal(weights_dict["strength"]),
+                    volume_profile=Decimal(weights_dict["volume_profile"]),
+                    drl=Decimal(weights_dict["drl"]),
+                )
+                result[regime] = weights
+            except (KeyError, ValueError) as e:
+                logger.warning(
+                    "Failed to parse weights for regime %s: %s",
+                    regime_str,
+                    str(e),
+                )
+                continue
+
+        return result
+    except Exception as e:
+        logger.warning("Failed to load weights from config: %s", str(e))
+        return {}
+
+
+def optimize_all_regimes(
+    signal_history_by_regime: dict[MarketRegime, list[dict[str, Decimal]]],
+    forward_returns_by_regime: dict[MarketRegime, Sequence[Decimal]],
+    n_trials: int = 50,
+    seed: int = 42,
+) -> dict[MarketRegime, OptimizationResult]:
+    """Run weight optimization for all market regimes.
+
+    Args:
+        signal_history_by_regime: Signal history for each regime.
+        forward_returns_by_regime: Forward returns for each regime.
+        n_trials: Number of optimization trials per regime.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Dictionary mapping regimes to their optimization results.
+    """
+    results: dict[MarketRegime, OptimizationResult] = {}
+
+    for regime, history in signal_history_by_regime.items():
+        returns = forward_returns_by_regime.get(regime, [])
+        if not returns:
+            logger.warning("No forward returns for regime %s, skipping", regime.value)
+            continue
+
+        try:
+            result = optimize_weights_for_regime(
+                regime, history, returns, n_trials=n_trials, seed=seed
+            )
+            results[regime] = result
+        except Exception as e:
+            logger.error(
+                "Failed to optimize weights for regime %s: %s",
+                regime.value,
+                str(e),
+            )
+
+    return results
