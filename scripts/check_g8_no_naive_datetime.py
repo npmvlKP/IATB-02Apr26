@@ -22,12 +22,12 @@ def check_file_for_naive_datetime(file_path: Path) -> list[tuple[int, str]]:
         for i, line in enumerate(lines, 1):
             # Check for naive datetime patterns
             naive_patterns = [
-                "datetime.now()",
-                "datetime.utcnow()",
-                "datetime.today()",
-                "datetime.fromtimestamp(",
+                ("datetime.now()", False),
+                ("datetime.utcnow()", False),
+                ("datetime.today()", False),
+                ("datetime.fromtimestamp(", True),  # May have UTC parameter
             ]
-            for pattern in naive_patterns:
+            for pattern, check_utc in naive_patterns:
                 if pattern in line:
                     # Skip if it's a comment or docstring
                     if line.strip().startswith("#") or line.strip().startswith('"""') or line.strip().startswith("'''"):
@@ -35,6 +35,15 @@ def check_file_for_naive_datetime(file_path: Path) -> list[tuple[int, str]]:
                     # Skip if it's in a test file (tests are allowed to test rejection)
                     if "tests/" in str(file_path):
                         continue
+                    # For fromtimestamp, check current line and next few lines for UTC
+                    if check_utc:
+                        # Check current line
+                        if "UTC" in line or "tz=" in line:
+                            continue
+                        # Check next 5 lines for multi-line function calls
+                        next_lines = "\n".join(lines[i:min(i+5, len(lines))])
+                        if "UTC" in next_lines or "tz=" in next_lines:
+                            continue
                     issues.append((i, line.strip()))
     except Exception:
         pass
