@@ -1,8 +1,9 @@
 """Tests for pre-paper-trading safety infrastructure."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
@@ -228,8 +229,14 @@ class TestTradeAuditLogger:
 
 
 class TestPreflightChecks:
-    def test_all_pass(self, tmp_path: Path) -> None:
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_all_pass(self, mock_detector_class: MagicMock, tmp_path: Path) -> None:
         from iatb.core.preflight import run_preflight_checks
+
+        # Mock clock drift to be within threshold
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        mock_detector_class.return_value = mock_detector
 
         executor = PaperExecutor()
         ks = KillSwitch(executor)
@@ -238,8 +245,16 @@ class TestPreflightChecks:
         audit_path = tmp_path / "audit" / "trades.sqlite"
         assert run_preflight_checks(executor, ks, data_dir, audit_path) is True
 
-    def test_engaged_kill_switch_fails(self, tmp_path: Path) -> None:
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_engaged_kill_switch_fails(
+        self, mock_detector_class: MagicMock, tmp_path: Path
+    ) -> None:
         from iatb.core.preflight import run_preflight_checks
+
+        # Mock clock drift to be within threshold
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        mock_detector_class.return_value = mock_detector
 
         executor = PaperExecutor()
         ks = KillSwitch(executor)
@@ -249,8 +264,14 @@ class TestPreflightChecks:
         audit_path = tmp_path / "audit" / "trades.sqlite"
         assert run_preflight_checks(executor, ks, data_dir, audit_path) is False
 
-    def test_missing_data_dir_fails(self, tmp_path: Path) -> None:
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_missing_data_dir_fails(self, mock_detector_class: MagicMock, tmp_path: Path) -> None:
         from iatb.core.preflight import run_preflight_checks
+
+        # Mock clock drift to be within threshold
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        mock_detector_class.return_value = mock_detector
 
         executor = PaperExecutor()
         ks = KillSwitch(executor)

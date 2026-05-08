@@ -1,23 +1,25 @@
 #!/usr/bin/env python
 """
-iATB Master Startup Script — Orchestrates engine and dashboard startup.
+ iATB Master Startup Script — Orchestrates engine and dashboard startup.
 
-This script ensures the Engine API (port 8000) starts BEFORE the dashboard (port 8080),
-preventing the "Loading..." issue when the dashboard attempts to connect.
+ This script ensures the Engine API (port 8000) starts BEFORE the dashboard (port 8080),
+ preventing the "Loading..." issue when the dashboard attempts to connect.
 
-Startup sequence:
-   1. Start Engine with event bus
-   2. Wait for /health endpoint to return 200 OK
-   3. Start Dashboard on port 8080
-   4. Handle graceful shutdown on Ctrl+C
+ Startup sequence:
+    1. Start Engine with event bus
+    2. Wait for /health endpoint to return 200 OK
+    3. Start Dashboard on port 8080
+    4. Handle graceful shutdown on Ctrl+C
 
-Run:  poetry run python scripts/start_master.py
+ Run:  poetry run python scripts/start_master.py
 """
 
 import asyncio
 import logging
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,6 +39,30 @@ logging.basicConfig(
     ],
 )
 _LOGGER = logging.getLogger("start_master")
+
+async def wait_for_health_endpoint(url: str = "http://localhost:8000/health/live", timeout_seconds: int = 30, poll_interval: float = 0.5) -> bool:
+    """Poll health endpoint until it returns HTTP 200 or timeout.
+
+    Returns True on successful 200 response; False otherwise.
+    """
+    deadline = asyncio.get_event_loop().time() + timeout_seconds
+    while True:
+        try:
+            # Use blocking urllib in thread to avoid blocking the event loop
+            response = await asyncio.to_thread(urllib.request.urlopen, url, timeout=timeout_seconds)
+            # Ensure response is read/closed
+            await asyncio.to_thread(response.read)
+            if getattr(response, "status", None) == 200:
+                return True
+            # Non-200 is considered failure per test expectations
+            return False
+        except urllib.error.URLError:
+            if asyncio.get_event_loop().time() >= deadline:
+                return False
+            await asyncio.sleep(poll_interval)
+        except Exception:
+            # Unexpected error – fail fast
+            return False
 
 
 # ── Engine Startup ──

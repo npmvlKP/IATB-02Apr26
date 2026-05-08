@@ -61,7 +61,7 @@ class ZerodhaConnection:
         timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
         max_retries: int = _DEFAULT_MAX_RETRIES,
         # API boundary: retry delay is time-based, not financial calculation.
-        retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,
+        retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,  # API boundary: timing parameter
         http_request: HttpRequest | None = None,
     ) -> None:
         self._api_key = _require_non_empty(api_key, field_name="api_key")
@@ -96,7 +96,7 @@ class ZerodhaConnection:
         timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
         max_retries: int = _DEFAULT_MAX_RETRIES,
         # API boundary: retry delay is time-based, not financial calculation.
-        retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,
+        retry_delay_seconds: float = _DEFAULT_RETRY_DELAY_SECONDS,  # API boundary: timing parameter
         http_request: HttpRequest | None = None,
     ) -> ZerodhaConnection:
         return cls(

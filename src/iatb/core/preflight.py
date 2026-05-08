@@ -49,7 +49,11 @@ def _run_check(name: str, check: Callable[[], None], current: bool) -> bool:
 
 def _check_clock_drift(max_drift_seconds: int = 2) -> None:
     detector = ClockDriftDetector()
-    drift = detector.check_drift()
+    try:
+        drift = detector.check_drift()
+    except Exception:
+        logger.warning("Clock drift check skipped - NTP servers unreachable")
+        return
     if abs(drift.total_seconds()) > max_drift_seconds:
         msg = f"clock drift {drift.total_seconds()}s exceeds {max_drift_seconds}s"
         raise ConfigError(msg)

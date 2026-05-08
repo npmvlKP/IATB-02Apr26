@@ -328,7 +328,7 @@ class DuckDBStore:
                         "return_pct": create_price(str(return_pct)),
                     }
                 )
-        rankings.sort(key=lambda x: float(x["return_pct"]), reverse=True)
+        rankings.sort(key=lambda x: Decimal(str(x["return_pct"])), reverse=True)
         return rankings[:limit]
 
     def query_performance_ranking(  # noqa: G10
@@ -417,13 +417,53 @@ class DuckDBStore:
             )
         return result
 
+    def query_moving_averages(
+        self,
+        symbol: str,
+        exchange: Exchange,
+        *,
+        window: int,
+        start: Timestamp,
+        end: Timestamp,
+    ) -> list[dict[str, Any]]:
+        """Return SMA and EMA (placeholder) for a symbol over a window.
+
+        For EMA a proper implementation is omitted; this stub returns ``None`` for EMA.
+        """
+        if window <= 0:
+            msg = "window must be positive"
+            raise ConfigError(msg)
+        connection = self._get_connection()
+        try:
+            rows = connection.execute(
+                """
+                SELECT
+                    timestamp_utc,
+                    close_price,
+                    AVG(CAST(close_price AS DOUBLE)) OVER (
+                        ORDER BY timestamp_utc
+                        ROWS BETWEEN ? PRECEDING AND CURRENT ROW
+                    ) AS sma,
+                    NULL AS ema
+                FROM ohlcv_bars
+                WHERE symbol = ? AND exchange = ?
+                AND timestamp_utc >= ? AND timestamp_utc <= ?
+                ORDER BY timestamp_utc
+                """,
+                (window - 1, symbol, exchange.value, start.isoformat(), end.isoformat()),
+            ).fetchall()
+        finally:
+            if self._connection is None:
+                connection.close()
+        return self._process_moving_average_rows(rows)
+
     def query_correlation_matrix(  # noqa: G10
         self,
         symbols: list[str],
         exchange: Exchange,
         start: Timestamp,
         end: Timestamp,
-    ) -> dict[str, dict[str, float]]:
+    ) -> dict[str, dict[str, Decimal]]:
         """Compute correlation matrix between symbols based on daily returns."""
         if len(symbols) < 2:
             msg = "At least 2 symbols required for correlation"
@@ -452,35 +492,35 @@ class DuckDBStore:
         returns = self._compute_returns(pivot, symbols)
         return self._compute_correlation_matrix(returns)
 
-    def _build_price_pivot(self, rows: list[tuple[Any, ...]]) -> dict[str, dict[str, float]]:
+    def _build_price_pivot(self, rows: list[tuple[Any, ...]]) -> dict[str, dict[str, Decimal]]:
         """Build pivot table: symbol -> {timestamp: close}."""
-        pivot: dict[str, dict[str, float]] = {}
+        pivot: dict[str, dict[str, Decimal]] = {}
         for row in rows:
             sym = row[0]
-            close = float(row[2])
+            close = Decimal(str(row[2]))
             if sym not in pivot:
                 pivot[sym] = {}
             pivot[sym][_normalize_timestamp(row[1]).isoformat()] = close
         return pivot
 
     def _compute_returns(
-        self, pivot: dict[str, dict[str, float]], symbols: list[str]
-    ) -> dict[str, list[float]]:
+        self, pivot: dict[str, dict[str, Decimal]], symbols: list[str]
+    ) -> dict[str, list[Decimal]]:
         """Compute daily returns for each symbol."""
         all_timestamps: set[str] = set()
         for sym_data in pivot.values():
             all_timestamps.update(sym_data.keys())
         sorted_timestamps = sorted(all_timestamps)
-        returns: dict[str, list[float]] = {}
+        returns: dict[str, list[Decimal]] = {}
         for sym in symbols:
             if sym not in pivot or len(pivot[sym]) < 2:
                 continue
             sym_prices = [pivot[sym].get(ts) for ts in sorted_timestamps]
-            sym_returns: list[float] = []
+            sym_returns: list[Decimal] = []
             for i in range(1, len(sym_prices)):
                 prev_price = sym_prices[i - 1]
                 curr_price = sym_prices[i]
-                if prev_price is not None and curr_price is not None:
+                if prev_price is not None and curr_price is not None and prev_price != Decimal("0"):
                     ret = (curr_price - prev_price) / prev_price
                     sym_returns.append(ret)
             if sym_returns:
@@ -488,36 +528,41 @@ class DuckDBStore:
         return returns
 
     def _compute_correlation_matrix(
-        self, returns: dict[str, list[float]]
-    ) -> dict[str, dict[str, float]]:
+        self, returns: dict[str, list[Decimal]]
+    ) -> dict[str, dict[str, Decimal]]:
         """Compute covariance-based correlation matrix."""
         common_symbols = list(returns.keys())
-        correlation_matrix: dict[str, dict[str, float]] = {}
+        correlation_matrix: dict[str, dict[str, Decimal]] = {}
         for sym1 in common_symbols:
             correlation_matrix[sym1] = {}
             for sym2 in common_symbols:
                 if sym1 == sym2:
-                    correlation_matrix[sym1][sym2] = 1.0
+                    correlation_matrix[sym1][sym2] = Decimal("1")
                 else:
                     ret1 = returns[sym1]
                     ret2 = returns[sym2]
                     min_len = min(len(ret1), len(ret2))
                     if min_len < 2:
-                        correlation_matrix[sym1][sym2] = 0.0
+                        correlation_matrix[sym1][sym2] = Decimal("0")
                     else:
                         r1 = ret1[:min_len]
                         r2 = ret2[:min_len]
-                        mean1 = sum(r1) / min_len
-                        mean2 = sum(r2) / min_len
-                        cov = (
-                            sum((r1[i] - mean1) * (r2[i] - mean2) for i in range(min_len)) / min_len
+                        mean1 = sum(r1, Decimal("0")) / Decimal(str(min_len))
+                        mean2 = sum(r2, Decimal("0")) / Decimal(str(min_len))
+                        cov = sum(
+                            [(r1[i] - mean1) * (r2[i] - mean2) for i in range(min_len)],
+                            Decimal("0"),
+                        ) / Decimal(str(min_len))
+                        var1 = sum([(r - mean1) ** 2 for r in r1], Decimal("0")) / Decimal(
+                            str(min_len)
                         )
-                        std1 = (sum((r - mean1) ** 2 for r in r1) / min_len) ** 0.5
-                        std2 = (sum((r - mean2) ** 2 for r in r2) / min_len) ** 0.5
-                        if std1 > 0 and std2 > 0:
-                            correlation_matrix[sym1][sym2] = cov / (std1 * std2)
+                        var2 = sum([(r - mean2) ** 2 for r in r2], Decimal("0")) / Decimal(
+                            str(min_len)
+                        )
+                        if var1 > Decimal("0") and var2 > Decimal("0"):
+                            correlation_matrix[sym1][sym2] = cov / (var1.sqrt() * var2.sqrt())
                         else:
-                            correlation_matrix[sym1][sym2] = 0.0
+                            correlation_matrix[sym1][sym2] = Decimal("0")
         return correlation_matrix
 
     def query_parquet(self, file_pattern: str) -> list[OHLCVBar]:

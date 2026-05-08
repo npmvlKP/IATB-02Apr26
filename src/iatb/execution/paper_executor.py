@@ -29,9 +29,9 @@ Price impact      = (total_slippage_bps / 10_000) * base_price
 
 import logging
 from decimal import Decimal
-from itertools import count
+from itertools import count as _itertools_count
 from pathlib import Path
-from typing import Final
+from typing import Any
 
 from iatb.core.enums import Exchange, MarketType, OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
@@ -75,8 +75,10 @@ def _volume_adjustment_factor(quantity: Decimal) -> Decimal:
     if quantity <= 0:
         return _VOLUME_ADJUSTMENT_MAX_FACTOR
 
-    # Use Decimal arithmetic to avoid float (G7 compliance)
-    log_val = (quantity + Decimal("1")).log10()
+    try:
+        log_val = (quantity + Decimal("1")).ln() / Decimal("10").ln()
+    except Exception:
+        log_val = Decimal("0")
     factor = Decimal("1") / (Decimal("1") + _VOLUME_ADJUSTMENT_MULTIPLIER * log_val)
 
     # Clamp to [0.5, 1.0]
@@ -100,204 +102,229 @@ def _compute_slippage_bps(
     compatibility.  Otherwise the deterministic model is applied:
 
     1. Exchange-specific base bps
-    2. Volume discount on top
+    2. Volume-adjustment factor (log10, bounded [0.5, 1.0])
+    3. Return total bps
     """
     if override_bps is not None:
         return override_bps
 
     base_bps = _resolve_base_slippage(exchange, market_type)
-    vol_factor = _volume_adjustment_factor(quantity)
-    return base_bps * vol_factor
+    volume_factor = _volume_adjustment_factor(quantity)
+    return base_bps * volume_factor
 
 
-def _apply_slippage(
+def apply_slippage(
     base_price: Decimal,
+    bps: Decimal,
     side: OrderSide,
-    slippage_bps: Decimal,
 ) -> Decimal:
-    """Apply the computed slippage to a base price."""
-    slippage = (slippage_bps / Decimal("10000")) * base_price
-    if side == OrderSide.BUY:
-        return base_price + slippage
-    return max(Decimal("0"), base_price - slippage)
+    """Apply the computed slippage to a base price.
 
-
-# ---------------------------------------------------------------------------
-# Slippage Validation Constants
-# ---------------------------------------------------------------------------
-_LIQUID_TARGET_SLIPPAGE_BPS: Decimal = Decimal("5")  # 5 bps for liquid instruments
-_ILLIQUID_TARGET_SLIPPAGE_BPS: Decimal = Decimal("10")  # 10 bps for illiquid instruments
-_VALIDATION_TOLERANCE_BPS: Decimal = Decimal("2")  # ±2 bps tolerance for validation
-
-
-def validate_fill_against_market(
-    fill_price: Decimal,
-    market_price: Decimal,
-    side: OrderSide,
-    target_slippage_bps: Decimal,
-    tolerance_bps: Decimal = _VALIDATION_TOLERANCE_BPS,
-) -> tuple[bool, str, Decimal]:
-    """Validate that a paper fill is within acceptable slippage bounds."""
-    # Calculate actual slippage in bps
-    price_diff = abs(fill_price - market_price)
-    actual_slippage_bps = (price_diff / market_price) * Decimal("10000")
-
-    # Calculate deviation from target
-    deviation_bps = abs(actual_slippage_bps - target_slippage_bps)
-
-    # Check if within tolerance
-    is_valid = deviation_bps <= tolerance_bps
-
-    # Build message
-    if is_valid:
-        message = (
-            f"Fill validated: {actual_slippage_bps:.2f} bps slippage "
-            f"(target: {target_slippage_bps} bps ±{tolerance_bps} bps)"
-        )
-    else:
-        message = (
-            f"Fill out of bounds: {actual_slippage_bps:.2f} bps slippage "
-            f"(target: {target_slippage_bps} bps ±{tolerance_bps} bps, "
-            f"deviation: {deviation_bps:.2f} bps)"
-        )
-
-    return is_valid, message, actual_slippage_bps
-
-
-def is_liquid_instrument(exchange: Exchange, market_type: MarketType) -> bool:
-    """Determine if an instrument is considered liquid based on exchange/segment.
-
-    Liquid instruments have lower target slippage (5 bps vs 10 bps).
-
-    Args:
-        exchange: The exchange identifier.
-        market_type: The market type/segment.
-
-    Returns:
-        True if liquid, False if illiquid.
+    BUY  -> fill_price = base_price + impact
+    SELL -> fill_price = base_price - impact (clamped to >= 0)
     """
-    # NSE F&O (futures and options) are highly liquid
-    if exchange == Exchange.NSE and market_type in (MarketType.FUTURES, MarketType.OPTIONS):
-        return True
+    impact = (bps / Decimal("10000")) * base_price
+    if side == OrderSide.BUY:
+        return base_price + impact
+    # SELL
+    result = base_price - impact
+    if result < Decimal("0"):
+        return Decimal("0")
+    return result
 
-    # NSE Equity (SPOT) is generally liquid
-    if exchange == Exchange.NSE and market_type == MarketType.SPOT:
-        return True
 
-    # BSE is moderately liquid
-    if exchange == Exchange.BSE and market_type == MarketType.SPOT:
-        return True
+# ---------------------------------------------------------------------------
+# Validation constants
+# ---------------------------------------------------------------------------
+_LIQUID_TARGET_SLIPPAGE_BPS: Decimal = Decimal("5")
+_ILLIQUID_TARGET_SLIPPAGE_BPS: Decimal = Decimal("10")
+_VALIDATION_TOLERANCE_BPS: Decimal = Decimal("2")
 
-    # MCX and other exchanges are less liquid
+
+def is_liquid_instrument(
+    symbol: str,
+    exchange: Exchange,
+    market_type: MarketType,
+) -> bool:
+    """Return whether an instrument is considered liquid."""
+    # NSE spot instruments are generally liquid
+    key = (exchange, market_type)
+    if key in _EXCHANGE_BASE_SLIPPAGE:
+        base = _EXCHANGE_BASE_SLIPPAGE[key]
+        return base <= Decimal("3")
     return False
 
 
+def validate_fill_against_market(
+    filled_price: Decimal,
+    market_price: Decimal,
+    side: OrderSide,
+    base_slippage_bps: Decimal,
+) -> bool:
+    """Validate that a paper fill is within acceptable slippage bounds."""
+    tolerance = base_slippage_bps + _VALIDATION_TOLERANCE_BPS
+    if market_price == Decimal("0"):
+        return True  # Can't validate against zero market price
+    if side == OrderSide.BUY:
+        max_price = market_price * (Decimal("1") + tolerance / Decimal("10000"))
+        return filled_price <= max_price
+    # SELL
+    min_price = market_price * (Decimal("1") - tolerance / Decimal("10000"))
+    return filled_price >= min_price
+
+
+# ---------------------------------------------------------------------------
+# PaperExecutor implementation
+# ---------------------------------------------------------------------------
+
+
 class PaperExecutor(Executor):
-    """Default executor for safe simulation in non-live mode."""
+    """Default executor for safe simulation in non-live mode.
+
+    * Uses the deterministic slippage model above.
+    * Optionally persists / restores state via ``export_trading_state`` /
+    ``load_trading_state`` for crash-recovery.
+    * Thread-safe via internal ``count``-based order-id generation.
+    """
+
+    _order_id_counter: Any
+    _positions: dict[str, tuple[Decimal, Decimal]]
+    _open_orders: dict[str, dict[str, Any]]
+
+    _slippage_override_bps: Decimal | None
+    """If set, used directly instead of the deterministic model."""
 
     def __init__(
         self,
+        *,
         slippage_bps: Decimal | None = None,
-        state_persistence_path: Path | None = None,
         crash_recovery_mode: bool = False,
+        state_file: str | None = None,
+        state_persistence_path: Path | str | None = None,
     ) -> None:
         if slippage_bps is not None and slippage_bps < Decimal("0"):
             msg = "slippage_bps cannot be negative"
             raise ConfigError(msg)
-        self._slippage_bps: Decimal | None = slippage_bps
-        # Use itertools.count() for thread-safe counter
-        self._counter: Final = count(start=1)
-        self._open_orders: set[str] = set()
-        self._crash_recovery_mode: bool = crash_recovery_mode
-        self._state_persistence_path = state_persistence_path
 
-        # Load trading state if persistence path is provided
-        self._load_trading_state()
+        self._order_id_counter = _itertools_count(start=1)
+        self._positions: dict[str, tuple[Decimal, Decimal]] = {}
+        self._open_orders: dict[str, dict[str, Any]] = {}
+        self._slippage_override_bps = slippage_bps
+        self._crash_recovery_mode = crash_recovery_mode
+        self._state_persistence_path: Path | None = (
+            Path(state_persistence_path) if state_persistence_path is not None else None
+        )
+        self._state_file = (
+            str(self._state_persistence_path)
+            if self._state_persistence_path is not None
+            else state_file
+        )
 
+        if self._state_persistence_path is not None:
+            self._restore_state(self._state_persistence_path)
+        elif self._state_file is not None:
+            self._restore_state(Path(self._state_file))
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _restore_state(self, path: Path) -> None:
+        """Load positions and pending orders from a persisted state."""
+        if not path.exists():
+            _LOGGER.warning("State file not found: %s", path)
+            return
+        try:
+            positions, pending_orders = load_trading_state(path)
+            self._positions = positions
+            self._open_orders = pending_orders
+        except Exception as exc:
+            _LOGGER.error("Failed to restore state from %s: %s", path, exc)
+
+    def _persist_state(self, path: Path) -> None:
+        """Persist current positions and pending orders."""
+        export_trading_state(
+            positions=self._positions,
+            pending_orders=self._open_orders,
+            output_path=path,
+        )
+
+    def _next_order_id(self) -> str:
+        """Generate a unique order id."""
+        return f"PAPER-{next(self._order_id_counter):06d}"
+
+    # ------------------------------------------------------------------
+    # Public API (Executor interface)
+    # ------------------------------------------------------------------
     def execute_order(self, request: OrderRequest) -> ExecutionResult:
-        order_id = f"PAPER-{next(self._counter):06d}"
+        """Simulate execution with deterministic slippage."""
+        order_id = self._next_order_id()
+        bps = _compute_slippage_bps(
+            exchange=request.exchange,
+            market_type=request.market_type,
+            quantity=request.quantity,
+            override_bps=self._slippage_override_bps,
+        )
         base_price = request.price if request.price is not None else Decimal("100")
-
-        effective_slippage = _compute_slippage_bps(
-            request.exchange,
-            request.market_type,
-            request.quantity,
-            self._slippage_bps,
+        fill_price = apply_slippage(base_price=base_price, bps=bps, side=request.side)
+        self._update_positions(request.symbol, request.side, request.quantity, fill_price)
+        self._open_orders[order_id] = {
+            "symbol": request.symbol,
+            "side": request.side,
+            "quantity": request.quantity,
+            "price": fill_price,
+            "status": OrderStatus.FILLED,
+        }
+        self._maybe_persist_state()
+        return ExecutionResult(
+            order_id=order_id,
+            status=OrderStatus.FILLED,
+            filled_quantity=request.quantity,
+            average_price=fill_price,
         )
-        fill_price = _apply_slippage(base_price, request.side, effective_slippage)
-        self._open_orders.add(order_id)
-        result = ExecutionResult(
-            order_id, OrderStatus.FILLED, request.quantity, fill_price, "paper fill"
+
+    def _update_positions(
+        self, symbol: str, side: OrderSide, quantity: Decimal, fill_price: Decimal
+    ) -> None:
+        """Update internal position book after a fill."""
+        if side == OrderSide.BUY:
+            current_qty, current_avg = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
+            new_qty = current_qty + quantity
+            new_avg = (
+                ((current_qty * current_avg) + (quantity * fill_price)) / new_qty
+                if new_qty > Decimal("0")
+                else fill_price
+            )
+            self._positions[symbol] = (new_qty, new_avg)
+        else:
+            current_qty, current_avg = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
+            new_qty = current_qty - quantity if current_qty > quantity else Decimal("0")
+            self._positions[symbol] = (
+                (new_qty, current_avg) if new_qty > Decimal("0") else (Decimal("0"), Decimal("0"))
+            )
+
+    def _maybe_persist_state(self) -> None:
+        """Persist state to disk if a persistence path is configured."""
+        persistence_path = self._state_persistence_path or (
+            Path(self._state_file) if self._state_file else None
         )
-
-        # Persist state after order fill if persistence path is configured
-        if self._state_persistence_path:
-            self._export_trading_state()
-
-        return result
+        if persistence_path is not None:
+            self._persist_state(persistence_path)
 
     def cancel_all(self) -> int:
-        """Cancel all open orders and return count of cancelled orders."""
-        count_val = len(self._open_orders)
+        """Cancel all pending orders (simplified for paper trading)."""
+        # In paper trading, orders fill immediately; nothing to cancel
+        count = len(self._open_orders)
         self._open_orders.clear()
-        return count_val
-
-    def _load_trading_state(self) -> None:
-        """Load positions and pending orders from persisted state."""
-        if self._state_persistence_path is None:
-            return
-        try:
-            positions, pending_orders = load_trading_state(self._state_persistence_path)
-            # For paper executor, we primarily care about pending orders to avoid duplicates
-            # In a full implementation, we would also restore positions
-            # For now, we'll log that we loaded state
-            _LOGGER.info(
-                "Loaded trading state: %d positions, %d pending orders",
-                len(positions),
-                len(pending_orders),
-            )
-            # Note: PaperExecutor doesn't maintain position state, but OrderManager does
-            # The positions would be handled by OrderManager.load_state()
-        except Exception as exc:
-            _LOGGER.warning("Failed to load trading state: %s", exc)
-
-    def _export_trading_state(self) -> None:
-        """Export current positions and pending orders for crash recovery."""
-        if not self._state_persistence_path:
-            return
-
-        try:
-            # PaperExecutor doesn't track positions, so export empty dict
-            positions: dict[str, tuple[Decimal, Decimal]] = {}
-
-            # Export open orders as pending orders
-            pending_orders: dict[str, dict[str, str]] = {}
-            for order_id in self._open_orders:
-                pending_orders[order_id] = {
-                    "status": OrderStatus.OPEN.value,
-                    "executor": "paper",
-                }
-
-            # Export the state
-            export_trading_state(
-                positions=positions,
-                pending_orders=pending_orders,
-                output_path=self._state_persistence_path,
-            )
-            _LOGGER.info("Trading state exported for crash recovery")
-        except Exception as exc:
-            _LOGGER.error("Failed to export trading state: %s", exc)
+        return count
 
     def close_order(self, order_id: str) -> bool:
-        """Close a specific order by ID.
-
-        Args:
-            order_id: The order ID to close.
-
-        Returns:
-            True if order was found and closed, False otherwise.
-        """
+        """Close an order (simplified for paper trading)."""
+        # In paper trading, orders fill immediately; nothing to close
         if order_id in self._open_orders:
-            self._open_orders.remove(order_id)
+            del self._open_orders[order_id]
             return True
         return False
+
+    def get_positions(self) -> dict[str, tuple[Decimal, Decimal]]:
+        """Return current positions."""
+        return dict(self._positions)

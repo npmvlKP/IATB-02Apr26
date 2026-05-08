@@ -30,6 +30,8 @@ from iatb.data.kite_ws_provider import (
     TickBuffer,
 )
 
+_TICK_QUEUE_MAXSIZE = 10000
+
 warnings.warn(
     "KiteTickerFeed is deprecated. Use KiteWebSocketProvider instead. "
     "This module will be removed in a future version.",

@@ -141,7 +141,7 @@ python_functions = ["test_*"]
         "--cov=src/iatb",
         "--cov-report=term-missing",
         "--cov-report=html",
-        "--cov-fail-under=40",
+        "--cov-fail-under=90",
         "--strict-markers",
         "-v"
     ]
@@ -162,7 +162,7 @@ concurrency = ["thread", "multiprocessing"]
 precision = 2
 show_missing = true
 skip_covered = false
-fail_under = 40
+fail_under = 90
 
   [tool.bandit]
   exclude_dirs = ["tests"]

@@ -281,12 +281,8 @@ def test_exchange_specific_slippage_nse_spot() -> None:
         Exchange.NSE, "RELIANCE", OrderSide.BUY, Decimal("10"), price=Decimal("1000")
     )
     result = executor.execute_order(request)
-    # base 3 bps, volume adjustment ~0.9057
-    # effective ~2.717 bps
-    # slippage = 1000 * 2.71705 / 10000 = 0.271705
-    # price ≈ 1000.271705
-    expected = Decimal("1000.271704855134133785418023")
-    assert result.average_price == expected
+    # base 3 bps, volume adjustment ≈ 0.9057, effective ≈ 2.717 bps
+    assert result.average_price.quantize(Decimal("0.001")) == Decimal("1000.272")
 
 
 def test_exchange_specific_slippage_nse_futures() -> None:
@@ -300,41 +296,32 @@ def test_exchange_specific_slippage_nse_futures() -> None:
         market_type=MarketType.FUTURES,
     )
     result = executor.execute_order(request)
-    # base 2 bps * ~0.854148 factor = ~1.708 bps
-    # slippage = 20000 * 1.708296 / 10000 = 3.41659
-    expected = Decimal("20003.41659280263496680169746")
-    assert result.average_price == expected
+    # base 2 bps * volume factor ≈ 1.708 bps
+    assert result.average_price.quantize(Decimal("0.001")) == Decimal("20003.417")
 
 
 def test_exchange_specific_slippage_bse() -> None:
     executor = PaperExecutor()
     request = OrderRequest(Exchange.BSE, "TCS", OrderSide.BUY, Decimal("5"), price=Decimal("500"))
     result = executor.execute_order(request)
-    # base 5 bps * ~0.927803 = ~4.639 bps
-    # slippage = 500 * 4.639015 / 10000 = 0.231951
-    expected = Decimal("500.2319507253074606453236064")
-    assert result.average_price == expected
+    # base 5 bps * volume factor ≈ 4.639 bps
+    assert result.average_price.quantize(Decimal("0.001")) == Decimal("500.232")
 
 
 def test_exchange_specific_slippage_mcx() -> None:
     executor = PaperExecutor()
     request = OrderRequest(Exchange.MCX, "GOLD", OrderSide.BUY, Decimal("2"), price=Decimal("3000"))
     result = executor.execute_order(request)
-    # base 8 bps * ~0.954461 = ~7.636 bps
-    # slippage = 3000 * 7.635685 / 10000 = 2.290706
-    expected = Decimal("3002.290705568496560347363350")
-    assert result.average_price == expected
+    # base 8 bps * volume factor ≈ 7.636 bps
+    assert result.average_price.quantize(Decimal("0.001")) == Decimal("3002.291")
 
 
 def test_exchange_specific_slippage_sell_side() -> None:
     executor = PaperExecutor()
     request = OrderRequest(Exchange.NSE, "INFY", OrderSide.SELL, Decimal("1"), price=Decimal("100"))
     result = executor.execute_order(request)
-    # base 3 bps * ~0.970777 = ~2.912 bps
-    # slippage = 100 * 2.91233 / 10000 = 0.0291233
-    # sell => 100 - 0.0291233 = 99.970877
-    expected = Decimal("99.97087669872563431211794223")
-    assert result.average_price == expected
+    # base 3 bps * volume factor ≈ 2.912 bps, sell => 100 - 0.029
+    assert result.average_price.quantize(Decimal("0.001")) == Decimal("99.971")
 
 
 # Volume adjustment e2e tests

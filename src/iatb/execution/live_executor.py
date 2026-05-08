@@ -41,7 +41,9 @@ _LOGGER = logging.getLogger(__name__)
 # Default configuration values
 DEFAULT_CONFIRMATION_TIMEOUT_SECONDS: int = 30
 # API boundary: timing parameter, not financial calculation
-DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS: float = 0.5
+DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS: float = (  # API boundary: timing, not financial
+    0.5
+)
 DEFAULT_SLIPPAGE_TOLERANCE_BPS: Decimal = Decimal("20")  # 0.20%
 
 
@@ -75,7 +77,9 @@ class LiveExecutor(Executor):
         broker: BrokerInterface,
         confirmation_timeout_seconds: int = DEFAULT_CONFIRMATION_TIMEOUT_SECONDS,
         # API boundary: timing parameter, not financial
-        confirmation_poll_interval_seconds: float = DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS,
+        confirmation_poll_interval_seconds: float = (  # API boundary: timing parameter
+            DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS
+        ),
         slippage_tolerance_bps: Decimal = DEFAULT_SLIPPAGE_TOLERANCE_BPS,
     ) -> None:
         """Initialize live executor.
@@ -95,7 +99,7 @@ class LiveExecutor(Executor):
         if confirmation_timeout_seconds <= 0:
             msg = "confirmation_timeout_seconds must be positive"
             raise ValueError(msg)
-        if confirmation_poll_interval_seconds <= 0:
+        if confirmation_poll_interval_seconds <= 0:  # API boundary: timing parameter validation
             msg = "confirmation_poll_interval_seconds must be positive"
             raise ValueError(msg)
         if slippage_tolerance_bps < Decimal("0"):

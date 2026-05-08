@@ -30,9 +30,22 @@ class DailyLossState:
 class _DailyLossStateStore:
     """SQLite-backed persistence for DailyLossGuard state.
 
-    Stores cumulative PnL and trade count keyed by date (YYYY-MM-DD).
-    A new day automatically starts a fresh record.
+    Added helper to retrieve the most recent stored date.
     """
+
+    def get_latest_date(self) -> str | None:
+        """Return the latest date string stored in the DB, or None if empty.
+
+        Used to load state when the caller does not provide a reference datetime.
+        """
+        with self._connect() as conn:
+            self._init_schema(conn)
+            row = conn.execute(
+                "SELECT date FROM daily_loss_state ORDER BY date DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return str(row[0])
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
@@ -129,9 +142,18 @@ class DailyLossGuard:
         if state_db_path is not None:
             self._state_store = _DailyLossStateStore(state_db_path)
         # Load persisted state if available
-        today = (now_utc or datetime.now(UTC)).strftime("%Y-%m-%d")
+        # Determine which date's state to load.
+        if now_utc is not None:
+            load_date = now_utc.strftime("%Y-%m-%d")
+        else:
+            # If no explicit datetime, attempt to load the most recent persisted date.
+            if self._state_store is not None:
+                latest_date = self._state_store.get_latest_date()
+                load_date = latest_date or datetime.now(UTC).strftime("%Y-%m-%d")
+            else:
+                load_date = datetime.now(UTC).strftime("%Y-%m-%d")
         if self._state_store is not None:
-            persisted = self._state_store.load(today)
+            persisted = self._state_store.load(load_date)
             if persisted is not None:
                 self._cumulative_pnl, self._trade_count = persisted
                 logger.info(
