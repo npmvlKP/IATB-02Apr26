@@ -166,3 +166,82 @@ def sample_order_update_event() -> dict:
         "avg_price": Decimal("150.00"),
         "timestamp": datetime.now(UTC),
     }
+
+
+def _event_stub(event_type_name: str, **attrs: object) -> object:
+    """Create a lightweight dynamic object for branch testing."""
+
+    event_type = type(event_type_name, (), {})
+    instance = event_type()
+    for key, value in attrs.items():
+        setattr(instance, key, value)
+    return instance
+
+
+@pytest.fixture
+def sample_signal_event() -> object:
+    """Fixture providing valid SignalEvent."""
+    from datetime import datetime
+
+    from iatb.core.enums import Exchange, OrderSide
+
+    return _event_stub(
+        "SignalEvent",
+        timestamp=datetime.now(UTC),
+        strategy_id="STRATEGY-001",
+        exchange=Exchange.NSE,
+        symbol="RELIANCE",
+        side=OrderSide.BUY,
+        quantity=Decimal("100"),
+        price=Decimal("100.50"),
+        confidence=Decimal("0.75"),
+    )
+
+
+@pytest.fixture
+def sample_scan_update_event() -> object:
+    """Fixture providing valid ScanUpdateEvent."""
+    from datetime import datetime
+
+    return _event_stub(
+        "ScanUpdateEvent",
+        timestamp=datetime.now(UTC),
+        total_candidates=100,
+        approved_candidates=80,
+        trades_executed=50,
+        duration_ms=1000,
+        errors=[],
+    )
+
+
+@pytest.fixture
+def sample_pnl_update_event() -> object:
+    """Fixture providing valid PnLUpdateEvent."""
+    from datetime import datetime
+
+    return _event_stub(
+        "PnLUpdateEvent",
+        timestamp=datetime.now(UTC),
+        order_id="ORD-12345",
+        symbol="RELIANCE",
+        side="BUY",
+        quantity=Decimal("100"),
+        price=Decimal("100.50"),
+        trade_pnl=Decimal("-50.00"),
+        cumulative_pnl=Decimal("1000.00"),
+    )
+
+
+@pytest.fixture
+def sample_regime_change_event() -> object:
+    """Fixture providing valid RegimeChangeEvent."""
+    from datetime import datetime
+
+    return _event_stub(
+        "RegimeChangeEvent",
+        timestamp=datetime.now(UTC),
+        regime_type="VOLATILITY_SPIKE",
+        description="Volatility increasing",
+        confidence=Decimal("0.85"),
+        metadata={"key1": "value1", "key2": "value2"},
+    )
