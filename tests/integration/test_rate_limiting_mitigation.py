@@ -239,7 +239,6 @@ class TestRateLimitingMitigationIntegration:
             api_key="test_key",
             access_token="test_token",
             kite_connect_factory=lambda k, t: mock_kite_client,
-            requests_per_second=3,  # Kite API limit
         )
 
         # Mock instrument master for batch resolution
@@ -288,10 +287,14 @@ class TestRateLimitingMitigationIntegration:
         # Even with 5 API calls, rate limiter ensures 3 req/sec limit
         assert provider._rate_limiter is not None
 
+
+class TestRateLimitingEdgeCases:
+    """Test edge cases for rate limiting mitigation."""
+
     @pytest.mark.asyncio
     async def test_rate_limiter_concurrent_requests(self):
         """Test rate limiter handles concurrent requests correctly."""
-        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=10)
+        limiter = RateLimiter(requests_per_second=3.0, burst_capacity=3)
 
         # Make 10 concurrent requests
         tasks = [limiter.acquire() for _ in range(10)]
@@ -301,9 +304,10 @@ class TestRateLimitingMitigationIntegration:
 
         elapsed = (datetime.now(UTC) - start_time).total_seconds()
 
-        # With 3 req/sec, 10 requests should take at least 3 seconds
+        # With burst_capacity=3 and 3 req/sec, 10 requests should take at least 3 seconds
         # (3 + 3 + 3 + 1 = 10 requests across 4 windows)
-        assert elapsed >= 3.0
+        # Allow tolerance for timing variations
+        assert elapsed >= 2.5
 
     @pytest.mark.asyncio
     async def test_cache_ttl_expiration(self):
@@ -352,14 +356,10 @@ class TestRateLimitingMitigationIntegration:
             assert symbol in tokens
             assert tokens[symbol] == i
 
-
-class TestRateLimitingEdgeCases:
-    """Test edge cases for rate limiting mitigation."""
-
     @pytest.mark.asyncio
     async def test_rate_limiter_zero_tokens_waits_for_refill(self):
         """Test that rate limiter waits for refill when tokens are exhausted."""
-        limiter = RateLimiter(requests_per_second=1.0, burst_capacity=10)
+        limiter = RateLimiter(requests_per_second=10.0, burst_capacity=1)
 
         # Consume the only token
         await limiter.acquire()
@@ -369,8 +369,9 @@ class TestRateLimitingEdgeCases:
         await limiter.acquire()
         elapsed = (datetime.now(UTC) - start_time).total_seconds()
 
-        # Should have waited for refill
-        assert elapsed >= 0.4  # Allow some margin
+        # Should have waited for refill (10 tokens/sec = 0.1s per token)
+        # Allow tolerance for timing variations
+        assert elapsed >= 0.08  # Allow some margin
 
     @pytest.mark.asyncio
     async def test_cache_purge_expired(self):

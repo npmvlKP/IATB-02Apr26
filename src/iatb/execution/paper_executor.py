@@ -142,16 +142,16 @@ _VALIDATION_TOLERANCE_BPS: Decimal = Decimal("2")
 
 
 def is_liquid_instrument(
-    symbol: str,
     exchange: Exchange,
     market_type: MarketType,
+    symbol: str | None = None,
 ) -> bool:
     """Return whether an instrument is considered liquid."""
-    # NSE spot instruments are generally liquid
+    # NSE and BSE instruments are generally liquid
     key = (exchange, market_type)
     if key in _EXCHANGE_BASE_SLIPPAGE:
         base = _EXCHANGE_BASE_SLIPPAGE[key]
-        return base <= Decimal("3")
+        return base <= Decimal("5")
     return False
 
 
@@ -160,17 +160,39 @@ def validate_fill_against_market(
     market_price: Decimal,
     side: OrderSide,
     base_slippage_bps: Decimal,
-) -> bool:
-    """Validate that a paper fill is within acceptable slippage bounds."""
-    tolerance = base_slippage_bps + _VALIDATION_TOLERANCE_BPS
+    tolerance_bps: Decimal | None = None,
+) -> tuple[bool, str, Decimal]:
+    """Validate that a paper fill is within acceptable slippage bounds.
+
+    Checks if actual slippage is within [target - tolerance, target + tolerance].
+    Returns a tuple of (is_valid, message, actual_bps).
+    """
+    if tolerance_bps is None:
+        tolerance_bps = _VALIDATION_TOLERANCE_BPS
+
     if market_price == Decimal("0"):
-        return True  # Can't validate against zero market price
-    if side == OrderSide.BUY:
-        max_price = market_price * (Decimal("1") + tolerance / Decimal("10000"))
-        return filled_price <= max_price
-    # SELL
-    min_price = market_price * (Decimal("1") - tolerance / Decimal("10000"))
-    return filled_price >= min_price
+        return True, "Cannot validate against zero market price", Decimal("0")
+
+    actual_bps = abs((filled_price - market_price) / market_price * Decimal("10000"))
+    lower_bound = base_slippage_bps - tolerance_bps
+    upper_bound = base_slippage_bps + tolerance_bps
+
+    is_valid = lower_bound <= actual_bps <= upper_bound
+
+    if is_valid:
+        message = (
+            f"Fill validated: {actual_bps:.2f} bps slippage "
+            f"(target: {base_slippage_bps} ± {tolerance_bps} bps, "
+            f"range: {lower_bound:.2f}-{upper_bound:.2f} bps)"
+        )
+    else:
+        message = (
+            f"Fill out of bounds: {actual_bps:.2f} bps slippage "
+            f"exceeds target {base_slippage_bps} ± {tolerance_bps} bps "
+            f"(range: {lower_bound:.2f}-{upper_bound:.2f} bps)"
+        )
+
+    return is_valid, message, actual_bps
 
 
 # ---------------------------------------------------------------------------

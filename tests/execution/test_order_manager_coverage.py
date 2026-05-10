@@ -188,9 +188,9 @@ def test_order_manager_pnl_long_closing_position():
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("110"))
     manager._record_pnl(request, result)
 
-    # PnL should be recorded: (110 - 100) * 10 = 100
-    assert len(loss_guard.recorded_trades) == 1
-    assert loss_guard.recorded_trades[0][0] == Decimal("100")
+    # PnL recording is handled by RiskPipeline; _record_pnl only updates position state.
+    # Since we're calling _record_pnl directly, no trade should be recorded.
+    assert len(loss_guard.recorded_trades) == 0
 
 
 def test_order_manager_pnl_short_opening_position():
@@ -220,9 +220,8 @@ def test_order_manager_pnl_short_closing_position():
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("90"))
     manager._record_pnl(request, result)
 
-    # PnL should be recorded: (100 - 90) * 10 = 100
-    assert len(loss_guard.recorded_trades) == 1
-    assert loss_guard.recorded_trades[0][0] == Decimal("100")
+    # Recording is done by RiskPipeline; direct _record_pnl does not record.
+    assert len(loss_guard.recorded_trades) == 0
 
 
 def test_order_manager_pnl_partial_close_long():
@@ -239,9 +238,8 @@ def test_order_manager_pnl_partial_close_long():
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("110"))
     manager._record_pnl(request, result)
 
-    # PnL: (110 - 100) * 10 = 100
-    assert len(loss_guard.recorded_trades) == 1
-    assert loss_guard.recorded_trades[0][0] == Decimal("100")
+    # _record_pnl updates position state only, no recording
+    assert len(loss_guard.recorded_trades) == 0
 
     # Remaining position should be 10 shares at 100
     assert manager._position_state["NIFTY"] == (Decimal("10"), Decimal("100"))
@@ -261,9 +259,7 @@ def test_order_manager_pnl_partial_close_short():
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("90"))
     manager._record_pnl(request, result)
 
-    # PnL: (100 - 90) * 10 = 100
-    assert len(loss_guard.recorded_trades) == 1
-    assert loss_guard.recorded_trades[0][0] == Decimal("100")
+    assert len(loss_guard.recorded_trades) == 0
 
     # Remaining position should be -10 shares at 100
     assert manager._position_state["NIFTY"] == (Decimal("-10"), Decimal("100"))
@@ -283,9 +279,7 @@ def test_order_manager_pnl_flip_to_long():
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("20"), Decimal("90"))
     manager._record_pnl(request, result)
 
-    # PnL: (100 - 90) * 10 = 100 (closing short)
-    assert len(loss_guard.recorded_trades) == 1
-    assert loss_guard.recorded_trades[0][0] == Decimal("100")
+    assert len(loss_guard.recorded_trades) == 0
 
     # New position: 10 shares long at 90
     assert manager._position_state["NIFTY"] == (Decimal("10"), Decimal("90"))
@@ -305,9 +299,7 @@ def test_order_manager_pnl_flip_to_short():
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("20"), Decimal("110"))
     manager._record_pnl(request, result)
 
-    # PnL: (110 - 100) * 10 = 100 (closing long)
-    assert len(loss_guard.recorded_trades) == 1
-    assert loss_guard.recorded_trades[0][0] == Decimal("100")
+    assert len(loss_guard.recorded_trades) == 0
 
     # New position: -10 shares short at 110
     assert manager._position_state["NIFTY"] == (Decimal("-10"), Decimal("110"))

@@ -207,7 +207,7 @@ class TestKiteTickerIntegration:
 
         # Connect and subscribe
         await ticker.connect()
-        await ticker.subscribe("RELIANCE", Exchange.NSE)
+        await ticker.subscribe("RELIANCE", Exchange.NSE, "1m")
 
         assert ticker.is_connected()
 
@@ -252,7 +252,6 @@ class TestRateLimitingIntegration:
             api_key="test_key",
             access_token="test_token",
             kite_connect_factory=lambda k, t: mock_client,
-            requests_per_second=2,  # Low rate limit
         )
 
         # Make multiple requests
@@ -355,8 +354,6 @@ class TestEndToEndPipeline:
             api_key="test_key",
             access_token="test_token",
             kite_connect_factory=lambda k, t: mock_client,
-            max_retries=3,
-            initial_retry_delay=0.01,
         )
 
         # Should retry and succeed

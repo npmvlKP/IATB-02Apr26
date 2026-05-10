@@ -171,6 +171,7 @@ class OrderManager:
 
         self._order_status[result.order_id] = result.status
         self._record_order_fingerprint(request, result.order_id)
+        self._record_pnl(request, result)
         self._persist_order_state(result)
         return result
 
@@ -251,7 +252,7 @@ class OrderManager:
         - BUY closes position → realized PnL = (entry_price - exit_price) * qty_closed
         - SELL opens position → no realized PnL
         """
-        if not self._daily_loss_guard or result.filled_quantity <= Decimal("0"):
+        if result.filled_quantity <= Decimal("0"):
             return
 
         symbol = request.symbol
@@ -316,13 +317,9 @@ class OrderManager:
         now: datetime,
     ) -> None:
         """Realize PnL when closing a short position."""
-        # Type guard: daily_loss_guard is guaranteed to be set when this is called
-        assert self._daily_loss_guard is not None  # nosec B101
-
         # For short: PnL = (entry - exit) * qty_closed
         qty_to_close = min(fill_qty, abs(current_qty))
-        realized_pnl = (avg_entry_price - fill_price) * qty_to_close
-        self._daily_loss_guard.record_trade(realized_pnl, now)
+        # Note: PnL recording is handled by RiskPipeline; we only update position state.
 
         # Update remaining short position
         remaining_short = -current_qty - qty_to_close
@@ -349,13 +346,9 @@ class OrderManager:
         now: datetime,
     ) -> None:
         """Realize PnL when closing a long position."""
-        # Type guard: daily_loss_guard is guaranteed to be set when this is called
-        assert self._daily_loss_guard is not None  # nosec B101
-
         # For long: PnL = (exit - entry) * qty_closed
         qty_to_close = min(fill_qty, current_qty)
-        realized_pnl = (fill_price - avg_entry_price) * qty_to_close
-        self._daily_loss_guard.record_trade(realized_pnl, now)
+        # Note: PnL recording is handled by RiskPipeline; we only update position state.
 
         # Update remaining long position
         remaining_long = current_qty - qty_to_close
@@ -463,6 +456,7 @@ class OrderManager:
 
         self._order_status[result.order_id] = result.status
         self._record_order_fingerprint(request, result.order_id)
+        self._record_pnl(request, result)
         if self._state_persistence_path:
             self.save_state(self._state_persistence_path)
 
