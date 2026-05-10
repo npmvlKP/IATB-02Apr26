@@ -41,12 +41,12 @@ def validate_ohlcv_bar(bar: OHLCVBar) -> None:
     _validate_non_negative(bar.volume, "volume")
     _validate_timestamp_not_far_future(bar.timestamp)
 
-    max_traded = max(bar.open, bar.close, bar.low)
-    min_traded = min(bar.open, bar.close, bar.high)
-    if bar.high < max_traded:
+    max_of_open_close = max(bar.open, bar.close)
+    min_of_open_close = min(bar.open, bar.close)
+    if bar.high < max_of_open_close or bar.high < bar.low:
         msg = "high price cannot be lower than open/close/low"
         raise ValidationError(msg)
-    if bar.low > min_traded:
+    if bar.low > min_of_open_close or bar.low > bar.high:
         msg = "low price cannot be greater than open/close/high"
         raise ValidationError(msg)
 
