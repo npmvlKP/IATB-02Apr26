@@ -7,7 +7,7 @@ from __future__ import annotations
 import random
 import sys as _sys
 from collections.abc import Generator
-from datetime import UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import ModuleType
 from typing import TYPE_CHECKING
@@ -110,17 +110,15 @@ def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None
 
 
 @pytest.fixture
-def sample_ohlcv_bars() -> list[dict]:
-    """Fixture providing valid OHLCVBar-like list for reuse."""
-    from datetime import datetime
-
+def sample_ohlcv_bars() -> list[dict[str, object]]:
+    """Fixture providing valid OHLCVBar dicts for reuse."""
     return [
         {
             "timestamp": datetime(2024, 1, 1, 9, 30, tzinfo=UTC),
-            "open_": Decimal("100"),
-            "high": Decimal("101"),
-            "low": Decimal("99"),
-            "close": Decimal("100.5"),
+            "open": Decimal("100.00"),
+            "high": Decimal("101.00"),
+            "low": Decimal("99.00"),
+            "close": Decimal("100.50"),
             "volume": Decimal("5000"),
         }
         for _ in range(5)
@@ -130,8 +128,6 @@ def sample_ohlcv_bars() -> list[dict]:
 @pytest.fixture
 def sample_ticker_snapshot() -> dict:
     """Fixture providing valid TickerSnapshot."""
-    from datetime import datetime
-
     return {
         "ticker": "AAPL",
         "last_price": Decimal("150.00"),
@@ -145,8 +141,6 @@ def sample_ticker_snapshot() -> dict:
 @pytest.fixture
 def sample_market_tick_event() -> dict:
     """Fixture providing valid MarketTickEvent."""
-    from datetime import datetime
-
     return {
         "symbol": "NIFTY50",
         "price": Decimal("22500.50"),
@@ -157,8 +151,6 @@ def sample_market_tick_event() -> dict:
 @pytest.fixture
 def sample_order_update_event() -> dict:
     """Fixture providing valid OrderUpdateEvent."""
-    from datetime import datetime
-
     return {
         "order_id": "ORD-12345",
         "status": "FILLED",
@@ -170,7 +162,6 @@ def sample_order_update_event() -> dict:
 
 def _event_stub(event_type_name: str, **attrs: object) -> object:
     """Create a lightweight dynamic object for branch testing."""
-
     event_type = type(event_type_name, (), {})
     instance = event_type()
     for key, value in attrs.items():
@@ -181,8 +172,6 @@ def _event_stub(event_type_name: str, **attrs: object) -> object:
 @pytest.fixture
 def sample_signal_event() -> object:
     """Fixture providing valid SignalEvent."""
-    from datetime import datetime
-
     from iatb.core.enums import Exchange, OrderSide
 
     return _event_stub(
@@ -201,8 +190,6 @@ def sample_signal_event() -> object:
 @pytest.fixture
 def sample_scan_update_event() -> object:
     """Fixture providing valid ScanUpdateEvent."""
-    from datetime import datetime
-
     return _event_stub(
         "ScanUpdateEvent",
         timestamp=datetime.now(UTC),
@@ -217,8 +204,6 @@ def sample_scan_update_event() -> object:
 @pytest.fixture
 def sample_pnl_update_event() -> object:
     """Fixture providing valid PnLUpdateEvent."""
-    from datetime import datetime
-
     return _event_stub(
         "PnLUpdateEvent",
         timestamp=datetime.now(UTC),
@@ -235,8 +220,6 @@ def sample_pnl_update_event() -> object:
 @pytest.fixture
 def sample_regime_change_event() -> object:
     """Fixture providing valid RegimeChangeEvent."""
-    from datetime import datetime
-
     return _event_stub(
         "RegimeChangeEvent",
         timestamp=datetime.now(UTC),
