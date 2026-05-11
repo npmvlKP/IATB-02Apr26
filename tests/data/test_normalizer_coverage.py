@@ -233,3 +233,189 @@ def test_batch_error_with_index(mock_helpers):
             exchange=Exchange.NSE,
             source="kite",
         )
+
+
+def test_invalid_type_raises(mock_helpers):
+    """Invalid type (not Decimal, int, float, or str) raises ValidationError."""
+    raw_record = {
+        "timestamp": "2024-01-01T09:30:00+00:00",
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    raw_record["open"] = object()
+    with pytest.raises(ValidationError, match="open must be Decimal, int, float, or str"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_invalid_decimal_string_raises(mock_helpers):
+    """Invalid Decimal string raises ValidationError."""
+    raw_record = {
+        "timestamp": "2024-01-01T09:30:00+00:00",
+        "open": "not_a_number",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    with pytest.raises(ValidationError, match="open is not Decimal-compatible"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_naive_datetime_raises(mock_helpers):
+    """Naive datetime (no timezone) raises ValidationError."""
+    from datetime import datetime as dt
+
+    raw_record = {
+        "timestamp": dt(2024, 1, 1, 9, 30),  # noqa: DTZ001
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    with pytest.raises(ValidationError, match="timestamp must be timezone-aware"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_invalid_unix_timestamp_raises(mock_helpers):
+    """Invalid unix timestamp raises ValidationError."""
+    raw_record = {
+        "timestamp": 99999999999999999,  # Way too large
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    with pytest.raises(ValidationError, match="invalid unix timestamp"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_empty_timestamp_string_raises(mock_helpers):
+    """Empty timestamp string raises ValidationError."""
+    raw_record = {
+        "timestamp": " ",
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    with pytest.raises(ValidationError, match="timestamp cannot be empty"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_z_suffix_timestamp(mock_helpers):
+    """Z suffix is properly converted to +00:00."""
+    raw_record = {
+        "timestamp": "2024-01-01T09:30:00Z",
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    bar = normalize_ohlcv_record(
+        raw_record,
+        symbol="AAPL",
+        exchange=Exchange.NSE,
+        source="kite",
+    )
+    assert bar.timestamp.tzinfo == UTC
+
+
+def test_invalid_iso_timestamp_raises(mock_helpers):
+    """Invalid ISO timestamp string raises ValidationError."""
+    raw_record = {
+        "timestamp": "not-a-valid-timestamp",
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    with pytest.raises(ValidationError, match="invalid ISO timestamp string"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_timezone_free_iso_string_raises(mock_helpers):
+    """ISO string without timezone raises ValidationError."""
+    raw_record = {
+        "timestamp": "2024-01-01T09:30:00",
+        "open": "100",
+        "high": "101",
+        "low": "99",
+        "close": "100.5",
+        "volume": "5000",
+    }
+    with pytest.raises(ValidationError, match="must include timezone information"):
+        normalize_ohlcv_record(
+            raw_record,
+            symbol="AAPL",
+            exchange=Exchange.NSE,
+            source="kite",
+        )
+
+
+def test_batch_validate_series_enabled(mock_helpers):
+    """Batch with validate_series=True calls validate_ohlcv_series."""
+    raw_records = [
+        {
+            "timestamp": "2024-01-01T09:30:00+00:00",
+            "open": "100",
+            "high": "101",
+            "low": "99",
+            "close": "100.5",
+            "volume": "5000",
+        },
+        {
+            "timestamp": "2024-01-02T09:30:00+00:00",
+            "open": "101",
+            "high": "102",
+            "low": "100",
+            "close": "101.5",
+            "volume": "6000",
+        },
+    ]
+    # Should pass with validate_series=True (default)
+    bars = normalize_ohlcv_batch(
+        raw_records,
+        symbol="AAPL",
+        exchange=Exchange.NSE,
+        source="kite",
+        validate_series=True,
+    )
+    assert len(bars) == 2

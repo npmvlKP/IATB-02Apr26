@@ -364,6 +364,7 @@ class TestRateLimitingEdgeCases:
 
         # Consume the only token
         await limiter.acquire()
+        limiter.release()
 
         # Next acquire should wait for refill
         start_time = datetime.now(UTC)
@@ -373,6 +374,9 @@ class TestRateLimitingEdgeCases:
         # Should have waited for refill (10 tokens/sec = 0.1s per token)
         # Allow tolerance for timing variations
         assert elapsed >= 0.08  # Allow some margin
+
+        # Clean up
+        limiter.release()
 
     @pytest.mark.asyncio
     async def test_cache_purge_expired(self):
