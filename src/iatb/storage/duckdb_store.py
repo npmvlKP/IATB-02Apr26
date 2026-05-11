@@ -262,21 +262,30 @@ class DuckDBStore:
                     MAX(CAST(high_price AS DOUBLE)) AS high,
                     MIN(CAST(low_price AS DOUBLE)) AS low,
                     (SELECT close_price FROM ohlcv_bars o2
-                     WHERE o2.symbol = o1.symbol AND o2.exchange = o1.exchange
+                     WHERE o2.symbol = ? AND o2.exchange = ?
                      AND DATE(o2.timestamp_utc) = DATE(o1.timestamp_utc)
                      ORDER BY timestamp_utc DESC LIMIT 1) AS close,
                     (SELECT open_price FROM ohlcv_bars o3
-                     WHERE o3.symbol = o1.symbol AND o3.exchange = o1.exchange
+                     WHERE o3.symbol = ? AND o3.exchange = ?
                      AND DATE(o3.timestamp_utc) = DATE(o1.timestamp_utc)
                      ORDER BY timestamp_utc ASC LIMIT 1) AS open,
                     SUM(CAST(volume AS DOUBLE)) AS volume
                 FROM ohlcv_bars o1
-                WHERE symbol = ? AND exchange = ?
-                AND timestamp_utc >= ? AND timestamp_utc <= ?
-                GROUP BY DATE(timestamp_utc)
+                WHERE o1.symbol = ? AND o1.exchange = ?
+                AND o1.timestamp_utc >= ? AND o1.timestamp_utc <= ?
+                GROUP BY DATE(o1.timestamp_utc)
                 ORDER BY trade_date
                 """,
-                (symbol, exchange.value, start.isoformat(), end.isoformat()),
+                (
+                    symbol,
+                    exchange.value,
+                    symbol,
+                    exchange.value,
+                    symbol,
+                    exchange.value,
+                    start.isoformat(),
+                    end.isoformat(),
+                ),
             ).fetchall()
         finally:
             if self._connection is None:
@@ -347,7 +356,7 @@ class DuckDBStore:
             rows = connection.execute(
                 """
                 SELECT
-                    symbol,
+                    o1.symbol,
                     (SELECT CAST(close_price AS DOUBLE) FROM ohlcv_bars o2
                      WHERE o2.symbol = o1.symbol AND o2.exchange = o1.exchange
                      AND o2.timestamp_utc <= ?
@@ -357,9 +366,9 @@ class DuckDBStore:
                      AND o3.timestamp_utc >= ?
                      ORDER BY o3.timestamp_utc ASC LIMIT 1) AS start_price
                 FROM ohlcv_bars o1
-                WHERE exchange = ?
-                AND timestamp_utc >= ? AND timestamp_utc <= ?
-                GROUP BY symbol
+                WHERE o1.exchange = ?
+                AND o1.timestamp_utc >= ? AND o1.timestamp_utc <= ?
+                GROUP BY o1.symbol, o1.exchange
                 """,
                 (
                     end.isoformat(),
