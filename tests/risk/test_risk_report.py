@@ -475,9 +475,12 @@ class TestRiskReportGenerator:
         self,
         temp_output_dir: TemporaryDirectory,
         sample_metrics: DailyRiskMetrics,
-        caplog: pytest.LogCaptureFixture,
+        mocker,
     ) -> None:
-        """Test report generation with email notification stub."""
+        """Test report generation with email notification."""
+        # Mock the internal email function
+        mock_send_email = mocker.patch.object(RiskReportGenerator, "_send_email_notification")
+
         config = ReportConfig(
             output_dir=Path(temp_output_dir.name),
             notification_channel=NotificationChannel.EMAIL,
@@ -487,15 +490,20 @@ class TestRiskReportGenerator:
         report_path = generator.generate_report(sample_metrics)
 
         assert report_path.exists()
-        assert any("Email notification would be sent" in message for message in caplog.messages)
+        mock_send_email.assert_called_once_with(report_path, sample_metrics)
 
     def test_report_with_telegram_notification(
         self,
         temp_output_dir: TemporaryDirectory,
         sample_metrics: DailyRiskMetrics,
-        caplog: pytest.LogCaptureFixture,
+        mocker,
     ) -> None:
-        """Test report generation with Telegram notification stub."""
+        """Test report generation with Telegram notification."""
+        # Mock the logger to capture calls
+        mock_logger = mocker.patch("iatb.risk.risk_report._get_logger")
+        mock_logger_instance = mock_logger.return_value
+        mock_logger_instance.info.return_value = None
+
         config = ReportConfig(
             output_dir=Path(temp_output_dir.name),
             notification_channel=NotificationChannel.TELEGRAM,
@@ -505,7 +513,12 @@ class TestRiskReportGenerator:
         report_path = generator.generate_report(sample_metrics)
 
         assert report_path.exists()
-        assert any("Telegram notification would be sent" in message for message in caplog.messages)
+        # Verify logger was called with expected message
+        mock_logger.assert_called_once()
+        # Check that info was called with Telegram message
+        mock_logger_instance.info.assert_any_call(
+            "Telegram notification would be sent to chat_id: %s", "123456789"
+        )
 
     def test_report_contains_risk_alert_normal(
         self,

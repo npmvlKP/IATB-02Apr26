@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from iatb.core.enums import Exchange
-from iatb.core.exceptions import ConfigError
+from iatb.core.exceptions import ConfigError, ValidationError
 from iatb.core.types import Timestamp, create_price, create_quantity, create_timestamp
 from iatb.data.base import OHLCVBar
 from iatb.data.validator import validate_ohlcv_series
@@ -246,6 +246,13 @@ class DuckDBStore:
             raise ConfigError(msg)
         return create_price(str(result[0]))
 
+    def _validate_daily_summary_params(self, start: Timestamp, end: Timestamp) -> None:
+        """Validate parameters for query_daily_summary."""
+        if not isinstance(start, datetime) or not isinstance(end, datetime):
+            raise ValidationError("Start and end must be datetime objects")
+        if start > end:
+            raise ValidationError("Start date must be before end date")
+
     def query_daily_summary(
         self,
         symbol: str,
@@ -253,28 +260,31 @@ class DuckDBStore:
         start: Timestamp,
         end: Timestamp,
     ) -> list[dict[str, Any]]:
+        """Query daily summary for date range with validation and error handling."""
+        self._validate_daily_summary_params(start, end)
+
         connection = self._get_connection()
         try:
             rows = connection.execute(
                 """
-                SELECT
-                    DATE(timestamp_utc) AS trade_date,
-                    MAX(CAST(high_price AS DOUBLE)) AS high,
-                    MIN(CAST(low_price AS DOUBLE)) AS low,
-                    (SELECT close_price FROM ohlcv_bars o2
-                     WHERE o2.symbol = ? AND o2.exchange = ?
-                     AND DATE(o2.timestamp_utc) = DATE(o1.timestamp_utc)
-                     ORDER BY timestamp_utc DESC LIMIT 1) AS close,
-                    (SELECT open_price FROM ohlcv_bars o3
-                     WHERE o3.symbol = ? AND o3.exchange = ?
-                     AND DATE(o3.timestamp_utc) = DATE(o1.timestamp_utc)
-                     ORDER BY timestamp_utc ASC LIMIT 1) AS open,
-                    SUM(CAST(volume AS DOUBLE)) AS volume
-                FROM ohlcv_bars o1
-                WHERE o1.symbol = ? AND o1.exchange = ?
-                AND o1.timestamp_utc >= ? AND o1.timestamp_utc <= ?
-                GROUP BY DATE(o1.timestamp_utc)
-                ORDER BY trade_date
+                    SELECT
+                        DATE(timestamp_utc) AS trade_date,
+                        MAX(CAST(high_price AS DOUBLE)) AS high,
+                        MIN(CAST(low_price AS DOUBLE)) AS low,
+                        (SELECT close_price FROM ohlcv_bars o2
+                         WHERE o2.symbol = ? AND o2.exchange = ?
+                         AND DATE(o2.timestamp_utc) = DATE(o1.timestamp_utc)
+                         ORDER BY timestamp_utc DESC LIMIT 1) AS close,
+                        (SELECT open_price FROM ohlcv_bars o3
+                         WHERE o3.symbol = ? AND o3.exchange = ?
+                         AND DATE(o3.timestamp_utc) = DATE(o1.timestamp_utc)
+                         ORDER BY timestamp_utc ASC LIMIT 1) AS open,
+                        SUM(CAST(volume AS DOUBLE)) AS volume
+                    FROM ohlcv_bars o1
+                    WHERE o1.symbol = ? AND o1.exchange = ?
+                    AND o1.timestamp_utc >= ? AND o1.timestamp_utc <= ?
+                    GROUP BY DATE(o1.timestamp_utc)
+                    ORDER BY trade_date
                 """,
                 (
                     symbol,
@@ -290,18 +300,35 @@ class DuckDBStore:
         finally:
             if self._connection is None:
                 connection.close()
+
+        return self._process_daily_summary_rows(rows)
+
+    def _process_daily_summary_rows(self, rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+        """Process and validate daily summary rows. Separated to reduce function size."""
         result: list[dict[str, Any]] = []
         for row in rows:
-            result.append(
-                {
-                    "date": row[0],
-                    "open": create_price(str(row[4])),
-                    "high": create_price(str(row[1])),
-                    "low": create_price(str(row[2])),
-                    "close": create_price(str(row[3])),
-                    "volume": create_quantity(str(row[5])),
-                }
-            )
+            if len(row) < 5:
+                raise ValidationError("Invalid row format in daily summary")
+
+            summary = {
+                "date": row[0],
+                "open": create_price(str(row[4])),
+                "high": create_price(str(row[1])),
+                "low": create_price(str(row[2])),
+                "close": create_price(str(row[3])),
+                "volume": Decimal(str(row[5])) if row[5] is not None else Decimal("0"),
+            }
+
+            # Validate decimal ranges
+            for field in ["open", "high", "low", "close"]:
+                if not isinstance(summary[field], Decimal):
+                    raise ValidationError(f"Invalid decimal value for {field}")
+
+            if summary["high"] < summary["low"]:
+                raise ValidationError("High price cannot be less than low price")
+
+            result.append(summary)
+
         return result
 
     def _process_moving_average_rows(self, rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
