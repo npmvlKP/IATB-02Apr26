@@ -97,6 +97,7 @@ ignore = []
 "tests/risk/test_risk_disclosure.py" = ["DTZ001"]  # Naive datetime rejection tests
 "tests/core/test_secrets_rotation.py" = ["DTZ001"]  # Naive datetime rejection tests
 "tests/storage/test_parquet_store.py" = ["DTZ001"]  # Naive datetime in rejection tests
+"tests/storage/test_git_sync_coverage.py" = ["S603", "S607"]  # subprocess used in real-git integration tests
 "src/iatb/core/secrets_rotation.py" = ["S105"]  # Secret type constant names, not actual secrets
 
 [tool.mypy]
