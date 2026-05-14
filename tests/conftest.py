@@ -126,6 +126,35 @@ def sample_ohlcv_bars() -> list[dict[str, object]]:
 
 
 @pytest.fixture
+def sample_kite_historical_data() -> list[dict[str, object]]:
+    """Fixture providing raw Kite API historical_data response dicts."""
+    return [
+        {
+            "date": datetime(2024, 1, i + 1, 9, 15, tzinfo=UTC),
+            "open": 100.0 + i,
+            "high": 105.0 + i,
+            "low": 98.0 + i,
+            "close": 103.0 + i,
+            "volume": 1_000_000 + i * 50_000,
+        }
+        for i in range(5)
+    ]
+
+
+@pytest.fixture
+def sample_kite_quote_data() -> dict[str, dict[str, object]]:
+    """Fixture providing raw Kite API quote response dict."""
+    return {
+        "NSE:RELIANCE": {
+            "last_price": Decimal("2450.50"),
+            "bid": Decimal("2450.00"),
+            "ask": Decimal("2451.00"),
+            "volume": 1_500_000,
+        }
+    }
+
+
+@pytest.fixture
 def sample_ticker_snapshot() -> dict:
     """Fixture providing valid TickerSnapshot."""
     return {
