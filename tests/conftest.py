@@ -81,6 +81,7 @@ def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None
     for name in (
         "title",
         "header",
+        "subheader",
         "text",
         "write",
         "table",
@@ -103,6 +104,7 @@ def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None
         "warning",
         "error",
         "info",
+        "divider",
     ):
         setattr(st, name, MagicMock())
     monkeypatch.setitem(_sys.modules, "streamlit", st)

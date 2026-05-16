@@ -7,7 +7,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price
@@ -16,7 +15,13 @@ from iatb.data.openalgo_provider import OpenAlgoProvider
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
+try:
+    import torch
+
+    torch.manual_seed(42)
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 
 
 def _http_get_factory(responses: dict[str, dict[str, object]]) -> Any:
