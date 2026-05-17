@@ -145,7 +145,7 @@ class TestSuggestParams:
         mock_trial = MagicMock()
         mock_trial.suggest_int = MagicMock(return_value="not an int")
 
-        with pytest.raises(ConfigError, match="trial parameter must be int"):
+        with pytest.raises(ConfigError, match=r"trial parameter '.*' must be int"):
             _suggest_params(mock_trial, {"param": (1, 10)})
 
 
@@ -173,15 +173,18 @@ class TestBestParams:
         ):
             _best_params(mock_study, ["param1"])
 
-    def _mock_get_none(self, key):
-        """Helper to mock dict.get returning None."""
-        pass
-
     def test_best_params_missing_value_raises_error(self):
         """Test that missing param value raises ConfigError."""
+        # Use a custom mock object that mimics dict behavior
+        class MockBestParams(dict):
+            def get(self, key, default=None):
+                # Return None for param2 (which is being looked up)
+                if key == "param2":
+                    return None
+                return super().get(key, default)
+        
         mock_study = MagicMock()
-        mock_study.best_params = {"param1": 5}
-        mock_study.best_params.get = MagicMock(side_effect=self._mock_get_none)
+        mock_study.best_params = MockBestParams({"param1": 5})
 
         with pytest.raises(ConfigError, match="best_params missing int value"):
             _best_params(mock_study, ["param2"])
