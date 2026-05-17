@@ -14,7 +14,11 @@ from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_quantity, create_timestamp
 from iatb.data.base import OHLCVBar
-from iatb.storage.parquet_store import ParquetStore, _allowed_compression, _parse_timestamp
+from iatb.storage.parquet_store import (
+    ParquetStore,
+    _allowed_compression,
+    _parse_timestamp,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -93,7 +97,9 @@ class _FakeParquet:
     def __init__(self) -> None:
         self._storage: dict[str, dict[str, list[Any]]] = {}
 
-    def write_table(self, table: _FakeTable, file_path: Path, compression: str = "ZSTD") -> None:
+    def write_table(
+        self, table: _FakeTable, file_path: Path, compression: str = "ZSTD"
+    ) -> None:
         self._storage[str(file_path)] = table.to_pydict()
         file_path.write_text("parquet-placeholder", encoding="utf-8")
 
@@ -179,13 +185,17 @@ class TestParquetStore:
             timeframe="1m",
             bars=[_bar(0), _bar(1)],
         )
-        listed = store.list_parquet_files(symbol="BANKNIFTY", exchange=Exchange.NSE, timeframe="1m")
+        listed = store.list_parquet_files(
+            symbol="BANKNIFTY", exchange=Exchange.NSE, timeframe="1m"
+        )
         assert listed == sorted([file_a, file_b])
 
     def test_write_bars_rejects_empty_input(self, tmp_path: Path) -> None:
         store = ParquetStore(tmp_path / "archive")
         with pytest.raises(ConfigError, match="bars cannot be empty"):
-            store.write_bars(symbol="BANKNIFTY", exchange=Exchange.NSE, timeframe="1m", bars=[])
+            store.write_bars(
+                symbol="BANKNIFTY", exchange=Exchange.NSE, timeframe="1m", bars=[]
+            )
 
     def test_read_bars_rejects_missing_file(self, tmp_path: Path) -> None:
         store = ParquetStore(tmp_path / "archive")
@@ -367,9 +377,15 @@ class TestReadBarsRangeEdges:
         bar_feb = _bar_with_date(datetime(2026, 2, 5, 10, 0, tzinfo=UTC), 0)
         bar_mar = _bar_with_date(datetime(2026, 3, 5, 10, 0, tzinfo=UTC), 0)
 
-        store.write_bars(symbol="SORT", exchange=Exchange.NSE, timeframe="1m", bars=[bar_feb])
-        store.write_bars(symbol="SORT", exchange=Exchange.NSE, timeframe="1m", bars=[bar_jan])
-        store.write_bars(symbol="SORT", exchange=Exchange.NSE, timeframe="1m", bars=[bar_mar])
+        store.write_bars(
+            symbol="SORT", exchange=Exchange.NSE, timeframe="1m", bars=[bar_feb]
+        )
+        store.write_bars(
+            symbol="SORT", exchange=Exchange.NSE, timeframe="1m", bars=[bar_jan]
+        )
+        store.write_bars(
+            symbol="SORT", exchange=Exchange.NSE, timeframe="1m", bars=[bar_mar]
+        )
 
         result = store.read_bars_range(
             symbol="SORT",
@@ -386,8 +402,12 @@ class TestReadBarsRangeEdges:
         store, _ = self._make_store(tmp_path)
         bar_jan10 = _bar_with_date(datetime(2026, 1, 10, 10, 0, tzinfo=UTC), 0)
         bar_feb20 = _bar_with_date(datetime(2026, 2, 20, 10, 0, tzinfo=UTC), 0)
-        store.write_bars(symbol="BND", exchange=Exchange.NSE, timeframe="1m", bars=[bar_jan10])
-        store.write_bars(symbol="BND", exchange=Exchange.NSE, timeframe="1m", bars=[bar_feb20])
+        store.write_bars(
+            symbol="BND", exchange=Exchange.NSE, timeframe="1m", bars=[bar_jan10]
+        )
+        store.write_bars(
+            symbol="BND", exchange=Exchange.NSE, timeframe="1m", bars=[bar_feb20]
+        )
 
         result = store.read_bars_range(
             symbol="BND",
@@ -420,7 +440,9 @@ class TestCleanupRetention:
         store._import_pyarrow = lambda: (_FakePyArrow(), _FakeParquet())  # type: ignore[method-assign]
         # Write bars that are far in the past
         old_bar = _bar_with_date(datetime.now(UTC) - timedelta(days=days + 1), 0)
-        store.write_bars(symbol=" CLEAN", exchange=Exchange.NSE, timeframe="1m", bars=[old_bar])
+        store.write_bars(
+            symbol=" CLEAN", exchange=Exchange.NSE, timeframe="1m", bars=[old_bar]
+        )
         return store, old_bar.timestamp
 
     def test_cleanup_deletes_old_files(self, tmp_path: Path) -> None:
@@ -443,7 +465,9 @@ class TestCleanupRetention:
         store = ParquetStore(tmp_path / "archive")
         store._import_pyarrow = lambda: (_FakePyArrow(), _FakeParquet())  # type: ignore[method-assign]
         bar = _bar_with_date(datetime(2025, 1, 15, 10, 0, tzinfo=UTC), 0)
-        store.write_bars(symbol="KEEP", exchange=Exchange.NSE, timeframe="1m", bars=[bar])
+        store.write_bars(
+            symbol="KEEP", exchange=Exchange.NSE, timeframe="1m", bars=[bar]
+        )
         deleted = store.cleanup_older_than(days=0)
         assert not deleted
 
@@ -489,7 +513,9 @@ class TestCompressionConfig:
         fake_parquet = _FakeParquet()
         store = ParquetStore(tmp_path / "archive", compression="LZ4")
         store._import_pyarrow = lambda: (_FakePyArrow(), fake_parquet)  # type: ignore[method-assign]
-        store.write_bars(symbol="COMP", exchange=Exchange.NSE, timeframe="1m", bars=[_bar(0)])
+        store.write_bars(
+            symbol="COMP", exchange=Exchange.NSE, timeframe="1m", bars=[_bar(0)]
+        )
         # The fake parquet writer should have been called successfully
         assert len(fake_parquet._storage) == 1
 
@@ -497,5 +523,7 @@ class TestCompressionConfig:
         fake_parquet = _FakeParquet()
         store = ParquetStore(tmp_path / "archive")
         store._import_pyarrow = lambda: (_FakePyArrow(), fake_parquet)  # type: ignore[method-assign]
-        store.write_bars(symbol="DEF", exchange=Exchange.NSE, timeframe="1m", bars=[_bar(0)])
+        store.write_bars(
+            symbol="DEF", exchange=Exchange.NSE, timeframe="1m", bars=[_bar(0)]
+        )
         assert len(fake_parquet._storage) == 1

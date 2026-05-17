@@ -737,16 +737,23 @@ class TestComputeDRLSignalFromAgent:
         current_utc = datetime.now(UTC)
 
         # Import the function we're testing
-        from iatb.selection.drl_signal import compute_drl_signal, compute_drl_signal_from_agent
+        from iatb.selection.drl_signal import (
+            compute_drl_signal,
+            compute_drl_signal_from_agent,
+        )
 
-        result = compute_drl_signal_from_agent(mock_agent, observation, current_utc, conclusion)
+        result = compute_drl_signal_from_agent(
+            mock_agent, observation, current_utc, conclusion
+        )
 
         # Should fall back to regular compute_drl_signal
         assert isinstance(result, DRLSignalOutput)
         expected = compute_drl_signal(conclusion, current_utc)
         assert result == expected
 
-    def test_compute_drl_signal_from_agent_without_model_no_fallback_raises(self) -> None:
+    def test_compute_drl_signal_from_agent_without_model_no_fallback_raises(
+        self
+    ) -> None:
         """Test that missing conclusion when no model raises error."""
         from unittest.mock import Mock
 

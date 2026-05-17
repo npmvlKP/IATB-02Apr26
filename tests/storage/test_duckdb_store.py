@@ -39,7 +39,9 @@ def _bar(minute_offset: int) -> OHLCVBar:
     )
 
 
-def _bar_multi_symbol(minute_offset: int, symbol: str = "NIFTY", close: str = "100.5") -> OHLCVBar:
+def _bar_multi_symbol(
+    minute_offset: int, symbol: str = "NIFTY", close: str = "100.5"
+) -> OHLCVBar:
     # Ensure high >= max(open, close, low) and low <= min(open, close, high)
     close_price = Decimal(close)
     high_price = max(Decimal("101"), close_price, Decimal("99")) + Decimal("1")
@@ -88,7 +90,10 @@ class _FakeDuckDBConnection:
             if normalized.startswith("select count(*) from read_parquet"):
                 matched = self._match_parquet(pattern)
                 self._result = [(len(matched),)]
-            elif normalized.startswith("delete from ohlcv_bars where"):
+            elif (
+                "delete from ohlcv_bars" in normalized and "where exists" in normalized
+            ):
+                # New DELETE with EXISTS subquery
                 matched = self._match_parquet(pattern)
                 keys_to_remove = {(r[0], r[1], r[2], r[8]) for r in matched}
                 self.rows = [
@@ -96,7 +101,9 @@ class _FakeDuckDBConnection:
                     for row in self.rows
                     if (row[0], row[1], row[2], row[8]) not in keys_to_remove
                 ]
-            elif normalized.startswith("insert into ohlcv_bars select * from read_parquet"):
+            elif normalized.startswith(
+                "insert into ohlcv_bars select * from read_parquet"
+            ):
                 matched = self._match_parquet(pattern)
                 self.rows.extend(matched)
             else:
@@ -345,7 +352,9 @@ class TestDuckDBStore:
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         try:
-            mas = store.query_moving_averages("TEST", Exchange.NSE, window=2, start=start, end=end)
+            mas = store.query_moving_averages(
+                "TEST", Exchange.NSE, window=2, start=start, end=end
+            )
         except Exception:
             pytest.skip("DuckDB not available")
         assert len(mas) >= 1
@@ -373,7 +382,9 @@ class TestDuckDBStore:
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         try:
-            ranking = store.query_performance_ranking(Exchange.NSE, start, end, limit=10)
+            ranking = store.query_performance_ranking(
+                Exchange.NSE, start, end, limit=10
+            )
         except Exception:
             pytest.skip("DuckDB not available")
         assert len(ranking) >= 1
@@ -421,7 +432,9 @@ class TestDuckDBStore:
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         try:
-            vol = store.query_volatility("TEST", Exchange.NSE, window=2, start=start, end=end)
+            vol = store.query_volatility(
+                "TEST", Exchange.NSE, window=2, start=start, end=end
+            )
         except Exception:
             pytest.skip("DuckDB not available")
         assert len(vol) >= 1
@@ -438,11 +451,15 @@ class TestDuckDBStore:
             bars = []
             for i in range(5):
                 close_price = Decimal(f"{100 + i * 5}")
-                high_price = max(Decimal("105"), close_price, Decimal("95")) + Decimal("1")
+                high_price = max(Decimal("105"), close_price, Decimal("95")) + Decimal(
+                    "1"
+                )
                 low_price = min(Decimal("95"), close_price, Decimal("100"))
                 bars.append(
                     OHLCVBar(
-                        timestamp=create_timestamp(datetime(2026, 1, 1, 10, i, tzinfo=UTC)),
+                        timestamp=create_timestamp(
+                            datetime(2026, 1, 1, 10, i, tzinfo=UTC)
+                        ),
                         exchange=Exchange.NSE,
                         symbol=sym,
                         open=create_price("100"),
@@ -468,28 +485,38 @@ class TestDuckDBStore:
             assert sym1 in corr[sym1]
             assert corr[sym1][sym1] == 1.0
 
-    def test_query_moving_averages_rejects_non_positive_window(self, tmp_path: Path) -> None:
+    def test_query_moving_averages_rejects_non_positive_window(
+        self, tmp_path: Path
+    ) -> None:
         store = DuckDBStore(tmp_path / "market.duckdb")
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         with pytest.raises(ConfigError, match="window must be positive"):
-            store.query_moving_averages("TEST", Exchange.NSE, window=0, start=start, end=end)
+            store.query_moving_averages(
+                "TEST", Exchange.NSE, window=0, start=start, end=end
+            )
 
     def test_query_volatility_rejects_non_positive_window(self, tmp_path: Path) -> None:
         store = DuckDBStore(tmp_path / "market.duckdb")
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         with pytest.raises(ConfigError, match="window must be positive"):
-            store.query_volatility("TEST", Exchange.NSE, window=-1, start=start, end=end)
+            store.query_volatility(
+                "TEST", Exchange.NSE, window=-1, start=start, end=end
+            )
 
-    def test_query_performance_ranking_rejects_non_positive_limit(self, tmp_path: Path) -> None:
+    def test_query_performance_ranking_rejects_non_positive_limit(
+        self, tmp_path: Path
+    ) -> None:
         store = DuckDBStore(tmp_path / "market.duckdb")
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
         with pytest.raises(ConfigError, match="limit must be positive"):
             store.query_performance_ranking(Exchange.NSE, start, end, limit=0)
 
-    def test_query_correlation_matrix_requires_minimum_symbols(self, tmp_path: Path) -> None:
+    def test_query_correlation_matrix_requires_minimum_symbols(
+        self, tmp_path: Path
+    ) -> None:
         store = DuckDBStore(tmp_path / "market.duckdb")
         start = create_timestamp(datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
@@ -682,7 +709,9 @@ class TestDuckDBStore:
         except Exception:
             pytest.skip("DuckDB migrate not available")
         assert count == 2
-        loaded = store_dest.load_bars(symbol="BANKNIFTY", exchange=Exchange.NSE, limit=10)
+        loaded = store_dest.load_bars(
+            symbol="BANKNIFTY", exchange=Exchange.NSE, limit=10
+        )
         assert len(loaded) == 2
 
     def test_archive_to_parquet_roundtrip(self, tmp_path: Path) -> None:

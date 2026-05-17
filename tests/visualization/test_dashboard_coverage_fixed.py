@@ -93,7 +93,9 @@ def test_render_dashboard_missing_methods(mock_load_streamlit):
     st.title = None
     mock_load_streamlit.return_value = st
 
-    with pytest.raises(ConfigError, match=r"streamlit module missing title\(\)/tabs\(\)"):
+    with pytest.raises(
+        ConfigError, match=r"streamlit module missing title\(\)/tabs\(\)"
+    ):
         render_dashboard({})
 
 
@@ -265,7 +267,9 @@ def test_render_instrument_scanner_tab_no_result(mock_load_st, _mock_load_go):
         "approved_count": 0,
         "total_count": 0,
     }
-    st.info.assert_called_once_with("No scanner result available. Run scanner to see instruments.")
+    st.info.assert_called_once_with(
+        "No scanner result available. Run scanner to see instruments."
+    )
 
 
 @freeze_time("2024-01-01")
@@ -274,7 +278,9 @@ def test_render_instrument_scanner_tab_metrics(mock_streamlit):
     st = mock_streamlit
     st.subheader = MagicMock()
     st.divider = MagicMock()
-    st.columns = MagicMock(return_value=[MagicMock(metric=MagicMock()) for _ in range(3)])
+    st.columns = MagicMock(
+        return_value=[MagicMock(metric=MagicMock()) for _ in range(3)]
+    )
 
     go = MagicMock()
     go.Figure.return_value = MagicMock()
@@ -343,7 +349,7 @@ def test_build_approval_chart_conditions(ohlcv_rows):
         go.Bar.assert_called_once()
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 @patch("iatb.visualization.dashboard._load_streamlit")
 async def test_render_dashboard_async_success(mock_load_streamlit):
     """Async dashboard rendering with complete flow."""
@@ -361,7 +367,7 @@ async def test_render_dashboard_async_success(mock_load_streamlit):
     assert st.tabs.call_count == 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_build_scanner_payload_async_with_logging(caplog):
     """Async scanner payload building with structured logging verification."""
     caplog.set_level(logging.DEBUG)
@@ -381,7 +387,7 @@ async def test_build_scanner_payload_async_with_logging(caplog):
     assert len(caplog.records) >= 0  # Logging infrastructure available
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_convert_candidates_logging(caplog):
     """Async candidate conversion with logging verification."""
     caplog.set_level(logging.INFO)

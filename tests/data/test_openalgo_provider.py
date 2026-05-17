@@ -36,7 +36,7 @@ def _http_get_factory(responses: dict[str, dict[str, object]]) -> Any:
 
 
 class TestOpenAlgoProvider:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_parses_data_list(self) -> None:
         payload = {
             "data": [
@@ -64,7 +64,7 @@ class TestOpenAlgoProvider:
         assert len(bars) == 1
         assert bars[0].close == create_price("101")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_parses_mapping_payload(self) -> None:
         payload = {"data": {"bid": 100.5, "ask": 101.5, "last": 101, "volume_24h": 900}}
         provider = OpenAlgoProvider(
@@ -76,7 +76,7 @@ class TestOpenAlgoProvider:
         assert ticker.bid == create_price("100.5")
         assert ticker.ask == create_price("101.5")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_missing_data_mapping_raises(self) -> None:
         provider = OpenAlgoProvider(
             base_url="https://api.openalgo.local",
@@ -86,7 +86,7 @@ class TestOpenAlgoProvider:
         with pytest.raises(ConfigError, match="missing data mapping"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_non_positive_limit_raises(self) -> None:
         provider = OpenAlgoProvider(
             base_url="https://api.openalgo.local",
@@ -101,7 +101,7 @@ class TestOpenAlgoProvider:
                 limit=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_missing_data_list_raises(self) -> None:
         provider = OpenAlgoProvider(
             base_url="https://api.openalgo.local",
@@ -116,7 +116,7 @@ class TestOpenAlgoProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_non_mapping_http_payload_raises(self) -> None:
         provider = OpenAlgoProvider(
             base_url="https://api.openalgo.local",
@@ -126,19 +126,25 @@ class TestOpenAlgoProvider:
         with pytest.raises(ConfigError, match="must be mapping-like JSON"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_invalid_numeric_payload_raises(self) -> None:
         provider = OpenAlgoProvider(
             base_url="https://api.openalgo.local",
             api_key="secret",
             http_get=_http_get_factory(
-                {"market/ticker": {"data": {"bid": object(), "ask": 1, "last": 1, "volume": 1}}},
+                {
+                    "market/ticker": {
+                        "data": {"bid": object(), "ask": 1, "last": 1, "volume": 1}
+                    }
+                },
             ),
         )
         with pytest.raises(ConfigError, match="numeric-compatible"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    def test_constructor_uses_env_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_constructor_uses_env_api_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("OPENALGO_API_KEY", "from-env")
         provider = OpenAlgoProvider(
             base_url="https://api.openalgo.local",
@@ -147,7 +153,9 @@ class TestOpenAlgoProvider:
         )
         assert provider._api_key == "from-env"
 
-    def test_constructor_missing_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_constructor_missing_api_key_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("OPENALGO_API_KEY", raising=False)
         with pytest.raises(ConfigError, match="API key is required"):
             OpenAlgoProvider(base_url="https://api.openalgo.local")

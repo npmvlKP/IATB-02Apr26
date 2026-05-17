@@ -38,13 +38,13 @@ torch.manual_seed(42)
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_timestamp():
     """UTC timestamp for testing."""
     return datetime(2026, 1, 5, 10, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_market_data(utc_timestamp):
     """Valid market data for testing."""
     return MarketData(
@@ -65,7 +65,7 @@ def valid_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def gainer_market_data(utc_timestamp):
     """Market data for a gainer stock."""
     return MarketData(
@@ -85,7 +85,7 @@ def gainer_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def loser_market_data(utc_timestamp):
     """Market data for a loser stock."""
     return MarketData(
@@ -105,7 +105,7 @@ def loser_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def option_market_data(utc_timestamp):
     """Market data for an option."""
     return MarketData(
@@ -125,7 +125,7 @@ def option_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def future_market_data(utc_timestamp):
     """Market data for a future."""
     return MarketData(
@@ -145,7 +145,7 @@ def future_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mcx_market_data(utc_timestamp):
     """Market data for MCX exchange."""
     return MarketData(
@@ -165,7 +165,7 @@ def mcx_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def cds_market_data(utc_timestamp):
     """Market data for CDS exchange."""
     return MarketData(
@@ -185,7 +185,7 @@ def cds_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_sentiment_strong():
     """Mock sentiment analyzer returning VERY_STRONG."""
     return create_mock_sentiment_analyzer(
@@ -201,7 +201,7 @@ def mock_sentiment_strong():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_sentiment_weak():
     """Mock sentiment analyzer returning weak sentiment."""
     return create_mock_sentiment_analyzer(
@@ -212,19 +212,19 @@ def mock_sentiment_weak():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_rl_positive():
     """Mock RL predictor returning positive exit probability."""
     return create_mock_rl_predictor(Decimal("0.65"))
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_rl_negative():
     """Mock RL predictor returning negative exit probability."""
     return create_mock_rl_predictor(Decimal("0.30"))
 
 
-@pytest.fixture
+@pytest.fixture()
 def scanner_with_mocks(mock_sentiment_strong, mock_rl_positive):
     """Scanner with all mocks configured."""
     return InstrumentScanner(
@@ -319,12 +319,16 @@ class TestMarketData:
 
     def test_pct_change_positive(self, valid_market_data):
         """Test positive percentage change calculation."""
-        expected = ((Decimal("2500") - Decimal("2400")) / Decimal("2400")) * Decimal("100")
+        expected = ((Decimal("2500") - Decimal("2400")) / Decimal("2400")) * Decimal(
+            "100"
+        )
         assert valid_market_data.pct_change == expected
 
     def test_pct_change_negative(self, loser_market_data):
         """Test negative percentage change calculation."""
-        expected = ((Decimal("1400") - Decimal("1500")) / Decimal("1500")) * Decimal("100")
+        expected = ((Decimal("1400") - Decimal("1500")) / Decimal("1500")) * Decimal(
+            "100"
+        )
         assert loser_market_data.pct_change == expected
 
     def test_pct_change_zero_prev_close(self, utc_timestamp):
@@ -389,7 +393,11 @@ class TestInstrumentScannerHappyPath:
         assert isinstance(result, ScannerResult)
 
     def test_scan_with_gainers(
-        self, scanner_with_mocks, gainer_market_data, mock_sentiment_strong, mock_rl_positive
+        self,
+        scanner_with_mocks,
+        gainer_market_data,
+        mock_sentiment_strong,
+        mock_rl_positive,
     ):
         """Test scan identifies gainers correctly."""
         result = scanner_with_mocks.scan(custom_data=[gainer_market_data])
@@ -450,7 +458,9 @@ class TestInstrumentScannerHappyPath:
         if len(result.gainers) >= 2:
             assert result.gainers[0].pct_change > result.gainers[1].pct_change
 
-    def test_scan_respects_top_n(self, mock_sentiment_strong, mock_rl_positive, utc_timestamp):
+    def test_scan_respects_top_n(
+        self, mock_sentiment_strong, mock_rl_positive, utc_timestamp
+    ):
         """Test scan respects top_n configuration."""
         data_list = []
         for i in range(20):
@@ -495,7 +505,9 @@ class TestInstrumentScannerHappyPath:
             sentiment_analyzer=mock_sentiment_strong,
             rl_predictor=mock_rl_positive,
         )
-        result = scanner.scan(custom_data=[gainer_market_data, mcx_market_data, cds_market_data])
+        result = scanner.scan(
+            custom_data=[gainer_market_data, mcx_market_data, cds_market_data]
+        )
         assert result.total_scanned == 3
 
     def test_scan_multiple_categories(
@@ -537,7 +549,9 @@ class TestInstrumentScannerFilters:
         # With weak sentiment, should be filtered
         assert result.filtered_count >= 1 or len(result.gainers) == 0
 
-    def test_filter_by_volume_ratio(self, mock_sentiment_strong, mock_rl_positive, utc_timestamp):
+    def test_filter_by_volume_ratio(
+        self, mock_sentiment_strong, mock_rl_positive, utc_timestamp
+    ):
         """Test low volume ratio is filtered out."""
         low_volume_data = MarketData(
             symbol="LOWVOL",
@@ -563,7 +577,9 @@ class TestInstrumentScannerFilters:
         result = scanner.scan(custom_data=[low_volume_data])
         assert len(result.gainers) == 0
 
-    def test_filter_by_exit_probability(self, mock_sentiment_strong, gainer_market_data):
+    def test_filter_by_exit_probability(
+        self, mock_sentiment_strong, gainer_market_data
+    ):
         """Test low exit probability is filtered out."""
         low_rl = create_mock_rl_predictor(Decimal("0.2"))
         scanner = InstrumentScanner(
@@ -574,7 +590,9 @@ class TestInstrumentScannerFilters:
         result = scanner.scan(custom_data=[gainer_market_data])
         assert len(result.gainers) == 0
 
-    def test_all_filters_must_pass(self, mock_sentiment_strong, mock_rl_positive, utc_timestamp):
+    def test_all_filters_must_pass(
+        self, mock_sentiment_strong, mock_rl_positive, utc_timestamp
+    ):
         """Test all filters must pass for emission."""
         # Data that passes all filters
         good_data = MarketData(
@@ -664,7 +682,9 @@ class TestInstrumentScannerEdgeCases:
             atr_pct=Decimal("0.02"),
             breadth_ratio=Decimal("2.0"),
         )
-        sentiment = create_mock_sentiment_analyzer({"ZEROCHANGE": (Decimal("0.80"), True)})
+        sentiment = create_mock_sentiment_analyzer(
+            {"ZEROCHANGE": (Decimal("0.80"), True)}
+        )
         scanner = InstrumentScanner(
             sentiment_analyzer=sentiment,
             rl_predictor=mock_rl_positive,
@@ -682,7 +702,9 @@ class TestInstrumentScannerEdgeCases:
         result = scanner.scan(custom_data=[gainer_market_data])
         assert len(result.gainers) == 0
 
-    def test_no_rl_predictor_filters_all(self, gainer_market_data, mock_sentiment_strong):
+    def test_no_rl_predictor_filters_all(
+        self, gainer_market_data, mock_sentiment_strong
+    ):
         """Test no RL predictor filters all candidates."""
         scanner = InstrumentScanner(
             sentiment_analyzer=mock_sentiment_strong,
@@ -871,7 +893,9 @@ class TestInstrumentScannerTimezone:
             atr_pct=Decimal("0.02"),
             breadth_ratio=Decimal("2.0"),
         )
-        sentiment = create_mock_sentiment_analyzer({"TIMEZONE": (Decimal("0.80"), True)})
+        sentiment = create_mock_sentiment_analyzer(
+            {"TIMEZONE": (Decimal("0.80"), True)}
+        )
         scanner = InstrumentScanner(
             sentiment_analyzer=sentiment,
             rl_predictor=mock_rl_positive,
@@ -880,7 +904,9 @@ class TestInstrumentScannerTimezone:
         if result.gainers:
             assert result.gainers[0].timestamp_utc.tzinfo == UTC
 
-    def test_microsecond_precision_timestamp(self, mock_sentiment_strong, mock_rl_positive):
+    def test_microsecond_precision_timestamp(
+        self, mock_sentiment_strong, mock_rl_positive
+    ):
         """Test microsecond precision in timestamps is preserved."""
         precise_timestamp = datetime(2026, 1, 5, 10, 30, 15, 123456, tzinfo=UTC)
         data = MarketData(

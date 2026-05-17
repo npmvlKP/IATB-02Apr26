@@ -29,13 +29,13 @@ from iatb.storage.audit_scheduler import (
 from iatb.storage.sqlite_store import SQLiteStore, TradeAuditRecord
 
 
-@pytest.fixture
+@pytest.fixture()
 def temp_dir(tmp_path: Path) -> Path:
     """Create temporary directory for test files."""
     return tmp_path / "audit_scheduler"
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_records() -> list[TradeAuditRecord]:
     """Create sample trade audit records for testing."""
     base_time = datetime(2025, 4, 25, 10, 30, 0, tzinfo=UTC)
@@ -55,13 +55,13 @@ def sample_records() -> list[TradeAuditRecord]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def empty_db_path(temp_dir: Path) -> Path:
     """Create empty SQLite database for testing."""
     return temp_dir / "test_trades.sqlite"
 
 
-@pytest.fixture
+@pytest.fixture()
 def store(empty_db_path: Path, sample_records: list[TradeAuditRecord]) -> SQLiteStore:
     """Create SQLite store with sample records."""
     store = SQLiteStore(db_path=empty_db_path, retention_years=7)
@@ -78,7 +78,7 @@ def store(empty_db_path: Path, sample_records: list[TradeAuditRecord]) -> SQLite
         _ = e
 
 
-@pytest.fixture
+@pytest.fixture()
 def export_config(temp_dir: Path) -> ExportConfig:
     """Create export configuration for testing."""
     return ExportConfig(
@@ -90,7 +90,7 @@ def export_config(temp_dir: Path) -> ExportConfig:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def exporter(store: SQLiteStore, export_config: ExportConfig) -> AuditExporter:
     """Create AuditExporter instance for testing."""
     return AuditExporter(store=store, config=export_config)

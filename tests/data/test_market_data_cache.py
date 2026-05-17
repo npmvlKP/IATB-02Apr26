@@ -250,7 +250,7 @@ class TestMarketDataCache:
         def fetch_func():
             nonlocal fetch_called
             fetch_called = True
-            return None
+            return
 
         result = cache.get_or_fetch("TCS", "2024-01-01", "2024-01-31", fetch_func)
 
@@ -357,7 +357,9 @@ class TestScannerParallelization:
     def test_scanner_with_custom_data_bypasses_cache(self):
         """Test that custom data bypasses cache entirely."""
         scanner = InstrumentScanner(
-            sentiment_analyzer=create_mock_sentiment_analyzer({"TCS": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"TCS": (Decimal("0.8"), True)}
+            ),
             rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
             symbols=[],
         )
@@ -389,7 +391,9 @@ class TestScannerParallelization:
     def test_scanner_cache_stats_after_scan_with_custom_data(self):
         """Test that cache stats are tracked correctly."""
         scanner = InstrumentScanner(
-            sentiment_analyzer=create_mock_sentiment_analyzer({"TCS": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"TCS": (Decimal("0.8"), True)}
+            ),
             rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
             symbols=[],
             cache_ttl_seconds=60,

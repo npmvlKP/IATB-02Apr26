@@ -45,7 +45,12 @@ class MockKiteProvider(DataProvider):
     ) -> list[OHLCVBar]:
         """Mock OHLCV fetch with KiteConnect source tag."""
         self._get_ohlcv_calls.append(
-            {"symbol": symbol, "exchange": exchange, "timeframe": timeframe, "limit": limit}
+            {
+                "symbol": symbol,
+                "exchange": exchange,
+                "timeframe": timeframe,
+                "limit": limit,
+            }
         )
 
         # Generate synthetic OHLCV data
@@ -92,24 +97,28 @@ class MockKiteProvider(DataProvider):
         result = {}
         for symbol in symbols:
             result[symbol] = await self.get_ohlcv(
-                symbol=symbol, exchange=exchange, timeframe=timeframe, since=since, limit=limit
+                symbol=symbol,
+                exchange=exchange,
+                timeframe=timeframe,
+                since=since,
+                limit=limit,
             )
         return result
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_kite_provider():
     """Fixture providing mock KiteProvider."""
     return MockKiteProvider(data_source="kiteconnect")
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_jugaad_provider():
     """Fixture providing mock JugaadProvider."""
     return MockKiteProvider(data_source="jugaad-data")
 
 
-@pytest.fixture
+@pytest.fixture()
 def scanner_config():
     """Fixture providing scanner configuration."""
     return ScannerConfig(
@@ -123,7 +132,7 @@ def scanner_config():
 class TestDataProviderIntegration:
     """Test DataProvider integration in scan cycle pipeline."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_run_scan_cycle_uses_injected_data_provider(
         self, mock_kite_provider, scanner_config
     ):
@@ -158,7 +167,7 @@ class TestDataProviderIntegration:
         assert len(mock_kite_provider._get_ohlcv_calls) > 0
         assert mock_kite_provider._get_ohlcv_calls[0]["symbol"] == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_scanner_data_source_tag_is_kiteconnect(self, mock_kite_provider):
         """Test that MarketData objects carry data_source='kiteconnect'."""
         from iatb.scanner.instrument_scanner import InstrumentScanner
@@ -166,7 +175,9 @@ class TestDataProviderIntegration:
         scanner = InstrumentScanner(
             config=ScannerConfig(top_n=5, lookback_days=30),
             data_provider=mock_kite_provider,
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"RELIANCE": (Decimal("0.8"), True)}
+            ),
             symbols=["RELIANCE"],
         )
 
@@ -179,7 +190,7 @@ class TestDataProviderIntegration:
         # Verify data was fetched from mock provider
         assert len(mock_kite_provider._get_ohlcv_calls) > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_from_env_fallback(self, monkeypatch):
         """Test that KiteProvider is created from env when not provided."""
         # Set environment variables
@@ -199,8 +210,10 @@ class TestDataProviderIntegration:
         if data_provider is not None:
             assert "KiteProvider" in type(data_provider).__name__
 
-    @pytest.mark.asyncio
-    async def test_no_data_provider_raises_error_without_custom_data(self, scanner_config):
+    @pytest.mark.asyncio()
+    async def test_no_data_provider_raises_error_without_custom_data(
+        self, scanner_config
+    ):
         """Test that scanner requires DataProvider or custom_data."""
         from iatb.core.exceptions import ConfigError
         from iatb.scanner.instrument_scanner import InstrumentScanner
@@ -216,7 +229,7 @@ class TestDataProviderIntegration:
         with pytest.raises(ConfigError, match="DataProvider not configured"):
             scanner.scan(direction=SortDirection.GAINERS)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_custom_data_bypasses_provider(self, scanner_config):
         """Test that custom_data bypasses DataProvider fetch."""
         from iatb.scanner.instrument_scanner import InstrumentScanner
@@ -246,7 +259,9 @@ class TestDataProviderIntegration:
         scanner = InstrumentScanner(
             config=scanner_config,
             data_provider=mock_provider,
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"RELIANCE": (Decimal("0.8"), True)}
+            ),
             symbols=["RELIANCE"],
         )
 
@@ -263,7 +278,7 @@ class TestDataProviderIntegration:
 class TestSentimentDataFlow:
     """Test sentiment analysis receives data from correct source."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_sentiment_receives_kiteconnect_data(self, mock_kite_provider):
         """Test that sentiment analyzer processes data from KiteConnect."""
         sentiment_calls = []
@@ -294,7 +309,7 @@ class TestSentimentDataFlow:
 class TestAuditTrailDataSource:
     """Test audit trail records data source information."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_audit_trail_records_kiteconnect_source(self, mock_kite_provider):
         """Test that audit trail records data_source='kiteconnect'."""
         # This test verifies that when using KiteProvider,
@@ -306,7 +321,9 @@ class TestAuditTrailDataSource:
         scanner = InstrumentScanner(
             config=ScannerConfig(top_n=5, lookback_days=30),
             data_provider=mock_kite_provider,
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"RELIANCE": (Decimal("0.8"), True)}
+            ),
             symbols=["RELIANCE"],
         )
 
@@ -324,7 +341,7 @@ class TestAuditTrailDataSource:
 class TestExchangeHandling:
     """Test that exchange is correctly derived, not hardcoded."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_exchange_derived_from_config_not_hardcoded(self, mock_kite_provider):
         """Test that exchange is derived from config, not hardcoded to NSE."""
         from iatb.scanner.instrument_scanner import InstrumentScanner
@@ -357,7 +374,7 @@ class TestExchangeHandling:
 class TestBreadthRatioCalculation:
     """Test that breadth_ratio is calculated, not hardcoded."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_breadth_ratio_calculated_from_data(self, mock_kite_provider):
         """Test that breadth_ratio is calculated from actual data, not hardcoded."""
         from iatb.scanner.instrument_scanner import InstrumentScanner
@@ -365,7 +382,9 @@ class TestBreadthRatioCalculation:
         scanner = InstrumentScanner(
             config=ScannerConfig(top_n=5, lookback_days=30),
             data_provider=mock_kite_provider,
-            sentiment_analyzer=create_mock_sentiment_analyzer({"RELIANCE": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"RELIANCE": (Decimal("0.8"), True)}
+            ),
             symbols=["RELIANCE"],
         )
 

@@ -9,7 +9,10 @@ from iatb.market_strength.strength_scorer import StrengthInputs
 from iatb.sentiment.aggregator import SentimentGateResult
 from iatb.sentiment.base import SentimentScore
 from iatb.strategies.base import StrategyContext
-from iatb.strategies.sentiment_driven import SentimentDrivenInputs, SentimentDrivenStrategy
+from iatb.strategies.sentiment_driven import (
+    SentimentDrivenInputs,
+    SentimentDrivenStrategy,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -21,7 +24,9 @@ class _StubAggregator:
     def __init__(self, result: SentimentGateResult) -> None:
         self._result = result
 
-    def evaluate_instrument(self, text: str, volume_ratio: Decimal) -> SentimentGateResult:
+    def evaluate_instrument(
+        self, text: str, volume_ratio: Decimal
+    ) -> SentimentGateResult:
         _ = (text, volume_ratio)
         return self._result
 
@@ -90,7 +95,9 @@ def test_sentiment_strategy_emits_sell_for_negative_very_strong_signal() -> None
 
 def test_sentiment_strategy_blocks_on_untradable_sentiment_or_strength() -> None:
     blocked_sentiment = SentimentDrivenStrategy(
-        sentiment_aggregator=_StubAggregator(_gate_result(Decimal("0.8"), tradable=False))
+        sentiment_aggregator=_StubAggregator(
+            _gate_result(Decimal("0.8"), tradable=False)
+        )
     )
     sentiment_signal = blocked_sentiment.on_sentiment(
         _context(),

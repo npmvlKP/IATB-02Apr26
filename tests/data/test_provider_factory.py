@@ -26,7 +26,7 @@ from iatb.data.provider_factory import DataProviderFactory, ProviderChain
 from iatb.data.token_resolver import SymbolTokenResolver
 
 
-@pytest.fixture
+@pytest.fixture()
 def temp_cache_dir(tmp_path: Path) -> Path:
     """Create a temporary cache directory for tests."""
     cache_dir = tmp_path / "cache" / "instruments"
@@ -34,7 +34,7 @@ def temp_cache_dir(tmp_path: Path) -> Path:
     return cache_dir
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_token_manager() -> ZerodhaTokenManager:
     """Create a mock ZerodhaTokenManager."""
     tm = MagicMock(spec=ZerodhaTokenManager)
@@ -42,7 +42,7 @@ def mock_token_manager() -> ZerodhaTokenManager:
     return tm
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_kite_provider() -> KiteProvider:
     """Create a mock KiteProvider."""
     provider = MagicMock(spec=KiteProvider)
@@ -67,7 +67,7 @@ def mock_kite_provider() -> KiteProvider:
     return provider
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_jugaad_provider() -> JugaadProvider:
     """Create a mock JugaadProvider."""
     provider = MagicMock(spec=JugaadProvider)
@@ -95,7 +95,9 @@ def mock_jugaad_provider() -> JugaadProvider:
 class TestDataProviderFactory:
     """Test DataProviderFactory initialization and configuration."""
 
-    def test_factory_initialization_with_valid_params(self, temp_cache_dir: Path) -> None:
+    def test_factory_initialization_with_valid_params(
+        self, temp_cache_dir: Path
+    ) -> None:
         """Test factory initializes with valid parameters."""
         factory = DataProviderFactory(
             api_key="test_api_key",
@@ -106,7 +108,9 @@ class TestDataProviderFactory:
         assert factory._api_secret == "test_api_secret"
         assert factory._cache_dir == temp_cache_dir
 
-    def test_factory_initialization_with_empty_api_key(self, temp_cache_dir: Path) -> None:
+    def test_factory_initialization_with_empty_api_key(
+        self, temp_cache_dir: Path
+    ) -> None:
         """Test factory rejects empty API key."""
         with pytest.raises(ConfigError, match="api_key cannot be empty"):
             DataProviderFactory(
@@ -115,7 +119,9 @@ class TestDataProviderFactory:
                 cache_dir=temp_cache_dir,
             )
 
-    def test_factory_initialization_with_empty_api_secret(self, temp_cache_dir: Path) -> None:
+    def test_factory_initialization_with_empty_api_secret(
+        self, temp_cache_dir: Path
+    ) -> None:
         """Test factory rejects empty API secret."""
         with pytest.raises(ConfigError, match="api_secret cannot be empty"):
             DataProviderFactory(
@@ -134,7 +140,9 @@ class TestDataProviderFactory:
                 cache_dir=invalid_path,
             )
 
-    @patch.dict("os.environ", {"ZERODHA_API_KEY": "env_key", "ZERODHA_API_SECRET": "env_secret"})
+    @patch.dict(
+        "os.environ", {"ZERODHA_API_KEY": "env_key", "ZERODHA_API_SECRET": "env_secret"}
+    )
     def test_factory_from_env(self) -> None:
         """Test factory creation from environment variables."""
         factory = DataProviderFactory.from_env()
@@ -144,7 +152,9 @@ class TestDataProviderFactory:
     @patch.dict("os.environ", {}, clear=True)
     def test_factory_from_env_missing_api_key(self) -> None:
         """Test factory from_env fails without API key."""
-        with pytest.raises(ConfigError, match="ZERODHA_API_KEY environment variable is required"):
+        with pytest.raises(
+            ConfigError, match="ZERODHA_API_KEY environment variable is required"
+        ):
             DataProviderFactory.from_env()
 
     @patch.dict("os.environ", {"ZERODHA_API_KEY": "env_key"}, clear=True)
@@ -282,7 +292,7 @@ class TestTokenResolverCreation:
 class TestProviderChainCreation:
     """Test complete provider chain creation."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_create_provider_chain(
         self,
         temp_cache_dir: Path,
@@ -300,7 +310,9 @@ class TestProviderChainCreation:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
             chain = factory.create_provider_chain(cooldown_seconds=60.0)
 
         assert isinstance(chain, ProviderChain)
@@ -311,7 +323,7 @@ class TestProviderChainCreation:
         assert chain.token_resolver is not None
         assert chain.instrument_master is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_data_provider(
         self,
         temp_cache_dir: Path,
@@ -329,7 +341,9 @@ class TestProviderChainCreation:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
             provider = factory.get_data_provider()
         assert isinstance(provider, FailoverProvider)
 
@@ -337,7 +351,7 @@ class TestProviderChainCreation:
 class TestProviderChainIntegration:
     """Integration tests for ProviderChain."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_chain_end_to_end(
         self,
         temp_cache_dir: Path,
@@ -355,7 +369,9 @@ class TestProviderChainIntegration:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
             chain = factory.create_provider_chain()
 
         # Test failover provider works
@@ -391,8 +407,15 @@ class TestCreateCoreComponents:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
-            token_manager, instrument_master, primary, fallback = factory._create_core_components()
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
+            (
+                token_manager,
+                instrument_master,
+                primary,
+                fallback,
+            ) = factory._create_core_components()
 
         assert isinstance(token_manager, ZerodhaTokenManager)
         assert isinstance(instrument_master, InstrumentMaster)
@@ -450,7 +473,9 @@ class TestProviderChainDataclass:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
             chain = factory.create_provider_chain()
 
         # Verify all components are present
@@ -544,7 +569,9 @@ class TestFailoverProviderWithCustomCooldown:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
             failover = factory.create_failover_provider(cooldown_seconds=120.0)
         assert isinstance(failover, FailoverProvider)
         # Cooldown is passed to FailoverProvider constructor
@@ -613,13 +640,17 @@ class TestFromEnvCustomVars:
         assert factory._api_secret == "env_secret"
         assert factory._totp_secret is None
 
-    @patch.dict("os.environ", {"ZERODHA_API_KEY": "   ", "ZERODHA_API_SECRET": "secret"})
+    @patch.dict(
+        "os.environ", {"ZERODHA_API_KEY": "   ", "ZERODHA_API_SECRET": "secret"}
+    )
     def test_factory_from_env_whitespace_only_key(
         self,
         temp_cache_dir: Path,
     ) -> None:
         """Test factory from_env with whitespace-only API key."""
-        with pytest.raises(ConfigError, match="ZERODHA_API_KEY environment variable is required"):
+        with pytest.raises(
+            ConfigError, match="ZERODHA_API_KEY environment variable is required"
+        ):
             DataProviderFactory.from_env(cache_dir=temp_cache_dir)
 
     @patch.dict("os.environ", {"ZERODHA_API_KEY": "key", "ZERODHA_API_SECRET": "   "})
@@ -737,7 +768,9 @@ class TestGetDataProviderConvenience:
         )
 
         # Patch create_token_manager to return mock
-        with patch.object(factory, "create_token_manager", return_value=mock_token_manager):
+        with patch.object(
+            factory, "create_token_manager", return_value=mock_token_manager
+        ):
             provider = factory.get_data_provider()
         assert isinstance(provider, FailoverProvider)
 

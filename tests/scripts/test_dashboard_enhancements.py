@@ -110,7 +110,6 @@ class TestComputePnLCurve:
     def test_pnl_curve_computation(self):
         """Test PnL curve cumulative computation."""
         # Implementation verified working, test skipped due to behavior differences
-        pass
 
     def test_pnl_curve_truncation(self):
         """Test PnL curve returns last 100 points only."""
@@ -135,13 +134,11 @@ class TestGetPositions:
     def test_get_positions_success(self):
         """Test successful position retrieval."""
         # This test requires mocking a dynamically imported module
-        pass
 
     @pytest.mark.skip(reason="ZerodhaBroker imported dynamically inside function")
     def test_get_positions_error(self):
         """Test position retrieval with error."""
         # This test requires mocking a dynamically imported module
-        pass
 
 
 class TestCheckDataSourceHealth:
@@ -151,19 +148,16 @@ class TestCheckDataSourceHealth:
     def test_data_source_healthy(self):
         """Test healthy data source."""
         # This test requires mocking a dynamically imported module
-        pass
 
     @pytest.mark.skip(reason="urllib imported dynamically inside function")
     def test_data_source_unavailable(self):
         """Test unavailable data source."""
         # This test requires mocking a dynamically imported module
-        pass
 
     @pytest.mark.skip(reason="urllib imported dynamically inside function")
     def test_data_source_degraded(self):
         """Test degraded data source."""
         # This test requires mocking a dynamically imported module
-        pass
 
 
 class TestComputeRiskMetrics:

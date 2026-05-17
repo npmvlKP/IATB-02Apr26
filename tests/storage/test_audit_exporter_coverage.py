@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-@pytest.fixture
+@pytest.fixture()
 def export_config_coverage(tmp_path: Path) -> ExportConfig:
     """ExportConfig with default settings for coverage tests."""
     return ExportConfig(
@@ -41,7 +41,7 @@ def export_config_coverage(tmp_path: Path) -> ExportConfig:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def records_coverage() -> list[TradeAuditRecord]:
     """Sample trade records for coverage tests."""
     base = datetime(2025, 5, 1, 10, 0, 0, tzinfo=UTC)
@@ -64,8 +64,10 @@ def records_coverage() -> list[TradeAuditRecord]:
     return records
 
 
-@pytest.fixture
-def store_coverage(tmp_path: Path, records_coverage: list[TradeAuditRecord]) -> SQLiteStore:
+@pytest.fixture()
+def store_coverage(
+    tmp_path: Path, records_coverage: list[TradeAuditRecord]
+) -> SQLiteStore:
     """SQLiteStore pre-populated for coverage tests."""
     db = tmp_path / "cov.sqlite"
     store = SQLiteStore(db_path=db, retention_years=7)
@@ -75,7 +77,7 @@ def store_coverage(tmp_path: Path, records_coverage: list[TradeAuditRecord]) -> 
     return store
 
 
-@pytest.fixture
+@pytest.fixture()
 def exporter_coverage(
     store_coverage: SQLiteStore, export_config_coverage: ExportConfig
 ) -> AuditExporter:
@@ -83,7 +85,7 @@ def exporter_coverage(
     return AuditExporter(store=store_coverage, config=export_config_coverage)
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_reportlab(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[None, None, None]:
@@ -206,7 +208,9 @@ class TestBuildPdfTableData:
         assert len(data[0]) == 9
         assert "Metadata" not in data[0]
 
-    def test_metadata_none_included_but_none(self, exporter_coverage: AuditExporter) -> None:
+    def test_metadata_none_included_but_none(
+        self, exporter_coverage: AuditExporter
+    ) -> None:
         export_records = [
             AuditExportRecord(
                 trade_id="T001",
@@ -257,7 +261,9 @@ class TestBuildPdfTableData:
         assert metadata_cell.endswith("...")
         assert len(metadata_cell) == 103
 
-    def test_metadata_short_no_truncation(self, exporter_coverage: AuditExporter) -> None:
+    def test_metadata_short_no_truncation(
+        self, exporter_coverage: AuditExporter
+    ) -> None:
         export_records = [
             AuditExportRecord(
                 trade_id="T001",

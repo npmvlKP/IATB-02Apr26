@@ -22,11 +22,11 @@ from iatb.scanner.instrument_scanner import (
 )
 
 
-@pytest.mark.integration
+@pytest.mark.integration()
 class TestKiteProviderCriticalPath:
     """Test critical path for Kite provider data flow."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Mock Kite client for integration test."""
         client = MagicMock()
@@ -66,7 +66,7 @@ class TestKiteProviderCriticalPath:
         }
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_end_to_end_kite_data_flow(self, mock_kite_client):
         """Test data flow from Kite provider to cache and retrieval."""
         # Step 1: Create provider
@@ -109,7 +109,7 @@ class TestKiteProviderCriticalPath:
         assert ticker.exchange == Exchange.NSE
         assert ticker.source == "kiteconnect"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_with_cache_integration(self, mock_kite_client):
         """Test Kite provider integration with market data cache."""
         # Create provider and cache
@@ -154,11 +154,11 @@ class TestKiteProviderCriticalPath:
         assert cached.close_price == bars[-1].close
 
 
-@pytest.mark.integration
+@pytest.mark.integration()
 class TestCCXTProviderCriticalPath:
     """Test critical path for CCXT provider data flow."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_ccxt_client(self):
         """Mock CCXT client for integration test."""
         client = MagicMock()
@@ -179,7 +179,7 @@ class TestCCXTProviderCriticalPath:
         }
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_end_to_end_ccxt_data_flow(self, mock_ccxt_client):
         """Test data flow from CCXT provider to cache and retrieval."""
         # Step 1: Create provider
@@ -219,11 +219,11 @@ class TestCCXTProviderCriticalPath:
         assert ticker.source == "ccxt:binance"
 
 
-@pytest.mark.integration
+@pytest.mark.integration()
 class TestProviderToScannerIntegration:
     """Test integration between data providers and scanner."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Mock Kite client for scanner integration."""
         client = MagicMock()
@@ -239,10 +239,13 @@ class TestProviderToScannerIntegration:
         ]
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_to_scanner_data_flow(self, mock_kite_client):
         """Test data flow from provider to scanner."""
-        from iatb.scanner.instrument_scanner import InstrumentScanner, create_mock_rl_predictor
+        from iatb.scanner.instrument_scanner import (
+            InstrumentScanner,
+            create_mock_rl_predictor,
+        )
 
         # Create provider
         provider = KiteProvider(
@@ -261,7 +264,9 @@ class TestProviderToScannerIntegration:
 
         # Create scanner with custom data
         scanner = InstrumentScanner(
-            sentiment_analyzer=create_mock_sentiment_analyzer({"TCS": (Decimal("0.8"), True)}),
+            sentiment_analyzer=create_mock_sentiment_analyzer(
+                {"TCS": (Decimal("0.8"), True)}
+            ),
             rl_predictor=create_mock_rl_predictor(Decimal("0.6")),
             symbols=[],
             cache_ttl_seconds=60,
@@ -291,4 +296,6 @@ class TestProviderToScannerIntegration:
         result = scanner.scan(custom_data=custom_data)
 
         assert result.total_scanned == 1
-        assert scanner._cache.get_stats()["total_entries"] == 0  # Custom data bypasses cache
+        assert (
+            scanner._cache.get_stats()["total_entries"] == 0
+        )  # Custom data bypasses cache

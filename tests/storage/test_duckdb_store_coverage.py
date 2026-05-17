@@ -57,7 +57,9 @@ def _create_daily_bars(
         for hour in range(9, 16):  # Market hours
             offset_minutes = day * 24 * 60 + (hour - 9) * 60
             close_price = base_price + Decimal(str(day * 5 + hour))
-            bars.append(_create_bar(offset_minutes, symbol=symbol, close=str(close_price)))
+            bars.append(
+                _create_bar(offset_minutes, symbol=symbol, close=str(close_price))
+            )
     return bars
 
 
@@ -631,7 +633,9 @@ class TestDuckDBStoreQueryPerformanceRanking:
         # Check that returns are positive and sorted
         returns = [r["return_pct"] for r in ranking]
         assert all(r > 0 for r in returns), "All returns should be positive"
-        assert returns == sorted(returns, reverse=True), "Returns should be sorted descending"
+        assert returns == sorted(
+            returns, reverse=True
+        ), "Returns should be sorted descending"
         assert ranking[0]["symbol"] == "SYM2"  # Highest return
         assert ranking[2]["symbol"] == "SYM3"  # Lowest return
 
@@ -695,7 +699,9 @@ class TestDuckDBStoreQueryVolatility:
         store.store_bars(bars)
         start = create_timestamp(datetime(2024, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2024, 1, 1, 12, 0, tzinfo=UTC))
-        vol = store.query_volatility("TEST", Exchange.NSE, window=3, start=start, end=end)
+        vol = store.query_volatility(
+            "TEST", Exchange.NSE, window=3, start=start, end=end
+        )
         assert len(vol) == 10
         for v in vol:
             assert "timestamp" in v
@@ -703,7 +709,9 @@ class TestDuckDBStoreQueryVolatility:
             assert "volatility" in v
             assert v["close"] > 0
 
-    def test_query_volatility_window_zero_raises_config_error(self, tmp_path: Path) -> None:
+    def test_query_volatility_window_zero_raises_config_error(
+        self, tmp_path: Path
+    ) -> None:
         """Window <= 0 should raise ConfigError."""
         store = DuckDBStore(tmp_path / "test.duckdb")
         start = create_timestamp(datetime(2024, 1, 1, 9, 0, tzinfo=UTC))
@@ -720,7 +728,9 @@ class TestDuckDBStoreQueryVolatility:
         start = create_timestamp(datetime(2024, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2024, 1, 1, 12, 0, tzinfo=UTC))
         with pytest.raises(ConfigError, match="window must be positive"):
-            store.query_volatility("TEST", Exchange.NSE, window=-1, start=start, end=end)
+            store.query_volatility(
+                "TEST", Exchange.NSE, window=-1, start=start, end=end
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -737,7 +747,9 @@ class TestDuckDBStoreQueryMovingAverages:
         bars = []
         for i in range(5):
             close_price = Decimal(str(100 + i * 2))  # 100, 102, 104, 106, 108
-            ts = create_timestamp(datetime(2024, 1, 1, 10, 0, tzinfo=UTC) + timedelta(minutes=i))
+            ts = create_timestamp(
+                datetime(2024, 1, 1, 10, 0, tzinfo=UTC) + timedelta(minutes=i)
+            )
             bars.append(
                 OHLCVBar(
                     timestamp=ts,
@@ -754,7 +766,9 @@ class TestDuckDBStoreQueryMovingAverages:
         store.store_bars(bars)
         start = create_timestamp(datetime(2024, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2024, 1, 1, 12, 0, tzinfo=UTC))
-        mas = store.query_moving_averages("TEST", Exchange.NSE, window=3, start=start, end=end)
+        mas = store.query_moving_averages(
+            "TEST", Exchange.NSE, window=3, start=start, end=end
+        )
         assert len(mas) == 5
         for ma in mas:
             assert "timestamp" in ma
@@ -768,7 +782,9 @@ class TestDuckDBStoreQueryMovingAverages:
         bars = []
         for i in range(5):
             close_price = Decimal(str(100 + i * 10))  # 100, 110, 120, 130, 140
-            ts = create_timestamp(datetime(2024, 1, 1, 10, 0, tzinfo=UTC) + timedelta(minutes=i))
+            ts = create_timestamp(
+                datetime(2024, 1, 1, 10, 0, tzinfo=UTC) + timedelta(minutes=i)
+            )
             bars.append(
                 OHLCVBar(
                     timestamp=ts,
@@ -785,7 +801,9 @@ class TestDuckDBStoreQueryMovingAverages:
         store.store_bars(bars)
         start = create_timestamp(datetime(2024, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2024, 1, 1, 12, 0, tzinfo=UTC))
-        mas = store.query_moving_averages("TEST", Exchange.NSE, window=3, start=start, end=end)
+        mas = store.query_moving_averages(
+            "TEST", Exchange.NSE, window=3, start=start, end=end
+        )
         # First bar: SMA = 100 (only 1 value)
         # Second bar: SMA = (100+110)/2 = 105
         # Third bar: SMA = (100+110+120)/3 = 110
@@ -802,7 +820,9 @@ class TestDuckDBStoreQueryMovingAverages:
         start = create_timestamp(datetime(2024, 1, 1, 9, 0, tzinfo=UTC))
         end = create_timestamp(datetime(2024, 1, 1, 12, 0, tzinfo=UTC))
         with pytest.raises(ConfigError, match="window must be positive"):
-            store.query_moving_averages("TEST", Exchange.NSE, window=0, start=start, end=end)
+            store.query_moving_averages(
+                "TEST", Exchange.NSE, window=0, start=start, end=end
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -822,7 +842,9 @@ class TestDuckDBStoreQueryCorrelationMatrix:
         sym1_bars = []
         sym2_bars = []
         for i in range(5):
-            ts = create_timestamp(base_ts + timedelta(minutes=i * 10))  # 10-minute intervals
+            ts = create_timestamp(
+                base_ts + timedelta(minutes=i * 10)
+            )  # 10-minute intervals
             base_price = Decimal(str(100 + i * 10))
             sym1_bars.append(
                 OHLCVBar(
@@ -865,13 +887,21 @@ class TestDuckDBStoreQueryCorrelationMatrix:
         loaded_sym2 = store.load_bars(
             symbol="SYM2", exchange=Exchange.NSE, limit=100, start=start, end=end
         )
-        assert len(loaded_sym1) == 5, f"Expected 5 bars for SYM1, got {len(loaded_sym1)}"
-        assert len(loaded_sym2) == 5, f"Expected 5 bars for SYM2, got {len(loaded_sym2)}"
+        assert (
+            len(loaded_sym1) == 5
+        ), f"Expected 5 bars for SYM1, got {len(loaded_sym1)}"
+        assert (
+            len(loaded_sym2) == 5
+        ), f"Expected 5 bars for SYM2, got {len(loaded_sym2)}"
 
         # Now query correlation
-        corr = store.query_correlation_matrix(["SYM1", "SYM2"], Exchange.NSE, start, end)
+        corr = store.query_correlation_matrix(
+            ["SYM1", "SYM2"], Exchange.NSE, start, end
+        )
         # Both symbols should be in correlation matrix
-        assert len(corr) == 2, f"Expected 2 symbols in correlation matrix, got {len(corr)}"
+        assert (
+            len(corr) == 2
+        ), f"Expected 2 symbols in correlation matrix, got {len(corr)}"
         assert "SYM1" in corr
         assert "SYM2" in corr
         # Diagonal should be 1.0
@@ -960,10 +990,9 @@ class TestDuckDBStoreQueryParquet:
     def test_query_parquet_nonexistent_raises_exception(self, tmp_path: Path) -> None:
         """Querying non-existent parquet file should raise exception."""
         store = DuckDBStore(tmp_path / "test.duckdb")
-        # DuckDB raises duckdb.IOException for non-existent parquet files
-        # We catch it as OSError since it inherits from it
+        # DuckDB raises duckdb.InvalidInputException for IO errors in modern versions
         duckdb = pytest.importorskip("duckdb")
-        with pytest.raises(duckdb.IOException):
+        with pytest.raises(duckdb.InvalidInputException):
             store.query_parquet("/nonexistent/*.parquet")
 
 
@@ -995,18 +1024,18 @@ class TestDuckDBStoreMigrateParquet:
         store_dest = DuckDBStore(tmp_path / "dest.duckdb")
         count = store_dest.migrate_parquet_to_duckdb(archive_dir)
         assert count == 1
-        loaded = store_dest.load_bars(symbol="MIGRATE_TEST", exchange=Exchange.NSE, limit=10)
+        loaded = store_dest.load_bars(
+            symbol="MIGRATE_TEST", exchange=Exchange.NSE, limit=10
+        )
         assert len(loaded) == 1
 
     def test_migrate_parquet_empty_dir_raises_exception(self, tmp_path: Path) -> None:
-        """Migrating empty directory should raise exception."""
+        """Migrating empty directory should return 0 (no files to migrate)."""
         empty_dir = tmp_path / "empty_parquet"
         empty_dir.mkdir(parents=True, exist_ok=True)
         store = DuckDBStore(tmp_path / "dest.duckdb")
-        # DuckDB raises IOException for empty directory
-        duckdb = pytest.importorskip("duckdb")
-        with pytest.raises(duckdb.IOException):
-            store.migrate_parquet_to_duckdb(empty_dir)
+        result = store.migrate_parquet_to_duckdb(empty_dir)
+        assert result == 0
 
     def test_migrate_parquet_deduplicates(self, tmp_path: Path) -> None:
         """Migrate should deduplicate existing data."""
@@ -1031,7 +1060,9 @@ class TestDuckDBStoreMigrateParquet:
         # Second migration (should not duplicate)
         count2 = store_dest.migrate_parquet_to_duckdb(archive_dir)
         assert count2 == 1  # Still reports count, but no duplicates
-        loaded = store_dest.load_bars(symbol="DEDUP_TEST", exchange=Exchange.NSE, limit=10)
+        loaded = store_dest.load_bars(
+            symbol="DEDUP_TEST", exchange=Exchange.NSE, limit=10
+        )
         assert len(loaded) == 1  # Only one record
 
 

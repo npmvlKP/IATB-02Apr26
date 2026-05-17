@@ -42,14 +42,14 @@ from iatb.strategies.base import StrategyOrder
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_data_provider() -> DataProvider:
     """Create mock data provider."""
     provider = AsyncMock(spec=DataProvider)
     return provider
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_provider_pool(mock_data_provider: DataProvider) -> SharedDataProviderPool:
     """Create shared provider pool with mock provider."""
     return SharedDataProviderPool(
@@ -59,7 +59,7 @@ def mock_provider_pool(mock_data_provider: DataProvider) -> SharedDataProviderPo
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_strategy_configs() -> list[StrategyConfig]:
     """Create sample strategy configurations with mixed enabled/disabled."""
     return [
@@ -96,7 +96,7 @@ def sample_strategy_configs() -> list[StrategyConfig]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ohlcv_bars() -> list[OHLCVBar]:
     """Create sample OHLCV bars with Decimal-only financial fields."""
     base_time = datetime.now(UTC) - timedelta(days=100)
@@ -1329,7 +1329,10 @@ class TestStrategyRunnerState:
         assert state.trades_executed == 0
         assert state.active_positions == 0
         assert runner._position_guards["momentum_1"]._max_positions == original_max_pos
-        assert runner._position_guards["momentum_1"]._max_position_value == original_max_val
+        assert (
+            runner._position_guards["momentum_1"]._max_position_value
+            == original_max_val
+        )
 
     async def test_reset_nonexistent_raises(
         self,
@@ -1640,7 +1643,9 @@ class TestStrategyRunnerSignalProcessing:
             strategy_configs=sample_strategy_configs,
         )
 
-        async def _failing_scan(*args: object, **kwargs: object) -> tuple[int, int, list[str]]:
+        async def _failing_scan(
+            *args: object, **kwargs: object
+        ) -> tuple[int, int, list[str]]:
             raise RuntimeError("Unhandled scan error")
 
         runner._scan_symbols = _failing_scan

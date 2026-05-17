@@ -298,7 +298,9 @@ def _render_scanner_content(
     if callable(subheader_fn):
         subheader_fn("Approved Instruments Charts")
 
-    chart_symbols = render_approved_charts(scanner_result.instruments, chart_data, st, go)
+    chart_symbols = render_approved_charts(
+        scanner_result.instruments, chart_data, st, go
+    )
 
     return table_symbols, chart_symbols
 
@@ -337,7 +339,9 @@ def render_instrument_scanner_tab(
     result["approved_count"] = scanner_result.approved_count
 
     _render_scanner_metrics(st, scanner_result)
-    table_symbols, chart_symbols = _render_scanner_content(st, go, scanner_result, chart_data)
+    table_symbols, chart_symbols = _render_scanner_content(
+        st, go, scanner_result, chart_data
+    )
     result["table_symbols"] = table_symbols
     result["chart_symbols"] = chart_symbols
 
@@ -365,7 +369,9 @@ def convert_candidates_to_health_matrix(
         matrix = build_instrument_health_matrix(
             symbol=candidate.symbol,
             sentiment_score=abs(candidate.sentiment_score),
-            market_strength_score=Decimal(candidate.metadata.get("strength_score", "0.5")),
+            market_strength_score=Decimal(
+                candidate.metadata.get("strength_score", "0.5")
+            ),
             volume_score=volume_score,
             drl_backtest_score=drl_score,
             safe_exit_probability=candidate.exit_probability,

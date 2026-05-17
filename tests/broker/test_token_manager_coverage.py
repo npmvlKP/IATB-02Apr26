@@ -27,16 +27,18 @@ _IST_OFFSET = timedelta(hours=5, minutes=30)
 _KEYRING_SERVICE = "iatb_zerodha"
 
 
-def _make_ist_datetime(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
+def _make_ist_datetime(
+    year: int, month: int, day: int, hour: int, minute: int = 0
+) -> datetime:
     return datetime(year, month, day, hour, minute, tzinfo=UTC) - _IST_OFFSET
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_http_post() -> MagicMock:
     return MagicMock(return_value={"data": {"access_token": "new_access_token"}})
 
 
-@pytest.fixture
+@pytest.fixture()
 def tm(mock_http_post: MagicMock) -> ZerodhaTokenManager:
     return ZerodhaTokenManager(
         api_key="test_api_key",
@@ -46,7 +48,7 @@ def tm(mock_http_post: MagicMock) -> ZerodhaTokenManager:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def tm_no_totp(mock_http_post: MagicMock) -> ZerodhaTokenManager:
     return ZerodhaTokenManager(
         api_key="test_api_key",
@@ -56,7 +58,7 @@ def tm_no_totp(mock_http_post: MagicMock) -> ZerodhaTokenManager:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def tm_with_env(mock_http_post: MagicMock, tmp_path: Path) -> ZerodhaTokenManager:
     env_file = tmp_path / ".env"
     env_file.write_text("ZERODHA_ACCESS_TOKEN=stored_tok\n")
@@ -90,7 +92,9 @@ class TestIsTokenFreshBefore6AMIST:
 class TestIsTokenFreshAfter6AMIST:
     """Scenario 2: is_token_fresh() with token created after 6 AM IST -> expired next day."""
 
-    def test_token_after_6am_ist_expires_next_day(self, tm: ZerodhaTokenManager) -> None:
+    def test_token_after_6am_ist_expires_next_day(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         token_time = _make_ist_datetime(2026, 4, 12, 7, 0)
         now_utc = _make_ist_datetime(2026, 4, 13, 5, 0)
         with patch.object(
@@ -104,7 +108,9 @@ class TestIsTokenFreshAfter6AMIST:
                 mock_dt.combine = datetime.combine
                 assert tm.is_token_fresh() is True
 
-    def test_token_after_6am_expired_past_next_6am(self, tm: ZerodhaTokenManager) -> None:
+    def test_token_after_6am_expired_past_next_6am(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         token_time = _make_ist_datetime(2026, 4, 12, 7, 0)
         now_utc = _make_ist_datetime(2026, 4, 13, 7, 0)
         with patch.object(
@@ -154,7 +160,9 @@ class TestIsTokenValidForPreMarket:
         with patch.object(keyring, "get_password", return_value=None):
             assert tm.is_token_valid_for_pre_market() is False
 
-    def test_pre_market_invalid_timestamp_returns_false(self, tm: ZerodhaTokenManager) -> None:
+    def test_pre_market_invalid_timestamp_returns_false(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         with patch.object(keyring, "get_password", side_effect=["tok", "bad_ts"]):
             assert tm.is_token_valid_for_pre_market() is False
 
@@ -220,13 +228,17 @@ class TestAutoRefreshToken:
         self, tm: ZerodhaTokenManager, mock_http_post: MagicMock
     ) -> None:
         with patch.object(tm, "should_refresh_token", return_value=True):
-            with patch.object(tm, "resolve_saved_request_token", return_value="req_tok"):
+            with patch.object(
+                tm, "resolve_saved_request_token", return_value="req_tok"
+            ):
                 with patch.object(tm, "store_access_token"):
                     result = tm.auto_refresh_token()
                     assert result == "new_access_token"
                     mock_http_post.assert_called_once()
 
-    def test_auto_refresh_no_request_token_raises(self, tm: ZerodhaTokenManager) -> None:
+    def test_auto_refresh_no_request_token_raises(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         with patch.object(tm, "should_refresh_token", return_value=True):
             with patch.object(tm, "resolve_saved_request_token", return_value=None):
                 with pytest.raises(ValueError, match="No saved request token"):
@@ -261,7 +273,9 @@ class TestExchangeRequestToken:
 class TestStoreAccessToken:
     """Scenario 7: store_access_token() -> keyring + .env persistence."""
 
-    def test_store_writes_keyring_with_utc_timestamp(self, tm: ZerodhaTokenManager) -> None:
+    def test_store_writes_keyring_with_utc_timestamp(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         with patch.object(keyring, "set_password") as mock_set:
             with freeze_time("2026-04-12 10:30:00", tz_offset=0):
                 tm.store_access_token("my_token")
@@ -294,12 +308,16 @@ class TestGetAccessTokenFallbackChain:
 
     def test_env_var_kite_fallback(self, tm_no_totp: ZerodhaTokenManager) -> None:
         with patch.object(keyring, "get_password", return_value=None):
-            with patch.dict(os.environ, {"KITE_ACCESS_TOKEN": "k_env_tok"}, clear=False):
+            with patch.dict(
+                os.environ, {"KITE_ACCESS_TOKEN": "k_env_tok"}, clear=False
+            ):
                 with patch.dict(os.environ, {"ZERODHA_ACCESS_TOKEN": ""}, clear=False):
                     result = tm_no_totp.get_access_token()
                     assert result in ("k_env_tok", "z_env_tok")
 
-    def test_dotenv_file_fallback(self, tm_no_totp: ZerodhaTokenManager, tmp_path: Path) -> None:
+    def test_dotenv_file_fallback(
+        self, tm_no_totp: ZerodhaTokenManager, tmp_path: Path
+    ) -> None:
         env_file = tmp_path / ".env"
         env_file.write_text("ZERODHA_ACCESS_TOKEN=file_tok\n")
         with patch.object(keyring, "get_password", return_value=None):
@@ -308,7 +326,9 @@ class TestGetAccessTokenFallbackChain:
                     result = tm_no_totp.get_access_token()
                     assert result == "file_tok"
 
-    def test_all_sources_empty_returns_none(self, tm_no_totp: ZerodhaTokenManager) -> None:
+    def test_all_sources_empty_returns_none(
+        self, tm_no_totp: ZerodhaTokenManager
+    ) -> None:
         with patch.object(keyring, "get_password", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
                 with patch("pathlib.Path.cwd", return_value=Path("no_exist")):
@@ -326,9 +346,13 @@ class TestGetKiteClient:
         with patch.dict("sys.modules", {"kiteconnect": mock_module}):
             client = tm.get_kite_client(access_token="explicit_tok")
             assert client == mock_kite_instance
-            mock_kc_cls.assert_called_once_with(api_key="test_api_key", access_token="explicit_tok")
+            mock_kc_cls.assert_called_once_with(
+                api_key="test_api_key", access_token="explicit_tok"
+            )
 
-    def test_get_kite_client_no_token_raises(self, tm_no_totp: ZerodhaTokenManager) -> None:
+    def test_get_kite_client_no_token_raises(
+        self, tm_no_totp: ZerodhaTokenManager
+    ) -> None:
         with patch.object(keyring, "get_password", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
                 with pytest.raises(ValueError, match="Access token not available"):
@@ -420,7 +444,9 @@ class TestEdge9AMISTPreMarketBoundary:
         expected = _make_ist_datetime(2026, 4, 12, 9, 0)
         assert pre_market == expected
 
-    def test_pre_market_at_boundary_returns_false(self, tm: ZerodhaTokenManager) -> None:
+    def test_pre_market_at_boundary_returns_false(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         token_time = _make_ist_datetime(2026, 4, 12, 8, 0)
         now_utc = _make_ist_datetime(2026, 4, 12, 9, 0)
         with patch.object(
@@ -505,7 +531,9 @@ class TestErrorTOTPSecretNotConfigured:
             with pytest.raises(ValueError, match="TOTP secret not configured"):
                 tm_no_totp.auto_refresh_token()
 
-    def test_generate_totp_no_secret_raises(self, tm_no_totp: ZerodhaTokenManager) -> None:
+    def test_generate_totp_no_secret_raises(
+        self, tm_no_totp: ZerodhaTokenManager
+    ) -> None:
         with pytest.raises(ValueError, match="TOTP secret not configured"):
             tm_no_totp._generate_totp()
 
@@ -551,7 +579,9 @@ class TestErrorAPIMissingAccessToken:
 class TestErrorKeyringPasswordDeleteError:
     """Scenario 18: Error - keyring PasswordDeleteError during clear_token()."""
 
-    def test_clear_token_handles_password_delete_error(self, tm: ZerodhaTokenManager) -> None:
+    def test_clear_token_handles_password_delete_error(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         with patch.object(
             keyring,
             "delete_password",
@@ -583,22 +613,32 @@ class TestErrorOSErrorReadingEnv:
         env_file = tmp_path / ".env"
         env_file.write_text("KEY=val\n")
         real_path = str(env_file)
-        with patch("iatb.broker.token_manager.Path.read_text", side_effect=OSError("read error")):
+        with patch(
+            "iatb.broker.token_manager.Path.read_text",
+            side_effect=OSError("read error"),
+        ):
             result = _load_env_file(Path(real_path))
             assert result == {}
 
-    def test_clear_env_token_os_error(self, tm: ZerodhaTokenManager, tmp_path: Path) -> None:
+    def test_clear_env_token_os_error(
+        self, tm: ZerodhaTokenManager, tmp_path: Path
+    ) -> None:
         env_file = tmp_path / ".env"
         env_file.write_text("ZERODHA_ACCESS_TOKEN=tok\n")
         real_path = str(env_file)
-        with patch("iatb.broker.token_manager.Path.read_text", side_effect=OSError("read error")):
+        with patch(
+            "iatb.broker.token_manager.Path.read_text",
+            side_effect=OSError("read error"),
+        ):
             tm._clear_env_token(Path(real_path))
 
 
 class TestAutoRefreshExceptionPropagation:
     """Scenario 20: auto_refresh_token() exception propagation."""
 
-    def test_auto_refresh_exchange_failure_raises(self, tm: ZerodhaTokenManager) -> None:
+    def test_auto_refresh_exchange_failure_raises(
+        self, tm: ZerodhaTokenManager
+    ) -> None:
         with patch.object(tm, "should_refresh_token", return_value=True):
             with patch.object(tm, "resolve_saved_request_token", return_value="req"):
                 with patch.object(
@@ -618,11 +658,13 @@ class TestResolveSavedRequestToken:
     ) -> None:
         env_file = tmp_path / ".env.example"
         env_file.write_text(
-            "ZERODHA_REQUEST_TOKEN=req_tok\n" "ZERODHA_REQUEST_TOKEN_DATE_UTC=2026-04-16\n"
+            "ZERODHA_REQUEST_TOKEN=req_tok\n"
+            "ZERODHA_REQUEST_TOKEN_DATE_UTC=2026-04-16\n"
         )
         actual_env = tmp_path / ".env"
         actual_env.write_text(
-            "ZERODHA_REQUEST_TOKEN=req_tok\n" "ZERODHA_REQUEST_TOKEN_DATE_UTC=2026-04-16\n"
+            "ZERODHA_REQUEST_TOKEN=req_tok\n"
+            "ZERODHA_REQUEST_TOKEN_DATE_UTC=2026-04-16\n"
         )
         mgr = ZerodhaTokenManager(
             api_key="k",
@@ -634,7 +676,9 @@ class TestResolveSavedRequestToken:
         with patch.object(keyring, "get_password", return_value=None):
             assert mgr.resolve_saved_request_token() == "req_tok"
 
-    def test_request_token_no_date_invalid(self, mock_http_post: MagicMock, tmp_path: Path) -> None:
+    def test_request_token_no_date_invalid(
+        self, mock_http_post: MagicMock, tmp_path: Path
+    ) -> None:
         env_file = tmp_path / ".env"
         env_file.write_text("ZERODHA_REQUEST_TOKEN=req_tok\n")
         mgr = ZerodhaTokenManager(
@@ -658,7 +702,8 @@ class TestResolveSavedAccessToken:
         env_example.write_text("placeholder=1\n")
         actual_env = tmp_path / ".env"
         actual_env.write_text(
-            "ZERODHA_ACCESS_TOKEN=env_acc_tok\n" "ZERODHA_ACCESS_TOKEN_DATE_UTC=2026-04-16\n"
+            "ZERODHA_ACCESS_TOKEN=env_acc_tok\n"
+            "ZERODHA_ACCESS_TOKEN_DATE_UTC=2026-04-16\n"
         )
         mgr = ZerodhaTokenManager(
             api_key="k",
@@ -763,7 +808,9 @@ class TestGetLoginURL:
 class TestInitWithEnvValues:
     """Additional: Initialization with env_values parameter."""
 
-    def test_init_with_env_values_dict(self, mock_http_post: MagicMock, tmp_path: Path) -> None:
+    def test_init_with_env_values_dict(
+        self, mock_http_post: MagicMock, tmp_path: Path
+    ) -> None:
         env_file = tmp_path / ".env"
         env_file.write_text("EXISTING=val\n")
         mgr = ZerodhaTokenManager(
@@ -817,7 +864,9 @@ class TestClearEnvTokenPreservesComments:
 class TestGetAccessTokenNoEnvFallback:
     """Additional: get_access_token with use_env_fallback=False skips env."""
 
-    def test_no_env_fallback_skips_env_vars(self, tm_no_totp: ZerodhaTokenManager) -> None:
+    def test_no_env_fallback_skips_env_vars(
+        self, tm_no_totp: ZerodhaTokenManager
+    ) -> None:
         with patch.object(keyring, "get_password", return_value=None):
             with patch.dict(os.environ, {"ZERODHA_ACCESS_TOKEN": "env_tok"}):
                 assert tm_no_totp.get_access_token(use_env_fallback=False) is None

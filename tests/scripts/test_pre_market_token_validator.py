@@ -16,7 +16,7 @@ from scripts.pre_market_token_validator import (
 )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_token_manager():
     """Mock ZerodhaTokenManager."""
     with patch("scripts.pre_market_token_validator.ZerodhaTokenManager") as mock:
@@ -27,7 +27,7 @@ def mock_token_manager():
         yield mock_instance
 
 
-@pytest.fixture
+@pytest.fixture()
 def validator(mock_token_manager):
     """Create PreMarketTokenValidator instance with mocked dependencies."""
     with patch.dict(
@@ -116,7 +116,7 @@ def test_validation_result_to_dict_no_expiry():
 # ── AlertManager Tests ──
 
 
-@pytest.fixture
+@pytest.fixture()
 def alert_manager():
     """Create AlertManager instance."""
     logger = MagicMock(spec=logging.Logger)
@@ -234,7 +234,9 @@ def test_validate_token_fresh(validator):
     validator._token_manager.is_token_fresh.return_value = True
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) + timedelta(hours=2)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) + timedelta(hours=2),
     ):
         result = validator.validate_token()
 
@@ -249,7 +251,9 @@ def test_validate_token_expired_with_totp(validator):
     validator._totp_secret = "JBSWY3DPEHPK3PXP"
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) - timedelta(hours=1)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) - timedelta(hours=1),
     ):
         with patch.object(validator, "_attempt_auto_relogin", return_value=True):
             result = validator.validate_token()
@@ -265,7 +269,9 @@ def test_validate_token_expired_totp_fails(validator):
     validator._totp_secret = "JBSWY3DPEHPK3PXP"
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) - timedelta(hours=1)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) - timedelta(hours=1),
     ):
         with patch.object(validator, "_attempt_auto_relogin", return_value=False):
             result = validator.validate_token()
@@ -281,7 +287,9 @@ def test_validate_token_expired_no_totp(validator):
     validator._totp_secret = None
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) - timedelta(hours=1)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) - timedelta(hours=1),
     ):
         result = validator.validate_token()
 
@@ -316,7 +324,9 @@ def test_get_token_expiry(validator):
         return "test_token"
 
     with patch.object(keyring, "get_password", side_effect=mock_get_password):
-        with patch.object(validator, "_calculate_next_expiry", return_value=expected_expiry):
+        with patch.object(
+            validator, "_calculate_next_expiry", return_value=expected_expiry
+        ):
             expiry = validator._get_token_expiry()
 
     assert expiry == expected_expiry
@@ -464,7 +474,9 @@ def test_run_once_success(validator):
     validator._token_manager.is_token_fresh.return_value = True
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) + timedelta(hours=2)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) + timedelta(hours=2),
     ):
         exit_code = validator.run_once()
 
@@ -477,7 +489,9 @@ def test_run_once_expired_relogin_success(validator):
     validator._totp_secret = "JBSWY3DPEHPK3PXP"
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) - timedelta(hours=1)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) - timedelta(hours=1),
     ):
         with patch.object(validator, "_attempt_auto_relogin", return_value=True):
             exit_code = validator.run_once()
@@ -491,7 +505,9 @@ def test_run_once_failure(validator):
     validator._totp_secret = "JBSWY3DPEHPK3PXP"
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) - timedelta(hours=1)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) - timedelta(hours=1),
     ):
         with patch.object(validator, "_attempt_auto_relogin", return_value=False):
             exit_code = validator.run_once()
@@ -499,21 +515,23 @@ def test_run_once_failure(validator):
     assert exit_code == 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_run_scheduled_success(validator):
     """Test run_scheduled() success."""
     validator._token_manager.is_token_fresh.return_value = True
 
     with patch.object(validator, "should_run_at_scheduled_time", return_value=True):
         with patch.object(
-            validator, "_get_token_expiry", return_value=datetime.now(UTC) + timedelta(hours=2)
+            validator,
+            "_get_token_expiry",
+            return_value=datetime.now(UTC) + timedelta(hours=2),
         ):
             exit_code = await validator.run_scheduled(9, 0)
 
     assert exit_code == 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_run_scheduled_waits_for_time(validator):
     """Test run_scheduled() waits until scheduled time."""
     validator._token_manager.is_token_fresh.return_value = True
@@ -552,7 +570,9 @@ def test_validator_with_alert_manager(validator):
     validator._token_manager.is_token_fresh.return_value = True
 
     with patch.object(
-        validator, "_get_token_expiry", return_value=datetime.now(UTC) + timedelta(hours=2)
+        validator,
+        "_get_token_expiry",
+        return_value=datetime.now(UTC) + timedelta(hours=2),
     ):
         exit_code = validator.run_once()
 

@@ -83,22 +83,30 @@ class TestVectorBTConfig:
 
     def test_invalid_composite_score_low(self) -> None:
         """Test config with composite score < 0."""
-        with pytest.raises(ConfigError, match="min_composite_score must be in \\[0, 1\\]"):
+        with pytest.raises(
+            ConfigError, match="min_composite_score must be in \\[0, 1\\]"
+        ):
             VectorBTConfig(min_composite_score=Decimal("-0.1"))
 
     def test_invalid_composite_score_high(self) -> None:
         """Test config with composite score > 1."""
-        with pytest.raises(ConfigError, match="min_composite_score must be in \\[0, 1\\]"):
+        with pytest.raises(
+            ConfigError, match="min_composite_score must be in \\[0, 1\\]"
+        ):
             VectorBTConfig(min_composite_score=Decimal("1.5"))
 
     def test_invalid_exit_probability_low(self) -> None:
         """Test config with exit probability < 0."""
-        with pytest.raises(ConfigError, match="min_exit_probability must be in \\[0, 1\\]"):
+        with pytest.raises(
+            ConfigError, match="min_exit_probability must be in \\[0, 1\\]"
+        ):
             VectorBTConfig(min_exit_probability=Decimal("-0.1"))
 
     def test_invalid_exit_probability_high(self) -> None:
         """Test config with exit probability > 1."""
-        with pytest.raises(ConfigError, match="min_exit_probability must be in \\[0, 1\\]"):
+        with pytest.raises(
+            ConfigError, match="min_exit_probability must be in \\[0, 1\\]"
+        ):
             VectorBTConfig(min_exit_probability=Decimal("1.5"))
 
     def test_invalid_train_pct_zero(self) -> None:
@@ -159,7 +167,9 @@ class TestVectorBTEngineInitialization:
         mock_vectorbt = MagicMock()
         mock_import.side_effect = [mock_vectorbt, ModuleNotFoundError("pandas-ta")]
 
-        with pytest.raises(ConfigError, match="pandas-ta-classic dependency is required"):
+        with pytest.raises(
+            ConfigError, match="pandas-ta-classic dependency is required"
+        ):
             VectorBTEngine()
 
     @patch("iatb.backtesting.vectorbt_engine.importlib.import_module")
@@ -167,7 +177,11 @@ class TestVectorBTEngineInitialization:
         """Test error when quantstats is not installed."""
         mock_vectorbt = MagicMock()
         mock_pandas_ta = MagicMock()
-        mock_import.side_effect = [mock_vectorbt, mock_pandas_ta, ModuleNotFoundError("quantstats")]
+        mock_import.side_effect = [
+            mock_vectorbt,
+            mock_pandas_ta,
+            ModuleNotFoundError("quantstats"),
+        ]
 
         with pytest.raises(ConfigError, match="quantstats dependency is required"):
             VectorBTEngine()
@@ -176,17 +190,19 @@ class TestVectorBTEngineInitialization:
 class TestVectorBTEngineBacktest:
     """Test VectorBTEngine backtest functionality."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_engine(self) -> VectorBTEngine:
         """Create mock engine with mocked dependencies and lower thresholds."""
         config = VectorBTConfig(
             min_composite_score=Decimal("0.3"), min_exit_probability=Decimal("0.3")
         )
-        with patch("iatb.backtesting.vectorbt_engine.importlib.import_module") as mock_import:
+        with patch(
+            "iatb.backtesting.vectorbt_engine.importlib.import_module"
+        ) as mock_import:
             mock_import.return_value = MagicMock()
             return VectorBTEngine(config)
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_prices(self) -> list[Decimal]:
         """Generate sample price data."""
         return [
@@ -202,13 +218,13 @@ class TestVectorBTEngineBacktest:
             Decimal("107"),
         ]
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_timestamps(self) -> list[datetime]:
         """Generate sample UTC timestamps."""
         base = datetime(2024, 1, 1, 9, 15, tzinfo=UTC)
         return [base + timedelta(hours=i) for i in range(10)]
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_scores(self) -> list[Decimal]:
         """Generate sample composite scores with alternating values."""
         return [
@@ -224,7 +240,7 @@ class TestVectorBTEngineBacktest:
             Decimal("0.9"),  # High - enter
         ]
 
-    @pytest.fixture
+    @pytest.fixture()
     def sample_probabilities(self) -> list[Decimal]:
         """Generate sample exit probabilities with alternating values."""
         return [
@@ -267,7 +283,9 @@ class TestVectorBTEngineBacktest:
     ) -> None:
         """Test backtest with composite scores."""
         mock_session.return_value = [ts.date() for ts in sample_timestamps]
-        result = mock_engine.run_backtest(sample_prices, sample_timestamps, sample_scores)
+        result = mock_engine.run_backtest(
+            sample_prices, sample_timestamps, sample_scores
+        )
 
         assert isinstance(result, BacktestResult)
         # With mocked vectorbt, trades may not execute, but API should work
@@ -293,7 +311,9 @@ class TestVectorBTEngineBacktest:
 
     def test_backtest_insufficient_prices(self, mock_engine: VectorBTEngine) -> None:
         """Test backtest with insufficient price data."""
-        with pytest.raises(ConfigError, match="prices must contain at least two points"):
+        with pytest.raises(
+            ConfigError, match="prices must contain at least two points"
+        ):
             mock_engine.run_backtest([Decimal("100")], [datetime.now(UTC)])
 
     def test_backtest_mismatched_lengths(
@@ -303,7 +323,9 @@ class TestVectorBTEngineBacktest:
         sample_timestamps: list[datetime],
     ) -> None:
         """Test backtest with mismatched prices and timestamps."""
-        with pytest.raises(ConfigError, match="prices and timestamps must have same length"):
+        with pytest.raises(
+            ConfigError, match="prices and timestamps must have same length"
+        ):
             mock_engine.run_backtest(sample_prices, sample_timestamps[:-1])
 
     def test_backtest_mismatched_scores(
@@ -313,8 +335,12 @@ class TestVectorBTEngineBacktest:
         sample_timestamps: list[datetime],
     ) -> None:
         """Test backtest with mismatched scores length."""
-        with pytest.raises(ConfigError, match="composite_scores must match prices length"):
-            mock_engine.run_backtest(sample_prices, sample_timestamps, [Decimal("0.5")] * 5)
+        with pytest.raises(
+            ConfigError, match="composite_scores must match prices length"
+        ):
+            mock_engine.run_backtest(
+                sample_prices, sample_timestamps, [Decimal("0.5")] * 5
+            )
 
     def test_backtest_mismatched_probabilities(
         self,
@@ -323,8 +349,12 @@ class TestVectorBTEngineBacktest:
         sample_timestamps: list[datetime],
     ) -> None:
         """Test backtest with mismatched probabilities length."""
-        with pytest.raises(ConfigError, match="exit_probabilities must match prices length"):
-            mock_engine.run_backtest(sample_prices, sample_timestamps, None, [Decimal("0.5")] * 5)
+        with pytest.raises(
+            ConfigError, match="exit_probabilities must match prices length"
+        ):
+            mock_engine.run_backtest(
+                sample_prices, sample_timestamps, None, [Decimal("0.5")] * 5
+            )
 
     def test_backtest_cost_breakdown(
         self,
@@ -375,25 +405,27 @@ class TestVectorBTEngineBacktest:
 class TestVectorBTEngineWalkForward:
     """Test VectorBTEngine walk-forward validation."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_engine(self) -> VectorBTEngine:
         """Create mock engine with mocked dependencies."""
-        with patch("iatb.backtesting.vectorbt_engine.importlib.import_module") as mock_import:
+        with patch(
+            "iatb.backtesting.vectorbt_engine.importlib.import_module"
+        ) as mock_import:
             mock_import.return_value = MagicMock()
             return VectorBTEngine()
 
-    @pytest.fixture
+    @pytest.fixture()
     def extended_prices(self) -> list[Decimal]:
         """Generate extended price data for walk-forward."""
         return [Decimal("100" + str(i % 10)) for i in range(20)]
 
-    @pytest.fixture
+    @pytest.fixture()
     def extended_timestamps(self) -> list[datetime]:
         """Generate extended timestamps for walk-forward."""
         base = datetime(2024, 1, 1, 9, 15, tzinfo=UTC)
         return [base + timedelta(days=i) for i in range(20)]
 
-    @pytest.mark.slow
+    @pytest.mark.slow()
     def test_walk_forward_basic(
         self,
         mock_engine: VectorBTEngine,
@@ -413,7 +445,9 @@ class TestVectorBTEngineWalkForward:
     def test_walk_forward_insufficient_data(self, mock_engine: VectorBTEngine) -> None:
         """Test walk-forward with insufficient data."""
         prices = [Decimal("100" + str(i)) for i in range(5)]
-        timestamps = [datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=i) for i in range(5)]
+        timestamps = [
+            datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=i) for i in range(5)
+        ]
 
         with pytest.raises(ConfigError, match="prices must contain at least 10 points"):
             mock_engine.run_walk_forward(prices, timestamps)
@@ -431,7 +465,9 @@ class TestVectorBTEngineWalkForward:
         scores = [Decimal("0.6") for _ in range(20)]
         probs = [Decimal("0.6") for _ in range(20)]
 
-        result = mock_engine.run_walk_forward(extended_prices, extended_timestamps, scores, probs)
+        result = mock_engine.run_walk_forward(
+            extended_prices, extended_timestamps, scores, probs
+        )
 
         assert isinstance(result, WalkForwardResult)
         # With mocked vectorbt, trades may not execute, but API should work
@@ -442,26 +478,28 @@ class TestVectorBTEngineWalkForward:
 class TestVectorBTEngineMonteCarlo:
     """Test VectorBTEngine Monte Carlo simulation."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_engine(self) -> VectorBTEngine:
         """Create mock engine with mocked dependencies."""
         config = VectorBTConfig(num_simulations=10)  # Reduce for test speed
-        with patch("iatb.backtesting.vectorbt_engine.importlib.import_module") as mock_import:
+        with patch(
+            "iatb.backtesting.vectorbt_engine.importlib.import_module"
+        ) as mock_import:
             mock_import.return_value = MagicMock()
             return VectorBTEngine(config)
 
-    @pytest.fixture
+    @pytest.fixture()
     def monte_carlo_prices(self) -> list[Decimal]:
         """Generate price data for Monte Carlo."""
         return [Decimal("100" + str(i % 20)) for i in range(30)]
 
-    @pytest.fixture
+    @pytest.fixture()
     def monte_carlo_timestamps(self) -> list[datetime]:
         """Generate timestamps for Monte Carlo."""
         base = datetime(2024, 1, 1, 9, 15, tzinfo=UTC)
         return [base + timedelta(days=i) for i in range(30)]
 
-    @pytest.mark.slow
+    @pytest.mark.slow()
     def test_monte_carlo_basic(
         self,
         mock_engine: VectorBTEngine,
@@ -481,12 +519,14 @@ class TestVectorBTEngineMonteCarlo:
     def test_monte_carlo_insufficient_data(self, mock_engine: VectorBTEngine) -> None:
         """Test Monte Carlo with insufficient data."""
         prices = [Decimal("100" + str(i)) for i in range(5)]
-        timestamps = [datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=i) for i in range(5)]
+        timestamps = [
+            datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=i) for i in range(5)
+        ]
 
         with pytest.raises(ConfigError, match="prices must contain at least 10 points"):
             mock_engine.run_monte_carlo(prices, timestamps)
 
-    @pytest.mark.slow
+    @pytest.mark.slow()
     def test_monte_carlo_percentiles(
         self,
         mock_engine: VectorBTEngine,
@@ -517,10 +557,12 @@ class TestVectorBTEngineMonteCarlo:
 class TestVectorBTEngineEdgeCases:
     """Test VectorBTEngine edge cases."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_engine(self) -> VectorBTEngine:
         """Create mock engine with mocked dependencies."""
-        with patch("iatb.backtesting.vectorbt_engine.importlib.import_module") as mock_import:
+        with patch(
+            "iatb.backtesting.vectorbt_engine.importlib.import_module"
+        ) as mock_import:
             mock_import.return_value = MagicMock()
             return VectorBTEngine()
 
@@ -536,12 +578,16 @@ class TestVectorBTEngineEdgeCases:
         timestamps = [base + timedelta(days=i) for i in range(10)]
         prices = [Decimal("100" + str(i)) for i in range(10)]
 
-        with patch("iatb.backtesting.vectorbt_engine.create_mis_session_mask", return_value=[]):
+        with patch(
+            "iatb.backtesting.vectorbt_engine.create_mis_session_mask", return_value=[]
+        ):
             with pytest.raises(ConfigError, match="No valid trading sessions"):
                 mock_engine.run_backtest(prices, timestamps)
 
     @patch("iatb.backtesting.vectorbt_engine.create_mis_session_mask")
-    def test_all_trades_losing(self, mock_session: MagicMock, mock_engine: VectorBTEngine) -> None:
+    def test_all_trades_losing(
+        self, mock_session: MagicMock, mock_engine: VectorBTEngine
+    ) -> None:
         """Test backtest where all trades lose."""
         # Create decreasing prices with alternating signals
         prices = [Decimal(str(110 - i)) for i in range(10)]
@@ -559,7 +605,9 @@ class TestVectorBTEngineEdgeCases:
         assert isinstance(result.losing_trades, int)
 
     @patch("iatb.backtesting.vectorbt_engine.create_mis_session_mask")
-    def test_all_trades_winning(self, mock_session: MagicMock, mock_engine: VectorBTEngine) -> None:
+    def test_all_trades_winning(
+        self, mock_session: MagicMock, mock_engine: VectorBTEngine
+    ) -> None:
         """Test backtest where all trades win."""
         # Create increasing prices with alternating signals
         prices = [Decimal(str(100 + i)) for i in range(10)]
@@ -580,10 +628,12 @@ class TestVectorBTEngineEdgeCases:
 class TestVectorBTEngineDecimalPrecision:
     """Test Decimal precision in financial calculations."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_engine(self) -> VectorBTEngine:
         """Create mock engine with mocked dependencies."""
-        with patch("iatb.backtesting.vectorbt_engine.importlib.import_module") as mock_import:
+        with patch(
+            "iatb.backtesting.vectorbt_engine.importlib.import_module"
+        ) as mock_import:
             mock_import.return_value = MagicMock()
             return VectorBTEngine()
 
@@ -653,16 +703,20 @@ class TestVectorBTEngineDecimalPrecision:
 
         for attr in financial_attrs:
             value = getattr(result, attr)
-            assert isinstance(value, Decimal | int), f"{attr} is not Decimal/int: {type(value)}"
+            assert isinstance(
+                value, Decimal | int
+            ), f"{attr} is not Decimal/int: {type(value)}"
 
 
 class TestVectorBTEngineUTCTimezone:
     """Test UTC timezone handling."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_engine(self) -> VectorBTEngine:
         """Create mock engine with mocked dependencies."""
-        with patch("iatb.backtesting.vectorbt_engine.importlib.import_module") as mock_import:
+        with patch(
+            "iatb.backtesting.vectorbt_engine.importlib.import_module"
+        ) as mock_import:
             mock_import.return_value = MagicMock()
             return VectorBTEngine()
 

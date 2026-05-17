@@ -288,9 +288,7 @@ class ExperimentTracker:
 
             # Add custom metrics
             for key, value in metrics.custom_metrics.items():
-                if isinstance(value, Decimal):
-                    mlflow_metrics[key] = float(value)  # noqa: G7
-                elif isinstance(value, int | float):
+                if isinstance(value, Decimal) or isinstance(value, int | float):
                     mlflow_metrics[key] = float(value)  # noqa: G7
 
             mlflow.log_metrics(mlflow_metrics, step=step)
@@ -394,7 +392,9 @@ class HyperparameterOptimizer:
         """
         if self.config.direction not in ["minimize", "maximize"]:
             msg = f"Invalid direction: {self.config.direction}. Must be 'minimize' or 'maximize'"
-            _LOGGER.error("Invalid Optuna direction", extra={"direction": self.config.direction})
+            _LOGGER.error(
+                "Invalid Optuna direction", extra={"direction": self.config.direction}
+            )
             raise ConfigError(msg)
 
     def create_study(
@@ -498,7 +498,9 @@ class HyperparameterOptimizer:
         # Log objective value if tracker is available
         if tracker is not None and tracker.config.enable_tracking:
             tracker.log_metrics(
-                ExperimentMetrics(custom_metrics={"objective_value": Decimal(str(value))})
+                ExperimentMetrics(
+                    custom_metrics={"objective_value": Decimal(str(value))}
+                )
             )
             tracker.end_run()
 

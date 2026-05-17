@@ -17,7 +17,7 @@ from iatb.core.config_manager import (
 from iatb.fastapi_app import app
 
 
-@pytest.fixture
+@pytest.fixture()
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Create a test client with temporary config."""
     # Set up temporary config path
@@ -55,7 +55,9 @@ class TestGetWatchlistConfig:
         assert "config_path" in data
         assert data["message"] == "Watchlist configuration retrieved successfully"
 
-    def test_get_watchlist_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_watchlist_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test retrieving empty watchlist."""
         # Set up new config path that doesn't exist
         empty_config_path = tmp_path / "empty.toml"
@@ -184,7 +186,9 @@ class TestUpdateWatchlistConfig:
         # Total: 3 (nse with duplicates) + 1 (bse) + 1 (mcx) + 1 (cds) = 6
         assert data["total_symbols"] == 6
 
-    def test_update_creates_new_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_update_creates_new_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that update creates config file if it doesn't exist."""
         # Use a non-existent path
         new_config_path = tmp_path / "new_config" / "watchlist.toml"
@@ -209,7 +213,9 @@ class TestUpdateWatchlistConfig:
 class TestWatchlistApiEdgeCases:
     """Tests for edge cases and error handling."""
 
-    def test_get_watchlist_after_file_update(self, client: TestClient, tmp_path: Path) -> None:
+    def test_get_watchlist_after_file_update(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
         """Test that GET reflects file changes."""
         # Update via API
         client.put("/config/watchlist", json={"nse": ["UPDATED"]})
@@ -250,7 +256,9 @@ class TestWatchlistApiEdgeCases:
 
         assert response.status_code == 422  # Unprocessable Entity
 
-    def test_get_with_config_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_get_with_config_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Test GET when config manager raises error."""
         # Set up a path that will cause an error
         error_path = tmp_path / "error.toml"

@@ -24,13 +24,13 @@ from iatb.storage.audit_exporter import (
 from iatb.storage.sqlite_store import SQLiteStore, TradeAuditRecord
 
 
-@pytest.fixture
+@pytest.fixture()
 def temp_output_dir(tmp_path: Path) -> Path:
     """Create temporary directory for test exports."""
     return tmp_path / "audit_exports"
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_records() -> list[TradeAuditRecord]:
     """Create sample trade audit records for testing."""
     base_time = datetime(2025, 4, 25, 10, 30, 0, tzinfo=UTC)
@@ -62,13 +62,13 @@ def sample_records() -> list[TradeAuditRecord]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def empty_db_path(temp_output_dir: Path) -> Path:
     """Create empty SQLite database for testing."""
     return temp_output_dir / "test_trades.sqlite"
 
 
-@pytest.fixture
+@pytest.fixture()
 def store(empty_db_path: Path, sample_records: list[TradeAuditRecord]) -> SQLiteStore:
     """Create SQLite store with sample records."""
     store = SQLiteStore(db_path=empty_db_path, retention_years=7)
@@ -85,7 +85,7 @@ def store(empty_db_path: Path, sample_records: list[TradeAuditRecord]) -> SQLite
         _ = e
 
 
-@pytest.fixture
+@pytest.fixture()
 def export_config(temp_output_dir: Path) -> ExportConfig:
     """Create export configuration for testing."""
     return ExportConfig(
@@ -97,7 +97,7 @@ def export_config(temp_output_dir: Path) -> ExportConfig:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def exporter(store: SQLiteStore, export_config: ExportConfig) -> AuditExporter:
     """Create AuditExporter instance for testing."""
     return AuditExporter(store=store, config=export_config)
@@ -144,7 +144,9 @@ class TestAuditExportRecord:
     ) -> None:
         """Test conversion from TradeAuditRecord with metadata."""
         record = sample_records[0]
-        export_record = AuditExportRecord.from_trade_audit_record(record, include_metadata=True)
+        export_record = AuditExportRecord.from_trade_audit_record(
+            record, include_metadata=True
+        )
 
         assert export_record.trade_id == record.trade_id
         assert export_record.timestamp == record.timestamp.isoformat()
@@ -162,7 +164,9 @@ class TestAuditExportRecord:
     ) -> None:
         """Test conversion from TradeAuditRecord without metadata."""
         record = sample_records[0]
-        export_record = AuditExportRecord.from_trade_audit_record(record, include_metadata=False)
+        export_record = AuditExportRecord.from_trade_audit_record(
+            record, include_metadata=False
+        )
 
         assert export_record.metadata is None
 
@@ -201,7 +205,9 @@ class TestAuditExporter:
         assert output_dir.exists()
         assert output_dir.is_dir()
 
-    def test_export_csv_creates_file(self, exporter: AuditExporter, temp_output_dir: Path) -> None:
+    def test_export_csv_creates_file(
+        self, exporter: AuditExporter, temp_output_dir: Path
+    ) -> None:
         """Test CSV export creates file with correct content."""
         result = exporter.export_csv()
 
@@ -252,7 +258,9 @@ class TestAuditExporter:
         assert result.success is True
         assert result.records_exported == 1  # Only first record in range
 
-    def test_export_with_naive_start_time_raises_error(self, exporter: AuditExporter) -> None:
+    def test_export_with_naive_start_time_raises_error(
+        self, exporter: AuditExporter
+    ) -> None:
         """Test that naive datetime for start_time raises ConfigError."""
         naive_time = datetime(2025, 4, 25, 10, 0, 0)
 
@@ -261,7 +269,9 @@ class TestAuditExporter:
         assert result.success is False
         assert "timezone-aware" in result.error_message.lower()
 
-    def test_export_with_naive_end_time_raises_error(self, exporter: AuditExporter) -> None:
+    def test_export_with_naive_end_time_raises_error(
+        self, exporter: AuditExporter
+    ) -> None:
         """Test that naive datetime for end_time raises ConfigError."""
         naive_time = datetime(2025, 4, 25, 12, 0, 0)
 
@@ -315,7 +325,9 @@ class TestAuditExporter:
         assert "2500.50" in content
         assert "3500.75" in content
 
-    def test_csv_without_metadata(self, temp_output_dir: Path, store: SQLiteStore) -> None:
+    def test_csv_without_metadata(
+        self, temp_output_dir: Path, store: SQLiteStore
+    ) -> None:
         """Test CSV export without metadata column."""
         config = ExportConfig(
             output_dir=temp_output_dir / "exports",
@@ -407,7 +419,9 @@ class TestExportResult:
 
     def test_successful_result_requires_file_path(self) -> None:
         """Test that successful export requires file_path."""
-        with pytest.raises(ConfigError, match="file_path required for successful export"):
+        with pytest.raises(
+            ConfigError, match="file_path required for successful export"
+        ):
             ExportResult(
                 success=True,
                 file_path=None,
@@ -418,7 +432,9 @@ class TestExportResult:
 
     def test_failed_result_requires_error_message(self) -> None:
         """Test that failed export requires error_message."""
-        with pytest.raises(ConfigError, match="error_message required for failed export"):
+        with pytest.raises(
+            ConfigError, match="error_message required for failed export"
+        ):
             ExportResult(
                 success=False,
                 file_path=None,
@@ -516,7 +532,9 @@ class TestExportResult:
         assert data["records"] == []
         assert "export_timestamp" in data
 
-    def test_json_without_metadata(self, temp_output_dir: Path, store: SQLiteStore) -> None:
+    def test_json_without_metadata(
+        self, temp_output_dir: Path, store: SQLiteStore
+    ) -> None:
         """Test JSON export without metadata field."""
         config = ExportConfig(
             output_dir=temp_output_dir / "exports",
@@ -632,7 +650,9 @@ class TestExportResult:
 
         # Mock SimpleDocTemplate to raise exception
         try:
-            from reportlab.platypus import SimpleDocTemplate  # type: ignore[import-untyped]
+            from reportlab.platypus import (
+                SimpleDocTemplate,  # type: ignore[import-untyped]
+            )
 
             def mock_build_error(*args: object, **kwargs: object) -> object:  # noqa: ARG001
                 raise OSError("Disk full")
@@ -699,12 +719,16 @@ class TestExportResult:
             result = exporter.export_pdf()
 
             # Should succeed even with large metadata
-            assert result.success is True or result.success is False  # May fail without reportlab
+            assert (
+                result.success is True or result.success is False
+            )  # May fail without reportlab
         except Exception as e:
             # If reportlab not available, that's expected
             _ = e
 
-    def test_export_pdf_without_metadata(self, temp_output_dir: Path, store: SQLiteStore) -> None:
+    def test_export_pdf_without_metadata(
+        self, temp_output_dir: Path, store: SQLiteStore
+    ) -> None:
         """Test PDF export without metadata column."""
         config = ExportConfig(
             output_dir=temp_output_dir / "exports",
@@ -723,7 +747,9 @@ class TestExportResult:
             # If reportlab not available, that's expected
             _ = e
 
-    def test_export_with_all_formats(self, temp_output_dir: Path, store: SQLiteStore) -> None:
+    def test_export_with_all_formats(
+        self, temp_output_dir: Path, store: SQLiteStore
+    ) -> None:
         """Test exporting in all supported formats."""
         config = ExportConfig(output_dir=temp_output_dir / "exports")
         exporter = AuditExporter(store=store, config=config)

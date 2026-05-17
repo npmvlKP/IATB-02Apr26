@@ -58,13 +58,13 @@ torch.manual_seed(42)
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_timestamp():
     """UTC timestamp for testing."""
     return datetime(2026, 1, 5, 10, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_streamlit():
     """Mock streamlit module."""
     mock = MagicMock()
@@ -85,7 +85,7 @@ def mock_streamlit():
     return mock
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_plotly_go():
     """Mock plotly graph_objects module."""
     mock = MagicMock()
@@ -96,7 +96,7 @@ def mock_plotly_go():
     return mock
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_tab():
     """Mock tab object for streamlit tabs."""
     mock = MagicMock()
@@ -104,7 +104,7 @@ def mock_tab():
     return mock
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_market_data(utc_timestamp):
     """Valid market data for testing."""
     return MarketData(
@@ -124,7 +124,7 @@ def valid_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def gainer_market_data(utc_timestamp):
     """Market data for a gainer stock."""
     return MarketData(
@@ -144,7 +144,7 @@ def gainer_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def loser_market_data(utc_timestamp):
     """Market data for a loser stock."""
     return MarketData(
@@ -164,7 +164,7 @@ def loser_market_data(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_sentiment_strong():
     """Mock sentiment analyzer returning VERY_STRONG."""
     return create_mock_sentiment_analyzer(
@@ -177,7 +177,7 @@ def mock_sentiment_strong():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_sentiment_weak():
     """Mock sentiment analyzer returning weak sentiment."""
     return create_mock_sentiment_analyzer(
@@ -188,19 +188,19 @@ def mock_sentiment_weak():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_rl_positive():
     """Mock RL predictor returning positive exit probability."""
     return create_mock_rl_predictor(Decimal("0.65"))
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_rl_negative():
     """Mock RL predictor returning negative exit probability."""
     return create_mock_rl_predictor(Decimal("0.30"))
 
 
-@pytest.fixture
+@pytest.fixture()
 def scanner_with_mocks(mock_sentiment_strong, mock_rl_positive):
     """Scanner with all mocks configured."""
     return InstrumentScanner(
@@ -209,7 +209,7 @@ def scanner_with_mocks(mock_sentiment_strong, mock_rl_positive):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_health_matrix(utc_timestamp):
     """Sample health matrix for testing."""
     return build_instrument_health_matrix(
@@ -223,7 +223,7 @@ def sample_health_matrix(utc_timestamp):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ohlcv_data(utc_timestamp):
     """Sample OHLCV data for chart testing."""
     return [
@@ -493,7 +493,7 @@ class TestEvaluateFactorHealth:
 class TestComputeOverallHealth:
     """Tests for compute_overall_health function."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def healthy_factors(self):
         """Create healthy factor health objects."""
         return (
@@ -503,7 +503,7 @@ class TestComputeOverallHealth:
             FactorHealth("DRL", HealthStatus.HEALTHY, Decimal("0.65"), ""),
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def unhealthy_factors(self):
         """Create unhealthy factor health objects."""
         return (
@@ -518,7 +518,7 @@ class TestComputeOverallHealth:
             FactorHealth("DRL", HealthStatus.HEALTHY, Decimal("0.65"), ""),
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def mixed_factors(self):
         """Create mixed factor health objects."""
         return (
@@ -757,7 +757,9 @@ class TestRenderHealthMatrixTable:
 class TestRenderApprovedCharts:
     """Tests for render_approved_charts function."""
 
-    def test_no_approved_returns_empty(self, mock_streamlit, mock_plotly_go, utc_timestamp):
+    def test_no_approved_returns_empty(
+        self, mock_streamlit, mock_plotly_go, utc_timestamp
+    ):
         """Test no approved instruments returns empty list."""
         matrix = build_instrument_health_matrix(
             symbol="BADSTOCK",
@@ -820,10 +822,14 @@ class TestRenderInstrumentScannerTab:
         mock_streamlit.info.assert_called_once()
         mock_streamlit.header.assert_called_once_with("🔍 Instrument Scanner")
 
-    def test_with_result_renders_all(self, mock_streamlit, mock_plotly_go, sample_health_matrix):
+    def test_with_result_renders_all(
+        self, mock_streamlit, mock_plotly_go, sample_health_matrix
+    ):
         """Test with valid result renders all components."""
         scanner_result = build_scanner_health_result([sample_health_matrix])
-        result = render_instrument_scanner_tab(scanner_result, None, mock_streamlit, mock_plotly_go)
+        result = render_instrument_scanner_tab(
+            scanner_result, None, mock_streamlit, mock_plotly_go
+        )
         assert result["total_count"] == 1
         assert result["approved_count"] == 1
         assert len(result["table_symbols"]) == 1
@@ -858,7 +864,7 @@ class TestRenderInstrumentScannerTab:
 class TestConvertCandidatesToHealthMatrix:
     """Tests for convert_candidates_to_health_matrix function."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def scanner_candidate(self, utc_timestamp):
         """Create a scanner candidate for testing."""
         return ScannerCandidate(

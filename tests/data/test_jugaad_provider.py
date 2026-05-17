@@ -43,7 +43,7 @@ class _InvalidRowFrame:
 
 
 class TestJugaadProvider:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_uses_stock_df_payload(self) -> None:
         rows = [
             {
@@ -77,7 +77,7 @@ class TestJugaadProvider:
         assert len(bars) == 2
         assert bars[0].close == create_price("105")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_derives_from_latest_bar(self) -> None:
         rows = [
             {
@@ -89,11 +89,13 @@ class TestJugaadProvider:
                 "TOTTRDQTY": 1000,
             }
         ]
-        provider = JugaadProvider(stock_df_loader=lambda: (lambda **_: _FakeFrame(rows)))
+        provider = JugaadProvider(
+            stock_df_loader=lambda: (lambda **_: _FakeFrame(rows))
+        )
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
         assert ticker.last == create_price("105")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_non_nse_exchange_raises(self) -> None:
         provider = JugaadProvider(stock_df_loader=lambda: (lambda **_: _FakeFrame([])))
         with pytest.raises(ConfigError, match="only supports NSE"):
@@ -104,7 +106,7 @@ class TestJugaadProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_non_daily_timeframe_raises(self) -> None:
         provider = JugaadProvider(stock_df_loader=lambda: (lambda **_: _FakeFrame([])))
         with pytest.raises(ConfigError, match="supports only 1d timeframe"):
@@ -115,7 +117,7 @@ class TestJugaadProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_non_positive_limit_raises(self) -> None:
         provider = JugaadProvider(stock_df_loader=lambda: (lambda **_: _FakeFrame([])))
         with pytest.raises(ConfigError, match="limit must be positive"):
@@ -126,15 +128,17 @@ class TestJugaadProvider:
                 limit=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_no_market_data_raises(self) -> None:
         provider = JugaadProvider(stock_df_loader=lambda: (lambda **_: _FakeFrame([])))
         with pytest.raises(ConfigError, match="No market data found"):
             await provider.get_ticker(symbol="SBIN", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_invalid_row_payload_raises(self) -> None:
-        provider = JugaadProvider(stock_df_loader=lambda: (lambda **_: _InvalidRowFrame()))
+        provider = JugaadProvider(
+            stock_df_loader=lambda: (lambda **_: _InvalidRowFrame())
+        )
         with pytest.raises(ConfigError, match="rows must be mapping-like"):
             await provider.get_ohlcv(
                 symbol="SBIN",
@@ -165,7 +169,7 @@ class TestJugaadProvider:
         with pytest.raises(ConfigError, match="stock_df is not available"):
             JugaadProvider._default_stock_df_loader()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_vectorized_extraction_large_dataset_performance(self) -> None:
         """Test that vectorized extraction handles large datasets efficiently.
 
@@ -210,9 +214,11 @@ class TestJugaadProvider:
 
         # Verify performance (should be very fast with vectorized approach)
         # Allow generous margin for test environment variations
-        assert elapsed_ms < 100, f"Vectorized extraction took {elapsed_ms:.2f}ms, expected <100ms"
+        assert (
+            elapsed_ms < 100
+        ), f"Vectorized extraction took {elapsed_ms:.2f}ms, expected <100ms"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_vectorized_extraction_handles_alternate_column_names(self) -> None:
         """Test that vectorized extraction handles alternate column naming conventions."""
         rows = [
@@ -249,7 +255,7 @@ class TestJugaadProvider:
         assert bars[0].close == create_price("105")
         assert bars[1].close == create_price("110")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fallback_to_iterrows_when_to_dict_fails(self) -> None:
         """Test that code falls back to iterrows() when to_dict() fails."""
 
@@ -303,7 +309,7 @@ class TestJugaadProvider:
         assert bars[0].close == create_price("105")
         assert bars[1].close == create_price("110")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_list_input_still_supported(self) -> None:
         """Test that list input (for testing) is still supported after vectorization."""
         rows = [

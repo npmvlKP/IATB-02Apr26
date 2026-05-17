@@ -8,14 +8,14 @@ from iatb.core.exceptions import ConfigError
 from iatb.risk.kill_switch import KillSwitch, KillSwitchState
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_executor():
     executor = MagicMock()
     executor.cancel_all.return_value = 3
     return executor
 
 
-@pytest.fixture
+@pytest.fixture()
 def kill_switch(mock_executor):
     return KillSwitch(executor=mock_executor)
 
@@ -163,7 +163,9 @@ class TestDefaultEngageCallback:
             ks = KillSwitch(executor=mock_executor)
             ks.engage("test reason", now)
 
-            mock_alerter.send_kill_switch_alert.assert_called_once_with("test reason", now)
+            mock_alerter.send_kill_switch_alert.assert_called_once_with(
+                "test reason", now
+            )
 
     def test_default_callback_handles_errors(self, mock_executor):
         from unittest.mock import patch

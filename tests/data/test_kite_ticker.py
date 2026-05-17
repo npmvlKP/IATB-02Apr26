@@ -184,7 +184,7 @@ class TestConnectionStats:
 class TestKiteTickerFeedBasic:
     """Basic tests for deprecated KiteTickerFeed alias."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_feed_initialization(self) -> None:
         """Test feed initialization with valid parameters."""
         feed = KiteTickerFeed(  # noqa: S106
@@ -197,39 +197,43 @@ class TestKiteTickerFeedBasic:
         assert not feed.is_connected()
         assert not feed.is_running()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_api_key_raises(self) -> None:
         """Test empty API key raises ConfigError."""
         with pytest.raises(ConfigError, match="api_key cannot be empty"):
             KiteTickerFeed(api_key="", access_token="test_access_token")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_access_token_raises(self) -> None:
         """Test empty access token raises ConfigError."""
         with pytest.raises(ConfigError, match="access_token cannot be empty"):
             KiteTickerFeed(api_key="test_api_key", access_token="")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_max_reconnect_raises(self) -> None:
         """Test invalid max_reconnect_attempts raises ConfigError."""
-        with pytest.raises(ConfigError, match="max_reconnect_attempts must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_reconnect_attempts must be positive"
+        ):
             KiteTickerFeed(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 max_reconnect_attempts=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_initial_reconnect_delay_raises(self) -> None:
         """Test invalid retry_delay_seconds raises ConfigError."""
-        with pytest.raises(ConfigError, match="retry_delay_seconds must be non-negative"):
+        with pytest.raises(
+            ConfigError, match="retry_delay_seconds must be non-negative"
+        ):
             KiteTickerFeed(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 retry_delay_seconds=-1.0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_max_reconnect_delay_raises(self) -> None:
         """Test invalid reconnect_backoff_max raises ConfigError."""
         with pytest.raises(ConfigError, match="reconnect_backoff_max must be positive"):
@@ -239,17 +243,19 @@ class TestKiteTickerFeedBasic:
                 reconnect_backoff_max=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_reconnect_backoff_raises(self) -> None:
         """Test invalid reconnect_backoff_base raises ConfigError."""
-        with pytest.raises(ConfigError, match="reconnect_backoff_base must be greater than 1.0"):
+        with pytest.raises(
+            ConfigError, match="reconnect_backoff_base must be greater than 1.0"
+        ):
             KiteTickerFeed(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 reconnect_backoff_base=1.0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_establishes_connection(self) -> None:
         """Test connect establishes WebSocket connection."""
         feed = KiteTickerFeed(  # noqa: S106
@@ -262,7 +268,7 @@ class TestKiteTickerFeedBasic:
         assert feed.is_connected()
         assert feed._ticker_instance is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_already_connected_noops(self) -> None:
         """Test connect when already connected is a no-op."""
         feed = KiteTickerFeed(  # noqa: S106
@@ -276,7 +282,7 @@ class TestKiteTickerFeedBasic:
         await feed.connect()
         assert feed._ticker_instance is first_instance
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_disconnect_cleans_up(self) -> None:
         """Test disconnect cleans up resources."""
         feed = KiteTickerFeed(  # noqa: S106
@@ -289,7 +295,7 @@ class TestKiteTickerFeedBasic:
         await feed.disconnect()
         assert not feed.is_connected()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_set_callback(self) -> None:
         """Test setting callback function."""
         feed = KiteTickerFeed(  # noqa: S106
@@ -304,7 +310,7 @@ class TestKiteTickerFeedBasic:
         feed.set_callback(callback)
         assert feed._callback is callback
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_stats(self) -> None:
         """Test get_stats returns connection statistics."""
         feed = KiteTickerFeed(  # noqa: S106
@@ -316,21 +322,21 @@ class TestKiteTickerFeedBasic:
         stats = feed.get_stats()
         assert isinstance(stats, ConnectionStats)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_from_env_missing_api_key(self) -> None:
         """Test from_env with missing API key raises ConfigError."""
         with patch.dict("os.environ", {}, clear=True):
             with pytest.raises(ConfigError, match="ZERODHA_API_KEY.*required"):
                 KiteTickerFeed.from_env()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_from_env_missing_access_token(self) -> None:
         """Test from_env with missing access token raises ConfigError."""
         with patch.dict("os.environ", {"ZERODHA_API_KEY": "test_key"}, clear=True):
             with pytest.raises(ConfigError, match="ZERODHA_ACCESS_TOKEN.*required"):
                 KiteTickerFeed.from_env()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_from_env_creates_instance(self) -> None:
         """Test from_env creates feed instance."""
         env_vars = {

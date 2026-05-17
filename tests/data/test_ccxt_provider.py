@@ -73,7 +73,7 @@ class _InvalidNumericTickerClient(_FakeCCXTClient):
 
 
 class TestCCXTProvider:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_maps_ccxt_rows(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())
         bars = await provider.get_ohlcv(
@@ -86,14 +86,14 @@ class TestCCXTProvider:
         assert bars[0].open == create_price("100")
         assert bars[1].close == create_price("102")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_maps_payload(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())
         ticker = await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
         assert ticker.bid == create_price("101")
         assert ticker.ask == create_price("102")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_unsupported_exchange_raises(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())
         with pytest.raises(ConfigError, match="Unsupported exchange"):
@@ -104,7 +104,7 @@ class TestCCXTProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_rejects_invalid_limit(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())
         with pytest.raises(ConfigError, match="limit must be positive"):
@@ -115,7 +115,7 @@ class TestCCXTProvider:
                 limit=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_invalid_row_shape_raises(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _InvalidRowsClient())
         with pytest.raises(ConfigError, match="CCXT OHLCV row must include"):
@@ -126,21 +126,23 @@ class TestCCXTProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_non_mapping_payload_raises(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _NonMappingTickerClient())
         with pytest.raises(ConfigError, match="must be mapping-like"):
             await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_missing_last_raises(self) -> None:
         provider = CCXTProvider(exchange_factory=lambda _: _MissingLastTickerClient())
         with pytest.raises(ConfigError, match="missing last/close"):
             await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_invalid_numeric_payload_raises(self) -> None:
-        provider = CCXTProvider(exchange_factory=lambda _: _InvalidNumericTickerClient())
+        provider = CCXTProvider(
+            exchange_factory=lambda _: _InvalidNumericTickerClient()
+        )
         with pytest.raises(ConfigError, match="numeric-compatible"):
             await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
 
@@ -287,7 +289,7 @@ class TestCCXTNumericCoercion:
 class TestCCXTTickers:
     """Test ticker handling edge cases."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_fallback_to_close(self) -> None:
         """Test ticker falls back to close when last is missing."""
 
@@ -299,7 +301,7 @@ class TestCCXTTickers:
         ticker = await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
         assert ticker.last == create_price("101.5")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_fallback_bid_to_last(self) -> None:
         """Test ticker falls back to last when bid is missing."""
 
@@ -311,7 +313,7 @@ class TestCCXTTickers:
         ticker = await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
         assert ticker.bid == create_price("101.5")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_fallback_ask_to_last(self) -> None:
         """Test ticker falls back to last when ask is missing."""
 
@@ -323,7 +325,7 @@ class TestCCXTTickers:
         ticker = await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
         assert ticker.ask == create_price("101.5")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_fallback_volume_to_zero(self) -> None:
         """Test ticker falls back to zero when volume is missing."""
 
@@ -335,7 +337,7 @@ class TestCCXTTickers:
         ticker = await provider.get_ticker(symbol="BTCUSDT", exchange=Exchange.BINANCE)
         assert ticker.volume_24h == create_price("0")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_uses_quote_volume(self) -> None:
         """Test ticker uses quoteVolume when baseVolume is missing."""
 
@@ -356,7 +358,7 @@ class TestCCXTTickers:
 class TestCCXTOHLCVEncoding:
     """Test OHLCV data encoding and normalization."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_handles_empty_response(self) -> None:
         """Test empty OHLCV response is handled."""
 
@@ -379,7 +381,7 @@ class TestCCXTOHLCVEncoding:
         )
         assert len(bars) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_respects_limit(self) -> None:
         """Test that limit parameter is respected."""
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())
@@ -391,14 +393,21 @@ class TestCCXTOHLCVEncoding:
         )
         assert len(bars) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_handles_large_dataset(self) -> None:
         """Test handling of large OHLCV dataset."""
 
         class _LargeDatasetClient(_FakeCCXTClient):
             def __init__(self) -> None:
                 self._rows = [
-                    [1735722900000 + i * 60000, 100 + i, 105 + i, 95 + i, 101 + i, 1000 + i * 100]
+                    [
+                        1735722900000 + i * 60000,
+                        100 + i,
+                        105 + i,
+                        95 + i,
+                        101 + i,
+                        1000 + i * 100,
+                    ]
                     for i in range(100)
                 ]
 
@@ -411,7 +420,7 @@ class TestCCXTOHLCVEncoding:
         )
         assert len(bars) == 100
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_handles_since_parameter(self) -> None:
         """Test that since parameter filters data."""
         from datetime import UTC, datetime
@@ -432,7 +441,7 @@ class TestCCXTOHLCVEncoding:
 class TestCCXTCoindCXIntegration:
     """Test CoinDCX exchange integration."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_coindcx(self) -> None:
         """Test OHLCV fetch from CoinDCX."""
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())
@@ -444,7 +453,7 @@ class TestCCXTCoindCXIntegration:
         )
         assert len(bars) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_coindcx(self) -> None:
         """Test ticker fetch from CoinDCX."""
         provider = CCXTProvider(exchange_factory=lambda _: _FakeCCXTClient())

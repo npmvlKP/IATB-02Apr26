@@ -15,7 +15,7 @@ from iatb.risk.daily_loss_guard import (
 from iatb.risk.kill_switch import KillSwitch
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_executor():
     """Create a mock executor for testing."""
     executor = MagicMock()
@@ -23,7 +23,7 @@ def mock_executor():
     return executor
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_kill_switch(mock_executor):
     """Create a mock kill switch for testing."""
     ks = KillSwitch(executor=mock_executor)
@@ -31,7 +31,7 @@ def mock_kill_switch(mock_executor):
     return ks
 
 
-@pytest.fixture
+@pytest.fixture()
 def daily_loss_guard(mock_kill_switch):
     """Create a daily loss guard with default configuration."""
     return DailyLossGuard(

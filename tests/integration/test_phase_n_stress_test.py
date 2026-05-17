@@ -127,7 +127,11 @@ class BulkDataProvider(DataProvider):
         result: dict[str, list[OHLCVBar]] = {}
         for sym in symbols:
             result[sym] = await self.get_ohlcv(
-                symbol=sym, exchange=exchange, timeframe=timeframe, since=since, limit=limit
+                symbol=sym,
+                exchange=exchange,
+                timeframe=timeframe,
+                since=since,
+                limit=limit,
             )
         return result
 
@@ -211,7 +215,9 @@ class TestStress50Symbols:
     def test_scan_50_symbols_with_custom_data(self) -> None:
         symbols = _generate_symbols(55)
         custom_data = _generate_market_data(symbols)
-        sentiment = create_mock_sentiment_analyzer({s: (Decimal("0.8"), True) for s in symbols})
+        sentiment = create_mock_sentiment_analyzer(
+            {s: (Decimal("0.8"), True) for s in symbols}
+        )
         rl = create_mock_rl_predictor(probability=Decimal("0.7"))
         scanner = InstrumentScanner(
             config=ScannerConfig(top_n=10, min_volume_ratio=Decimal("1.0")),
@@ -226,13 +232,15 @@ class TestStress50Symbols:
         assert result.total_scanned == 55
         assert elapsed < 30.0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_data_provider_50_symbols(self) -> None:
         symbols = _generate_symbols(55)
         provider = BulkDataProvider(len(symbols))
         start = time.perf_counter()
         tasks = [
-            provider.get_ohlcv(symbol=sym, exchange=Exchange.NSE, timeframe="1d", limit=20)
+            provider.get_ohlcv(
+                symbol=sym, exchange=Exchange.NSE, timeframe="1d", limit=20
+            )
             for sym in symbols
         ]
         results = await asyncio.gather(*tasks)
@@ -246,7 +254,8 @@ class TestStress50Symbols:
         from iatb.selection.ranking import RankingConfig, rank_and_select
 
         candidates = [
-            (f"SYM{i:03d}", Exchange.NSE, Decimal(str(0.9 - i * 0.01)), {}) for i in range(55)
+            (f"SYM{i:03d}", Exchange.NSE, Decimal(str(0.9 - i * 0.01)), {})
+            for i in range(55)
         ]
         result = rank_and_select(
             candidates,
@@ -389,11 +398,13 @@ class TestStressAuditThroughput:
 class TestStressCombinedPipeline:
     """Stress test: Combined pipeline under load."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_full_pipeline_50_symbols_100_orders(self, tmp_path: Path) -> None:
         symbols = _generate_symbols(55)
         custom_data = _generate_market_data(symbols)
-        sentiment = create_mock_sentiment_analyzer({s: (Decimal("0.8"), True) for s in symbols})
+        sentiment = create_mock_sentiment_analyzer(
+            {s: (Decimal("0.8"), True) for s in symbols}
+        )
         rl = create_mock_rl_predictor(probability=Decimal("0.7"))
         scanner = InstrumentScanner(
             config=ScannerConfig(top_n=20, min_volume_ratio=Decimal("1.0")),
@@ -402,7 +413,9 @@ class TestStressCombinedPipeline:
             rl_predictor=rl,
             symbols=symbols,
         )
-        scan_result = scanner.scan(direction=SortDirection.GAINERS, custom_data=custom_data)
+        scan_result = scanner.scan(
+            direction=SortDirection.GAINERS, custom_data=custom_data
+        )
         assert scan_result.total_scanned == 55
         executor = HighThroughputExecutor()
         om = _create_stress_order_manager(

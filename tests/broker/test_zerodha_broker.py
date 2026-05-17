@@ -30,7 +30,7 @@ from iatb.broker import (
 from iatb.core.exceptions import ConfigError
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_token_manager() -> ZerodhaTokenManager:
     """Create a mock token manager."""
     manager = MagicMock(spec=ZerodhaTokenManager)
@@ -45,7 +45,7 @@ def mock_token_manager() -> ZerodhaTokenManager:
     return manager
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_kite_client() -> MagicMock:
     """Create a mock KiteConnect client."""
     client = MagicMock()
@@ -73,8 +73,10 @@ def mock_kite_client() -> MagicMock:
     return client
 
 
-@pytest.fixture
-def broker(mock_token_manager: ZerodhaTokenManager, mock_kite_client: MagicMock) -> ZerodhaBroker:
+@pytest.fixture()
+def broker(
+    mock_token_manager: ZerodhaTokenManager, mock_kite_client: MagicMock
+) -> ZerodhaBroker:
     """Create a ZerodhaBroker instance with mocked dependencies."""
     broker = ZerodhaBroker(token_manager=mock_token_manager)
     broker._client = mock_kite_client
@@ -85,7 +87,9 @@ def broker(mock_token_manager: ZerodhaTokenManager, mock_kite_client: MagicMock)
 class TestZerodhaBrokerInit:
     """Test ZerodhaBroker initialization."""
 
-    def test_init_with_token_manager(self, mock_token_manager: ZerodhaTokenManager) -> None:
+    def test_init_with_token_manager(
+        self, mock_token_manager: ZerodhaTokenManager
+    ) -> None:
         """Test successful initialization with token manager."""
         broker = ZerodhaBroker(token_manager=mock_token_manager)
         assert broker._token_manager == mock_token_manager
@@ -97,27 +101,33 @@ class TestZerodhaBrokerInit:
         with pytest.raises(ValueError, match="token_manager is required"):
             ZerodhaBroker(token_manager=None)  # type: ignore[arg-type]
 
-    def test_init_with_custom_rate_limiter(self, mock_token_manager: ZerodhaTokenManager) -> None:
+    def test_init_with_custom_rate_limiter(
+        self, mock_token_manager: ZerodhaTokenManager
+    ) -> None:
         """Test initialization with custom rate limiter."""
         from iatb.data.rate_limiter import RateLimiter
 
         custom_limiter = RateLimiter(requests_per_second=5.0, burst_capacity=20)
-        broker = ZerodhaBroker(token_manager=mock_token_manager, rate_limiter=custom_limiter)
+        broker = ZerodhaBroker(
+            token_manager=mock_token_manager, rate_limiter=custom_limiter
+        )
         assert broker._rate_limiter == custom_limiter
 
 
 class TestZerodhaBrokerAuthentication:
     """Test authentication methods."""
 
-    @pytest.mark.asyncio
-    async def test_authenticate_success(self, mock_token_manager: ZerodhaTokenManager) -> None:
+    @pytest.mark.asyncio()
+    async def test_authenticate_success(
+        self, mock_token_manager: ZerodhaTokenManager
+    ) -> None:
         """Test successful authentication."""
         broker = ZerodhaBroker(token_manager=mock_token_manager)
         await broker.authenticate()
         assert broker._authenticated is True
         assert broker._client is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_authenticate_without_token_raises_error(
         self, mock_token_manager: ZerodhaTokenManager
     ) -> None:
@@ -127,7 +137,7 @@ class TestZerodhaBrokerAuthentication:
         with pytest.raises(ConfigError, match="No access token available"):
             await broker.authenticate()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ensure_authenticated_calls_authenticate(
         self, mock_token_manager: ZerodhaTokenManager
     ) -> None:
@@ -141,7 +151,7 @@ class TestZerodhaBrokerAuthentication:
 class TestZerodhaBrokerPlaceOrder:
     """Test place_order method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_market_order(self, broker: ZerodhaBroker) -> None:
         """Test placing a market order."""
         order = await broker.place_order(
@@ -159,7 +169,7 @@ class TestZerodhaBrokerPlaceOrder:
         assert order.quantity == 10
         assert order.status == OrderStatus.PENDING
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_limit_order(self, broker: ZerodhaBroker) -> None:
         """Test placing a limit order."""
         order = await broker.place_order(
@@ -173,7 +183,7 @@ class TestZerodhaBrokerPlaceOrder:
         assert order.price == Decimal("1500.50")
         assert order.order_type == OrderType.LIMIT
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_stop_loss_order(self, broker: ZerodhaBroker) -> None:
         """Test placing a stop loss order."""
         order = await broker.place_order(
@@ -188,7 +198,7 @@ class TestZerodhaBrokerPlaceOrder:
         assert order.trigger_price == Decimal("3450.00")
         assert order.order_type == OrderType.STOP_LOSS
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_limit_order_without_price_raises_error(
         self, broker: ZerodhaBroker
     ) -> None:
@@ -202,12 +212,14 @@ class TestZerodhaBrokerPlaceOrder:
                 quantity=10,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_stop_loss_without_trigger_price_raises_error(
         self, broker: ZerodhaBroker
     ) -> None:
         """Test that placing stop loss order without trigger price raises error."""
-        with pytest.raises(ValueError, match="trigger_price is required for STOP_LOSS orders"):
+        with pytest.raises(
+            ValueError, match="trigger_price is required for STOP_LOSS orders"
+        ):
             await broker.place_order(
                 symbol="RELIANCE",
                 exchange=Exchange.NSE,
@@ -217,7 +229,7 @@ class TestZerodhaBrokerPlaceOrder:
                 price=Decimal("2500.00"),
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_with_invalid_quantity_raises_error(
         self, broker: ZerodhaBroker
     ) -> None:
@@ -231,8 +243,10 @@ class TestZerodhaBrokerPlaceOrder:
                 quantity=0,
             )
 
-    @pytest.mark.asyncio
-    async def test_place_order_with_different_product_types(self, broker: ZerodhaBroker) -> None:
+    @pytest.mark.asyncio()
+    async def test_place_order_with_different_product_types(
+        self, broker: ZerodhaBroker
+    ) -> None:
         """Test placing orders with different product types."""
         for product_type in [
             ProductType.INTRADAY,
@@ -253,7 +267,7 @@ class TestZerodhaBrokerPlaceOrder:
 class TestZerodhaBrokerCancelOrder:
     """Test cancel_order method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cancel_order_success(self, broker: ZerodhaBroker) -> None:
         """Test successful order cancellation."""
         broker._client.orders.return_value = [
@@ -277,8 +291,10 @@ class TestZerodhaBrokerCancelOrder:
         assert order.order_id == "ORD123456"
         assert order.status == OrderStatus.CANCELLED
 
-    @pytest.mark.asyncio
-    async def test_cancel_order_without_order_id_raises_error(self, broker: ZerodhaBroker) -> None:
+    @pytest.mark.asyncio()
+    async def test_cancel_order_without_order_id_raises_error(
+        self, broker: ZerodhaBroker
+    ) -> None:
         """Test that canceling without order_id raises error."""
         with pytest.raises(ValueError, match="order_id is required"):
             await broker.cancel_order(order_id="")  # type: ignore[arg-type]
@@ -287,14 +303,14 @@ class TestZerodhaBrokerCancelOrder:
 class TestZerodhaBrokerGetPositions:
     """Test get_positions method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_positions_empty(self, broker: ZerodhaBroker) -> None:
         """Test getting positions when none exist."""
         broker._client.positions.return_value = {"day": []}
         positions = await broker.get_positions()
         assert positions == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_positions_with_data(self, broker: ZerodhaBroker) -> None:
         """Test getting positions with data."""
         broker._client.positions.return_value = {
@@ -320,8 +336,10 @@ class TestZerodhaBrokerGetPositions:
         assert positions[0].average_price == Decimal("2500.0")
         assert positions[0].pnl == Decimal("200.0")
 
-    @pytest.mark.asyncio
-    async def test_get_positions_filters_zero_quantity(self, broker: ZerodhaBroker) -> None:
+    @pytest.mark.asyncio()
+    async def test_get_positions_filters_zero_quantity(
+        self, broker: ZerodhaBroker
+    ) -> None:
         """Test that positions with zero quantity are filtered out."""
         broker._client.positions.return_value = {
             "day": [
@@ -355,14 +373,14 @@ class TestZerodhaBrokerGetPositions:
 class TestZerodhaBrokerGetOrders:
     """Test get_orders method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_orders_empty(self, broker: ZerodhaBroker) -> None:
         """Test getting orders when none exist."""
         broker._client.orders.return_value = []
         orders = await broker.get_orders()
         assert orders == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_orders_with_data(self, broker: ZerodhaBroker) -> None:
         """Test getting orders with data."""
         broker._client.orders.return_value = [
@@ -394,7 +412,7 @@ class TestZerodhaBrokerGetOrders:
 class TestZerodhaBrokerGetMargins:
     """Test get_margins method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_margins(self, broker: ZerodhaBroker) -> None:
         """Test getting margin details."""
         margins = await broker.get_margins()
@@ -407,7 +425,7 @@ class TestZerodhaBrokerGetMargins:
 class TestZerodhaBrokerGetOrderHistory:
     """Test get_order_history method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_order_history(self, broker: ZerodhaBroker) -> None:
         """Test getting order history."""
         broker._client.order_history.return_value = [
@@ -417,7 +435,7 @@ class TestZerodhaBrokerGetOrderHistory:
         history = await broker.get_order_history(order_id="ORD123456")
         assert len(history) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_order_history_without_order_id_raises_error(
         self, broker: ZerodhaBroker
     ) -> None:
@@ -429,7 +447,7 @@ class TestZerodhaBrokerGetOrderHistory:
 class TestZerodhaBrokerGetHoldings:
     """Test get_holdings method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_holdings(self, broker: ZerodhaBroker) -> None:
         """Test getting holdings."""
         broker._client.holdings.return_value = [
@@ -450,7 +468,7 @@ class TestZerodhaBrokerGetHoldings:
 class TestZerodhaBrokerModifyOrder:
     """Test modify_order method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_modify_order_price(self, broker: ZerodhaBroker) -> None:
         """Test modifying order price."""
         broker._client.orders.return_value = [
@@ -470,10 +488,12 @@ class TestZerodhaBrokerModifyOrder:
                 "average_price": "",
             }
         ]
-        order = await broker.modify_order(order_id="ORD123456", price=Decimal("2550.00"))
+        order = await broker.modify_order(
+            order_id="ORD123456", price=Decimal("2550.00")
+        )
         assert order.price == Decimal("2550.0")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_modify_order_quantity(self, broker: ZerodhaBroker) -> None:
         """Test modifying order quantity."""
         broker._client.orders.return_value = [
@@ -496,7 +516,7 @@ class TestZerodhaBrokerModifyOrder:
         order = await broker.modify_order(order_id="ORD123456", quantity=20)
         assert order.quantity == 20
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_modify_order_with_invalid_quantity_raises_error(
         self, broker: ZerodhaBroker
     ) -> None:
@@ -504,8 +524,10 @@ class TestZerodhaBrokerModifyOrder:
         with pytest.raises(ValueError, match="quantity must be positive"):
             await broker.modify_order(order_id="ORD123456", quantity=0)
 
-    @pytest.mark.asyncio
-    async def test_modify_order_without_order_id_raises_error(self, broker: ZerodhaBroker) -> None:
+    @pytest.mark.asyncio()
+    async def test_modify_order_without_order_id_raises_error(
+        self, broker: ZerodhaBroker
+    ) -> None:
         """Test that modifying without order_id raises error."""
         with pytest.raises(ValueError, match="order_id is required"):
             await broker.modify_order(order_id="", price=Decimal("2500.00"))  # type: ignore[arg-type]
@@ -514,15 +536,17 @@ class TestZerodhaBrokerModifyOrder:
 class TestZerodhaBrokerGetQuote:
     """Test get_quote method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_quote(self, broker: ZerodhaBroker) -> None:
         """Test getting quote for a symbol."""
         quote = await broker.get_quote(symbol="RELIANCE", exchange=Exchange.NSE)
         assert quote["last_price"] == 2500.0
         assert quote["instrument_token"] == "256265"
 
-    @pytest.mark.asyncio
-    async def test_get_quote_without_symbol_raises_error(self, broker: ZerodhaBroker) -> None:
+    @pytest.mark.asyncio()
+    async def test_get_quote_without_symbol_raises_error(
+        self, broker: ZerodhaBroker
+    ) -> None:
         """Test that getting quote without symbol raises error."""
         with pytest.raises(ValueError, match="symbol is required"):
             await broker.get_quote(symbol="", exchange=Exchange.NSE)  # type: ignore[arg-type]
@@ -572,8 +596,13 @@ class TestZerodhaBrokerTypeConversions:
 
     def test_parse_transaction_type_from_str(self) -> None:
         """Test string to transaction type enum conversion."""
-        assert ZerodhaBroker._parse_transaction_type_from_str("BUY") == TransactionType.BUY
-        assert ZerodhaBroker._parse_transaction_type_from_str("SELL") == TransactionType.SELL
+        assert (
+            ZerodhaBroker._parse_transaction_type_from_str("BUY") == TransactionType.BUY
+        )
+        assert (
+            ZerodhaBroker._parse_transaction_type_from_str("SELL")
+            == TransactionType.SELL
+        )
 
     def test_parse_product_type_from_str(self) -> None:
         """Test string to product type enum conversion."""
@@ -584,11 +613,13 @@ class TestZerodhaBrokerTypeConversions:
 class TestZerodhaBrokerErrorHandling:
     """Test error handling scenarios."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_api_failure(self, broker: ZerodhaBroker) -> None:
         """Test handling of API failure when placing order."""
         broker._client.place_order.return_value = {}
-        with pytest.raises(ConfigError, match="Non-retryable error: Failed to place order"):
+        with pytest.raises(
+            ConfigError, match="Non-retryable error: Failed to place order"
+        ):
             await broker.place_order(
                 symbol="RELIANCE",
                 exchange=Exchange.NSE,
@@ -597,16 +628,20 @@ class TestZerodhaBrokerErrorHandling:
                 quantity=10,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cancel_order_api_failure(self, broker: ZerodhaBroker) -> None:
         """Test handling of API failure when canceling order."""
         broker._client.cancel_order.return_value = {}
-        with pytest.raises(ConfigError, match="Non-retryable error: Failed to cancel order"):
+        with pytest.raises(
+            ConfigError, match="Non-retryable error: Failed to cancel order"
+        ):
             await broker.cancel_order(order_id="ORD123456")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_quote_empty_response(self, broker: ZerodhaBroker) -> None:
         """Test handling of empty quote response."""
         broker._client.quote.return_value = {}
-        with pytest.raises(ConfigError, match="Non-retryable error: No quote data for RELIANCE"):
+        with pytest.raises(
+            ConfigError, match="Non-retryable error: No quote data for RELIANCE"
+        ):
             await broker.get_quote(symbol="RELIANCE", exchange=Exchange.NSE)

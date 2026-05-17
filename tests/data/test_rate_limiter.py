@@ -55,7 +55,7 @@ class TestRateLimiter:
         with pytest.raises(ValueError, match="burst_capacity must be positive"):
             RateLimiter(burst_capacity=-5)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_acquire_release_single(self) -> None:
         """Test acquire and release for single request."""
         limiter = RateLimiter(requests_per_second=1.0, burst_capacity=1)
@@ -68,7 +68,7 @@ class TestRateLimiter:
         await asyncio.sleep(0.01)
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_requests_within_burst(self) -> None:
         """Test concurrent requests within burst capacity."""
         limiter = RateLimiter(requests_per_second=1.0, burst_capacity=5)
@@ -83,7 +83,7 @@ class TestRateLimiter:
         results = await asyncio.gather(*[make_request(i) for i in range(5)])
         assert sorted(results) == [0, 1, 2, 3, 4]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_token_refill_over_time(self) -> None:
         """Test tokens refill over time."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=2)
@@ -113,7 +113,7 @@ class TestRateLimiter:
         limiter.release()
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limit_enforcement(self) -> None:
         """Test that rate limit is enforced over time."""
         limiter = RateLimiter(requests_per_second=2.0, burst_capacity=2)
@@ -132,7 +132,7 @@ class TestRateLimiter:
         # (2 in burst, then wait for 2 more tokens)
         assert elapsed >= 0.9  # Allow some tolerance
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_execute_method(self) -> None:
         """Test execute method with coroutine."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
@@ -141,12 +141,14 @@ class TestRateLimiter:
             await asyncio.sleep(0.01)
             return value * 2
 
-        results = await asyncio.gather(*[limiter.execute(mock_api_call(i)) for i in range(5)])
+        results = await asyncio.gather(
+            *[limiter.execute(mock_api_call(i)) for i in range(5)]
+        )
 
         assert results == [0, 2, 4, 6, 8]
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_execute_with_exception(self) -> None:
         """Test execute releases permit even on exception."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=1)
@@ -162,7 +164,7 @@ class TestRateLimiter:
         # Permit should be released
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_per_minute_limit(self) -> None:
         """Test per-minute rate limiting."""
         limiter = RateLimiter(
@@ -185,7 +187,7 @@ class TestRateLimiter:
         # Should have waited for minute reset
         assert elapsed >= 0.01  # Small delay expected
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_request_tracking(self) -> None:
         """Test concurrent request counter is accurate."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
@@ -199,7 +201,7 @@ class TestRateLimiter:
         await asyncio.gather(*[tracked_request() for _ in range(5)])
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_burst_capacity_semaphore(self) -> None:
         """Test burst capacity limits concurrent requests."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=2)
@@ -220,7 +222,7 @@ class TestRateLimiter:
 class TestAsyncRateLimiter:
     """Test AsyncRateLimiter context manager."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_context_manager_basic(self) -> None:
         """Test basic context manager usage."""
         limiter = AsyncRateLimiter(requests_per_second=10.0, burst_capacity=2)
@@ -233,7 +235,7 @@ class TestAsyncRateLimiter:
         assert result == "success"
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_context_manager_with_exception(self) -> None:
         """Test context manager releases on exception."""
         limiter = AsyncRateLimiter(requests_per_second=10.0, burst_capacity=1)
@@ -244,7 +246,7 @@ class TestAsyncRateLimiter:
 
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_nested_context_managers(self) -> None:
         """Test multiple context managers work correctly."""
         limiter = AsyncRateLimiter(requests_per_second=10.0, burst_capacity=3)
@@ -261,7 +263,7 @@ class TestAsyncRateLimiter:
 class TestRateLimiterEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_zero_refill_rate(self) -> None:
         """Test behavior with very low refill rate."""
         limiter = RateLimiter(requests_per_second=0.1, burst_capacity=1)
@@ -274,7 +276,7 @@ class TestRateLimiterEdgeCases:
         await asyncio.sleep(0.1)
         assert limiter.available_tokens == 0  # Still need 1 full token
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_large_burst_capacity(self) -> None:
         """Test with large burst capacity."""
         limiter = RateLimiter(requests_per_second=1.0, burst_capacity=100)
@@ -286,7 +288,7 @@ class TestRateLimiterEdgeCases:
 
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rapid_acquire_release(self) -> None:
         """Test rapid acquire/release cycles."""
         limiter = RateLimiter(requests_per_second=100.0, burst_capacity=10)
@@ -298,7 +300,7 @@ class TestRateLimiterEdgeCases:
 
         assert limiter.concurrent_requests == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_acquire_without_release(self) -> None:
         """Test that unreleased permits don't cause deadlocks."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
@@ -321,7 +323,7 @@ class TestRateLimiterEdgeCases:
         limiter.release()
         limiter.release()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_utc_timestamps(self) -> None:
         """Test that internal timestamps use UTC."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=1)
@@ -386,9 +388,13 @@ class TestRetryConfig:
 
     def test_init_invalid_backoff_multiplier(self) -> None:
         """Test initialization fails with backoff_multiplier <= 1.0."""
-        with pytest.raises(ValueError, match="backoff_multiplier must be greater than 1.0"):
+        with pytest.raises(
+            ValueError, match="backoff_multiplier must be greater than 1.0"
+        ):
             RetryConfig(backoff_multiplier=1.0)
-        with pytest.raises(ValueError, match="backoff_multiplier must be greater than 1.0"):
+        with pytest.raises(
+            ValueError, match="backoff_multiplier must be greater than 1.0"
+        ):
             RetryConfig(backoff_multiplier=0.5)
 
     def test_init_invalid_jitter_seconds(self) -> None:
@@ -424,14 +430,14 @@ class TestCircuitBreaker:
         with pytest.raises(ValueError, match="reset_timeout must be positive"):
             CircuitBreaker(reset_timeout=-60.0)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_acquire_closed_circuit(self) -> None:
         """Test acquire succeeds when circuit is closed."""
         breaker = CircuitBreaker(failure_threshold=3)
         await breaker.acquire()  # Should not raise
         assert breaker.state == CircuitState.CLOSED
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_record_success_resets_count(self) -> None:
         """Test record_success resets failure count."""
         breaker = CircuitBreaker(failure_threshold=3)
@@ -442,7 +448,7 @@ class TestCircuitBreaker:
         await breaker.record_success()
         assert breaker.failure_count == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_opens_after_threshold(self) -> None:
         """Test circuit opens after failure threshold is reached."""
         breaker = CircuitBreaker(failure_threshold=3)
@@ -454,7 +460,7 @@ class TestCircuitBreaker:
         await breaker.record_failure()
         assert breaker.state == CircuitState.OPEN
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_blocks_requests_when_open(self) -> None:
         """Test circuit blocks requests when open."""
         breaker = CircuitBreaker(failure_threshold=2)
@@ -468,7 +474,7 @@ class TestCircuitBreaker:
         with pytest.raises(CircuitOpenError, match="Circuit 'default' is open"):
             await breaker.acquire()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_transitions_to_half_open_after_timeout(
         self,
     ) -> None:
@@ -487,7 +493,7 @@ class TestCircuitBreaker:
         await breaker.acquire()
         assert breaker.state == CircuitState.HALF_OPEN
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_closes_after_half_open_success(self) -> None:
         """Test circuit closes after success in HALF_OPEN state."""
         breaker = CircuitBreaker(failure_threshold=2, reset_timeout=0.1)
@@ -507,7 +513,7 @@ class TestCircuitBreaker:
         assert breaker.state == CircuitState.CLOSED
         assert breaker.failure_count == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_reopens_after_half_open_failure(self) -> None:
         """Test circuit reopens after failure in HALF_OPEN state."""
         breaker = CircuitBreaker(failure_threshold=2, reset_timeout=0.1)
@@ -530,7 +536,7 @@ class TestCircuitBreaker:
 class TestRetryWithBackoff:
     """Test retry_with_backoff function."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_success_on_first_attempt(self) -> None:
         """Test function succeeds on first attempt."""
 
@@ -540,7 +546,7 @@ class TestRetryWithBackoff:
         result = await retry_with_backoff(success_func)
         assert result == "success"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_success_on_retry_after_429(self) -> None:
         """Test function succeeds after retrying on 429 error."""
         attempt_count = 0
@@ -556,7 +562,7 @@ class TestRetryWithBackoff:
         assert result == "success"
         assert attempt_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_success_on_retry_after_500(self) -> None:
         """Test function succeeds after retrying on 500 error."""
         attempt_count = 0
@@ -572,7 +578,7 @@ class TestRetryWithBackoff:
         assert result == "success"
         assert attempt_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_success_on_retry_after_502(self) -> None:
         """Test function succeeds after retrying on 502 error."""
         attempt_count = 0
@@ -588,7 +594,7 @@ class TestRetryWithBackoff:
         assert result == "success"
         assert attempt_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_success_on_retry_after_503(self) -> None:
         """Test function succeeds after retrying on 503 error."""
         attempt_count = 0
@@ -604,7 +610,7 @@ class TestRetryWithBackoff:
         assert result == "success"
         assert attempt_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_failure_after_max_retries(self) -> None:
         """Test function fails after exhausting max retries."""
         attempt_count = 0
@@ -621,7 +627,7 @@ class TestRetryWithBackoff:
             )
         assert attempt_count == 4  # Initial + 3 retries
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_no_retry_on_401_error(self) -> None:
         """Test function does not retry on 401 Unauthorized error."""
         attempt_count = 0
@@ -635,7 +641,7 @@ class TestRetryWithBackoff:
             await retry_with_backoff(fail_401)
         assert attempt_count == 1  # Should not retry
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_no_retry_on_403_error(self) -> None:
         """Test function does not retry on 403 Forbidden error."""
         attempt_count = 0
@@ -649,7 +655,7 @@ class TestRetryWithBackoff:
             await retry_with_backoff(fail_403)
         assert attempt_count == 1  # Should not retry
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_exponential_backoff_delays(self) -> None:
         """Test exponential backoff adds correct delays."""
         attempt_times: list[float] = []
@@ -679,7 +685,7 @@ class TestRetryWithBackoff:
         delay_2 = attempt_times[2] - attempt_times[1]
         assert 0.17 < delay_2 < 0.25
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_breaker_opens_on_failures(self) -> None:
         """Test circuit breaker opens after consecutive failures."""
         breaker = CircuitBreaker(failure_threshold=2, reset_timeout=0.1)
@@ -700,7 +706,7 @@ class TestRetryWithBackoff:
         with pytest.raises(CircuitOpenError, match="Circuit 'default' is open"):
             await retry_with_backoff(always_fail, circuit_breaker=breaker)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_breaker_allows_after_reset(self) -> None:
         """Test circuit breaker allows requests after reset timeout."""
         breaker = CircuitBreaker(failure_threshold=2, reset_timeout=0.1)
@@ -720,7 +726,7 @@ class TestRetryWithBackoff:
         result = await retry_with_backoff(succeed, circuit_breaker=breaker)
         assert result == "success"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_custom_retry_config(self) -> None:
         """Test custom retry configuration is used."""
         attempt_count = 0
@@ -742,7 +748,7 @@ class TestRetryWithBackoff:
         assert result == "success"
         assert attempt_count == 4
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_jitter_prevents_thundering_herd(self) -> None:
         """Test that jitter is added to prevent thundering herd."""
         delays: list[float] = []

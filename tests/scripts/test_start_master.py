@@ -33,20 +33,21 @@ class TestStartMaster:
     def test_start_engine(self) -> None:
         """Test start_engine function."""
         # This test requires actual engine startup, skip for now
-        pass
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_wait_for_health_endpoint_success(self) -> None:
         """Test wait_for_health_endpoint when endpoint is available immediately."""
         from scripts.start_master import wait_for_health_endpoint
 
         mock_response = MockHTTPResponse(status=200, body='{"status": "healthy"}')
 
-        with patch("scripts.start_master.urllib.request.urlopen", return_value=mock_response):
+        with patch(
+            "scripts.start_master.urllib.request.urlopen", return_value=mock_response
+        ):
             result = await wait_for_health_endpoint(timeout_seconds=30)
             assert result is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_wait_for_health_endpoint_retries_then_success(self) -> None:
         """Test wait_for_health_endpoint with retries before success."""
         from scripts.start_master import wait_for_health_endpoint
@@ -60,12 +61,15 @@ class TestStartMaster:
                 raise URLError("Connection refused")
             return mock_response
 
-        with patch("scripts.start_master.urllib.request.urlopen", side_effect=urlopen_side_effect):
+        with patch(
+            "scripts.start_master.urllib.request.urlopen",
+            side_effect=urlopen_side_effect,
+        ):
             result = await wait_for_health_endpoint(timeout_seconds=10)
             assert result is True
             assert call_count[0] >= 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_wait_for_health_endpoint_timeout(self) -> None:
         """Test wait_for_health_endpoint when endpoint never becomes available."""
         from scripts.start_master import wait_for_health_endpoint
@@ -77,18 +81,20 @@ class TestStartMaster:
             result = await wait_for_health_endpoint(timeout_seconds=2)
             assert result is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_wait_for_health_endpoint_non_200_status(self) -> None:
         """Test wait_for_health_endpoint when endpoint returns non-200 status."""
         from scripts.start_master import wait_for_health_endpoint
 
         mock_response = MockHTTPResponse(status=500, body='{"status": "error"}')
 
-        with patch("scripts.start_master.urllib.request.urlopen", return_value=mock_response):
+        with patch(
+            "scripts.start_master.urllib.request.urlopen", return_value=mock_response
+        ):
             result = await wait_for_health_endpoint(timeout_seconds=2)
             assert result is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_wait_for_health_endpoint_custom_timeout(self) -> None:
         """Test wait_for_health_endpoint with custom timeout."""
         from scripts.start_master import wait_for_health_endpoint
@@ -101,7 +107,7 @@ class TestStartMaster:
             result = await wait_for_health_endpoint(timeout_seconds=1)
             assert result is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_wait_for_health_endpoint_non_blocking(self) -> None:
         """Test that wait_for_health_endpoint doesn't block the event loop."""
         from scripts.start_master import wait_for_health_endpoint
@@ -115,7 +121,10 @@ class TestStartMaster:
                 raise URLError("Connection refused")
             return mock_response
 
-        with patch("scripts.start_master.urllib.request.urlopen", side_effect=urlopen_side_effect):
+        with patch(
+            "scripts.start_master.urllib.request.urlopen",
+            side_effect=urlopen_side_effect,
+        ):
             # Create a task that should complete without blocking
             task = asyncio.create_task(wait_for_health_endpoint(timeout_seconds=5))
 

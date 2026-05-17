@@ -48,13 +48,13 @@ def _event_stub(event_type_name: str, **attrs: object) -> object:
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_timestamp() -> datetime:
     """UTC-aware timestamp for valid event creation."""
     return datetime(2024, 1, 1, 9, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_market_tick_event(valid_timestamp) -> object:
     """Valid MarketTickEvent with all required fields."""
     return _event_stub(
@@ -70,7 +70,7 @@ def valid_market_tick_event(valid_timestamp) -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_order_update_event(valid_timestamp) -> object:
     """Valid OrderUpdateEvent with FILLED status."""
     return _event_stub(
@@ -89,7 +89,7 @@ def valid_order_update_event(valid_timestamp) -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_signal_event(valid_timestamp) -> object:
     """Valid SignalEvent with optional price."""
     return _event_stub(
@@ -105,7 +105,7 @@ def valid_signal_event(valid_timestamp) -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_scan_update_event(valid_timestamp) -> object:
     """Valid ScanUpdateEvent with zero errors list."""
     return _event_stub(
@@ -119,7 +119,7 @@ def valid_scan_update_event(valid_timestamp) -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_pnl_update_event(valid_timestamp) -> object:
     """Valid PnLUpdateEvent with negative trade_pnl."""
     return _event_stub(
@@ -135,7 +135,7 @@ def valid_pnl_update_event(valid_timestamp) -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_regime_change_event(valid_timestamp) -> object:
     """Valid RegimeChangeEvent with metadata."""
     return _event_stub(
@@ -160,7 +160,9 @@ class TestValidateEvent:
         """Scenario 1: Valid MarketTickEvent with all fields including optional bid/ask."""
         validate_event(valid_market_tick_event)
 
-    def test_validate_order_update_event_success(self, valid_order_update_event) -> None:
+    def test_validate_order_update_event_success(
+        self, valid_order_update_event
+    ) -> None:
         """Scenario 2: Valid OrderUpdateEvent with FILLED status and positive filled_quantity."""
         validate_event(valid_order_update_event)
 
@@ -176,7 +178,9 @@ class TestValidateEvent:
         """Scenario 5: Valid PnLUpdateEvent with negative trade_pnl."""
         validate_event(valid_pnl_update_event)
 
-    def test_validate_regime_change_event_success(self, valid_regime_change_event) -> None:
+    def test_validate_regime_change_event_success(
+        self, valid_regime_change_event
+    ) -> None:
         """Scenario 6: Valid RegimeChangeEvent with metadata."""
         validate_event(valid_regime_change_event)
 
@@ -300,7 +304,9 @@ class TestValidateMarketTickEvent:
             bid_price=Decimal("101"),
             ask_price=Decimal("100"),
         )
-        with pytest.raises(ValidationError, match="bid_price cannot be greater than ask_price"):
+        with pytest.raises(
+            ValidationError, match="bid_price cannot be greater than ask_price"
+        ):
             _validate_market_tick_event(event)
 
     def test_non_decimal_price_raises_validation_error(self) -> None:
@@ -386,7 +392,9 @@ class TestValidateOrderUpdateEvent:
             avg_price=None,
             status=OrderStatus.PARTIALLY_FILLED,
         )
-        with pytest.raises(ValidationError, match="filled_quantity cannot exceed quantity"):
+        with pytest.raises(
+            ValidationError, match="filled_quantity cannot exceed quantity"
+        ):
             _validate_order_update_event(event)
 
     def test_missing_required_attribute_raises_validation_error(self) -> None:
@@ -577,7 +585,9 @@ class TestValidateRegimeChangeEvent:
             confidence=Decimal("0.85"),
             metadata={123: "value"},
         )
-        with pytest.raises(ValidationError, match="metadata keys and values must be strings"):
+        with pytest.raises(
+            ValidationError, match="metadata keys and values must be strings"
+        ):
             _validate_regime_change_event(event)
 
     def test_non_string_metadata_value_raises_validation_error(self) -> None:
@@ -590,7 +600,9 @@ class TestValidateRegimeChangeEvent:
             confidence=Decimal("0.85"),
             metadata={"key": 123},
         )
-        with pytest.raises(ValidationError, match="metadata keys and values must be strings"):
+        with pytest.raises(
+            ValidationError, match="metadata keys and values must be strings"
+        ):
             _validate_regime_change_event(event)
 
 

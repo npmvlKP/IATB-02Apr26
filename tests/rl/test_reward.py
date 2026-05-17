@@ -48,9 +48,16 @@ class TestPnlReward:
 class TestSharpeReward:
     """Tests for Sharpe ratio-based reward calculation."""
 
-    def test_sharpe_reward_returns_positive_for_consistent_positive_returns(self) -> None:
+    def test_sharpe_reward_returns_positive_for_consistent_positive_returns(
+        self
+    ) -> None:
         """Test Sharpe reward positive for consistent positive returns."""
-        returns = [Decimal("0.01"), Decimal("0.015"), Decimal("0.012"), Decimal("0.011")]
+        returns = [
+            Decimal("0.01"),
+            Decimal("0.015"),
+            Decimal("0.012"),
+            Decimal("0.011"),
+        ]
         reward = sharpe_reward(returns)
         assert reward > Decimal("0")
 
@@ -68,7 +75,12 @@ class TestSharpeReward:
 
     def test_sharpe_reward_mixed_returns(self) -> None:
         """Test Sharpe reward with mixed returns."""
-        returns = [Decimal("0.02"), Decimal("-0.01"), Decimal("0.01"), Decimal("-0.005")]
+        returns = [
+            Decimal("0.02"),
+            Decimal("-0.01"),
+            Decimal("0.01"),
+            Decimal("-0.005"),
+        ]
         reward = sharpe_reward(returns)
         # Should be positive if mean positive despite volatility
         assert isinstance(reward, Decimal)
@@ -196,7 +208,7 @@ class TestPositiveExitReward:
 
     def test_default_threshold_constant(self) -> None:
         """Verify default threshold constant is correct."""
-        assert _DEFAULT_POSITIVE_EXIT_THRESHOLD == Decimal("0.7")
+        assert Decimal("0.7") == _DEFAULT_POSITIVE_EXIT_THRESHOLD
 
     def test_default_threshold_parameter(self) -> None:
         """Test default threshold parameter value."""

@@ -164,8 +164,12 @@ class TestVolumeProfileSignal:
             instrument_symbol="NIFTY",
             timestamp_utc=_NOW,
         )
-        long_result = compute_volume_profile_signal(inputs, _NOW, DirectionalIntent.LONG)
-        short_result = compute_volume_profile_signal(inputs, _NOW, DirectionalIntent.SHORT)
+        long_result = compute_volume_profile_signal(
+            inputs, _NOW, DirectionalIntent.LONG
+        )
+        short_result = compute_volume_profile_signal(
+            inputs, _NOW, DirectionalIntent.SHORT
+        )
         assert short_result.score > long_result.score
 
     def test_poc_proximity_zero_va_range_at_poc(self) -> None:
@@ -222,7 +226,10 @@ class TestVolumeProfileSignal:
         """Test _validate_input raises for non-UTC timestamp (lines 158-159)."""
         from datetime import timezone
 
-        from iatb.selection.volume_profile_signal import VolumeProfileSignalInput, _validate_input
+        from iatb.selection.volume_profile_signal import (
+            VolumeProfileSignalInput,
+            _validate_input,
+        )
 
         profile = _sample_profile("100", "110", "90")
         # Non-UTC timestamp
@@ -230,7 +237,9 @@ class TestVolumeProfileSignal:
             profile=profile,
             current_price=Decimal("100"),
             instrument_symbol="NIFTY",
-            timestamp_utc=datetime(2026, 4, 7, 10, 0, 0, tzinfo=timezone(timedelta(hours=1))),
+            timestamp_utc=datetime(
+                2026, 4, 7, 10, 0, 0, tzinfo=timezone(timedelta(hours=1))
+            ),
         )
         current = datetime(2026, 4, 7, 10, 30, 0, tzinfo=UTC)
 
@@ -241,7 +250,10 @@ class TestVolumeProfileSignal:
         """Test _validate_input raises for non-UTC current (lines 161-162)."""
         from datetime import timezone
 
-        from iatb.selection.volume_profile_signal import VolumeProfileSignalInput, _validate_input
+        from iatb.selection.volume_profile_signal import (
+            VolumeProfileSignalInput,
+            _validate_input,
+        )
 
         profile = _sample_profile("100", "110", "90")
         inputs = VolumeProfileSignalInput(
@@ -258,7 +270,10 @@ class TestVolumeProfileSignal:
 
     def test_validate_input_empty_symbol_raises(self) -> None:
         """Test _validate_input raises for empty instrument_symbol (lines 164-165)."""
-        from iatb.selection.volume_profile_signal import VolumeProfileSignalInput, _validate_input
+        from iatb.selection.volume_profile_signal import (
+            VolumeProfileSignalInput,
+            _validate_input,
+        )
 
         profile = _sample_profile("100", "110", "90")
         inputs = VolumeProfileSignalInput(
@@ -316,7 +331,9 @@ class TestDRLSignal:
         assert robust.score > fragile.score
 
     def test_negative_sharpe_yields_low_score(self) -> None:
-        result = compute_drl_signal(_sample_conclusion(out_of_sample_sharpe=Decimal("-2")), _NOW)
+        result = compute_drl_signal(
+            _sample_conclusion(out_of_sample_sharpe=Decimal("-2")), _NOW
+        )
         assert result.score < Decimal("0.3")
 
     def test_invalid_win_rate_raises(self) -> None:
@@ -492,7 +509,10 @@ class TestCompositeScore:
     def test_bull_regime_weights_drl_highest(self) -> None:
         result = compute_composite_score(_sample_signals(), MarketRegime.BULL)
         assert result.regime == MarketRegime.BULL
-        assert result.component_contributions["drl"] >= result.component_contributions["sentiment"]
+        assert (
+            result.component_contributions["drl"]
+            >= result.component_contributions["sentiment"]
+        )
 
     def test_sideways_regime_weights_volume_profile_highest(self) -> None:
         result = compute_composite_score(_sample_signals(), MarketRegime.SIDEWAYS)
@@ -786,7 +806,9 @@ class TestInstrumentScorer:
         }
         scorer = InstrumentScorer(custom_weights=custom)
         signals = [
-            _make_signals("NIFTY", Exchange.NSE, (Decimal("0.8"), Decimal("0.7"), Decimal("0.6"))),
+            _make_signals(
+                "NIFTY", Exchange.NSE, (Decimal("0.8"), Decimal("0.7"), Decimal("0.6"))
+            ),
         ]
         scored = scorer.score_instruments(signals, MarketRegime.BULL)
         assert scored[0].composite.weights_used == custom[MarketRegime.BULL]
@@ -907,7 +929,9 @@ class TestCorrelationMatrix:
         from iatb.selection.correlation_matrix import compute_pairwise_correlations
 
         with pytest.raises(ConfigError, match="must have at least 2 points"):
-            compute_pairwise_correlations({"A": [Decimal("100")], "B": [Decimal("100")]})
+            compute_pairwise_correlations(
+                {"A": [Decimal("100")], "B": [Decimal("100")]}
+            )
 
     def test_single_price_returns_empty_correlations(self) -> None:
         """Test that single instrument returns empty dict."""

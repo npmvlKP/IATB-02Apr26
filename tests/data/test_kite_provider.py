@@ -248,7 +248,7 @@ class TestKiteProviderInitialization:
 class TestKiteProviderGetOhlcv:
     """Test get_ohlcv method."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Create a mock KiteConnect client."""
         client = MagicMock()
@@ -272,11 +272,13 @@ class TestKiteProviderGetOhlcv:
         ]
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fetches_ohlcv_data(self, mock_kite_client):
         """Test successful OHLCV data fetch."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
         bars = await provider.get_ohlcv(
@@ -288,11 +290,13 @@ class TestKiteProviderGetOhlcv:
         assert bars[0].symbol == "RELIANCE"
         assert bars[0].exchange == Exchange.NSE
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_respects_limit_parameter(self, mock_kite_client):
         """Test that limit parameter is respected."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
         bars = await provider.get_ohlcv(
@@ -301,11 +305,13 @@ class TestKiteProviderGetOhlcv:
 
         assert len(bars) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_filters_by_since_timestamp(self, mock_kite_client):
         """Test filtering by since timestamp."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
         since = create_timestamp(datetime(2024, 1, 16, tzinfo=UTC))
@@ -317,11 +323,13 @@ class TestKiteProviderGetOhlcv:
         assert len(bars) == 1
         assert bars[0].timestamp >= since
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rejects_non_positive_limit(self, mock_kite_client):
         """Test that non-positive limit raises error."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
         with pytest.raises(ConfigError, match="limit must be positive"):
@@ -329,15 +337,19 @@ class TestKiteProviderGetOhlcv:
                 symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=0
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_handles_empty_api_response(self, mock_kite_client):
         """Test handling of empty API response."""
         mock_kite_client.historical_data.return_value = []
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
-        bars = await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d")
+        bars = await provider.get_ohlcv(
+            symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d"
+        )
 
         assert bars == []
 
@@ -345,7 +357,7 @@ class TestKiteProviderGetOhlcv:
 class TestKiteProviderGetTicker:
     """Test get_ticker method."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Create a mock KiteConnect client."""
         client = MagicMock()
@@ -359,11 +371,13 @@ class TestKiteProviderGetTicker:
         }
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fetches_ticker_snapshot(self, mock_kite_client):
         """Test successful ticker fetch."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
         snapshot = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
@@ -372,7 +386,7 @@ class TestKiteProviderGetTicker:
         assert snapshot.exchange == Exchange.NSE
         assert snapshot.source == "kiteconnect"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_handles_alternative_field_names(self, mock_kite_client):
         """Test handling of alternative field names in quote."""
         mock_kite_client.quote.return_value = {
@@ -384,7 +398,9 @@ class TestKiteProviderGetTicker:
             }
         }
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
 
         snapshot = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
@@ -395,7 +411,7 @@ class TestKiteProviderGetTicker:
 class TestKiteProviderRateLimiting:
     """Test rate limiting behavior."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_respects_rate_limit(self):
         """Test that rate limiter respects configured rate."""
         from iatb.data.rate_limiter import RateLimiter
@@ -425,7 +441,7 @@ class TestKiteProviderRateLimiting:
 class TestKiteProviderRetryLogic:
     """Test retry logic with exponential backoff."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_retries_on_rate_limit_error(self):
         """Test retry on 429 rate limit error."""
         from iatb.data.rate_limiter import RetryConfig
@@ -450,7 +466,7 @@ class TestKiteProviderRetryLogic:
         assert result == "success"
         assert call_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_retries_on_server_error(self):
         """Test retry on 5xx server errors."""
         from iatb.data.rate_limiter import RetryConfig
@@ -475,7 +491,7 @@ class TestKiteProviderRetryLogic:
         assert result == "success"
         assert call_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fails_after_max_retries(self):
         """Test that failure after max retries raises error."""
         from iatb.data.rate_limiter import RetryConfig
@@ -492,7 +508,7 @@ class TestKiteProviderRetryLogic:
         with pytest.raises(ConfigError, match="failed after 2 retries"):
             await provider._retry_with_backoff(mock_func)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_no_retry_on_non_retryable_error(self):
         """Test that non-retryable errors are raised immediately."""
         from iatb.data.rate_limiter import RetryConfig
@@ -513,7 +529,7 @@ class TestKiteProviderRetryLogic:
 class TestKiteProviderFromEnv:
     """Test from_env factory method."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_creates_provider_from_env(self):
         """Test creating provider from environment variables."""
         with patch.dict(
@@ -524,7 +540,7 @@ class TestKiteProviderFromEnv:
             assert provider._api_key == "env_key"
             assert provider._access_token == "env_token"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fails_when_api_key_missing(self):
         """Test failure when API key env var is missing."""
         with patch.dict("os.environ", {"ZERODHA_ACCESS_TOKEN": "token"}, clear=True):
@@ -533,16 +549,17 @@ class TestKiteProviderFromEnv:
             ):
                 KiteProvider.from_env()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fails_when_access_token_missing(self):
         """Test failure when access token env var is missing."""
         with patch.dict("os.environ", {"ZERODHA_API_KEY": "key"}, clear=True):
             with pytest.raises(
-                ConfigError, match="ZERODHA_ACCESS_TOKEN environment variable is required"
+                ConfigError,
+                match="ZERODHA_ACCESS_TOKEN environment variable is required",
             ):
                 KiteProvider.from_env()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_accepts_custom_env_var_names(self):
         """Test using custom environment variable names."""
         with patch.dict(
@@ -558,7 +575,7 @@ class TestKiteProviderFromEnv:
 class TestKiteProviderBacktestingValidation:
     """Test backtesting validation for data consistency."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_30day_kite_data(self):
         """Create 30 days of mock Kite OHLCV data for backtesting validation."""
         now = datetime.now(UTC)
@@ -586,7 +603,7 @@ class TestKiteProviderBacktestingValidation:
             )
         return bars
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_30day_jugaad_data(self):
         """Create 30 days of mock Jugaad OHLCV data with small price differences."""
         now = datetime.now(UTC)
@@ -616,7 +633,7 @@ class TestKiteProviderBacktestingValidation:
             )
         return bars
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_data_no_timestamp_gaps(self, mock_30day_kite_data):
         """Verify no missing candles in historical data."""
         mock_client = MagicMock()
@@ -660,7 +677,7 @@ class TestKiteProviderBacktestingValidation:
                     msg += f" between bars {i-1} and {i}"
                     raise AssertionError(msg)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_data_no_timestamp_gaps_with_weekend(self, mock_30day_kite_data):
         """Verify no missing candles, accounting for weekends."""
         mock_client = MagicMock()
@@ -681,12 +698,16 @@ class TestKiteProviderBacktestingValidation:
 
         # Verify all bars are in chronological order
         timestamps = [bar.timestamp for bar in bars]
-        assert timestamps == sorted(timestamps), "Timestamps are not in chronological order"
+        assert timestamps == sorted(
+            timestamps
+        ), "Timestamps are not in chronological order"
 
         # Verify no duplicate timestamps
-        assert len(timestamps) == len(set(timestamps)), "Duplicate timestamps found in data"
+        assert len(timestamps) == len(
+            set(timestamps)
+        ), "Duplicate timestamps found in data"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_data_monotonic_timestamps(self, mock_30day_kite_data):
         """Verify timestamps are strictly monotonically increasing."""
         mock_client = MagicMock()
@@ -711,7 +732,7 @@ class TestKiteProviderBacktestingValidation:
                 bars[i].timestamp > bars[i - 1].timestamp
             ), f"Timestamp not strictly increasing at index {i}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_data_volume_consistency(self, mock_30day_kite_data):
         """Verify volume data is consistent and non-negative."""
         mock_client = MagicMock()
@@ -732,9 +753,11 @@ class TestKiteProviderBacktestingValidation:
 
         # Verify all volumes are non-negative
         for bar in bars:
-            assert bar.volume >= Decimal("0"), f"Negative volume found at {bar.timestamp}"
+            assert bar.volume >= Decimal(
+                "0"
+            ), f"Negative volume found at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_data_price_inequality_validation(self, mock_30day_kite_data):
         """Verify high >= low and open/close within high-low range."""
         mock_client = MagicMock()
@@ -761,7 +784,7 @@ class TestKiteProviderBacktestingValidation:
             assert bar.close >= bar.low, f"Close < Low at {bar.timestamp}"
             assert bar.close <= bar.high, f"Close > High at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_corporate_actions_adjusted(self):
         """Verify split/dividend adjustments are present in historical data."""
         # Create mock data simulating a 2:1 stock split in the past
@@ -839,7 +862,9 @@ class TestKiteProviderBacktestingValidation:
         # Post-split price should be approximately half of pre-split
         # Allowing for 10% tolerance for market movement
         expected_post_split = pre_split_close / Decimal("2")
-        price_diff_ratio = abs(post_split_close - expected_post_split) / expected_post_split
+        price_diff_ratio = (
+            abs(post_split_close - expected_post_split) / expected_post_split
+        )
 
         assert price_diff_ratio < Decimal("0.1"), (
             f"Post-split price {post_split_close} not approximately half "
@@ -852,7 +877,8 @@ class TestKiteProviderBacktestingValidation:
         # Post-split volume should be approximately double
         expected_post_split_volume = pre_split_volume * Decimal("2")
         volume_diff_ratio = (
-            abs(post_split_volume - expected_post_split_volume) / expected_post_split_volume
+            abs(post_split_volume - expected_post_split_volume)
+            / expected_post_split_volume
         )
 
         assert volume_diff_ratio < Decimal("0.1"), (
@@ -862,12 +888,12 @@ class TestKiteProviderBacktestingValidation:
         # Verify continuity - the adjusted prices should maintain trends
         # Calculate returns before and after split
         if split_index > 1 and split_index < len(bars) - 1:
-            pre_split_return = (bars[split_index - 1].close - bars[split_index - 2].close) / bars[
-                split_index - 2
-            ].close
-            post_split_return = (bars[split_index + 1].close - bars[split_index].close) / bars[
-                split_index
-            ].close
+            pre_split_return = (
+                bars[split_index - 1].close - bars[split_index - 2].close
+            ) / bars[split_index - 2].close
+            post_split_return = (
+                bars[split_index + 1].close - bars[split_index].close
+            ) / bars[split_index].close
 
             # Returns should be in similar magnitude (not considering the split)
             # This ensures the data is properly adjusted
@@ -881,7 +907,7 @@ class TestKiteProviderBacktestingValidation:
 class TestKiteProviderGetOhlcvBatch:
     """Test get_ohlcv_batch method."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Create a mock KiteConnect client."""
         client = MagicMock()
@@ -905,7 +931,7 @@ class TestKiteProviderGetOhlcvBatch:
         ]
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fetches_batch_ohlcv_data(self, mock_kite_client):
         """Test successful batch OHLCV data fetch."""
         provider = KiteProvider(
@@ -929,7 +955,7 @@ class TestKiteProviderGetOhlcvBatch:
         assert result["RELIANCE"][0].symbol == "RELIANCE"
         assert result["TCS"][0].symbol == "TCS"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_symbols_list_returns_empty(self, mock_kite_client):
         """Test that empty symbols list returns empty dict."""
         provider = KiteProvider(
@@ -946,7 +972,7 @@ class TestKiteProviderGetOhlcvBatch:
 
         assert result == {}
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_respects_rate_limit_during_batch(self, mock_kite_client):
         """Test that batch fetches respect rate limiter."""
         provider = KiteProvider(
@@ -968,7 +994,7 @@ class TestKiteProviderGetOhlcvBatch:
         for symbol in symbols:
             assert symbol in result
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rejects_non_positive_limit(self, mock_kite_client):
         """Test that non-positive limit raises error."""
         provider = KiteProvider(
@@ -985,7 +1011,7 @@ class TestKiteProviderGetOhlcvBatch:
                 limit=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_raises_on_unsupported_exchange(self, mock_kite_client):
         """Test that unsupported exchange raises ConfigError."""
         provider = KiteProvider(
@@ -1005,7 +1031,7 @@ class TestKiteProviderGetOhlcvBatch:
                 timeframe="1d",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_propagates_fetch_error(self, mock_kite_client):
         """Test that errors during individual fetches are propagated."""
         call_count = 0
@@ -1041,7 +1067,7 @@ class TestKiteProviderGetOhlcvBatch:
                 timeframe="1d",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_single_symbol_batch(self, mock_kite_client):
         """Test batch fetch with single symbol."""
         provider = KiteProvider(
@@ -1068,7 +1094,9 @@ class TestKiteProviderEdgeCases:
     def test_kite_connect_module_not_found(self):
         """Test error handling when kiteconnect module is not installed."""
         with patch("iatb.data.kite_provider.importlib.import_module") as mock_import:
-            mock_import.side_effect = ModuleNotFoundError("No module named 'kiteconnect'")
+            mock_import.side_effect = ModuleNotFoundError(
+                "No module named 'kiteconnect'"
+            )
 
             with pytest.raises(ConfigError, match="kiteconnect dependency is required"):
                 KiteProvider._default_kite_factory("key", "token")
@@ -1088,10 +1116,12 @@ class TestKiteProviderEdgeCases:
             del mock_module.KiteConnect
             mock_import.return_value = mock_module
 
-            with pytest.raises(ConfigError, match="kiteconnect.KiteConnect is not available"):
+            with pytest.raises(
+                ConfigError, match="kiteconnect.KiteConnect is not available"
+            ):
                 provider._default_kite_factory("key", "token")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_token_refill(self):
         """Test rate limiter refills tokens after waiting."""
         from iatb.data.rate_limiter import RateLimiter
@@ -1115,7 +1145,7 @@ class TestKiteProviderEdgeCases:
 
         limiter.release()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_client_missing_historical_data_method(self):
         """Test error when client lacks historical_data method."""
         mock_client = MagicMock(spec=[])  # Empty spec = no methods
@@ -1134,7 +1164,7 @@ class TestKiteProviderEdgeCases:
                 datetime(2024, 1, 31, tzinfo=UTC),
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_historical_data_returns_non_list(self):
         """Test error when historical_data returns non-list."""
         mock_client = MagicMock()
@@ -1154,7 +1184,7 @@ class TestKiteProviderEdgeCases:
                 datetime(2024, 1, 31, tzinfo=UTC),
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_client_missing_quote_method(self):
         """Test error when client lacks quote method."""
         mock_client = MagicMock(spec=[])  # Empty spec = no methods
@@ -1167,7 +1197,7 @@ class TestKiteProviderEdgeCases:
         with pytest.raises(ConfigError, match="must have quote\\(\\) method"):
             await provider._fetch_quote(mock_client, "NSE:RELIANCE")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_quote_returns_non_dict(self):
         """Test error when quote returns non-dict."""
         mock_client = MagicMock()
@@ -1221,7 +1251,13 @@ class TestKiteProviderEdgeCases:
                 "close": 103,
                 "volume": 1000000,
             },
-            {"open": 103, "high": 108, "low": 102, "close": 107, "volume": 1200000},  # Missing date
+            {
+                "open": 103,
+                "high": 108,
+                "low": 102,
+                "close": 107,
+                "volume": 1200000,
+            },  # Missing date
         ]
 
         records = provider._build_ohlcv_records(data)
@@ -1253,7 +1289,7 @@ class TestKiteProviderEdgeCases:
         records = provider._build_ohlcv_records(data)
         assert len(records) == 1  # Only valid timestamp included
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_retry_with_backoff_unreachable_fallback(self):
         """Test the unreachable fallback error in retry logic."""
         from iatb.data.rate_limiter import RetryConfig

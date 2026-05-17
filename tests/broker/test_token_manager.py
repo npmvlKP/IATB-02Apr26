@@ -13,13 +13,13 @@ import pytest
 from iatb.broker.token_manager import ZerodhaTokenManager, _get_next_expiry_utc
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_http_post() -> MagicMock:
     """Mock HTTP POST function."""
     return MagicMock(return_value={"data": {"access_token": "test_access_token"}})
 
 
-@pytest.fixture
+@pytest.fixture()
 def token_manager(mock_http_post: MagicMock) -> ZerodhaTokenManager:
     """Create token manager with mocked HTTP."""
     return ZerodhaTokenManager(

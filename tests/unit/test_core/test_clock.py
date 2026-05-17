@@ -25,40 +25,42 @@ from iatb.core.exceptions import ClockError
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_calendar():
     """Mock ExchangeCalendar for testing."""
     calendar = MagicMock()
     calendar.get_regular_session.return_value = MagicMock(
         open_time=time(9, 15), close_time=time(15, 30)
     )
-    calendar.session_for.return_value = MagicMock(open_time=time(9, 15), close_time=time(15, 30))
+    calendar.session_for.return_value = MagicMock(
+        open_time=time(9, 15), close_time=time(15, 30)
+    )
     calendar.is_trading_day.return_value = True
     return calendar
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_trading_time():
     """UTC time corresponding to 10:00 AM IST on a trading day."""
     # 10:00 IST = 04:30 UTC
     return datetime(2026, 1, 5, 4, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_pre_market_time():
     """UTC time before market open."""
     # 8:00 IST = 02:30 UTC
     return datetime(2026, 1, 5, 2, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_after_hours_time():
     """UTC time after MIS close (after 15:20 IST)."""
     # 16:00 IST = 10:30 UTC
     return datetime(2026, 1, 5, 10, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_weekend_time():
     """UTC time on a weekend (Saturday)."""
     # Saturday Jan 3, 2026 at 10:00 IST = 04:30 UTC
@@ -223,12 +225,16 @@ class TestMISSession:
     def test_is_mis_session_active_during_hours(self, mock_calendar, utc_trading_time):
         """Test is_mis_session_active returns True during MIS hours."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.is_mis_session_active(utc_trading_time, Exchange.NSE)
+            result = TradingSessions.is_mis_session_active(
+                utc_trading_time, Exchange.NSE
+            )
             assert result is True
 
     def test_is_mis_session_active_unsupported_exchange(self, utc_trading_time):
         """Test is_mis_session_active returns False for unsupported exchange."""
-        result = TradingSessions.is_mis_session_active(utc_trading_time, Exchange.BINANCE)
+        result = TradingSessions.is_mis_session_active(
+            utc_trading_time, Exchange.BINANCE
+        )
         assert result is False
 
     def test_is_mis_session_active_requires_utc(self):
@@ -249,31 +255,43 @@ class TestValidateProductType:
     def test_validate_mis_product_type(self, mock_calendar, utc_trading_time):
         """Test validating MIS product type succeeds."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.validate_product_type("MIS", Exchange.NSE, utc_trading_time)
+            result = TradingSessions.validate_product_type(
+                "MIS", Exchange.NSE, utc_trading_time
+            )
             assert result == ProductType.MIS
 
     def test_validate_nrml_product_type(self, mock_calendar, utc_trading_time):
         """Test validating NRML product type succeeds."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.validate_product_type("NRML", Exchange.NSE, utc_trading_time)
+            result = TradingSessions.validate_product_type(
+                "NRML", Exchange.NSE, utc_trading_time
+            )
             assert result == ProductType.NRML
 
     def test_validate_cnc_blocked_on_nse(self, mock_calendar, utc_trading_time):
         """Test CNC (DELIVERY) is blocked on NSE."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
             with pytest.raises(ClockError, match="DELIVERY.*blocked"):
-                TradingSessions.validate_product_type("CNC", Exchange.NSE, utc_trading_time)
+                TradingSessions.validate_product_type(
+                    "CNC", Exchange.NSE, utc_trading_time
+                )
 
     def test_validate_invalid_product_type(self, mock_calendar, utc_trading_time):
         """Test invalid product type raises error."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
             with pytest.raises(ClockError, match="Invalid product_type"):
-                TradingSessions.validate_product_type("INVALID", Exchange.NSE, utc_trading_time)
+                TradingSessions.validate_product_type(
+                    "INVALID", Exchange.NSE, utc_trading_time
+                )
 
-    def test_validate_product_type_case_insensitive(self, mock_calendar, utc_trading_time):
+    def test_validate_product_type_case_insensitive(
+        self, mock_calendar, utc_trading_time
+    ):
         """Test product type validation is case-insensitive."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.validate_product_type("mis", Exchange.NSE, utc_trading_time)
+            result = TradingSessions.validate_product_type(
+                "mis", Exchange.NSE, utc_trading_time
+            )
             assert result == ProductType.MIS
 
     def test_validate_product_type_requires_utc(self):
@@ -294,25 +312,33 @@ class TestGetMISSquareOffTime:
     def test_get_mis_square_off_time_nse(self, mock_calendar):
         """Test getting MIS square-off time for NSE."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.get_mis_square_off_time(Exchange.NSE, date(2026, 1, 5))
+            result = TradingSessions.get_mis_square_off_time(
+                Exchange.NSE, date(2026, 1, 5)
+            )
             assert result == time(15, 20)
 
     def test_get_mis_square_off_time_mcx(self, mock_calendar):
         """Test getting MIS square-off time for MCX."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.get_mis_square_off_time(Exchange.MCX, date(2026, 1, 5))
+            result = TradingSessions.get_mis_square_off_time(
+                Exchange.MCX, date(2026, 1, 5)
+            )
             assert result == time(23, 0)
 
     def test_get_mis_square_off_time_unsupported_exchange(self):
         """Test returns None for unsupported exchange."""
-        result = TradingSessions.get_mis_square_off_time(Exchange.BINANCE, date(2026, 1, 5))
+        result = TradingSessions.get_mis_square_off_time(
+            Exchange.BINANCE, date(2026, 1, 5)
+        )
         assert result is None
 
     def test_get_mis_square_off_time_holiday(self, mock_calendar):
         """Test returns None for holiday."""
         mock_calendar.session_for.return_value = None
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = TradingSessions.get_mis_square_off_time(Exchange.NSE, date(2026, 1, 26))
+            result = TradingSessions.get_mis_square_off_time(
+                Exchange.NSE, date(2026, 1, 26)
+            )
             assert result is None
 
 
@@ -326,7 +352,7 @@ class TestEdgeCases:
 
     def test_ist_offset_value(self):
         """Test IST offset is exactly 5 hours 30 minutes."""
-        assert IST_OFFSET == timedelta(hours=5, minutes=30)
+        assert timedelta(hours=5, minutes=30) == IST_OFFSET
 
     def test_clock_to_ist_day_rollover(self):
         """Test IST conversion handles day rollover correctly."""
@@ -350,7 +376,9 @@ class TestEdgeCases:
         """Test MIS session is inactive after square-off time."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
             # Configure to return session but time check should fail
-            result = TradingSessions.is_mis_session_active(utc_after_hours_time, Exchange.NSE)
+            result = TradingSessions.is_mis_session_active(
+                utc_after_hours_time, Exchange.NSE
+            )
             # Result depends on mock setup - this tests the path
             assert isinstance(result, bool)
 

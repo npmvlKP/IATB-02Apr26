@@ -77,10 +77,10 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
     except ImportError:
         pass
 
-    yield
+    return
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_datetime_utc() -> MagicMock:
     """
     Mock datetime module that always returns UTC timestamps.
@@ -103,7 +103,7 @@ def mock_datetime_utc() -> MagicMock:
         yield mock_dt
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_decimal_precision() -> MagicMock:
     """
     Mock Decimal operations to ensure consistent precision handling.
@@ -115,7 +115,7 @@ def mock_decimal_precision() -> MagicMock:
         yield mock_context
 
 
-@pytest.fixture
+@pytest.fixture()
 def edge_case_prices() -> list[Decimal]:
     """
     Edge case prices for comprehensive testing.
@@ -136,7 +136,7 @@ def edge_case_prices() -> list[Decimal]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def edge_case_quantities() -> list[Decimal]:
     """
     Edge case quantities for comprehensive testing.
@@ -155,7 +155,7 @@ def edge_case_quantities() -> list[Decimal]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def timezone_aware_timestamps() -> list[datetime]:
     """
     Timezone-aware timestamps for testing timezone handling.
@@ -176,7 +176,7 @@ def timezone_aware_timestamps() -> list[datetime]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def error_scenario_data() -> dict[str, list]:
     """
     Error scenario data for testing error paths.
@@ -201,7 +201,7 @@ def error_scenario_data() -> dict[str, list]:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def type_validation_data() -> dict[str, list]:
     """
     Type validation data for testing type handling.
@@ -218,7 +218,7 @@ def type_validation_data() -> dict[str, list]:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def precision_test_data() -> dict[str, list[tuple[Decimal, int]]]:
     """
     Precision test data for testing decimal precision handling.
@@ -245,19 +245,19 @@ def precision_test_data() -> dict[str, list[tuple[Decimal, int]]]:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def fast_property_settings() -> settings:
     """Fast hypothesis settings for quick feedback during development."""
     return HYPOTHESIS_FAST_SETTINGS
 
 
-@pytest.fixture
+@pytest.fixture()
 def medium_property_settings() -> settings:
     """Medium hypothesis settings for balanced speed and coverage."""
     return HYPOTHESIS_MEDIUM_SETTINGS
 
 
-@pytest.fixture
+@pytest.fixture()
 def slow_property_settings() -> settings:
     """Slow hypothesis settings for maximum coverage in CI."""
     return HYPOTHESIS_SLOW_SETTINGS
@@ -280,7 +280,10 @@ def pytest_collection_modifyitems(config, items):
         # Mark tests that use large example counts
         if hasattr(item, "obj") and hasattr(item.obj, "hypothesis"):
             for decorator in getattr(item.obj, "hypothesis", []):
-                if hasattr(decorator, "settings") and decorator.settings.max_examples > 20:
+                if (
+                    hasattr(decorator, "settings")
+                    and decorator.settings.max_examples > 20
+                ):
                     item.add_marker(pytest.mark.slow)
 
 

@@ -138,7 +138,9 @@ class TestCandleBuilder:
             timeframe="1m",
         )
 
-        timestamp = builder._candle_timestamp(datetime(2026, 1, 1, 10, 30, 45, tzinfo=UTC))
+        timestamp = builder._candle_timestamp(
+            datetime(2026, 1, 1, 10, 30, 45, tzinfo=UTC)
+        )
         assert timestamp == datetime(2026, 1, 1, 10, 30, 0, tzinfo=UTC)
 
     def test_candle_timestamp_5m(self) -> None:
@@ -149,7 +151,9 @@ class TestCandleBuilder:
             timeframe="5m",
         )
 
-        timestamp = builder._candle_timestamp(datetime(2026, 1, 1, 10, 33, 45, tzinfo=UTC))
+        timestamp = builder._candle_timestamp(
+            datetime(2026, 1, 1, 10, 33, 45, tzinfo=UTC)
+        )
         assert timestamp == datetime(2026, 1, 1, 10, 30, 0, tzinfo=UTC)
 
     def test_candle_timestamp_15m(self) -> None:
@@ -160,7 +164,9 @@ class TestCandleBuilder:
             timeframe="15m",
         )
 
-        timestamp = builder._candle_timestamp(datetime(2026, 1, 1, 10, 40, 45, tzinfo=UTC))
+        timestamp = builder._candle_timestamp(
+            datetime(2026, 1, 1, 10, 40, 45, tzinfo=UTC)
+        )
         assert timestamp == datetime(2026, 1, 1, 10, 30, 0, tzinfo=UTC)
 
     def test_candle_timestamp_1h(self) -> None:
@@ -171,7 +177,9 @@ class TestCandleBuilder:
             timeframe="1h",
         )
 
-        timestamp = builder._candle_timestamp(datetime(2026, 1, 1, 10, 30, 45, tzinfo=UTC))
+        timestamp = builder._candle_timestamp(
+            datetime(2026, 1, 1, 10, 30, 45, tzinfo=UTC)
+        )
         assert timestamp == datetime(2026, 1, 1, 10, 0, 0, tzinfo=UTC)
 
     def test_candle_timestamp_1d(self) -> None:
@@ -182,7 +190,9 @@ class TestCandleBuilder:
             timeframe="1d",
         )
 
-        timestamp = builder._candle_timestamp(datetime(2026, 1, 1, 10, 30, 45, tzinfo=UTC))
+        timestamp = builder._candle_timestamp(
+            datetime(2026, 1, 1, 10, 30, 45, tzinfo=UTC)
+        )
         assert timestamp == datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
 
     def test_unsupported_timeframe_raises(self) -> None:
@@ -297,7 +307,7 @@ class TestCandleBuilder:
 
 
 class TestKiteWebSocketProvider:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_initialization(self) -> None:
         """Test provider initialization with valid parameters."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -309,7 +319,7 @@ class TestKiteWebSocketProvider:
         assert provider._access_token == "test_access_token"
         assert not provider._is_connected
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_api_key_raises(self) -> None:
         """Test empty API key raises ConfigError."""
         with pytest.raises(ConfigError, match="api_key cannot be empty"):
@@ -318,7 +328,7 @@ class TestKiteWebSocketProvider:
                 access_token="test_access_token",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_access_token_raises(self) -> None:
         """Test empty access token raises ConfigError."""
         with pytest.raises(ConfigError, match="access_token cannot be empty"):
@@ -327,7 +337,7 @@ class TestKiteWebSocketProvider:
                 access_token="",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_max_retries_raises(self) -> None:
         """Test invalid max_retries raises ConfigError."""
         with pytest.raises(ConfigError, match="max_retries must be positive"):
@@ -337,17 +347,19 @@ class TestKiteWebSocketProvider:
                 max_retries=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_retry_delay_raises(self) -> None:
         """Test invalid retry_delay_seconds raises ConfigError."""
-        with pytest.raises(ConfigError, match="retry_delay_seconds must be non-negative"):
+        with pytest.raises(
+            ConfigError, match="retry_delay_seconds must be non-negative"
+        ):
             KiteWebSocketProvider(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 retry_delay_seconds=-1.0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_establishes_connection(self) -> None:
         """Test connect establishes WebSocket connection."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -360,7 +372,7 @@ class TestKiteWebSocketProvider:
         assert provider._is_connected
         assert provider._ticker_instance is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connect_already_connected_noops(self) -> None:
         """Test connect when already connected is a no-op."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -374,7 +386,7 @@ class TestKiteWebSocketProvider:
         await provider.connect()
         assert provider._ticker_instance is first_instance
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_disconnect_cleans_up(self) -> None:
         """Test disconnect cleans up resources."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -389,7 +401,7 @@ class TestKiteWebSocketProvider:
         assert len(provider._tickers) == 0
         assert len(provider._latest_tickers) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscribe_creates_candle_builder(self) -> None:
         """Test subscribe creates a CandleBuilder for the symbol."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -403,7 +415,7 @@ class TestKiteWebSocketProvider:
         assert "RELIANCE" in provider._tickers
         assert provider._tickers["RELIANCE"].timeframe == "1m"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscribe_without_connect_raises(self) -> None:
         """Test subscribe without connect raises ConfigError."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -415,7 +427,7 @@ class TestKiteWebSocketProvider:
         with pytest.raises(ConfigError, match="Provider not connected"):
             await provider.subscribe("RELIANCE", Exchange.NSE, "1m")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_without_connect_raises(self) -> None:
         """Test get_ohlcv without connect raises ConfigError."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -431,7 +443,7 @@ class TestKiteWebSocketProvider:
                 timeframe="1m",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_without_subscribe_raises(self) -> None:
         """Test get_ohlcv without subscribe raises ConfigError."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -448,7 +460,7 @@ class TestKiteWebSocketProvider:
                 timeframe="1m",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_invalid_limit_raises(self) -> None:
         """Test get_ohlcv with invalid limit raises ConfigError."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -468,7 +480,7 @@ class TestKiteWebSocketProvider:
                 limit=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_without_connect_raises(self) -> None:
         """Test get_ticker without connect raises ConfigError."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -480,7 +492,7 @@ class TestKiteWebSocketProvider:
         with pytest.raises(ConfigError, match="Provider not connected"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_no_data_raises(self) -> None:
         """Test get_ticker without data raises ConfigError."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -493,7 +505,7 @@ class TestKiteWebSocketProvider:
         with pytest.raises(ConfigError, match="No ticker data available"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_parse_tick_valid_data(self) -> None:
         """Test parsing valid tick data."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -515,7 +527,7 @@ class TestKiteWebSocketProvider:
         assert tick.last_price == create_price("1000.50")
         assert tick.volume == create_quantity("1000")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_parse_tick_missing_symbol(self) -> None:
         """Test parsing tick with missing symbol returns None."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -533,7 +545,7 @@ class TestKiteWebSocketProvider:
         tick = provider._parse_tick(tick_data)
         assert tick is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_parse_tick_missing_price(self) -> None:
         """Test parsing tick with missing price returns None."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -550,21 +562,21 @@ class TestKiteWebSocketProvider:
         tick = provider._parse_tick(tick_data)
         assert tick is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_from_env_missing_api_key(self) -> None:
         """Test from_env with missing API key raises ConfigError."""
         with patch.dict("os.environ", {}, clear=True):
             with pytest.raises(ConfigError, match="ZERODHA_API_KEY.*required"):
                 KiteWebSocketProvider.from_env()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_from_env_missing_access_token(self) -> None:
         """Test from_env with missing access token raises ConfigError."""
         with patch.dict("os.environ", {"ZERODHA_API_KEY": "test_key"}, clear=True):
             with pytest.raises(ConfigError, match="ZERODHA_ACCESS_TOKEN.*required"):
                 KiteWebSocketProvider.from_env()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_batch(self) -> None:
         """Test get_ohlcv_batch for multiple symbols."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -586,7 +598,7 @@ class TestKiteWebSocketProvider:
         assert "RELIANCE" in results
         assert "TCS" in results
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_disconnect_handles_runtime_error(self) -> None:
         """Test disconnect handles RuntimeError when event loop is closed."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -614,7 +626,7 @@ class TestKiteWebSocketProvider:
         assert len(provider._tickers) == 0
         assert len(provider._latest_tickers) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_disconnect_handles_cancelled_error(self) -> None:
         """Test disconnect handles CancelledError during task cancellation."""
         provider = KiteWebSocketProvider(  # noqa: S106

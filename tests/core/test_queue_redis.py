@@ -33,14 +33,14 @@ class TestEventMetadata:
 
 
 class TestInProcessBackendExtended:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_start_idempotent(self) -> None:
         backend = InProcessBackend()
         await backend.start()
         await backend.start()
         assert backend.is_running is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_stop_idempotent(self) -> None:
         backend = InProcessBackend()
         await backend.start()
@@ -48,13 +48,13 @@ class TestInProcessBackendExtended:
         await backend.stop()
         assert backend.is_running is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_no_subscribers(self) -> None:
         backend = InProcessBackend()
         await backend.start()
         await backend.publish("nonexistent", {"data": "test"})
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_empty_subscribers(self) -> None:
         backend = InProcessBackend()
         await backend.start()
@@ -62,37 +62,37 @@ class TestInProcessBackendExtended:
         await backend.unsubscribe("topic", q)
         await backend.publish("topic", {"data": "test"})
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_empty(self) -> None:
         backend = InProcessBackend()
         await backend.start()
         await backend.publish_batch("topic", [])
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_no_subscribers(self) -> None:
         backend = InProcessBackend()
         await backend.start()
         await backend.publish_batch("topic", [{"d": 1}, {"d": 2}])
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_not_running_publish_rejected(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.publish("topic", "data")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_not_running_subscribe_rejected(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.subscribe("topic")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_not_running_unsubscribe_rejected(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.unsubscribe("topic", asyncio.Queue())
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_not_running_batch_rejected(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
@@ -106,7 +106,7 @@ class TestInProcessBackendExtended:
         with pytest.raises(EventBusError, match="positive"):
             InProcessBackend(max_queue_size=-1)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_unsubscribe_not_subscribed(self) -> None:
         backend = InProcessBackend()
         await backend.start()
@@ -165,7 +165,7 @@ class TestRedisStreamBackendSerialize:
 
 
 class TestRedisStreamBackendLifecycle:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_start_import_error(self) -> None:
         backend = RedisStreamBackend()
         with patch.dict("sys.modules", {"redis": None, "redis.asyncio": None}):
@@ -173,42 +173,44 @@ class TestRedisStreamBackendLifecycle:
                 with pytest.raises(EventBusError, match="Redis package not installed"):
                     await backend.start()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_start_connection_error(self) -> None:
         backend = RedisStreamBackend()
         mock_redis = MagicMock()
-        mock_redis.Redis.return_value.ping = AsyncMock(side_effect=Exception("conn fail"))
+        mock_redis.Redis.return_value.ping = AsyncMock(
+            side_effect=Exception("conn fail")
+        )
         with patch.dict("sys.modules", {}):
             with patch("iatb.core.queue.RedisStreamBackend.start") as mock_start:
                 mock_start.side_effect = EventBusError("Failed to connect to Redis")
                 with pytest.raises(EventBusError, match="Failed to connect"):
                     await backend.start()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_stop_without_start(self) -> None:
         backend = RedisStreamBackend()
         await backend.stop()
         assert backend.is_running is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.publish("topic", {"data": "test"})
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.publish_batch("topic", [{"d": 1}])
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscribe_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.subscribe("topic")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_unsubscribe_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):

@@ -31,7 +31,11 @@ from iatb.market_strength.indicators import IndicatorSnapshot, PandasTaIndicator
 from iatb.market_strength.regime_detector import MarketRegime, RegimeDetector
 from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
 from iatb.selection._util import DirectionalIntent
-from iatb.selection.drl_signal import BacktestConclusion, DRLSignalOutput, compute_drl_signal
+from iatb.selection.drl_signal import (
+    BacktestConclusion,
+    DRLSignalOutput,
+    compute_drl_signal,
+)
 from iatb.selection.instrument_scorer import InstrumentScorer, InstrumentSignals
 from iatb.selection.ranking import RankingConfig
 from iatb.selection.sentiment_signal import (
@@ -84,10 +88,14 @@ class ScannerConfig:
         if self.min_volume_ratio < Decimal("0"):
             msg = "min_volume_ratio cannot be negative"
             raise ConfigError(msg)
-        if self.very_strong_threshold <= Decimal("0") or self.very_strong_threshold > Decimal("1"):
+        if self.very_strong_threshold <= Decimal(
+            "0"
+        ) or self.very_strong_threshold > Decimal("1"):
             msg = "very_strong_threshold must be in (0, 1]"
             raise ConfigError(msg)
-        if self.min_exit_probability < Decimal("0") or self.min_exit_probability > Decimal("1"):
+        if self.min_exit_probability < Decimal(
+            "0"
+        ) or self.min_exit_probability > Decimal("1"):
             msg = "min_exit_probability must be in [0, 1]"
             raise ConfigError(msg)
         if self.top_n <= 0:
@@ -125,7 +133,9 @@ class MarketData:
         """Calculate percentage change from previous close."""
         if self.prev_close_price == Decimal("0"):
             return Decimal("0")
-        return ((self.close_price - self.prev_close_price) / self.prev_close_price) * Decimal("100")
+        return (
+            (self.close_price - self.prev_close_price) / self.prev_close_price
+        ) * Decimal("100")
 
     @property
     def volume_ratio(self) -> Decimal:
@@ -364,7 +374,9 @@ class InstrumentScanner:
         try:
             # Check cache first
             cache_key = f"{symbol}_{datetime.now(UTC).date()}"
-            cached_data = cast(MarketData | None, self._cache.get(symbol, cache_key, cache_key))
+            cached_data = cast(
+                MarketData | None, self._cache.get(symbol, cache_key, cache_key)
+            )
             if cached_data is not None:
                 return cached_data
 
@@ -492,8 +504,14 @@ class InstrumentScanner:
         latest_close = price_data.closes[-1]
         prev_close = price_data.closes[-2]
         avg_volume = sum(price_data.volumes) / Decimal(str(len(price_data.volumes)))
-        breadth_ratio = self._calculate_breadth_ratio(price_data.closes, price_data.volumes)
-        atr_pct = indicators.atr / latest_close if latest_close > Decimal("0") else Decimal("0")
+        breadth_ratio = self._calculate_breadth_ratio(
+            price_data.closes, price_data.volumes
+        )
+        atr_pct = (
+            indicators.atr / latest_close
+            if latest_close > Decimal("0")
+            else Decimal("0")
+        )
 
         return MarketData(
             symbol=symbol,
@@ -527,7 +545,9 @@ class InstrumentScanner:
             _LOGGER.debug("Indicator calculation failed, using defaults: %s", exc)
             return self._default_indicators()
 
-    def _calculate_breadth_ratio(self, closes: list[Decimal], volumes: list[Decimal]) -> Decimal:
+    def _calculate_breadth_ratio(
+        self, closes: list[Decimal], volumes: list[Decimal]
+    ) -> Decimal:
         """Calculate breadth ratio from price and volume data."""
         if len(closes) < 2:
             return Decimal("1.0")
@@ -570,7 +590,9 @@ class InstrumentScanner:
             return Exchange.NSE
         if "MCX" in symbol_upper:
             return Exchange.MCX
-        if "NIFTY" in symbol_upper or any(x in symbol_upper for x in ("CE", "PE", "FUT")):
+        if "NIFTY" in symbol_upper or any(
+            x in symbol_upper for x in ("CE", "PE", "FUT")
+        ):
             return Exchange.NSE
 
         # Default to first configured exchange
@@ -594,7 +616,9 @@ class InstrumentScanner:
             features = self._build_regime_features(candidates)
             result = self._regime_detector.detect(features)
             _LOGGER.info(
-                "Regime detected: %s (confidence: %s)", result.regime.value, result.confidence
+                "Regime detected: %s (confidence: %s)",
+                result.regime.value,
+                result.confidence,
             )
             return result.regime
         except ConfigError as exc:
@@ -604,7 +628,9 @@ class InstrumentScanner:
             _LOGGER.warning("Regime detection error, defaulting to SIDEWAYS: %s", exc)
             return MarketRegime.SIDEWAYS
 
-    def _build_regime_features(self, candidates: list[MarketData]) -> list[list[Decimal]]:
+    def _build_regime_features(
+        self, candidates: list[MarketData]
+    ) -> list[list[Decimal]]:
         """Build feature matrix for regime detection from candidates."""
         features: list[list[Decimal]] = []
         for data in candidates:
@@ -625,7 +651,9 @@ class InstrumentScanner:
         current_utc = datetime.now(UTC)
 
         for data in candidates:
-            sentiment_score, is_very_strong = self._get_sentiment_pipeline(data, current_utc)
+            sentiment_score, is_very_strong = self._get_sentiment_pipeline(
+                data, current_utc
+            )
             strength_score, is_tradable = self._get_strength(data)
             exit_prob = self._get_exit_probability_pipeline(data, current_utc)
             scored.append(
@@ -691,7 +719,9 @@ class InstrumentScanner:
         except ConfigError:
             return Decimal("0"), False
 
-    def _get_exit_probability_pipeline(self, data: MarketData, current_utc: datetime) -> Decimal:
+    def _get_exit_probability_pipeline(
+        self, data: MarketData, current_utc: datetime
+    ) -> Decimal:
         """Get DRL exit probability using rl_predictor or compute_drl_signal."""
         # Legacy test override: rl_predictor callable
         if self._rl_predictor is not None:
@@ -781,7 +811,9 @@ class InstrumentScanner:
 
     def _build_instrument_signal(self, c: _CandidateScores) -> InstrumentSignals:
         """Build a single InstrumentSignals object."""
-        directional_bias = "BULLISH" if c.market_data.pct_change > Decimal("0") else "BEARISH"
+        directional_bias = (
+            "BULLISH" if c.market_data.pct_change > Decimal("0") else "BEARISH"
+        )
 
         sentiment_output = self._build_sentiment_output(c, directional_bias)
         strength_output = self._build_strength_output(c)

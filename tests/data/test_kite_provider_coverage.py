@@ -292,7 +292,9 @@ class TestKiteProviderInitCoverage:
 
     def test_custom_factory_assigned(self) -> None:
         factory = MagicMock()
-        provider = KiteProvider(api_key="k", access_token="t", kite_connect_factory=factory)
+        provider = KiteProvider(
+            api_key="k", access_token="t", kite_connect_factory=factory
+        )
         assert provider._kite_connect_factory is factory
 
     def test_default_rate_limiter_created(self) -> None:
@@ -312,7 +314,9 @@ class TestKiteProviderInitCoverage:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = _make_historical_data()
         factory = MagicMock(return_value=mock_client)
-        provider = KiteProvider(api_key="k", access_token="t", kite_connect_factory=factory)
+        provider = KiteProvider(
+            api_key="k", access_token="t", kite_connect_factory=factory
+        )
         factory.assert_not_called()
         _ = provider._get_client()
         factory.assert_called_once_with("k", "t")
@@ -321,7 +325,9 @@ class TestKiteProviderInitCoverage:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = _make_historical_data()
         factory = MagicMock(return_value=mock_client)
-        provider = KiteProvider(api_key="k", access_token="t", kite_connect_factory=factory)
+        provider = KiteProvider(
+            api_key="k", access_token="t", kite_connect_factory=factory
+        )
         c1 = provider._get_client()
         c2 = provider._get_client()
         assert c1 is c2
@@ -345,7 +351,9 @@ class TestDefaultKiteFactoryCoverage:
             "iatb.data.kite_provider.importlib.import_module",
             return_value=mock_module,
         ):
-            with pytest.raises(ConfigError, match="kiteconnect.KiteConnect is not available"):
+            with pytest.raises(
+                ConfigError, match="kiteconnect.KiteConnect is not available"
+            ):
                 KiteProvider._default_kite_factory("k", "t")
 
     def test_kiteconnect_class_present_returns_instance(self) -> None:
@@ -366,7 +374,7 @@ class TestDefaultKiteFactoryCoverage:
 class TestGetOhlcvCoverage:
     """Extended get_ohlcv coverage."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_successful_fetch(self) -> None:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = _make_historical_data(3)
@@ -379,19 +387,23 @@ class TestGetOhlcvCoverage:
         assert all(isinstance(b, OHLCVBar) for b in bars)
         assert bars[0].symbol == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_unsupported_exchange_raises(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="Unsupported exchange"):
-            await provider.get_ohlcv(symbol="BTC", exchange=Exchange.BINANCE, timeframe="1d")
+            await provider.get_ohlcv(
+                symbol="BTC", exchange=Exchange.BINANCE, timeframe="1d"
+            )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_unsupported_timeframe_raises(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="Unsupported Kite timeframe"):
-            await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="3m")
+            await provider.get_ohlcv(
+                symbol="RELIANCE", exchange=Exchange.NSE, timeframe="3m"
+            )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_zero_limit_raises(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="limit must be positive"):
@@ -399,7 +411,7 @@ class TestGetOhlcvCoverage:
                 symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=0
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_negative_limit_raises(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="limit must be positive"):
@@ -407,16 +419,18 @@ class TestGetOhlcvCoverage:
                 symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=-5
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_response_returns_empty_list(self) -> None:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = []
         provider = _make_provider(mock_client=mock_client)
 
-        bars = await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d")
+        bars = await provider.get_ohlcv(
+            symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d"
+        )
         assert bars == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_limit_clips_records(self) -> None:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = _make_historical_data(10)
@@ -427,7 +441,7 @@ class TestGetOhlcvCoverage:
         )
         assert len(bars) == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_since_filter(self) -> None:
         data = _make_historical_data(5)
         mock_client = MagicMock()
@@ -445,24 +459,28 @@ class TestGetOhlcvCoverage:
         for bar in bars:
             assert bar.timestamp >= since
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_client_missing_historical_data(self) -> None:
         mock_client = MagicMock(spec=[])
         provider = _make_provider(mock_client=mock_client)
 
         with pytest.raises(ConfigError, match="must have historical_data"):
-            await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d")
+            await provider.get_ohlcv(
+                symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d"
+            )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_historical_data_returns_non_list(self) -> None:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = "not_a_list"
         provider = _make_provider(mock_client=mock_client)
 
         with pytest.raises(ConfigError, match="must return list"):
-            await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d")
+            await provider.get_ohlcv(
+                symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d"
+            )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_supported_timeframes(self) -> None:
         for tf in ("1m", "5m", "15m", "30m", "1h", "1d"):
             mock_client = MagicMock()
@@ -473,26 +491,30 @@ class TestGetOhlcvCoverage:
             )
             assert len(bars) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_supported_exchanges(self) -> None:
         for ex in (Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS):
             mock_client = MagicMock()
             mock_client.historical_data.return_value = _make_historical_data(1)
             provider = _make_provider(mock_client=mock_client)
-            bars = await provider.get_ohlcv(symbol="SYM", exchange=ex, timeframe="1d", limit=1)
+            bars = await provider.get_ohlcv(
+                symbol="SYM", exchange=ex, timeframe="1d", limit=1
+            )
             assert len(bars) == 1
 
 
 class TestGetOhlcvBatchCoverage:
     """Extended get_ohlcv_batch coverage."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_empty_symbols_returns_empty(self) -> None:
         provider = _make_provider()
-        result = await provider.get_ohlcv_batch(symbols=[], exchange=Exchange.NSE, timeframe="1d")
+        result = await provider.get_ohlcv_batch(
+            symbols=[], exchange=Exchange.NSE, timeframe="1d"
+        )
         assert result == {}
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_single_symbol(self) -> None:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = _make_historical_data(2)
@@ -504,7 +526,7 @@ class TestGetOhlcvBatchCoverage:
         assert "RELIANCE" in result
         assert len(result["RELIANCE"]) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_symbols(self) -> None:
         mock_client = MagicMock()
         mock_client.historical_data.return_value = _make_historical_data(2)
@@ -520,7 +542,7 @@ class TestGetOhlcvBatchCoverage:
         for sym in ("RELIANCE", "TCS", "INFY"):
             assert sym in result
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_zero_limit_raises(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="limit must be positive"):
@@ -528,7 +550,7 @@ class TestGetOhlcvBatchCoverage:
                 symbols=["RELIANCE"], exchange=Exchange.NSE, timeframe="1d", limit=0
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_unsupported_exchange_raises(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="Unsupported exchange"):
@@ -536,7 +558,7 @@ class TestGetOhlcvBatchCoverage:
                 symbols=["BTC"], exchange=Exchange.BINANCE, timeframe="1d"
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_batch_partial_failure_raises(self) -> None:
         call_count = 0
 
@@ -560,7 +582,7 @@ class TestGetOhlcvBatchCoverage:
 class TestGetTickerCoverage:
     """Extended get_ticker coverage."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_successful_ticker_fetch(self) -> None:
         mock_client = MagicMock()
         mock_client.quote.return_value = _make_quote_data()
@@ -572,13 +594,13 @@ class TestGetTickerCoverage:
         assert snapshot.exchange == Exchange.NSE
         assert snapshot.source == "kiteconnect"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_unsupported_exchange(self) -> None:
         provider = _make_provider()
         with pytest.raises(ConfigError, match="Unsupported exchange"):
             await provider.get_ticker(symbol="BTC", exchange=Exchange.BINANCE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_client_missing_quote(self) -> None:
         mock_client = MagicMock(spec=[])
         provider = _make_provider(mock_client=mock_client)
@@ -586,7 +608,7 @@ class TestGetTickerCoverage:
         with pytest.raises(ConfigError, match="must have quote"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_quote_returns_non_dict(self) -> None:
         mock_client = MagicMock()
         mock_client.quote.return_value = [1, 2, 3]
@@ -595,7 +617,7 @@ class TestGetTickerCoverage:
         with pytest.raises(ConfigError, match="must return dict"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_alt_field_names(self) -> None:
         mock_client = MagicMock()
         mock_client.quote.return_value = {
@@ -611,7 +633,7 @@ class TestGetTickerCoverage:
         snapshot = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
         assert snapshot.symbol == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_best_bid_offer_fields(self) -> None:
         mock_client = MagicMock()
         mock_client.quote.return_value = {
@@ -627,7 +649,7 @@ class TestGetTickerCoverage:
         snapshot = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
         assert snapshot.symbol == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_float_values_converted(self) -> None:
         mock_client = MagicMock()
         mock_client.quote.return_value = {
@@ -645,7 +667,7 @@ class TestGetTickerCoverage:
         assert isinstance(snapshot.bid, Decimal)
         assert isinstance(snapshot.ask, Decimal)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ticker_missing_quote_key_returns_defaults(self) -> None:
         mock_client = MagicMock()
         mock_client.quote.return_value = {"NSE:OTHER": {"last_price": 100}}
@@ -741,7 +763,7 @@ class TestFromEnvCoverage:
 class TestRateLimiterIntegration:
     """Rate limiter integration with KiteProvider."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_acquire_release_cycle(self) -> None:
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
         provider = _make_provider(rate_limiter=limiter)
@@ -751,14 +773,18 @@ class TestRateLimiterIntegration:
         )
         assert isinstance(bars, list)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_burst_capacity_respected(self) -> None:
         limiter = RateLimiter(requests_per_second=3.0, burst_capacity=2)
         provider = _make_provider(rate_limiter=limiter)
 
         results = await asyncio.gather(
-            provider.get_ohlcv(symbol="A", exchange=Exchange.NSE, timeframe="1d", limit=1),
-            provider.get_ohlcv(symbol="B", exchange=Exchange.NSE, timeframe="1d", limit=1),
+            provider.get_ohlcv(
+                symbol="A", exchange=Exchange.NSE, timeframe="1d", limit=1
+            ),
+            provider.get_ohlcv(
+                symbol="B", exchange=Exchange.NSE, timeframe="1d", limit=1
+            ),
         )
         assert len(results) == 2
 
@@ -766,7 +792,7 @@ class TestRateLimiterIntegration:
 class TestRetryWithBackoffCoverage:
     """Retry with backoff integration coverage."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_retry_succeeds_after_transient_failure(self) -> None:
         call_count = 0
 
@@ -777,44 +803,54 @@ class TestRetryWithBackoffCoverage:
                 raise Exception("429 Too Many Requests")
             return "ok"
 
-        provider = _make_provider(retry_config=RetryConfig(max_retries=3, initial_delay=0.01))
+        provider = _make_provider(
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01)
+        )
         result = await provider._retry_with_backoff(flaky_func)
         assert result == "ok"
         assert call_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_retries_exhausted(self) -> None:
         async def always_fail(**kwargs: Any) -> Any:
             raise Exception("503 Service Unavailable")
 
-        provider = _make_provider(retry_config=RetryConfig(max_retries=2, initial_delay=0.01))
+        provider = _make_provider(
+            retry_config=RetryConfig(max_retries=2, initial_delay=0.01)
+        )
         with pytest.raises(ConfigError, match="failed after 2 retries"):
             await provider._retry_with_backoff(always_fail)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_non_retryable_401_raises(self) -> None:
         async def auth_fail(**kwargs: Any) -> Any:
             raise Exception("401 Unauthorized")
 
-        provider = _make_provider(retry_config=RetryConfig(max_retries=3, initial_delay=0.01))
+        provider = _make_provider(
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01)
+        )
         with pytest.raises(ConfigError, match="Non-retryable error.*401"):
             await provider._retry_with_backoff(auth_fail)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_non_retryable_403_raises(self) -> None:
         async def forbidden_fail(**kwargs: Any) -> Any:
             raise Exception("403 Forbidden")
 
-        provider = _make_provider(retry_config=RetryConfig(max_retries=3, initial_delay=0.01))
+        provider = _make_provider(
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01)
+        )
         with pytest.raises(ConfigError, match="Non-retryable error.*403"):
             await provider._retry_with_backoff(forbidden_fail)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_non_retryable_generic_raises(self) -> None:
         async def bad_request(**kwargs: Any) -> Any:
             raise Exception("400 Bad Request")
 
-        provider = _make_provider(retry_config=RetryConfig(max_retries=3, initial_delay=0.01))
+        provider = _make_provider(
+            retry_config=RetryConfig(max_retries=3, initial_delay=0.01)
+        )
         with pytest.raises(ConfigError, match="Non-retryable error"):
             await provider._retry_with_backoff(bad_request)
 
@@ -822,7 +858,7 @@ class TestRetryWithBackoffCoverage:
 class TestCircuitBreakerInteraction:
     """Circuit breaker integration with KiteProvider."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_breaker_opens_after_failures(self) -> None:
         cb = CircuitBreaker(failure_threshold=2, reset_timeout=60.0)
 
@@ -841,7 +877,7 @@ class TestCircuitBreakerInteraction:
 
         assert cb.state.value == "open"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_open_blocks_request(self) -> None:
         cb = CircuitBreaker(failure_threshold=1, reset_timeout=60.0)
 
@@ -997,13 +1033,17 @@ class TestProcessOhlcvDataCoverage:
     def test_clips_when_records_exceed_limit(self) -> None:
         provider = _make_provider()
         data = _make_historical_data(10)
-        result = provider._process_ohlcv_data(data, "RELIANCE", Exchange.NSE, "1d", None, 3)
+        result = provider._process_ohlcv_data(
+            data, "RELIANCE", Exchange.NSE, "1d", None, 3
+        )
         assert len(result) == 3
 
     def test_no_clip_when_within_limit(self) -> None:
         provider = _make_provider()
         data = _make_historical_data(3)
-        result = provider._process_ohlcv_data(data, "RELIANCE", Exchange.NSE, "1d", None, 100)
+        result = provider._process_ohlcv_data(
+            data, "RELIANCE", Exchange.NSE, "1d", None, 100
+        )
         assert len(result) == 3
 
 
@@ -1055,7 +1095,7 @@ class TestBuildTickerSnapshotCoverage:
 class TestRetryWithBackoffIntegration:
     """Integration tests for _retry_with_backoff with rate limiter."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_acquire_release_called(self) -> None:
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
         provider = _make_provider(rate_limiter=limiter)
@@ -1066,7 +1106,7 @@ class TestRetryWithBackoffIntegration:
         result = await provider._retry_with_backoff(simple_func)
         assert result == "done"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_released_on_error(self) -> None:
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
         provider = _make_provider(
@@ -1111,7 +1151,9 @@ class TestRetryConfigValidation:
             RetryConfig(jitter_seconds=-0.5)
 
     def test_zero_circuit_failure_threshold_rejected(self) -> None:
-        with pytest.raises(ValueError, match="circuit_failure_threshold must be positive"):
+        with pytest.raises(
+            ValueError, match="circuit_failure_threshold must be positive"
+        ):
             RetryConfig(circuit_failure_threshold=0)
 
     def test_zero_circuit_reset_timeout_rejected(self) -> None:

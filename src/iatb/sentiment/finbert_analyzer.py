@@ -6,7 +6,11 @@ from collections.abc import Callable, Mapping
 from decimal import Decimal
 
 from iatb.core.exceptions import ConfigError
-from iatb.sentiment.base import SentimentAnalyzer, SentimentScore, sentiment_label_from_score
+from iatb.sentiment.base import (
+    SentimentAnalyzer,
+    SentimentScore,
+    sentiment_label_from_score,
+)
 from iatb.sentiment.helpers import parse_finbert_label_score, resolve_finbert_predictor
 
 PredictFn = Callable[[str], list[Mapping[str, object]]]

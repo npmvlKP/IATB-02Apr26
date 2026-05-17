@@ -3,7 +3,11 @@ Backtesting and forward-testing utilities.
 """
 
 from iatb.backtesting.event_driven import EventDrivenBacktester, EventDrivenResult
-from iatb.backtesting.forward_test import ForwardTestConfig, ForwardTester, ForwardTestResult
+from iatb.backtesting.forward_test import (
+    ForwardTestConfig,
+    ForwardTester,
+    ForwardTestResult,
+)
 from iatb.backtesting.indian_costs import CostBreakdown, calculate_indian_costs
 from iatb.backtesting.monte_carlo import MonteCarloAnalyzer, MonteCarloResult
 from iatb.backtesting.report import QuantStatsReporter

@@ -32,7 +32,7 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
         np.random.seed(DETERMINISTIC_SEED)
     except ImportError:
         pass
-    yield
+    return
 
 
 # ---------------------------------------------------------------------------
@@ -40,13 +40,13 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
+@pytest.fixture()
 def tmp_storage_dir(tmp_path: Path) -> Path:
     """Provide a temporary directory for DuckDB/SQLite/Parquet/file tests."""
     return tmp_path
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_kite_client() -> MagicMock:
     """Pre-configured mock of KiteConnect with historical_data/quote stubs."""
     client = MagicMock()
@@ -55,7 +55,7 @@ def mock_kite_client() -> MagicMock:
     return client
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_event_bus() -> MagicMock:
     """Pre-configured mock EventBus with subscribe/publish stubs."""
     bus = MagicMock()
@@ -64,7 +64,7 @@ def mock_event_bus() -> MagicMock:
     return bus
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_redis_client() -> MagicMock:
     """Pre-configured mock of redis.asyncio.Redis."""
     redis = MagicMock()
@@ -74,7 +74,7 @@ def mock_redis_client() -> MagicMock:
     return redis
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None, None]:
     """Pre-configured mock of streamlit module with all UI methods."""
     st = ModuleType("streamlit")
@@ -108,10 +108,10 @@ def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None
     ):
         setattr(st, name, MagicMock())
     monkeypatch.setitem(_sys.modules, "streamlit", st)
-    yield st
+    return st
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ohlcv_bars() -> list[dict[str, object]]:
     """Fixture providing valid OHLCVBar dicts for reuse."""
     return [
@@ -127,7 +127,7 @@ def sample_ohlcv_bars() -> list[dict[str, object]]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_kite_historical_data() -> list[dict[str, object]]:
     """Fixture providing raw Kite API historical_data response dicts."""
     return [
@@ -143,7 +143,7 @@ def sample_kite_historical_data() -> list[dict[str, object]]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_kite_quote_data() -> dict[str, dict[str, object]]:
     """Fixture providing raw Kite API quote response dict."""
     return {
@@ -156,7 +156,7 @@ def sample_kite_quote_data() -> dict[str, dict[str, object]]:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ticker_snapshot() -> dict:
     """Fixture providing valid TickerSnapshot."""
     return {
@@ -169,7 +169,7 @@ def sample_ticker_snapshot() -> dict:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_market_tick_event() -> dict:
     """Fixture providing valid MarketTickEvent."""
     return {
@@ -179,7 +179,7 @@ def sample_market_tick_event() -> dict:
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_order_update_event() -> dict:
     """Fixture providing valid OrderUpdateEvent."""
     return {
@@ -200,7 +200,7 @@ def _event_stub(event_type_name: str, **attrs: object) -> object:
     return instance
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_signal_event() -> object:
     """Fixture providing valid SignalEvent."""
     from iatb.core.enums import Exchange, OrderSide
@@ -218,7 +218,7 @@ def sample_signal_event() -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_scan_update_event() -> object:
     """Fixture providing valid ScanUpdateEvent."""
     return _event_stub(
@@ -232,7 +232,7 @@ def sample_scan_update_event() -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_pnl_update_event() -> object:
     """Fixture providing valid PnLUpdateEvent."""
     return _event_stub(
@@ -248,7 +248,7 @@ def sample_pnl_update_event() -> object:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_regime_change_event() -> object:
     """Fixture providing valid RegimeChangeEvent."""
     return _event_stub(
@@ -259,3 +259,23 @@ def sample_regime_change_event() -> object:
         confidence=Decimal("0.85"),
         metadata={"key1": "value1", "key2": "value2"},
     )
+
+
+@pytest.fixture()
+def sample_strength_inputs() -> dict[str, object]:
+    """Fixture providing valid StrengthInputs kwargs for reuse."""
+    from iatb.market_strength.regime_detector import MarketRegime
+
+    return {
+        "breadth_ratio": Decimal("1.0"),
+        "regime": MarketRegime.SIDEWAYS,
+        "adx": Decimal("20"),
+        "volume_ratio": Decimal("1.0"),
+        "volatility_atr_pct": Decimal("0.03"),
+    }
+
+
+@pytest.fixture()
+def utc_now() -> datetime:
+    """Fixture providing deterministic UTC datetime for tests."""
+    return datetime(2024, 6, 15, 10, 0, 0, tzinfo=UTC)

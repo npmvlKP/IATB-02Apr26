@@ -4,7 +4,11 @@ Sentiment analysis package.
 
 from iatb.sentiment.aggregator import SentimentAggregator, SentimentGateResult
 from iatb.sentiment.aion_analyzer import AionAnalyzer
-from iatb.sentiment.base import SentimentAnalyzer, SentimentScore, sentiment_label_from_score
+from iatb.sentiment.base import (
+    SentimentAnalyzer,
+    SentimentScore,
+    sentiment_label_from_score,
+)
 from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
 from iatb.sentiment.news_analyzer import NewsAnalyzer, NewsArticle, NewsSentimentResult
 from iatb.sentiment.news_scraper import NewsHeadline, NewsScraper, headlines_to_articles

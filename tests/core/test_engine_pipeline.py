@@ -30,7 +30,7 @@ from iatb.selection.strength_signal import StrengthSignalOutput
 from iatb.selection.volume_profile_signal import VolumeProfileSignalOutput
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_engine_dependencies():
     """Provide mock core dependencies for Engine initialization."""
     return {
@@ -43,7 +43,9 @@ def mock_engine_dependencies():
 class TestEngineWiring:
     """Test engine wiring with dynamic dependencies."""
 
-    def test_engine_initialization_with_all_dependencies(self, mock_engine_dependencies) -> None:
+    def test_engine_initialization_with_all_dependencies(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test engine initialization with all pipeline dependencies."""
         mock_scorer = MagicMock()
         mock_kill_switch = MagicMock()
@@ -123,7 +125,9 @@ class TestDynamicSymbolLoading:
         # Verify config was accessed
         mock_config.get_symbols.assert_called_once_with(exchange=Exchange.NSE)
 
-    def test_dynamic_symbol_loading_fallback_to_defaults(self, mock_engine_dependencies) -> None:
+    def test_dynamic_symbol_loading_fallback_to_defaults(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test fallback to default symbols when config unavailable."""
         from iatb.core.exceptions import ConfigError
 
@@ -144,7 +148,9 @@ class TestDynamicSymbolLoading:
                 # Verify run_scan_cycle was called
                 mock_run.assert_called_once()
 
-    def test_dynamic_symbol_loading_with_empty_config(self, mock_engine_dependencies) -> None:
+    def test_dynamic_symbol_loading_with_empty_config(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test behavior when config returns empty symbol list."""
         mock_data_provider = MagicMock()
         engine = Engine(**mock_engine_dependencies, data_provider=mock_data_provider)
@@ -167,7 +173,9 @@ class TestDynamicSymbolLoading:
                 # Should use defaults when config is empty
                 mock_run.assert_called_once()
 
-    def test_dynamic_symbol_loading_with_explicit_symbols(self, mock_engine_dependencies) -> None:
+    def test_dynamic_symbol_loading_with_explicit_symbols(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test that explicitly provided symbols override config."""
         mock_data_provider = MagicMock()
         engine = Engine(**mock_engine_dependencies, data_provider=mock_data_provider)
@@ -194,7 +202,9 @@ class TestStrengthScorerIntegration:
         assert engine.instrument_scorer is not None
         assert isinstance(engine.instrument_scorer, InstrumentScorer)
 
-    def test_strength_scorer_used_in_selection_cycle(self, mock_engine_dependencies) -> None:
+    def test_strength_scorer_used_in_selection_cycle(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test strength scorer is used during selection cycle."""
         engine = Engine(**mock_engine_dependencies)
 
@@ -240,7 +250,9 @@ class TestStrengthScorerIntegration:
         # Verify scorer was called
         engine._scorer.score_and_select.assert_called_once()
 
-    def test_strength_scorer_caching_in_pipeline(self, mock_engine_dependencies) -> None:
+    def test_strength_scorer_caching_in_pipeline(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test strength scorer caching is respected in pipeline."""
         from iatb.selection.instrument_scorer import InstrumentScorer
 
@@ -280,7 +292,9 @@ class TestStrengthScorerIntegration:
         regime = MarketRegime.BULL
 
         # Mock scorer to raise exception
-        engine._scorer.score_and_select = MagicMock(side_effect=Exception("Scorer failed"))
+        engine._scorer.score_and_select = MagicMock(
+            side_effect=Exception("Scorer failed")
+        )
 
         with pytest.raises(Exception, match="Scorer failed"):
             engine.select_instruments(signals, regime)
@@ -298,7 +312,9 @@ class TestDeprecatedFileRemoval:
         # Verify engine does not import deprecated modules
         assert "deprecated_scanner" not in dir(engine)
 
-    def test_pipeline_uses_new_scan_cycle_module(self, mock_engine_dependencies) -> None:
+    def test_pipeline_uses_new_scan_cycle_module(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test pipeline uses the new scan_cycle module."""
         mock_data_provider = MagicMock()
         engine = Engine(**mock_engine_dependencies, data_provider=mock_data_provider)
@@ -395,7 +411,9 @@ class TestEnginePipelineIntegration:
             with pytest.raises(Exception, match="Pipeline error"):
                 engine.run_full_cycle()
 
-    def test_pipeline_with_dynamic_symbol_refresh(self, mock_engine_dependencies) -> None:
+    def test_pipeline_with_dynamic_symbol_refresh(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test pipeline with dynamic symbol refresh during runtime."""
         from iatb.scanner.scan_cycle import refresh_symbols
 
@@ -422,7 +440,9 @@ class TestEnginePipelineIntegration:
 
                 mock_run.assert_called_once()
 
-    def test_pipeline_strength_scorer_integration(self, mock_engine_dependencies) -> None:
+    def test_pipeline_strength_scorer_integration(
+        self, mock_engine_dependencies
+    ) -> None:
         """Test strength scorer integration in full pipeline."""
         from iatb.market_strength.strength_scorer import StrengthScorer
 

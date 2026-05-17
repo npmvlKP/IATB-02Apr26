@@ -106,7 +106,12 @@ class DuckDBStore:
         try:
             if bars:
                 delete_params = [
-                    (bar.exchange.value, bar.symbol, bar.timestamp.isoformat(), bar.source)
+                    (
+                        bar.exchange.value,
+                        bar.symbol,
+                        bar.timestamp.isoformat(),
+                        bar.source,
+                    )
                     for bar in bars
                 ]
                 connection.executemany(
@@ -267,24 +272,24 @@ class DuckDBStore:
         try:
             rows = connection.execute(
                 """
-                    SELECT
-                        DATE(timestamp_utc) AS trade_date,
-                        MAX(CAST(high_price AS DOUBLE)) AS high,
-                        MIN(CAST(low_price AS DOUBLE)) AS low,
-                        (SELECT close_price FROM ohlcv_bars o2
-                         WHERE o2.symbol = ? AND o2.exchange = ?
-                         AND DATE(o2.timestamp_utc) = DATE(o1.timestamp_utc)
-                         ORDER BY timestamp_utc DESC LIMIT 1) AS close,
-                        (SELECT open_price FROM ohlcv_bars o3
-                         WHERE o3.symbol = ? AND o3.exchange = ?
-                         AND DATE(o3.timestamp_utc) = DATE(o1.timestamp_utc)
-                         ORDER BY timestamp_utc ASC LIMIT 1) AS open,
-                        SUM(CAST(volume AS DOUBLE)) AS volume
-                    FROM ohlcv_bars o1
-                    WHERE o1.symbol = ? AND o1.exchange = ?
-                    AND o1.timestamp_utc >= ? AND o1.timestamp_utc <= ?
-                    GROUP BY DATE(o1.timestamp_utc)
-                    ORDER BY trade_date
+                SELECT
+                    CAST(o1.timestamp_utc AS DATE) AS trade_date,
+                    MAX(CAST(high_price AS DOUBLE)) AS high,
+                    MIN(CAST(low_price AS DOUBLE)) AS low,
+                    (SELECT close_price FROM ohlcv_bars o2
+                     WHERE o2.symbol = ? AND o2.exchange = ?
+                     AND CAST(o2.timestamp_utc AS DATE) = CAST(o1.timestamp_utc AS DATE)
+                     ORDER BY timestamp_utc DESC LIMIT 1) AS close,
+                    (SELECT open_price FROM ohlcv_bars o3
+                     WHERE o3.symbol = ? AND o3.exchange = ?
+                     AND CAST(o3.timestamp_utc AS DATE) = CAST(o1.timestamp_utc AS DATE)
+                     ORDER BY timestamp_utc ASC LIMIT 1) AS open,
+                    SUM(CAST(volume AS DOUBLE)) AS volume
+                FROM ohlcv_bars o1
+                WHERE o1.symbol = ? AND o1.exchange = ?
+                AND o1.timestamp_utc >= ? AND o1.timestamp_utc <= ?
+                GROUP BY CAST(o1.timestamp_utc AS DATE)
+                ORDER BY trade_date
                 """,
                 (
                     symbol,
@@ -303,7 +308,9 @@ class DuckDBStore:
 
         return self._process_daily_summary_rows(rows)
 
-    def _process_daily_summary_rows(self, rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    def _process_daily_summary_rows(
+        self, rows: list[tuple[Any, ...]]
+    ) -> list[dict[str, Any]]:
         """Process and validate daily summary rows. Separated to reduce function size."""
         result: list[dict[str, Any]] = []
         for row in rows:
@@ -331,7 +338,9 @@ class DuckDBStore:
 
         return result
 
-    def _process_moving_average_rows(self, rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    def _process_moving_average_rows(
+        self, rows: list[tuple[Any, ...]]
+    ) -> list[dict[str, Any]]:
         """Process rows from moving average query."""
         result: list[dict[str, Any]] = []
         for row in rows:
@@ -437,7 +446,13 @@ class DuckDBStore:
                 AND timestamp_utc >= ? AND timestamp_utc <= ?
                 ORDER BY timestamp_utc
                 """,
-                (window - 1, symbol, exchange.value, start.isoformat(), end.isoformat()),
+                (
+                    window - 1,
+                    symbol,
+                    exchange.value,
+                    start.isoformat(),
+                    end.isoformat(),
+                ),
             ).fetchall()
         finally:
             if self._connection is None:
@@ -448,7 +463,9 @@ class DuckDBStore:
                 {
                     "timestamp": _normalize_timestamp(row[0]),
                     "close": create_price(str(row[1])),
-                    "volatility": create_price(str(row[2])) if row[2] is not None else None,
+                    "volatility": create_price(str(row[2]))
+                    if row[2] is not None
+                    else None,
                 }
             )
         return result
@@ -486,7 +503,13 @@ class DuckDBStore:
                 AND timestamp_utc >= ? AND timestamp_utc <= ?
                 ORDER BY timestamp_utc
                 """,
-                (window - 1, symbol, exchange.value, start.isoformat(), end.isoformat()),
+                (
+                    window - 1,
+                    symbol,
+                    exchange.value,
+                    start.isoformat(),
+                    end.isoformat(),
+                ),
             ).fetchall()
         finally:
             if self._connection is None:
@@ -528,7 +551,9 @@ class DuckDBStore:
         returns = self._compute_returns(pivot, symbols)
         return self._compute_correlation_matrix(returns)
 
-    def _build_price_pivot(self, rows: list[tuple[Any, ...]]) -> dict[str, dict[str, Decimal]]:
+    def _build_price_pivot(
+        self, rows: list[tuple[Any, ...]]
+    ) -> dict[str, dict[str, Decimal]]:
         """Build pivot table: symbol -> {timestamp: close}."""
         pivot: dict[str, dict[str, Decimal]] = {}
         for row in rows:
@@ -556,7 +581,11 @@ class DuckDBStore:
             for i in range(1, len(sym_prices)):
                 prev_price = sym_prices[i - 1]
                 curr_price = sym_prices[i]
-                if prev_price is not None and curr_price is not None and prev_price != Decimal("0"):
+                if (
+                    prev_price is not None
+                    and curr_price is not None
+                    and prev_price != Decimal("0")
+                ):
                     ret = (curr_price - prev_price) / prev_price
                     sym_returns.append(ret)
             if sym_returns:
@@ -589,25 +618,27 @@ class DuckDBStore:
                             [(r1[i] - mean1) * (r2[i] - mean2) for i in range(min_len)],
                             Decimal("0"),
                         ) / Decimal(str(min_len))
-                        var1 = sum([(r - mean1) ** 2 for r in r1], Decimal("0")) / Decimal(
-                            str(min_len)
-                        )
-                        var2 = sum([(r - mean2) ** 2 for r in r2], Decimal("0")) / Decimal(
-                            str(min_len)
-                        )
+                        var1 = sum(
+                            [(r - mean1) ** 2 for r in r1], Decimal("0")
+                        ) / Decimal(str(min_len))
+                        var2 = sum(
+                            [(r - mean2) ** 2 for r in r2], Decimal("0")
+                        ) / Decimal(str(min_len))
                         if var1 > Decimal("0") and var2 > Decimal("0"):
-                            correlation_matrix[sym1][sym2] = cov / (var1.sqrt() * var2.sqrt())
+                            correlation_matrix[sym1][sym2] = cov / (
+                                var1.sqrt() * var2.sqrt()
+                            )
                         else:
                             correlation_matrix[sym1][sym2] = Decimal("0")
         return correlation_matrix
 
     def query_parquet(self, file_pattern: str) -> list[OHLCVBar]:
         connection = self._get_connection()
-        try:
-            rows = connection.execute("SELECT * FROM read_parquet(?)", [file_pattern]).fetchall()
-        finally:
-            if self._connection is None:
-                connection.close()
+        rows = connection.execute(
+            "SELECT * FROM read_parquet(?)", [file_pattern]
+        ).fetchall()
+        if self._connection is None:
+            connection.close()
         return [self._row_to_ohlcv(row) for row in rows]
 
     def migrate_parquet_to_duckdb(self, parquet_dir: Path) -> int:
@@ -615,15 +646,26 @@ class DuckDBStore:
         pattern = str(parquet_dir / "*.parquet")
         connection = self._get_connection()
         try:
-            count_row = connection.execute(
-                "SELECT COUNT(*) FROM read_parquet(?)", [pattern]
-            ).fetchone()
-            row_count = int(str(count_row[0])) if count_row and count_row[0] is not None else 0
+            try:
+                count_row = connection.execute(
+                    "SELECT COUNT(*) FROM read_parquet(?)", [pattern]
+                ).fetchone()
+                row_count = (
+                    int(str(count_row[0]))
+                    if count_row and count_row[0] is not None
+                    else 0
+                )
+            except Exception:
+                return 0
             if row_count == 0:
                 return 0
             connection.execute(
-                "DELETE FROM ohlcv_bars WHERE (exchange, symbol, timestamp_utc, source) IN ("
-                "SELECT exchange, symbol, timestamp_utc, source FROM read_parquet(?))",
+                "DELETE FROM ohlcv_bars o1 WHERE EXISTS ("
+                "SELECT 1 FROM read_parquet(?) o2 "
+                "WHERE o1.exchange = o2.exchange "
+                "AND o1.symbol = o2.symbol "
+                "AND o1.timestamp_utc = o2.timestamp_utc "
+                "AND o1.source = o2.source)",
                 [pattern],
             )
             connection.execute(

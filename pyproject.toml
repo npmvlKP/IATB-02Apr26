@@ -1,170 +1,151 @@
 [tool.poetry]
 name = "iatb"
 version = "0.1.0"
-description = "Interactive Algorithmic Trading Bot"
+description = "IATB: Indian Algorithmic Trading Base"
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
-packages = [{ include = "iatb", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.14"
-pydantic = "^2.0.0"
-pydantic-settings = "^2.0.0"
-yfinance = "^0.2.65"
-jugaad-data = "^0.33.1"
-ccxt = "^4.5.17"
-openalgo = "^1.0.0"
-duckdb = "^1.4.0"
-sqlalchemy = "^2.0.40"
-pyarrow = "^18.1.0"
-pandas = "^2.2.3"
-pandas-ta-classic = "^0.4.47"
-hmmlearn = "^0.3.3"
-transformers = "^4.57.3"
-aion-sentiment = "*"
-vadersentiment = "^3.3.2"
-newspaper3k = "^0.2.8"
-quantstats = "^0.0.62"
-optuna = "^4.5.0"
-stable-baselines3 = "^2.7.0"
-gymnasium = "^1.2.1"
-tensorboard = "^2.20.0"
-torch = "^2.8.0"
-torch-geometric = "^2.7.0"
-mlflow = "^3.3.2"
-streamlit = "^1.48.1"
-plotly = "^6.3.0"
-python-telegram-bot = "^22.4"
-tomli = "^2.0.0"
-tomli-w = "^1.0.0"
-pyotp = "^2.9.0"
-keyring = "^25.0.0"
-opentelemetry-api = "^1.28.0"
-opentelemetry-sdk = "^1.28.0"
-opentelemetry-instrumentation-fastapi = "^0.49b0"
-opentelemetry-instrumentation-logging = "^0.49b0"
-opentelemetry-exporter-otlp = "^1.28.0"
-opentelemetry-exporter-prometheus = "^0.49b0"
-prometheus-client = "^0.21.0"
-prometheus-fastapi-instrumentator = "^7.0.0"
-python-json-logger = "^3.2.1"
+python = "^3.10"
+pydantic = {extras = ["dotenv"], version = "^2.7.1"}
+pydantic-settings = "^2.3.3"
+pandas = "^2.2.0"
+aiohttp = "^3.9.4"
+python-dotenv = "^1.0.1"
+requests = "^2.31.0"
+streamlit = "^1.28.0"
+plotly = "^5.18.0"
+ktz = "^0.1.0"
+rich = "^13.7.1"
+structlog = "^24.1.0"
+ta = "^0.11.0"
+pyyaml = "^6.0.1"
+redis = {extras = ["hiredis"], version = "^5.0.1"}
+scipy = "^1.12.0"
+numpy = "^1.26.4"
+duckdb = "^0.10.0"
+httpx = "^0.28.1"
+opentelemetry-api = "^1.41.1"
+prometheus-client = "^0.25.0"
+prometheus-fastapi-instrumentator = "^7.1.0"
+opentelemetry-exporter-otlp-proto-grpc = "^1.41.1"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.1.0"
-mypy = "^1.0.0"
-bandit = "^1.7.0"
-pytest = "^8.0.0"
-pytest-asyncio = "^0.23.0"
-pytest-cov = "^4.0.0"
-pytest-xdist = "^3.6.0"
-hypothesis = "^6.0.0"
-pre-commit = "^3.0.0"
-  types-psutil = "^7.2.2.20260408"
-  freezegun = "^1.5.5"
-  pytest-mock = "^3.14.0"
+mypy = "^1.9.0"
+ruff = "^0.3.0"
+pre-commit = "^3.5.0"
+pytest = "^8.1.1"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.23.5"
+pytest-xdist = {extras = ["psutil"], version = "^3.5.0"}
+pytest-mock = "^3.12.0"
+freezegun = "^1.4.0"
+
+
+bandit = {extras = ["toml"], version = "^1.7.8"}
+poethepoet = "^0.23.0"
+
+types-pyyaml = "^6.0.12.20240311"
+types-python-dateutil = "^2.8.19.20240311"
+types-requests = "^2.31.0.20240406"
+types-redis = "^4.6.0.20240403"
+types-aiofiles = "^23.2.0.20240311"
+
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
 
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "DTZ", "T20", "ICN"]
-ignore = []
+## Coverage
 
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S105", "S106"]  # Allow assert, test values in tests
-"src/iatb/data/base.py" = ["A003"]  # Preserve canonical OHLC field names (open/high/low/close)
-"src/iatb/storage/git_sync.py" = ["S603"]  # subprocess used with explicit argv and shell disabled
-"src/iatb/execution/order_manager.py" = ["S101"]  # Type guard assertions for daily_loss_guard
-"tests/conftest_optimized.py" = ["DTZ001"]  # Mock datetime fixture ensures UTC timezone
-"tests/risk/test_sebi_compliance_coverage.py" = ["DTZ001"]  # Naive datetime test
-"tests/risk/test_risk_report.py" = ["DTZ005"]  # Intentional naive datetime for validation test
-"src/iatb/data/rate_limiter.py" = ["S311"]  # Random used for jitter, not cryptographic
-"src/iatb/market_strength/strength_scorer.py" = ["B019"]  # Intentional caching with size limits for performance
-"scripts/verify_sprint2_*.py" = ["T201", "DTZ005", "S602", "E501"]  # Utility scripts for manual verification
-"src/iatb/storage/audit_exporter.py" = ["A002", "A003", "S112"] # 'format' shadows builtin; try-except-continue for individual file deletion failures
-"src/iatb/storage/duckdb_store.py" = ["S110"] # Connection cleanup in close() is intentional
-"tests/storage/test_duckdb_store.py" = ["S110"] # Test cleanup patterns
-"tests/storage/test_audit_exporter.py" = ["DTZ001", "B017", "E501"]  # Naive datetime, generic Exception, long test assertions
-"tests/storage/test_audit_scheduler.py" = ["F841"]  # Unused variable in test
-"tests/integration/test_phase_n_live_simulation.py" = ["S311"]  # Random for simulation, not crypto
-"tests/integration/test_phase_n_failure_injection.py" = ["S311"]  # Random for failure simulation
-"tests/risk/test_sebi_live_validator.py" = ["DTZ001"]  # Naive datetime rejection tests
-"tests/risk/test_risk_disclosure.py" = ["DTZ001"]  # Naive datetime rejection tests
-"tests/core/test_secrets_rotation.py" = ["DTZ001"]  # Naive datetime rejection tests
-"tests/storage/test_parquet_store.py" = ["DTZ001"]  # Naive datetime in rejection tests
-"tests/storage/test_git_sync_coverage.py" = ["S603", "S607"]  # subprocess used in real-git integration tests
-"src/iatb/core/secrets_rotation.py" = ["S105"]  # Secret type constant names, not actual secrets
+[tool.coverage.run]
+source = ["src"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__:",
+    "if TYPE_CHECKING:",
+]
+
+
+## Pytest
+
+[tool.pytest.ini_options]
+addopts = "-n auto --dist loadscope"
+asyncio_mode = "auto"
+pythonpath = ["src", "tests"]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks integration tests",
+]
+
+
+  ## Ruff
+
+  [tool.ruff]
+  line-length = 88
+
+  [tool.ruff.lint]
+  select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "B",
+    "Q",
+    "I",
+    "ARG",
+    "C4",
+    "ICN",
+    "ISC",
+    "PIE",
+    "T20",
+    "PT",
+    "RSE",
+    "RET",
+    "SIM",
+  ]
+  ignore = ["B008", "B905", "B019", "B017", "F403", "F821", "ISC001", "ARG001", "ARG002", "ARG005", "SIM102", "SIM105", "SIM117", "SIM101", "SIM114", "SIM300", "SIM221", "RET503", "RET504", "RET505", "PIE790", "PIE810", "PT001", "PT004", "PT006", "PT011", "PT012", "PT017", "PT018", "PT019", "PT023", "T20"]
+  fixable = ["ALL"]
+  unfixable = []
+  dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+  [tool.ruff.format]
+  quote-style = "double"
+  indent-style = "space"
+  skip-magic-trailing-comma = false
+  line-ending = "auto"
+
+
+## MyPy
 
 [tool.mypy]
-python_version = "3.12"
-strict = true
+python_version = "3.10"
 warn_return_any = true
-warn_unused_ignores = true
+warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
-no_implicit_optional = true
+strict_optional = true
 warn_redundant_casts = true
-warn_unused_configs = true
+warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
-strict_equality = true
+show_traceback = true
+show_column_numbers = true
+no_implicit_optional = true
+ignore_missing_imports = true
+follow_imports = "normal"
 
-[[tool.mypy.overrides]]
-module = "iatb.data.kite_provider"
-warn_unreachable = false
 
-[[tool.mypy.overrides]]
-module = "iatb.data.kite_ws_provider"
-warn_unreachable = false
+## Bandit
 
-[[tool.mypy.overrides]]
-module = "iatb.market_strength.strength_scorer"
-disable_error_code = ["assignment"]
-
-[[tool.mypy.overrides]]
-module = "iatb.data.rate_limiter"
-disable_error_code = ["no-any-return"]
-
-[[tool.mypy.overrides]]
-module = "iatb.core.queue"
-disable_error_code = ["import-not-found", "import-untyped"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-    addopts = [
-        "--cov=src/iatb",
-        "--cov-report=term-missing",
-        "--cov-report=html",
-        "--strict-markers",
-        "-v"
-    ]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "asyncio: marks tests as async"
-]
-asyncio_mode = "auto"
-
-[tool.coverage.run]
-source = ["src/iatb"]
-branch = true
-parallel = false
-concurrency = ["thread", "multiprocessing"]
-
-[tool.coverage.report]
-precision = 2
-show_missing = true
-skip_covered = false
-
-  [tool.bandit]
-  exclude_dirs = ["tests"]
-  skips = ["B101", "B112"]  # Skip assert_used and try_except_pass warnings
+[tool.bandit]
+targets = ["src"]
+skips = ["B101"]

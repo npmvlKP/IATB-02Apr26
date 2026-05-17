@@ -18,7 +18,7 @@ from iatb.data.kite_provider import KiteProvider
 class TestKiteFinancialInvariants:
     """Test financial invariants for Kite provider data."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Mock Kite client returning realistic data."""
         client = MagicMock()
@@ -50,24 +50,30 @@ class TestKiteFinancialInvariants:
         ]
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_high_ge_low(self, mock_kite_client):
         """Invariant: High price must be >= Low price."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
         )
 
         for bar in bars:
-            assert bar.high >= bar.low, f"High {bar.high} < Low {bar.low} at {bar.timestamp}"
+            assert (
+                bar.high >= bar.low
+            ), f"High {bar.high} < Low {bar.low} at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_open_within_range(self, mock_kite_client):
         """Invariant: Open price must be within [Low, High]."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
@@ -78,11 +84,13 @@ class TestKiteFinancialInvariants:
                 bar.low <= bar.open <= bar.high
             ), f"Open {bar.open} not in [{bar.low}, {bar.high}] at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_close_within_range(self, mock_kite_client):
         """Invariant: Close price must be within [Low, High]."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
@@ -93,55 +101,77 @@ class TestKiteFinancialInvariants:
                 bar.low <= bar.close <= bar.high
             ), f"Close {bar.close} not in [{bar.low}, {bar.high}] at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_volume_non_negative(self, mock_kite_client):
         """Invariant: Volume must be >= 0."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
         )
 
         for bar in bars:
-            assert bar.volume >= Decimal("0"), f"Volume {bar.volume} < 0 at {bar.timestamp}"
+            assert bar.volume >= Decimal(
+                "0"
+            ), f"Volume {bar.volume} < 0 at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_prices_are_decimal(self, mock_kite_client):
         """Invariant: All price fields must be Decimal, not float."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
         )
 
         for bar in bars:
-            assert isinstance(bar.open, Decimal), f"Open is not Decimal: {type(bar.open)}"
-            assert isinstance(bar.high, Decimal), f"High is not Decimal: {type(bar.high)}"
+            assert isinstance(
+                bar.open, Decimal
+            ), f"Open is not Decimal: {type(bar.open)}"
+            assert isinstance(
+                bar.high, Decimal
+            ), f"High is not Decimal: {type(bar.high)}"
             assert isinstance(bar.low, Decimal), f"Low is not Decimal: {type(bar.low)}"
-            assert isinstance(bar.close, Decimal), f"Close is not Decimal: {type(bar.close)}"
-            assert isinstance(bar.volume, Decimal), f"Volume is not Decimal: {type(bar.volume)}"
+            assert isinstance(
+                bar.close, Decimal
+            ), f"Close is not Decimal: {type(bar.close)}"
+            assert isinstance(
+                bar.volume, Decimal
+            ), f"Volume is not Decimal: {type(bar.volume)}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_timestamp_utc_aware(self, mock_kite_client):
         """Invariant: All timestamps must be UTC-aware."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
         )
 
         for bar in bars:
-            assert bar.timestamp.tzinfo is not None, f"Timestamp has no timezone at {bar.timestamp}"
-            assert bar.timestamp.tzinfo == UTC, f"Timestamp not in UTC at {bar.timestamp}"
+            assert (
+                bar.timestamp.tzinfo is not None
+            ), f"Timestamp has no timezone at {bar.timestamp}"
+            assert (
+                bar.timestamp.tzinfo == UTC
+            ), f"Timestamp not in UTC at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_source_populated(self, mock_kite_client):
         """Invariant: Source field must be populated."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
@@ -151,11 +181,13 @@ class TestKiteFinancialInvariants:
             assert bar.source, f"Source is empty at {bar.timestamp}"
             assert bar.source == "kiteconnect", f"Source {bar.source} != 'kiteconnect'"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_symbol_and_exchange_consistent(self, mock_kite_client):
         """Invariant: Symbol and exchange must be consistent across all bars."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
@@ -165,11 +197,13 @@ class TestKiteFinancialInvariants:
             assert bar.symbol == "RELIANCE", f"Symbol mismatch: {bar.symbol}"
             assert bar.exchange == Exchange.NSE, f"Exchange mismatch: {bar.exchange}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_timeframe_consistent(self, mock_kite_client):
         """Invariant: Timeframe must be consistent across all bars."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
@@ -178,11 +212,13 @@ class TestKiteFinancialInvariants:
         for bar in bars:
             assert bar.timeframe == "1d", f"Timeframe mismatch: {bar.timeframe}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_no_extreme_price_anomalies(self, mock_kite_client):
         """Invariant: No extreme price anomalies (e.g., negative, zero)."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d", limit=100
@@ -198,7 +234,7 @@ class TestKiteFinancialInvariants:
 class TestCCXTFinancialInvariants:
     """Test financial invariants for CCXT provider data."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_ccxt_client(self):
         """Mock CCXT client returning realistic data."""
         client = MagicMock()
@@ -209,7 +245,7 @@ class TestCCXTFinancialInvariants:
         ]
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ccxt_invariant_high_ge_low(self, mock_ccxt_client):
         """Invariant: High price must be >= Low price (CCXT)."""
         provider = CCXTProvider(exchange_factory=lambda _: mock_ccxt_client)
@@ -218,9 +254,11 @@ class TestCCXTFinancialInvariants:
         )
 
         for bar in bars:
-            assert bar.high >= bar.low, f"High {bar.high} < Low {bar.low} at {bar.timestamp}"
+            assert (
+                bar.high >= bar.low
+            ), f"High {bar.high} < Low {bar.low} at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ccxt_invariant_prices_are_decimal(self, mock_ccxt_client):
         """Invariant: All price fields must be Decimal, not float (CCXT)."""
         provider = CCXTProvider(exchange_factory=lambda _: mock_ccxt_client)
@@ -229,13 +267,21 @@ class TestCCXTFinancialInvariants:
         )
 
         for bar in bars:
-            assert isinstance(bar.open, Decimal), f"Open is not Decimal: {type(bar.open)}"
-            assert isinstance(bar.high, Decimal), f"High is not Decimal: {type(bar.high)}"
+            assert isinstance(
+                bar.open, Decimal
+            ), f"Open is not Decimal: {type(bar.open)}"
+            assert isinstance(
+                bar.high, Decimal
+            ), f"High is not Decimal: {type(bar.high)}"
             assert isinstance(bar.low, Decimal), f"Low is not Decimal: {type(bar.low)}"
-            assert isinstance(bar.close, Decimal), f"Close is not Decimal: {type(bar.close)}"
-            assert isinstance(bar.volume, Decimal), f"Volume is not Decimal: {type(bar.volume)}"
+            assert isinstance(
+                bar.close, Decimal
+            ), f"Close is not Decimal: {type(bar.close)}"
+            assert isinstance(
+                bar.volume, Decimal
+            ), f"Volume is not Decimal: {type(bar.volume)}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ccxt_invariant_timestamp_utc_aware(self, mock_ccxt_client):
         """Invariant: All timestamps must be UTC-aware (CCXT)."""
         provider = CCXTProvider(exchange_factory=lambda _: mock_ccxt_client)
@@ -244,10 +290,14 @@ class TestCCXTFinancialInvariants:
         )
 
         for bar in bars:
-            assert bar.timestamp.tzinfo is not None, f"Timestamp has no timezone at {bar.timestamp}"
-            assert bar.timestamp.tzinfo == UTC, f"Timestamp not in UTC at {bar.timestamp}"
+            assert (
+                bar.timestamp.tzinfo is not None
+            ), f"Timestamp has no timezone at {bar.timestamp}"
+            assert (
+                bar.timestamp.tzinfo == UTC
+            ), f"Timestamp not in UTC at {bar.timestamp}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ccxt_invariant_source_populated(self, mock_ccxt_client):
         """Invariant: Source field must be populated (CCXT)."""
         provider = CCXTProvider(exchange_factory=lambda _: mock_ccxt_client)
@@ -257,13 +307,15 @@ class TestCCXTFinancialInvariants:
 
         for bar in bars:
             assert bar.source, f"Source is empty at {bar.timestamp}"
-            assert bar.source == "ccxt:binance", f"Source {bar.source} != 'ccxt:binance'"
+            assert (
+                bar.source == "ccxt:binance"
+            ), f"Source {bar.source} != 'ccxt:binance'"
 
 
 class TestTickerFinancialInvariants:
     """Test financial invariants for ticker data."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Mock Kite client for ticker tests."""
         client = MagicMock()
@@ -277,21 +329,25 @@ class TestTickerFinancialInvariants:
         }
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_ask_ge_bid(self, mock_kite_client):
         """Invariant: Ask price must be >= Bid price."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
         assert ticker.ask >= ticker.bid, f"Ask {ticker.ask} < Bid {ticker.bid}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_last_within_spread(self, mock_kite_client):
         """Invariant: Last price should be within [Bid, Ask] range."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
@@ -303,27 +359,37 @@ class TestTickerFinancialInvariants:
             "1.01"
         ), f"Last {ticker.last} too high vs Ask {ticker.ask}"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_ticker_volume_non_negative(self, mock_kite_client):
         """Invariant: Ticker volume must be >= 0."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
         assert ticker.volume_24h >= Decimal("0"), f"Volume {ticker.volume_24h} < 0"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invariant_ticker_prices_are_decimal(self, mock_kite_client):
         """Invariant: Ticker price fields must be Decimal."""
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_kite_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_kite_client,
         )
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-        assert isinstance(ticker.bid, Decimal), f"Bid is not Decimal: {type(ticker.bid)}"
-        assert isinstance(ticker.ask, Decimal), f"Ask is not Decimal: {type(ticker.ask)}"
-        assert isinstance(ticker.last, Decimal), f"Last is not Decimal: {type(ticker.last)}"
+        assert isinstance(
+            ticker.bid, Decimal
+        ), f"Bid is not Decimal: {type(ticker.bid)}"
+        assert isinstance(
+            ticker.ask, Decimal
+        ), f"Ask is not Decimal: {type(ticker.ask)}"
+        assert isinstance(
+            ticker.last, Decimal
+        ), f"Last is not Decimal: {type(ticker.last)}"
         assert isinstance(
             ticker.volume_24h, Decimal
         ), f"Volume is not Decimal: {type(ticker.volume_24h)}"

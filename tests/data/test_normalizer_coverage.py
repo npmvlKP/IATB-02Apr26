@@ -15,7 +15,7 @@ from iatb.data.base import OHLCVBar
 from iatb.data.normalizer import normalize_ohlcv_batch, normalize_ohlcv_record
 
 
-@pytest.fixture
+@pytest.fixture()
 @patch("iatb.data.normalizer.create_price")
 @patch("iatb.data.normalizer.create_quantity")
 @patch("iatb.data.normalizer.create_timestamp")
@@ -42,7 +42,9 @@ def mock_helpers(mock_timestamp, mock_quantity, mock_price):
         ),  # ISO string
     ],
 )
-def test_normalize_valid_ohlcv_record(timestamp_input, expected_timestamp, mock_helpers):
+def test_normalize_valid_ohlcv_record(
+    timestamp_input, expected_timestamp, mock_helpers
+):
     """Valid OHLCV record with varying timestamp types."""
     raw_record = {
         "timestamp": timestamp_input,
@@ -246,7 +248,9 @@ def test_invalid_type_raises(mock_helpers):
         "volume": "5000",
     }
     raw_record["open"] = object()
-    with pytest.raises(ValidationError, match="open must be Decimal, int, float, or str"):
+    with pytest.raises(
+        ValidationError, match="open must be Decimal, int, float, or str"
+    ):
         normalize_ohlcv_record(
             raw_record,
             symbol="AAPL",

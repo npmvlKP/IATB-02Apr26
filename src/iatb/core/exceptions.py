@@ -21,52 +21,34 @@ class IATBError(Exception):
 class ValidationError(IATBError):
     """Exception raised for validation errors."""
 
-    pass
-
 
 class ConfigError(IATBError):
     """Exception raised for configuration errors."""
-
-    pass
 
 
 class EventBusError(IATBError):
     """Exception raised for event bus errors."""
 
-    pass
-
 
 class ClockError(IATBError):
     """Exception raised for clock/time-related errors."""
-
-    pass
 
 
 class EngineError(IATBError):
     """Exception raised for engine/lifecycle errors."""
 
-    pass
-
 
 class InstrumentResolutionError(IATBError):
     """Exception raised when instrument resolution fails."""
-
-    pass
 
 
 class EngineNotRunningError(IATBError):
     """Exception raised when engine/runtime is not started."""
 
-    pass
-
 
 class ExecutionError(IATBError):
     """Exception raised for order execution errors."""
 
-    pass
-
 
 class ExchangeHaltError(IATBError):
     """Exception raised when exchange is halted."""
-
-    pass

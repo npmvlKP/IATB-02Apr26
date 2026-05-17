@@ -31,7 +31,7 @@ from iatb.scanner.instrument_scanner import (
 class TestKiteProviderDataSourceValidation:
     """Test that KiteProvider correctly attributes data source."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_data(self):
         """Create mock historical data from Kite API."""
         return [
@@ -53,14 +53,16 @@ class TestKiteProviderDataSourceValidation:
             },
         ]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_returns_direct_historical_data(self, mock_kite_data):
         """Verify KiteProvider.get_ohlcv() returns data matching kite.historical_data() directly."""
         mock_client = MagicMock()
         mock_client.historical_data.return_value = mock_kite_data
 
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_client,
         )
 
         bars = await provider.get_ohlcv(
@@ -86,35 +88,44 @@ class TestKiteProviderDataSourceValidation:
             assert bar.symbol == "RELIANCE"
             assert bar.exchange == Exchange.NSE
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_ohlcv_bars_have_kiteconnect_source(self, mock_kite_data):
         """Verify all OHLCVBar objects have source='kiteconnect' when using KiteProvider."""
         mock_client = MagicMock()
         mock_client.historical_data.return_value = mock_kite_data
 
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_client,
         )
 
-        bars = await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d")
+        bars = await provider.get_ohlcv(
+            symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d"
+        )
 
         # Verify all bars have source="kiteconnect"
         for bar in bars:
             assert bar.source == "kiteconnect", (
-                f"Bar at {bar.timestamp} has source " f"'{bar.source}', expected 'kiteconnect'"
+                f"Bar at {bar.timestamp} has source "
+                f"'{bar.source}', expected 'kiteconnect'"
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_handles_empty_response(self):
         """Verify KiteProvider handles empty historical_data() response correctly."""
         mock_client = MagicMock()
         mock_client.historical_data.return_value = []
 
         provider = KiteProvider(
-            api_key="key", access_token="token", kite_connect_factory=lambda k, t: mock_client
+            api_key="key",
+            access_token="token",
+            kite_connect_factory=lambda k, t: mock_client,
         )
 
-        bars = await provider.get_ohlcv(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d")
+        bars = await provider.get_ohlcv(
+            symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1d"
+        )
 
         assert bars == []
 
@@ -122,7 +133,7 @@ class TestKiteProviderDataSourceValidation:
 class TestScannerDataSourceConsistency:
     """Test that Scanner produces consistent MarketData from different sources."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_market_data(self):
         """Create mock market data for testing."""
         return MarketData(
@@ -142,7 +153,7 @@ class TestScannerDataSourceConsistency:
             data_source="kiteconnect",
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_data_provider(self, mock_market_data):
         """Create a mock data provider that returns OHLCV bars."""
         provider = MagicMock(spec=DataProvider)
@@ -180,7 +191,7 @@ class TestScannerDataSourceConsistency:
         provider.get_ohlcv = mock_get_ohlcv
         return provider
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_scanner_with_kite_provider_produces_correct_data(  # noqa: E501
         self,
         mock_data_provider,
@@ -202,7 +213,7 @@ class TestScannerDataSourceConsistency:
         # But we can verify the data was fetched
         assert result.total_scanned >= 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_scanner_with_custom_data_produces_identical_results(  # noqa: E501
         self, mock_market_data
     ):
@@ -218,8 +229,10 @@ class TestScannerDataSourceConsistency:
         # The custom data should be used as-is
         # (Note: filtered_count may be > 0 if data doesn't pass filters)
 
-    @pytest.mark.asyncio
-    async def test_scanner_preserves_data_source_from_provider(self, mock_data_provider):
+    @pytest.mark.asyncio()
+    async def test_scanner_preserves_data_source_from_provider(
+        self, mock_data_provider
+    ):
         """Verify Scanner preserves data_source from KiteProvider in MarketData."""
         scanner = InstrumentScanner(
             config=ScannerConfig(lookback_days=2),
@@ -237,7 +250,7 @@ class TestScannerDataSourceConsistency:
 class TestRateLimiterValidation:
     """Test that rate limiter prevents exceeding 3 requests/second."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_rate_limiter_respects_3_req_sec(self):
         """Verify KiteProvider's internal rate limiter enforces 3 requests/second."""
         from iatb.data.rate_limiter import RateLimiter
@@ -272,7 +285,7 @@ class TestRateLimiterValidation:
         # Clean up
         limiter.release()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_scanner_rate_limiter_configurable(self):
         """Verify Scanner rate limiter can be configured."""
         from iatb.data.rate_limiter import AsyncRateLimiter
@@ -285,7 +298,7 @@ class TestRateLimiterValidation:
         # Verify the rate limiter was set
         assert scanner._rate_limiter == limiter
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_retry_respects_rate_limit(self):
         """Verify KiteProvider retry logic respects rate limit during retries."""
         from iatb.data.rate_limiter import RetryConfig
@@ -321,4 +334,6 @@ class TestRateLimiterValidation:
         assert call_count == 3
 
         # Should have taken time for retries with rate limiting
-        assert elapsed >= 0.2, f"Expected >= 0.2s with rate-limited retries, got {elapsed}s"
+        assert (
+            elapsed >= 0.2
+        ), f"Expected >= 0.2s with rate-limited retries, got {elapsed}s"

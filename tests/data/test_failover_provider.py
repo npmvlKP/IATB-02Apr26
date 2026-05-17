@@ -138,7 +138,7 @@ class MockProvider(DataProvider):
         return results
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_metrics_switches() -> list[tuple[str, str, str]]:
     """Mock metrics switches callback."""
     switches: list[tuple[str, str, str]] = []
@@ -149,12 +149,14 @@ def mock_metrics_switches() -> list[tuple[str, str, str]]:
     return switches, record_switch
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_metrics_latency() -> list[tuple[str, str, float]]:
     """Mock metrics latency callback."""
     latencies: list[tuple[str, str, float]] = []
 
-    def record_latency(provider_name: str, method_name: str, latency_seconds: float) -> None:
+    def record_latency(
+        provider_name: str, method_name: str, latency_seconds: float
+    ) -> None:
         latencies.append((provider_name, method_name, latency_seconds))
 
     return latencies, record_latency
@@ -198,7 +200,9 @@ class TestFailoverProviderInitialization:
         assert failover._circuits["provider1"].cooldown_seconds == 10.0
         assert failover._circuits["provider2"].cooldown_seconds == 10.0
 
-    def test_metrics_callbacks_stored(self, mock_metrics_switches, mock_metrics_latency) -> None:
+    def test_metrics_callbacks_stored(
+        self, mock_metrics_switches, mock_metrics_latency
+    ) -> None:
         """Test that metrics callbacks are stored."""
         provider = MockProvider("test")
         _, switches_cb = mock_metrics_switches
@@ -217,7 +221,7 @@ class TestFailoverProviderInitialization:
 class TestFailoverProviderHappyPath:
     """Tests for happy path scenarios (primary provider succeeds)."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_primary_provider_succeeds_get_ohlcv(self) -> None:
         """Test that primary provider succeeds for get_ohlcv."""
         primary = MockProvider("kiteconnect")
@@ -237,7 +241,7 @@ class TestFailoverProviderHappyPath:
         assert len(primary.get_ohlcv_calls) == 1
         assert len(secondary.get_ohlcv_calls) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_primary_provider_succeeds_get_ticker(self) -> None:
         """Test that primary provider succeeds for get_ticker."""
         primary = MockProvider("kiteconnect")
@@ -254,7 +258,7 @@ class TestFailoverProviderHappyPath:
         assert len(primary.get_ticker_calls) == 1
         assert len(secondary.get_ticker_calls) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_primary_provider_succeeds_get_ohlcv_batch(self) -> None:
         """Test that primary provider succeeds for get_ohlcv_batch."""
         primary = MockProvider("kiteconnect")
@@ -277,7 +281,7 @@ class TestFailoverProviderHappyPath:
 class TestFailoverProviderFailover:
     """Tests for failover scenarios (primary fails, secondary succeeds)."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_primary_fails_secondary_succeeds_get_ohlcv(
         self, mock_metrics_switches, mock_metrics_latency
     ) -> None:
@@ -309,8 +313,10 @@ class TestFailoverProviderFailover:
         assert len(latencies) == 1
         assert latencies[0][0] == "jugaad"
 
-    @pytest.mark.asyncio
-    async def test_primary_fails_secondary_succeeds_get_ticker(self, mock_metrics_switches) -> None:
+    @pytest.mark.asyncio()
+    async def test_primary_fails_secondary_succeeds_get_ticker(
+        self, mock_metrics_switches
+    ) -> None:
         """Test failover from primary to secondary for get_ticker."""
         primary = MockProvider("kiteconnect", should_fail=True)
         secondary = MockProvider("jugaad")
@@ -332,7 +338,7 @@ class TestFailoverProviderFailover:
         assert len(switches) == 1
         assert switches[0] == ("kiteconnect", "jugaad", "get_ticker")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_two_providers_fail_third_succeeds(self) -> None:
         """Test failover through two failed providers to third."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -395,7 +401,9 @@ class TestCircuitBreaker:
 
     def test_cooldown_prevents_availability(self) -> None:
         """Test that cooldown period prevents availability."""
-        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0, failure_threshold=2)
+        circuit = CircuitBreaker(
+            provider_name="test", cooldown_seconds=30.0, failure_threshold=2
+        )
         # Record 2 failures to reach threshold
         circuit.record_failure()
         circuit.record_failure()
@@ -425,7 +433,9 @@ class TestCircuitBreaker:
 
     def test_cooldown_reset_on_success(self) -> None:
         """Test that success resets circuit state."""
-        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0, failure_threshold=2)
+        circuit = CircuitBreaker(
+            provider_name="test", cooldown_seconds=30.0, failure_threshold=2
+        )
         # Record 2 failures to open circuit
         circuit.record_failure()
         circuit.record_failure()
@@ -441,7 +451,9 @@ class TestCircuitBreaker:
 
     def test_is_available_with_half_open_state(self) -> None:
         """Test is_available when circuit is in HALF_OPEN state."""
-        circuit = CircuitBreaker(provider_name="test", cooldown_seconds=30.0, failure_threshold=2)
+        circuit = CircuitBreaker(
+            provider_name="test", cooldown_seconds=30.0, failure_threshold=2
+        )
         # Record 2 failures to open circuit
         circuit.record_failure()
         circuit.record_failure()
@@ -457,7 +469,7 @@ class TestCircuitBreaker:
 class TestFailoverProviderCircuitBreaker:
     """Tests for FailoverProvider circuit breaker integration."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_failed_provider_skipped_during_cooldown(self) -> None:
         """Test that failed provider is skipped during cooldown."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -490,7 +502,7 @@ class TestFailoverProviderCircuitBreaker:
         # Primary should not have been called again (in cooldown)
         assert len(primary.get_ohlcv_calls) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_circuit_resets_after_cooldown(self) -> None:
         """Test that circuit resets after cooldown period."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -524,7 +536,7 @@ class TestFailoverProviderCircuitBreaker:
         # Primary should have been called again (cooldown expired)
         assert len(primary.get_ohlcv_calls) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_circuit_states(self) -> None:
         """Test get_circuit_states method."""
         primary = MockProvider("kiteconnect")
@@ -543,7 +555,7 @@ class TestFailoverProviderCircuitBreaker:
         assert states["kiteconnect"]["available"] is True
         assert states["kiteconnect"]["failure_count"] == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_reset_circuit(self) -> None:
         """Test reset_circuit method."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -589,7 +601,7 @@ class TestFailoverProviderCircuitBreaker:
 class TestFailoverProviderAllProvidersFail:
     """Tests for scenario where all providers fail."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_providers_fail_raises_error(self) -> None:
         """Test that ConfigError is raised when all providers fail."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -607,7 +619,7 @@ class TestFailoverProviderAllProvidersFail:
                 timeframe="1d",
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_providers_fail_in_cooldown_raises_error(self) -> None:
         """Test that ConfigError is raised when all providers are in cooldown."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -644,7 +656,7 @@ class TestFailoverProviderAllProvidersFail:
 class TestFailoverProviderLatencyTracking:
     """Tests for latency tracking in metrics."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_latency_recorded_on_success(self, mock_metrics_latency) -> None:
         """Test that latency is recorded on successful request."""
         primary = MockProvider("kiteconnect", delay_seconds=0.05)
@@ -667,7 +679,7 @@ class TestFailoverProviderLatencyTracking:
         assert method == "get_ohlcv"
         assert latency >= 0.05  # At least the delay we added
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_latency_not_recorded_on_failure(self, mock_metrics_latency) -> None:
         """Test that latency is not recorded on failed request."""
         primary = MockProvider("kiteconnect", should_fail=True)
@@ -693,7 +705,7 @@ class TestFailoverProviderLatencyTracking:
 class TestFailoverProviderSourceTagging:
     """Tests for source tagging in responses."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_source_tagged_in_ohlcv_response(self) -> None:
         """Test that source is tagged in OHLCV response."""
         provider = MockProvider("kiteconnect")
@@ -708,7 +720,7 @@ class TestFailoverProviderSourceTagging:
         assert len(result) == 1
         assert result[0].source == "kiteconnect"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_source_tagged_in_ticker_response(self) -> None:
         """Test that source is tagged in ticker response."""
         provider = MockProvider("kiteconnect")
@@ -721,7 +733,7 @@ class TestFailoverProviderSourceTagging:
 
         assert result.source == "kiteconnect"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_source_tagged_in_batch_response(self) -> None:
         """Test that source is tagged in batch response."""
         provider = MockProvider("kiteconnect")
@@ -864,7 +876,7 @@ class TestFailoverProviderEdgeCases:
 class TestFailoverProviderNaming:
     """Tests for provider name extraction logic."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_name_from_name_attribute(self) -> None:
         """Test provider name extraction from name attribute."""
         provider = MockProvider("custom_provider_name")
@@ -873,7 +885,7 @@ class TestFailoverProviderNaming:
         states = failover.get_circuit_states()
         assert "custom_provider_name" in states
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_name_from_class_name_fallback(self) -> None:
         """Test provider name extraction from class name (no name attribute)."""
 
@@ -924,7 +936,7 @@ class TestFailoverProviderNaming:
         # Should use class name with index as fallback
         assert "nonameprovider_0" in states
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_name_from_kite_provider_class(self) -> None:
         """Test provider name extraction for KiteProvider class name."""
 
@@ -986,7 +998,7 @@ class TestFailoverProviderNaming:
         # Should use "kiteconnect" from class name mapping
         assert "kiteconnect" in states
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_name_from_jugaad_provider_class(self) -> None:
         """Test provider name extraction for JugaadProvider class name."""
 
@@ -1048,7 +1060,7 @@ class TestFailoverProviderNaming:
         # Should use "jugaad" from class name mapping
         assert "jugaad" in states
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_name_from_yfinance_provider_class(self) -> None:
         """Test provider name extraction for YFinanceProvider class name."""
 
@@ -1110,8 +1122,10 @@ class TestFailoverProviderNaming:
         # Should use "yfinance" from class name mapping
         assert "yfinance" in states
 
-    @pytest.mark.asyncio
-    async def test_source_switch_logging_with_structlog(self, mock_metrics_switches) -> None:
+    @pytest.mark.asyncio()
+    async def test_source_switch_logging_with_structlog(
+        self, mock_metrics_switches
+    ) -> None:
         """Test that source switch logging works with structlog available."""
         # This test covers the structlog import path in _log_source_switch
         primary = MockProvider("kiteconnect", should_fail=True)

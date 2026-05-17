@@ -35,7 +35,9 @@ class MockBroker(BrokerInterface):
 
         self.place_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.cancel_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
-        self.get_positions_async: AsyncMock[list[Position]] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_positions_async: AsyncMock[list[Position]] = AsyncMock(
+            return_value=None
+        )  # type: ignore[assignment]
         self.get_orders_async: AsyncMock[list[Order]] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.get_margins_async: AsyncMock[Margin] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.get_order_history_async: AsyncMock[list[Mapping[str, Any]]] = (
@@ -88,7 +90,11 @@ class MockBroker(BrokerInterface):
         return await self.get_margins_async()
 
     async def get_order_history(
-        self, *, order_id: str, from_date: date | None = None, to_date: date | None = None
+        self,
+        *,
+        order_id: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> list[dict[str, Any]]:
         """Mock get order history implementation."""
         return await self.get_order_history_async(
@@ -150,7 +156,7 @@ class TestBrokerInterfaceCompliance:
     # Happy Path Tests
     # ========================================
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_market_order_success(self) -> None:
         """Test successful market order placement."""
         self.broker.place_order_async.return_value = self.sample_order
@@ -169,7 +175,7 @@ class TestBrokerInterfaceCompliance:
         assert result.status == OrderStatus.COMPLETE
         self.broker.place_order_async.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_limit_order_with_price(self) -> None:
         """Test successful limit order placement with price."""
         limit_order = Order(
@@ -202,7 +208,7 @@ class TestBrokerInterfaceCompliance:
         assert result.order_type == OrderType.LIMIT
         assert result.price == Decimal("1450.75")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_stop_loss_with_trigger_price(self) -> None:
         """Test successful stop-loss order placement with trigger price."""
         stop_loss_order = Order(
@@ -234,7 +240,7 @@ class TestBrokerInterfaceCompliance:
 
         assert result.trigger_price == Decimal("3390.00")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_delivery_product_type(self) -> None:
         """Test order placement with delivery product type."""
         self.broker.place_order_async.return_value = self.sample_order
@@ -251,7 +257,7 @@ class TestBrokerInterfaceCompliance:
         call_kwargs = self.broker.place_order_async.call_args[1]
         assert call_kwargs["product_type"] == ProductType.DELIVERY
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cancel_order_success(self) -> None:
         """Test successful order cancellation."""
         cancelled_order = Order(
@@ -276,7 +282,7 @@ class TestBrokerInterfaceCompliance:
         assert result.status == OrderStatus.CANCELLED
         assert result.order_id == "ORD123456"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_positions_returns_list(self) -> None:
         """Test get positions returns list of Position objects."""
         positions = [
@@ -310,7 +316,7 @@ class TestBrokerInterfaceCompliance:
         assert all(isinstance(p, Position) for p in result)
         assert result[0].symbol == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_orders_returns_list(self) -> None:
         """Test get orders returns list of Order objects."""
         self.broker.get_orders_async.return_value = [self.sample_order]
@@ -321,7 +327,7 @@ class TestBrokerInterfaceCompliance:
         assert len(result) == 1
         assert isinstance(result[0], Order)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_margins_returns_margin_details(self) -> None:
         """Test get margins returns Margin object with correct fields."""
         margin = Margin(
@@ -339,7 +345,7 @@ class TestBrokerInterfaceCompliance:
         assert result.used_margin == Decimal("20000.00")
         assert result.available_margin == Decimal("80000.00")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_order_history_with_date_range(self) -> None:
         """Test get order history with date range filter."""
         history = [
@@ -361,7 +367,7 @@ class TestBrokerInterfaceCompliance:
         assert len(result) == 1
         self.broker.get_order_history_async.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_holdings_returns_list(self) -> None:
         """Test get holdings returns list of holdings."""
         holdings = [
@@ -381,7 +387,7 @@ class TestBrokerInterfaceCompliance:
         assert len(result) == 1
         assert result[0]["symbol"] == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_modify_order_price_and_quantity(self) -> None:
         """Test order modification with new price and quantity."""
         self.broker.modify_order_async.return_value = self.sample_order
@@ -395,7 +401,7 @@ class TestBrokerInterfaceCompliance:
         assert result.order_id == "ORD123456"
         self.broker.modify_order_async.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_quote_returns_quote_data(self) -> None:
         """Test get quote returns quote data dictionary."""
         quote = {
@@ -417,7 +423,7 @@ class TestBrokerInterfaceCompliance:
     # Error Path Tests
     # ========================================
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_invalid_quantity_raises_error(self) -> None:
         """Test that invalid quantity raises ValueError."""
         self.broker.place_order_async.side_effect = ValueError("Invalid quantity")
@@ -431,10 +437,12 @@ class TestBrokerInterfaceCompliance:
                 quantity=-10,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_missing_limit_price_raises_error(self) -> None:
         """Test that missing limit price for LIMIT order raises ValueError."""
-        self.broker.place_order_async.side_effect = ValueError("Price required for LIMIT order")
+        self.broker.place_order_async.side_effect = ValueError(
+            "Price required for LIMIT order"
+        )
 
         with pytest.raises(ValueError, match="Price required"):
             await self.broker.place_order(
@@ -446,7 +454,7 @@ class TestBrokerInterfaceCompliance:
                 price=None,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cancel_order_invalid_id_raises_error(self) -> None:
         """Test that canceling non-existent order raises ValueError."""
         self.broker.cancel_order_async.side_effect = ValueError("Invalid order ID")
@@ -454,23 +462,27 @@ class TestBrokerInterfaceCompliance:
         with pytest.raises(ValueError, match="Invalid order ID"):
             await self.broker.cancel_order(order_id="INVALID_ID")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cancel_already_executed_order_raises_error(self) -> None:
         """Test that canceling already executed order raises RuntimeError."""
-        self.broker.cancel_order_async.side_effect = RuntimeError("Cannot cancel executed order")
+        self.broker.cancel_order_async.side_effect = RuntimeError(
+            "Cannot cancel executed order"
+        )
 
         with pytest.raises(RuntimeError, match="Cannot cancel executed"):
             await self.broker.cancel_order(order_id="ORD123456")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_positions_failure_raises_runtime_error(self) -> None:
         """Test that get positions failure raises RuntimeError."""
-        self.broker.get_positions_async.side_effect = RuntimeError("API connection failed")
+        self.broker.get_positions_async.side_effect = RuntimeError(
+            "API connection failed"
+        )
 
         with pytest.raises(RuntimeError, match="API connection failed"):
             await self.broker.get_positions()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_modify_order_invalid_parameters_raises_error(self) -> None:
         """Test that modify order with invalid parameters raises ValueError."""
         self.broker.modify_order_async.side_effect = ValueError(
@@ -484,7 +496,7 @@ class TestBrokerInterfaceCompliance:
     # Precision Handling Tests
     # ========================================
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_order_price_maintains_decimal_precision(self) -> None:
         """Test that order price maintains Decimal precision."""
         high_precision_price = Decimal("1234.56789")
@@ -518,7 +530,7 @@ class TestBrokerInterfaceCompliance:
         assert isinstance(result.price, Decimal)
         assert str(result.price) == "1234.56789"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_margin_values_use_decimal_precision(self) -> None:
         """Test that margin values use Decimal precision."""
         margin = Margin(
@@ -535,10 +547,15 @@ class TestBrokerInterfaceCompliance:
         assert result.used_margin == Decimal("20000.789012")
         assert all(
             isinstance(getattr(result, field), Decimal)
-            for field in ["available_cash", "used_margin", "available_margin", "opening_balance"]
+            for field in [
+                "available_cash",
+                "used_margin",
+                "available_margin",
+                "opening_balance",
+            ]
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_position_pnl_uses_decimal_precision(self) -> None:
         """Test that position P&L uses Decimal precision."""
         position = Position(
@@ -564,7 +581,7 @@ class TestBrokerInterfaceCompliance:
     # Timezone Handling Tests
     # ========================================
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_order_timestamp_is_utc_aware(self) -> None:
         """Test that order timestamp is timezone-aware in UTC."""
         utc_timestamp = datetime(2026, 4, 7, 14, 30, 0, tzinfo=UTC)
@@ -643,10 +660,12 @@ class TestBrokerInterfaceCompliance:
     # Edge Cases
     # ========================================
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_zero_quantity_raises_error(self) -> None:
         """Test that zero quantity order raises error."""
-        self.broker.place_order_async.side_effect = ValueError("Quantity must be positive")
+        self.broker.place_order_async.side_effect = ValueError(
+            "Quantity must be positive"
+        )
 
         with pytest.raises(ValueError, match="Quantity must be positive"):
             await self.broker.place_order(
@@ -657,7 +676,7 @@ class TestBrokerInterfaceCompliance:
                 quantity=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_empty_positions_list(self) -> None:
         """Test getting empty positions list."""
         self.broker.get_positions_async.return_value = []
@@ -667,7 +686,7 @@ class TestBrokerInterfaceCompliance:
         assert isinstance(result, list)
         assert len(result) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_empty_orders_list(self) -> None:
         """Test getting empty orders list."""
         self.broker.get_orders_async.return_value = []
@@ -677,7 +696,7 @@ class TestBrokerInterfaceCompliance:
         assert isinstance(result, list)
         assert len(result) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_modify_order_no_changes(self) -> None:
         """Test modify order with no actual changes."""
         self.broker.modify_order_async.return_value = self.sample_order
@@ -694,7 +713,7 @@ class TestBrokerInterfaceCompliance:
             disclosed_quantity=None,
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_order_history_no_dates(self) -> None:
         """Test get order history without date filters."""
         self.broker.get_order_history_async.return_value = []
@@ -710,7 +729,7 @@ class TestBrokerInterfaceCompliance:
     # External API Mocking Tests
     # ========================================
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_all_externall_apis_are_mocked(self) -> None:
         """Verify all external broker API calls are mocked."""
         assert isinstance(self.broker.place_order_async, AsyncMock)
@@ -723,7 +742,7 @@ class TestBrokerInterfaceCompliance:
         assert isinstance(self.broker.modify_order_async, AsyncMock)
         assert isinstance(self.broker.get_quote_async, AsyncMock)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_mock_isolation_no_external_calls(self) -> None:
         """Test that mocks prevent actual external API calls."""
         self.broker.place_order_async.return_value = self.sample_order

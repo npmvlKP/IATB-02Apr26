@@ -21,7 +21,7 @@ from iatb.data.ccxt_provider import CCXTProvider
 from iatb.data.kite_provider import KiteProvider
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_kite_ohlcv_response():
     """Sample Kite Connect OHLCV API response."""
     return [
@@ -52,7 +52,7 @@ def sample_kite_ohlcv_response():
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_binance_ticker_response():
     """Sample Binance ticker API response."""
     return {
@@ -68,7 +68,7 @@ def sample_binance_ticker_response():
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_kite_ticker_response():
     """Sample Kite Connect ticker API response."""
     return {
@@ -86,7 +86,7 @@ def sample_kite_ticker_response():
     }
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ccxt_ohlcv_rows():
     """Sample CCXT OHLCV rows format."""
     return [
@@ -96,7 +96,7 @@ def sample_ccxt_ohlcv_rows():
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ohlcv_bars():
     """Sample OHLCVBar objects."""
     return [
@@ -127,7 +127,7 @@ def sample_ohlcv_bars():
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ticker_snapshot():
     """Sample TickerSnapshot object."""
     return TickerSnapshot(
@@ -141,7 +141,7 @@ def sample_ticker_snapshot():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_kite_client():
     """Mock KiteConnect client for testing."""
     client = MagicMock()
@@ -174,7 +174,7 @@ def mock_kite_client():
     return client
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_ccxt_client():
     """Mock CCXT exchange client for testing."""
     client = MagicMock()
@@ -195,7 +195,7 @@ def mock_ccxt_client():
     return client
 
 
-@pytest.fixture
+@pytest.fixture()
 def kite_provider(mock_kite_client):
     """KiteProvider instance with mocked client."""
     return KiteProvider(
@@ -205,13 +205,13 @@ def kite_provider(mock_kite_client):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def ccxt_provider(mock_ccxt_client):
     """CCXTProvider instance with mocked client."""
     return CCXTProvider(exchange_factory=lambda _: mock_ccxt_client)
 
 
-@pytest.fixture
+@pytest.fixture()
 def multi_day_kite_data():
     """30 days of mock Kite OHLCV data for backtesting."""
     now = datetime.now(UTC)
@@ -239,7 +239,7 @@ def multi_day_kite_data():
     return bars
 
 
-@pytest.fixture
+@pytest.fixture()
 def split_adjusted_kite_data():
     """Mock data simulating a 2:1 stock split."""
     split_date = datetime(2024, 1, 15, tzinfo=UTC)

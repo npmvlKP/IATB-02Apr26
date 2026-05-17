@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 class ParquetStoreError(ConfigError):
     """Raised when ParquetStore operations fail."""
 
-    pass
-
 
 def _parse_timestamp(raw_value: object) -> Timestamp:
     if isinstance(raw_value, datetime):
-        parsed = raw_value if raw_value.tzinfo is not None else raw_value.replace(tzinfo=UTC)
+        parsed = (
+            raw_value if raw_value.tzinfo is not None else raw_value.replace(tzinfo=UTC)
+        )
         return create_timestamp(parsed.astimezone(UTC))
     if isinstance(raw_value, str):
         normalized = raw_value[:-1] + "+00:00" if raw_value.endswith("Z") else raw_value
@@ -81,7 +81,9 @@ class ParquetStore:
             msg = "pyarrow dependency is required for ParquetStore"
             raise ConfigError(msg) from exc
 
-    def _partition_dir(self, *, symbol: str, exchange: Exchange, timeframe: str) -> Path:
+    def _partition_dir(
+        self, *, symbol: str, exchange: Exchange, timeframe: str
+    ) -> Path:
         """Return the top-level partition directory for a symbol/exchange/timeframe."""
         return self._root_dir / exchange.value / symbol / timeframe
 
@@ -114,7 +116,10 @@ class ParquetStore:
             raise ConfigError("bars cannot be empty")
         validate_ohlcv_series(bars)
         partition = self._date_partition_dir(
-            symbol=symbol, exchange=exchange, timeframe=timeframe, when=bars[0].timestamp
+            symbol=symbol,
+            exchange=exchange,
+            timeframe=timeframe,
+            when=bars[0].timestamp,
         )
         partition.mkdir(parents=True, exist_ok=True)
         filename = self._build_filename(bars[0].timestamp, bars[-1].timestamp)
@@ -122,7 +127,12 @@ class ParquetStore:
         pyarrow, parquet = self._import_pyarrow()
         table = pyarrow.table(self._bars_to_columns(bars))
         parquet.write_table(table, file_path, compression=self._compression)
-        logger.info("Wrote %d bars to %s (compression=%s)", len(bars), file_path, self._compression)
+        logger.info(
+            "Wrote %d bars to %s (compression=%s)",
+            len(bars),
+            file_path,
+            self._compression,
+        )
         return file_path
 
     def read_bars(self, file_path: Path) -> list[OHLCVBar]:
@@ -136,17 +146,29 @@ class ParquetStore:
     # Listing
     # ------------------------------------------------------------------ #
 
-    def list_parquet_files(self, *, symbol: str, exchange: Exchange, timeframe: str) -> list[Path]:
-        partition = self._partition_dir(symbol=symbol, exchange=exchange, timeframe=timeframe)
+    def list_parquet_files(
+        self, *, symbol: str, exchange: Exchange, timeframe: str
+    ) -> list[Path]:
+        partition = self._partition_dir(
+            symbol=symbol, exchange=exchange, timeframe=timeframe
+        )
         if not partition.exists():
             return []
         return sorted(partition.rglob("*.parquet"))
 
     def _list_parquet_files_between(
-        self, *, symbol: str, exchange: Exchange, timeframe: str, start: datetime, end: datetime
+        self,
+        *,
+        symbol: str,
+        exchange: Exchange,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
     ) -> list[Path]:
         """List parquet files whose partition month overlaps with [start, end]."""
-        all_files = self.list_parquet_files(symbol=symbol, exchange=exchange, timeframe=timeframe)
+        all_files = self.list_parquet_files(
+            symbol=symbol, exchange=exchange, timeframe=timeframe
+        )
         if not all_files:
             return []
 
@@ -236,7 +258,9 @@ class ParquetStore:
                 if newest_ts < cutoff:
                     file_path.unlink()
                     deleted.append(file_path)
-                    logger.info("Deleted archived file (age > %d days): %s", days, file_path)
+                    logger.info(
+                        "Deleted archived file (age > %d days): %s", days, file_path
+                    )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Skipping cleanup for %s: %s", file_path, exc)
                 continue
@@ -277,10 +301,15 @@ class ParquetStore:
         if required - columns.keys():
             raise ConfigError("Parquet columns missing required OHLCV fields")
         total_rows = len(columns["timestamp_utc"])
-        return [ParquetStore._build_bar_from_columns(columns, index) for index in range(total_rows)]
+        return [
+            ParquetStore._build_bar_from_columns(columns, index)
+            for index in range(total_rows)
+        ]
 
     @staticmethod
-    def _build_bar_from_columns(columns: dict[str, list[object]], index: int) -> OHLCVBar:
+    def _build_bar_from_columns(
+        columns: dict[str, list[object]], index: int
+    ) -> OHLCVBar:
         return OHLCVBar(
             exchange=Exchange(str(columns["exchange"][index])),
             symbol=str(columns["symbol"][index]),

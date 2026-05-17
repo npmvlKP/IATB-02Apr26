@@ -23,13 +23,13 @@ from iatb.data.base import OHLCVBar, TickerSnapshot
 from iatb.data.migration_provider import ABTestResult, MigrationProvider
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_config_path():
     """Create mock config path."""
     return Path("config/settings.toml")
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_default_provider():
     """Create mock default provider."""
     provider = AsyncMock()
@@ -37,7 +37,7 @@ def mock_default_provider():
     return provider
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_fallback_provider():
     """Create mock fallback provider."""
     provider = AsyncMock()
@@ -45,7 +45,7 @@ def mock_fallback_provider():
     return provider
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ohlcv_bars():
     """Create sample OHLCV bars for testing."""
     timestamp = create_timestamp(datetime.now(UTC) - timedelta(days=30))
@@ -66,7 +66,7 @@ def sample_ohlcv_bars():
     return bars
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ohlcv_bars_different():
     """Create sample OHLCV bars with different values for A/B testing."""
     timestamp = create_timestamp(datetime.now(UTC) - timedelta(days=30))
@@ -88,7 +88,7 @@ def sample_ohlcv_bars_different():
     return bars
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_ticker_snapshot():
     """Create sample ticker snapshot."""
     return TickerSnapshot(
@@ -129,31 +129,49 @@ class TestMigrationProviderInit:
         }
         # Mock config file content
         with patch("builtins.open", MagicMock()):
-            with patch("tomli.load", return_value={"data": {"enable_ab_testing": True}}):
+            with patch(
+                "tomli.load", return_value={"data": {"enable_ab_testing": True}}
+            ):
                 provider = MigrationProvider.from_config(mock_config_path, providers)
         assert provider._default_provider == mock_default_provider
         assert provider._fallback_provider == mock_fallback_provider
 
-    def test_from_config_missing_default(self, mock_config_path, mock_fallback_provider):
+    def test_from_config_missing_default(
+        self, mock_config_path, mock_fallback_provider
+    ):
         """Test from_config fails when default provider is missing."""
         providers = {"kite": mock_fallback_provider}
-        with patch("tomli.load", return_value={"data": {"data_provider_default": "nonexistent"}}):
-            with pytest.raises(ConfigError, match="Default provider 'nonexistent' not found"):
+        with patch(
+            "tomli.load",
+            return_value={"data": {"data_provider_default": "nonexistent"}},
+        ):
+            with pytest.raises(
+                ConfigError, match="Default provider 'nonexistent' not found"
+            ):
                 MigrationProvider.from_config(mock_config_path, providers)
 
-    def test_from_config_missing_fallback(self, mock_config_path, mock_default_provider):
+    def test_from_config_missing_fallback(
+        self, mock_config_path, mock_default_provider
+    ):
         """Test from_config fails when fallback provider is missing."""
         providers = {"jugaad": mock_default_provider}
-        with patch("tomli.load", return_value={"data": {"data_provider_fallback": "nonexistent"}}):
-            with pytest.raises(ConfigError, match="Fallback provider 'nonexistent' not found"):
+        with patch(
+            "tomli.load",
+            return_value={"data": {"data_provider_fallback": "nonexistent"}},
+        ):
+            with pytest.raises(
+                ConfigError, match="Fallback provider 'nonexistent' not found"
+            ):
                 MigrationProvider.from_config(mock_config_path, providers)
 
 
 class TestMigrationProviderGetOHLCV:
     """Test get_ohlcv method with various scenarios."""
 
-    @pytest.mark.asyncio
-    async def test_get_ohlcv_single_path_success(self, mock_default_provider, sample_ohlcv_bars):
+    @pytest.mark.asyncio()
+    async def test_get_ohlcv_single_path_success(
+        self, mock_default_provider, sample_ohlcv_bars
+    ):
         """Test single-path execution with default provider success."""
         mock_default_provider.get_ohlcv.return_value = sample_ohlcv_bars
         provider = MigrationProvider(
@@ -170,7 +188,7 @@ class TestMigrationProviderGetOHLCV:
         assert result == sample_ohlcv_bars
         mock_default_provider.get_ohlcv.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_single_path_fallback(
         self, mock_default_provider, mock_fallback_provider, sample_ohlcv_bars
     ):
@@ -191,8 +209,10 @@ class TestMigrationProviderGetOHLCV:
         assert result == sample_ohlcv_bars
         mock_fallback_provider.get_ohlcv.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_get_ohlcv_both_fail(self, mock_default_provider, mock_fallback_provider):
+    @pytest.mark.asyncio()
+    async def test_get_ohlcv_both_fail(
+        self, mock_default_provider, mock_fallback_provider
+    ):
         """Test ConfigError when both providers fail."""
         mock_default_provider.get_ohlcv.side_effect = Exception("Default failed")
         mock_fallback_provider.get_ohlcv.side_effect = Exception("Fallback failed")
@@ -213,7 +233,7 @@ class TestMigrationProviderGetOHLCV:
 class TestMigrationProviderABTesting:
     """Test A/B testing functionality."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ab_testing_success_no_anomaly(
         self,
         mock_default_provider,
@@ -240,7 +260,7 @@ class TestMigrationProviderABTesting:
         assert summary["total_tests"] == 1
         assert summary["anomalies"] == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ab_testing_with_anomaly(
         self,
         mock_default_provider,
@@ -269,7 +289,7 @@ class TestMigrationProviderABTesting:
         assert summary["anomalies"] == 1
         assert summary["max_diff_pct"] > Decimal("5.0")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ab_testing_bar_count_mismatch(
         self,
         mock_default_provider,
@@ -296,7 +316,7 @@ class TestMigrationProviderABTesting:
         results = provider.get_ab_test_results()
         assert not results[0].bars_count_match
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ab_testing_default_fails_fallback_succeeds(
         self,
         mock_default_provider,
@@ -319,8 +339,10 @@ class TestMigrationProviderABTesting:
         )
         assert result == sample_ohlcv_bars  # Returns fallback
 
-    @pytest.mark.asyncio
-    async def test_ab_testing_both_fail(self, mock_default_provider, mock_fallback_provider):
+    @pytest.mark.asyncio()
+    async def test_ab_testing_both_fail(
+        self, mock_default_provider, mock_fallback_provider
+    ):
         """Test A/B testing when both providers fail."""
         mock_default_provider.get_ohlcv.side_effect = Exception("Default failed")
         mock_fallback_provider.get_ohlcv.side_effect = Exception("Fallback failed")
@@ -341,8 +363,10 @@ class TestMigrationProviderABTesting:
 class TestMigrationProviderGetTicker:
     """Test get_ticker method."""
 
-    @pytest.mark.asyncio
-    async def test_get_ticker_success(self, mock_default_provider, sample_ticker_snapshot):
+    @pytest.mark.asyncio()
+    async def test_get_ticker_success(
+        self, mock_default_provider, sample_ticker_snapshot
+    ):
         """Test get_ticker with default provider success."""
         mock_default_provider.get_ticker.return_value = sample_ticker_snapshot
         provider = MigrationProvider(
@@ -354,7 +378,7 @@ class TestMigrationProviderGetTicker:
         assert result == sample_ticker_snapshot
         mock_default_provider.get_ticker.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_fallback(
         self, mock_default_provider, mock_fallback_provider, sample_ticker_snapshot
     ):
@@ -370,8 +394,10 @@ class TestMigrationProviderGetTicker:
         assert result == sample_ticker_snapshot
         mock_fallback_provider.get_ticker.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_get_ticker_both_fail(self, mock_default_provider, mock_fallback_provider):
+    @pytest.mark.asyncio()
+    async def test_get_ticker_both_fail(
+        self, mock_default_provider, mock_fallback_provider
+    ):
         """Test ConfigError when both providers fail for ticker."""
         mock_default_provider.get_ticker.side_effect = Exception("Default failed")
         mock_fallback_provider.get_ticker.side_effect = Exception("Fallback failed")
@@ -387,8 +413,10 @@ class TestMigrationProviderGetTicker:
 class TestMigrationProviderGetOHLCVBatch:
     """Test get_ohlcv_batch method."""
 
-    @pytest.mark.asyncio
-    async def test_get_ohlcv_batch_supported(self, mock_default_provider, sample_ohlcv_bars):
+    @pytest.mark.asyncio()
+    async def test_get_ohlcv_batch_supported(
+        self, mock_default_provider, sample_ohlcv_bars
+    ):
         """Test batch fetch when provider supports it."""
         mock_default_provider.get_ohlcv_batch = AsyncMock(
             return_value={"TCS": sample_ohlcv_bars, "INFY": sample_ohlcv_bars}
@@ -408,8 +436,10 @@ class TestMigrationProviderGetOHLCVBatch:
         assert "INFY" in result
         mock_default_provider.get_ohlcv_batch.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_get_ohlcv_batch_not_supported(self, mock_default_provider, sample_ohlcv_bars):
+    @pytest.mark.asyncio()
+    async def test_get_ohlcv_batch_not_supported(
+        self, mock_default_provider, sample_ohlcv_bars
+    ):
         """Test batch fetch when provider doesn't support it (parallel fallback)."""
         # Simulate provider without batch method
         delattr(mock_default_provider, "get_ohlcv_batch")
@@ -429,7 +459,7 @@ class TestMigrationProviderGetOHLCVBatch:
         assert "INFY" in result
         assert mock_default_provider.get_ohlcv.call_count == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_batch_with_ab_testing(
         self, mock_default_provider, mock_fallback_provider, sample_ohlcv_bars
     ):
@@ -538,7 +568,7 @@ class TestMigrationProviderResults:
 class TestMigrationProviderEdgeCases:
     """Test edge cases and error conditions."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_empty_results(self, mock_default_provider):
         """Test handling of empty results."""
         mock_default_provider.get_ohlcv.return_value = []
@@ -555,8 +585,10 @@ class TestMigrationProviderEdgeCases:
         )
         assert result == []
 
-    @pytest.mark.asyncio
-    async def test_get_ohlcv_zero_price_diff(self, mock_default_provider, mock_fallback_provider):
+    @pytest.mark.asyncio()
+    async def test_get_ohlcv_zero_price_diff(
+        self, mock_default_provider, mock_fallback_provider
+    ):
         """Test A/B testing with zero price difference."""
         bars1 = [
             OHLCVBar(
@@ -601,7 +633,7 @@ class TestMigrationProviderEdgeCases:
         summary = provider.get_ab_test_summary()
         assert summary["anomalies"] == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_max_diff_threshold_exactly(
         self, mock_default_provider, mock_fallback_provider
     ):

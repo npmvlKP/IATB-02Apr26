@@ -6,8 +6,15 @@ from collections.abc import Callable
 from decimal import Decimal
 
 from iatb.core.exceptions import ConfigError
-from iatb.sentiment.base import SentimentAnalyzer, SentimentScore, sentiment_label_from_score
-from iatb.sentiment.helpers import resolve_aion_predictor, validate_and_parse_aion_prediction
+from iatb.sentiment.base import (
+    SentimentAnalyzer,
+    SentimentScore,
+    sentiment_label_from_score,
+)
+from iatb.sentiment.helpers import (
+    resolve_aion_predictor,
+    validate_and_parse_aion_prediction,
+)
 
 PredictFn = Callable[[str], object]
 
@@ -25,7 +32,9 @@ class AionAnalyzer(SentimentAnalyzer):
         if not normalized_text:
             msg = "text cannot be empty"
             raise ConfigError(msg)
-        label, confidence = validate_and_parse_aion_prediction(self._predict(normalized_text))
+        label, confidence = validate_and_parse_aion_prediction(
+            self._predict(normalized_text)
+        )
         bounded_confidence = min(Decimal("1"), max(Decimal("0"), confidence))
         normalized_label = label.upper()
         if "POS" in normalized_label or "BULL" in normalized_label:

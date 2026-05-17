@@ -482,7 +482,7 @@ class TestBuildPath:
 
 
 class TestGetOHLCV:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_valid_single_bar(self) -> None:
         single_bar_payload: dict[str, object] = {
             "data": [
@@ -512,7 +512,7 @@ class TestGetOHLCV:
         assert bars[0].symbol == "RELIANCE"
         assert bars[0].exchange == Exchange.NSE
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_bars(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -527,7 +527,7 @@ class TestGetOHLCV:
         )
         assert len(bars) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_with_since_parameter(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -546,7 +546,7 @@ class TestGetOHLCV:
         )
         assert len(bars) == 2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_limit_zero_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -561,7 +561,7 @@ class TestGetOHLCV:
                 limit=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_limit_negative_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -576,7 +576,7 @@ class TestGetOHLCV:
                 limit=-5,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_missing_data_list_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -591,7 +591,7 @@ class TestGetOHLCV:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_data_list_with_non_mapping_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -606,7 +606,7 @@ class TestGetOHLCV:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_non_mapping_payload_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -621,7 +621,7 @@ class TestGetOHLCV:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bse_exchange(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -638,7 +638,7 @@ class TestGetOHLCV:
 
 
 class TestGetTicker:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_valid_ticker(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -652,7 +652,7 @@ class TestGetTicker:
         assert ticker.last == create_price("101")
         assert ticker.symbol == "RELIANCE"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ltp_fallback(self) -> None:
         payload: dict[str, object] = {
             "data": {"ltp": 105, "bid": 104.5, "ask": 105.5, "volume_24h": 500}
@@ -665,7 +665,7 @@ class TestGetTicker:
         ticker = await provider.get_ticker(symbol="TCS", exchange=Exchange.NSE)
         assert ticker.last == create_price("105")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_close_fallback_for_last(self) -> None:
         payload: dict[str, object] = {
             "data": {"close": 200, "bid": 199.5, "ask": 200.5, "volume_24h": 300}
@@ -678,9 +678,11 @@ class TestGetTicker:
         ticker = await provider.get_ticker(symbol="INFY", exchange=Exchange.NSE)
         assert ticker.last == create_price("200")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bid_defaults_to_last(self) -> None:
-        payload: dict[str, object] = {"data": {"last": 150, "ask": 151, "volume_24h": 100}}
+        payload: dict[str, object] = {
+            "data": {"last": 150, "ask": 151, "volume_24h": 100}
+        }
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
             api_key="secret",
@@ -689,9 +691,11 @@ class TestGetTicker:
         ticker = await provider.get_ticker(symbol="HDFC", exchange=Exchange.NSE)
         assert ticker.bid == create_price("150")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_ask_defaults_to_last(self) -> None:
-        payload: dict[str, object] = {"data": {"last": 150, "bid": 149.5, "volume_24h": 100}}
+        payload: dict[str, object] = {
+            "data": {"last": 150, "bid": 149.5, "volume_24h": 100}
+        }
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
             api_key="secret",
@@ -700,7 +704,7 @@ class TestGetTicker:
         ticker = await provider.get_ticker(symbol="ICICI", exchange=Exchange.NSE)
         assert ticker.ask == create_price("150")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_volume_fallback_key(self) -> None:
         payload: dict[str, object] = {
             "data": {"last": 100, "bid": 99.5, "ask": 100.5, "volume": 2000}
@@ -713,7 +717,7 @@ class TestGetTicker:
         ticker = await provider.get_ticker(symbol="WIPRO", exchange=Exchange.NSE)
         assert ticker.volume_24h is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_volume_defaults_to_zero(self) -> None:
         payload: dict[str, object] = {"data": {"last": 100, "bid": 99.5, "ask": 100.5}}
         provider = OpenAlgoProvider(  # type: ignore[abstract]
@@ -724,7 +728,7 @@ class TestGetTicker:
         ticker = await provider.get_ticker(symbol="ITC", exchange=Exchange.NSE)
         assert ticker.volume_24h == create_quantity("0")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_missing_data_mapping_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -734,7 +738,7 @@ class TestGetTicker:
         with pytest.raises(ConfigError, match="missing data mapping"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_numeric_bid_raises(self) -> None:
         payload: dict[str, object] = {
             "data": {"bid": object(), "ask": 101.5, "last": 101, "volume_24h": 100}
@@ -747,7 +751,7 @@ class TestGetTicker:
         with pytest.raises(ConfigError, match="numeric-compatible"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bool_bid_raises(self) -> None:
         payload: dict[str, object] = {
             "data": {"bid": True, "ask": 101.5, "last": 101, "volume_24h": 100}
@@ -760,7 +764,7 @@ class TestGetTicker:
         with pytest.raises(ConfigError, match="must not be boolean"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_non_mapping_http_response_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -770,7 +774,7 @@ class TestGetTicker:
         with pytest.raises(ConfigError, match="must be mapping-like JSON"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_decimal_values_in_payload(self) -> None:
         payload: dict[str, object] = {
             "data": {
@@ -789,7 +793,7 @@ class TestGetTicker:
         assert ticker.bid == create_price("100.50")
         assert ticker.ask == create_price("101.50")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_int_values_in_payload(self) -> None:
         payload: dict[str, object] = {
             "data": {"bid": 100, "ask": 102, "last": 101, "volume_24h": 500}
@@ -805,7 +809,7 @@ class TestGetTicker:
 
 
 class TestRequest:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_custom_http_get_receives_full_url(self) -> None:
         received_urls: list[str] = []
 
@@ -822,7 +826,7 @@ class TestRequest:
         assert len(received_urls) == 1
         assert received_urls[0].startswith("https://api.openalgo.local")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_default_http_get_uses_session(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -837,7 +841,7 @@ class TestRequest:
         mock_session.get.assert_called_once()
         assert isinstance(result, Mapping)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_non_mapping_response_raises(self) -> None:
         provider = OpenAlgoProvider(  # type: ignore[abstract]
             base_url="https://api.openalgo.local",
@@ -847,7 +851,7 @@ class TestRequest:
         with pytest.raises(ConfigError, match="must be mapping-like JSON"):
             await provider._request("/api/v1/test", {"k": "v"})
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_bearer_token_in_headers(self) -> None:
         received_headers: list[Mapping[str, str]] = []
 
@@ -873,7 +877,9 @@ class TestDefaultHttpGet:
         mock_conn.getresponse.return_value = mock_response
         mock_conn.request = MagicMock()
         mock_conn.close = MagicMock()
-        with patch("iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn):
+        with patch(
+            "iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn
+        ):
             result = OpenAlgoProvider._default_http_get(
                 "https://api.example.com/api/v1/test?symbol=RELIANCE",
                 {"Authorization": "Bearer key"},
@@ -888,7 +894,9 @@ class TestDefaultHttpGet:
         mock_conn.getresponse.return_value = mock_response
         mock_conn.request = MagicMock()
         mock_conn.close = MagicMock()
-        with patch("iatb.data.openalgo_provider.HTTPConnection", return_value=mock_conn):
+        with patch(
+            "iatb.data.openalgo_provider.HTTPConnection", return_value=mock_conn
+        ):
             result = OpenAlgoProvider._default_http_get(
                 "http://localhost:8080/api/v1/test",
                 {"Authorization": "Bearer key"},
@@ -902,7 +910,9 @@ class TestDefaultHttpGet:
         mock_conn.getresponse.return_value = mock_response
         mock_conn.request = MagicMock()
         mock_conn.close = MagicMock()
-        with patch("iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn):
+        with patch(
+            "iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn
+        ):
             with pytest.raises(ConfigError, match="not valid JSON"):
                 OpenAlgoProvider._default_http_get(
                     "https://api.example.com/api/v1/test",
@@ -916,7 +926,9 @@ class TestDefaultHttpGet:
         mock_conn.getresponse.return_value = mock_response
         mock_conn.request = MagicMock()
         mock_conn.close = MagicMock()
-        with patch("iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn):
+        with patch(
+            "iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn
+        ):
             with pytest.raises(ConfigError, match="must decode into JSON object"):
                 OpenAlgoProvider._default_http_get(
                     "https://api.example.com/api/v1/test",
@@ -927,7 +939,9 @@ class TestDefaultHttpGet:
         mock_conn = MagicMock()
         mock_conn.request.side_effect = ConnectionError("refused")
         mock_conn.close = MagicMock()
-        with patch("iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn):
+        with patch(
+            "iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn
+        ):
             with pytest.raises(ConnectionError, match="refused"):
                 OpenAlgoProvider._default_http_get(
                     "https://api.example.com/api/v1/test",
@@ -942,7 +956,9 @@ class TestDefaultHttpGet:
         mock_conn.getresponse.return_value = mock_response
         mock_conn.request = MagicMock()
         mock_conn.close = MagicMock()
-        with patch("iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn):
+        with patch(
+            "iatb.data.openalgo_provider.HTTPSConnection", return_value=mock_conn
+        ):
             OpenAlgoProvider._default_http_get(
                 "https://api.example.com/api/v1/test?symbol=AAPL&exchange=NSE",
                 {"Authorization": "Bearer key"},
@@ -954,7 +970,7 @@ class TestDefaultHttpGet:
 
 
 class TestAsyncIoToThread:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_custom_http_get_runs_in_thread(self) -> None:
         call_count = 0
 

@@ -27,7 +27,7 @@ from iatb.data.token_resolver import SymbolTokenResolver
 class TestRateLimitingMitigationIntegration:
     """Integration tests for complete rate limiting mitigation strategy."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Create a mock KiteConnect client with rate limiting behavior."""
         client = MagicMock()
@@ -84,7 +84,7 @@ class TestRateLimitingMitigationIntegration:
         ]
         return client
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_mitigation_1_token_bucket_rate_limiter(self, mock_kite_client):
         """Test Mitigation 1: Token bucket rate limiter prevents exceeding 3 req/sec."""
         provider = KiteProvider(
@@ -114,7 +114,7 @@ class TestRateLimitingMitigationIntegration:
         assert len(results) == 5
         assert call_count == 5
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_mitigation_2_batch_token_resolution(self, mock_kite_client):
         """Test Mitigation 2: Batch instrument token resolution reduces API calls."""
         # Create mock instrument master
@@ -132,7 +132,9 @@ class TestRateLimitingMitigationIntegration:
             access_token="test_token",
             kite_connect_factory=lambda k, t: mock_kite_client,
         )
-        resolver = SymbolTokenResolver(instrument_master=mock_master, kite_provider=provider)
+        resolver = SymbolTokenResolver(
+            instrument_master=mock_master, kite_provider=provider
+        )
 
         # Resolve multiple tokens in batch (efficient for 50+ symbols)
         symbols = ["RELIANCE", "INFY", "TCS"]
@@ -149,7 +151,7 @@ class TestRateLimitingMitigationIntegration:
         # Verify batch resolution used cache efficiently
         assert mock_master.get_instrument.call_count == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_mitigation_3_historical_data_cache(self, mock_kite_client):
         """Test Mitigation 3: MarketDataCache reduces redundant API calls."""
         cache = MarketDataCache(default_ttl_seconds=60)
@@ -193,7 +195,7 @@ class TestRateLimitingMitigationIntegration:
         cache.get_or_fetch("INFY", "2024-01-01", "2024-01-31", fetch_func)
         assert fetch_count == 1  # No additional fetch
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_mitigation_4_websocket_for_live_data(self, mock_kite_client):
         """Test Mitigation 4: WebSocket bypasses REST rate limits for live data."""
         # Mock KiteTicker
@@ -217,7 +219,9 @@ class TestRateLimitingMitigationIntegration:
         assert provider._is_connected is True
 
         # Subscribe to symbol updates (no REST API calls)
-        await provider.subscribe(symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1m")
+        await provider.subscribe(
+            symbol="RELIANCE", exchange=Exchange.NSE, timeframe="1m"
+        )
         assert "RELIANCE" in provider._tickers
 
         # WebSocket provides real-time data without rate limits
@@ -227,7 +231,7 @@ class TestRateLimitingMitigationIntegration:
         # Cleanup
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_complete_mitigation_scenario(self, mock_kite_client):
         """Test complete mitigation strategy for scanning 50+ symbols."""
         # Simulate scanning 50 symbols
@@ -244,10 +248,13 @@ class TestRateLimitingMitigationIntegration:
         # Mock instrument master for batch resolution
         mock_master = MagicMock()
         mock_master.get_instrument.side_effect = [
-            MagicMock(instrument_token=i, trading_symbol=symbol) for i, symbol in enumerate(symbols)
+            MagicMock(instrument_token=i, trading_symbol=symbol)
+            for i, symbol in enumerate(symbols)
         ]
 
-        resolver = SymbolTokenResolver(instrument_master=mock_master, kite_provider=provider)
+        resolver = SymbolTokenResolver(
+            instrument_master=mock_master, kite_provider=provider
+        )
 
         # Step 1: Batch resolve tokens (1 API call for all symbols)
         tokens = await resolver.resolve_multiple_tokens(symbols, Exchange.NSE)
@@ -291,8 +298,10 @@ class TestRateLimitingMitigationIntegration:
 class TestRateLimitingEdgeCases:
     """Test edge cases for rate limiting mitigation."""
 
-    @pytest.mark.skip(reason="RateLimiter.acquire() causes deadlock/hang - requires investigation")
-    @pytest.mark.asyncio
+    @pytest.mark.skip(
+        reason="RateLimiter.acquire() causes deadlock/hang - requires investigation"
+    )
+    @pytest.mark.asyncio()
     async def test_rate_limiter_concurrent_requests(self):
         """Test rate limiter handles concurrent requests correctly."""
         limiter = RateLimiter(requests_per_second=3.0, burst_capacity=3)
@@ -310,7 +319,7 @@ class TestRateLimitingEdgeCases:
         # Allow tolerance for timing variations
         assert elapsed >= 2.5
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cache_ttl_expiration(self):
         """Test cache respects TTL and expires old entries."""
         cache = MarketDataCache(default_ttl_seconds=1)  # 1 second TTL
@@ -328,7 +337,7 @@ class TestRateLimitingEdgeCases:
         # Should be expired
         assert cache.get("TEST", "2024-01-01", "2024-01-31") is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_batch_resolution_with_multiple_symbols(self, mock_kite_client):
         """Test batch resolution handles multiple symbols efficiently."""
         mock_master = MagicMock()
@@ -345,7 +354,9 @@ class TestRateLimitingEdgeCases:
             access_token="test_token",
             kite_connect_factory=lambda k, t: mock_kite_client,
         )
-        resolver = SymbolTokenResolver(instrument_master=mock_master, kite_provider=provider)
+        resolver = SymbolTokenResolver(
+            instrument_master=mock_master, kite_provider=provider
+        )
 
         # Resolve multiple symbols
         symbols = ["STOCK1", "STOCK2", "STOCK3", "STOCK4", "STOCK5"]
@@ -357,7 +368,7 @@ class TestRateLimitingEdgeCases:
             assert symbol in tokens
             assert tokens[symbol] == i
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_rate_limiter_zero_tokens_waits_for_refill(self):
         """Test that rate limiter waits for refill when tokens are exhausted."""
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=1)
@@ -378,7 +389,7 @@ class TestRateLimitingEdgeCases:
         # Clean up
         limiter.release()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_cache_purge_expired(self):
         """Test cache purging removes expired entries."""
         cache = MarketDataCache(default_ttl_seconds=1)
@@ -400,7 +411,7 @@ class TestRateLimitingEdgeCases:
         assert purged == 3
         assert cache.get_stats()["total_entries"] == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_websocket_reconnection_logic(self):
         """Test WebSocket handles reconnection on failure."""
         mock_ticker = MagicMock()

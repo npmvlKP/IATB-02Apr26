@@ -289,7 +289,9 @@ class AuditExporter:
         return f"{self._config.filename_prefix}_{ts_str}.{format.value}"
 
     @staticmethod
-    def _build_csv_row(rec: AuditExportRecord, include_metadata: bool) -> dict[str, Any]:
+    def _build_csv_row(
+        rec: AuditExportRecord, include_metadata: bool
+    ) -> dict[str, Any]:
         """Build a CSV row dict from an export record."""
         row: dict[str, Any] = {
             "trade_id": rec.trade_id,
@@ -457,7 +459,9 @@ class AuditExporter:
         """Write records to PDF file using reportlab."""
         try:
             from reportlab.lib.pagesizes import letter  # type: ignore[import-untyped]
-            from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
+            from reportlab.lib.styles import (
+                getSampleStyleSheet,  # type: ignore[import-untyped]
+            )
             from reportlab.platypus import (
                 Paragraph,
                 SimpleDocTemplate,
@@ -493,5 +497,8 @@ class AuditExporter:
             doc.build(elements)
 
         except ImportError as exc:
-            msg = "reportlab library not installed. " "Install with: pip install reportlab"
+            msg = (
+                "reportlab library not installed. "
+                "Install with: pip install reportlab"
+            )
             raise ConfigError(msg) from exc

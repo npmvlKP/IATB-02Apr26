@@ -161,7 +161,9 @@ data_provider_default = "jugaad"
                 assert config.storage_type == "duckdb"
                 assert str(config.storage_path).replace("\\", "/") == "data/iatb.duckdb"
                 assert config.storage_backup_enabled is True
-                assert str(config.storage_backup_path).replace("\\", "/") == "data/backups"
+                assert (
+                    str(config.storage_backup_path).replace("\\", "/") == "data/backups"
+                )
         assert isinstance(config.zerodha_api_key, str)
         assert isinstance(config.zerodha_api_secret, str)
 
@@ -207,12 +209,16 @@ data_provider_default = "jugaad"
 
     def test_zero_queue_size_raises_error(self) -> None:
         """Test that zero queue size raises ConfigError."""
-        with pytest.raises(ConfigError, match="event_bus_max_queue_size must be positive"):
+        with pytest.raises(
+            ConfigError, match="event_bus_max_queue_size must be positive"
+        ):
             Config(event_bus_max_queue_size=0)
 
     def test_negative_queue_size_raises_error(self) -> None:
         """Test that negative queue size raises ConfigError."""
-        with pytest.raises(ConfigError, match="event_bus_max_queue_size must be positive"):
+        with pytest.raises(
+            ConfigError, match="event_bus_max_queue_size must be positive"
+        ):
             Config(event_bus_max_queue_size=-10)
 
     def test_positive_max_tasks(self) -> None:
@@ -251,7 +257,6 @@ data_provider_default = "jugaad"
         """Test that directory creation failure raises ConfigError."""
         # Skip this test on Windows as it may not fail as expected
         # In real scenarios, this would fail with permission errors
-        pass
 
     def test_load_without_env_file(self) -> None:
         """Test loading config without env file."""
@@ -337,7 +342,9 @@ class TestExecutionMode:
 
     @patch("iatb.core.config.input")
     @patch("iatb.core.config.logger")
-    def test_confirm_live_mode_with_valid_confirmation(self, mock_logger, mock_input) -> None:
+    def test_confirm_live_mode_with_valid_confirmation(
+        self, mock_logger, mock_input
+    ) -> None:
         """Test confirm_live_mode with valid confirmation."""
         mock_input.return_value = "CONFIRM"
 

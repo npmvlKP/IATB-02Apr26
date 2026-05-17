@@ -4,9 +4,6 @@ Machine-learning module for predictive modeling and ensemble inference.
 
 from iatb.ml.base import PredictionResult, Predictor
 from iatb.ml.feature_engine import FeatureEngineer
-from iatb.ml.gnn_model import GNNConfig, GNNModel
-from iatb.ml.hmm_model import HMMConfig, HMMRegimeModel
-from iatb.ml.lstm_model import LSTMConfig, LSTMModel
 from iatb.ml.model_registry import (
     ModelHealth,
     ModelRegistry,
@@ -16,17 +13,29 @@ from iatb.ml.model_registry import (
 )
 from iatb.ml.predictor import EnsemblePredictor
 from iatb.ml.readiness import check_ml_readiness
-from iatb.ml.tracking import (
-    ExperimentMetrics,
-    ExperimentTracker,
-    HyperparameterOptimizer,
-    MLflowConfig,
-    OptunaConfig,
-    create_default_optimizer,
-    create_default_tracking,
-)
-from iatb.ml.trainer import TrainingRunResult, UnifiedTrainer
-from iatb.ml.transformer_model import TransformerConfig, TransformerModel
+
+_LAZY_IMPORTS: dict[str, tuple[str, list[str]]] = {
+    "gnn_model": ("iatb.ml.gnn_model", ["GNNConfig", "GNNModel"]),
+    "hmm_model": ("iatb.ml.hmm_model", ["HMMConfig", "HMMRegimeModel"]),
+    "lstm_model": ("iatb.ml.lstm_model", ["LSTMConfig", "LSTMModel"]),
+    "tracking": (
+        "iatb.ml.tracking",
+        [
+            "ExperimentMetrics",
+            "ExperimentTracker",
+            "HyperparameterOptimizer",
+            "MLflowConfig",
+            "OptunaConfig",
+            "create_default_optimizer",
+            "create_default_tracking",
+        ],
+    ),
+    "trainer": ("iatb.ml.trainer", ["TrainingRunResult", "UnifiedTrainer"]),
+    "transformer_model": (
+        "iatb.ml.transformer_model",
+        ["TransformerConfig", "TransformerModel"],
+    ),
+}
 
 __all__ = [
     "EnsemblePredictor",
@@ -57,3 +66,16 @@ __all__ = [
     "create_default_tracking",
     "get_registry",
 ]
+
+
+def __getattr__(name: str) -> object:
+    for _module_path, names in _LAZY_IMPORTS.values():
+        if name in names:
+            import importlib
+
+            mod = importlib.import_module(
+                next(k for k, v in _LAZY_IMPORTS.items() if name in v[1])
+            )
+            return getattr(mod, name)
+    msg = f"module 'iatb.ml' has no attribute {name!r}"
+    raise AttributeError(msg)

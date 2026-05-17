@@ -62,7 +62,7 @@ def _make_execution_result(**overrides):
 class TestAsyncExecutorSafety:
     """CRITICAL: Verify place_order_async offloads to thread pool."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_async_returns_result(self) -> None:
         executor = PaperExecutor()
         manager = OrderManager(executor=executor)
@@ -71,18 +71,19 @@ class TestAsyncExecutorSafety:
         assert result.status == OrderStatus.FILLED
         assert result.filled_quantity == Decimal("10")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_async_does_not_block_event_loop(self) -> None:
         executor = PaperExecutor()
         manager = OrderManager(executor=executor)
         tasks = [
-            manager.place_order_async(_make_order_request(symbol=f"SYM{i:03d}")) for i in range(5)
+            manager.place_order_async(_make_order_request(symbol=f"SYM{i:03d}"))
+            for i in range(5)
         ]
         results = await asyncio.gather(*tasks)
         assert len(results) == 5
         assert all(r.status == OrderStatus.FILLED for r in results)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_place_order_async_respects_kill_switch(self) -> None:
         executor = PaperExecutor()
         kill = KillSwitch(executor=executor)
@@ -109,7 +110,7 @@ class TestQueueMaxsizeBounds:
         with pytest.raises(EventBusError):
             InProcessBackend(max_queue_size=0)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscribe_creates_bounded_queue(self) -> None:
         from iatb.core.queue import InProcessBackend
 
@@ -197,7 +198,9 @@ class TestStatePersistence:
         manager = OrderManager(executor=executor, daily_loss_guard=dlg)
         manager.place_order(_make_order_request(symbol="SYM-A"))
         manager.place_order(
-            _make_order_request(symbol="SYM-B", side=OrderSide.SELL, quantity=Decimal("5"))
+            _make_order_request(
+                symbol="SYM-B", side=OrderSide.SELL, quantity=Decimal("5")
+            )
         )
         state_file = tmp_path / "state.json"
         manager.save_state(state_file)
@@ -229,8 +232,12 @@ class TestSymbolConfigFix:
         guard = PositionLimitGuard(limits=limits)
         now = datetime.now(UTC)
 
-        guard.validate_order(ExchangeType.NSE_FO, "RELIANCE", Decimal("100"), Decimal("500"), now)
-        guard.update_position(ExchangeType.NSE_FO, "RELIANCE", Decimal("100"), Decimal("500"), now)
+        guard.validate_order(
+            ExchangeType.NSE_FO, "RELIANCE", Decimal("100"), Decimal("500"), now
+        )
+        guard.update_position(
+            ExchangeType.NSE_FO, "RELIANCE", Decimal("100"), Decimal("500"), now
+        )
         config = guard._get_symbol_config("RELIANCE")
         assert config is not None
         assert config.exchange == ExchangeType.NSE_FO
@@ -253,8 +260,12 @@ class TestSymbolConfigFix:
         guard = PositionLimitGuard(limits=limits)
         now = datetime.now(UTC)
 
-        guard.validate_order(ExchangeType.MCX, "GOLD", Decimal("50"), Decimal("60000"), now)
-        guard.update_position(ExchangeType.MCX, "GOLD", Decimal("50"), Decimal("60000"), now)
+        guard.validate_order(
+            ExchangeType.MCX, "GOLD", Decimal("50"), Decimal("60000"), now
+        )
+        guard.update_position(
+            ExchangeType.MCX, "GOLD", Decimal("50"), Decimal("60000"), now
+        )
         config = guard._get_symbol_config("GOLD")
         assert config is not None
         assert config.exchange == ExchangeType.MCX
@@ -387,7 +398,7 @@ class TestConnectionPooling:
         session.close()
         assert len(session._pool) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_provider_uses_injected_http_get(self) -> None:
         from iatb.data.openalgo_provider import OpenAlgoProvider
 

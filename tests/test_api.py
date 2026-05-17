@@ -10,7 +10,7 @@ from iatb.broker.token_manager import ZerodhaTokenManager
 from iatb.core.exceptions import ConfigError
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_token_manager() -> ZerodhaTokenManager:
     """Create mock token manager."""
     manager = MagicMock(spec=ZerodhaTokenManager)
@@ -19,7 +19,7 @@ def mock_token_manager() -> ZerodhaTokenManager:
     return manager
 
 
-@pytest.fixture
+@pytest.fixture()
 def api_instance(mock_token_manager: ZerodhaTokenManager) -> IATBApi:
     """Create API instance with mocked token manager."""
     return IATBApi(token_manager=mock_token_manager)
@@ -314,7 +314,9 @@ def test_instrument_cache_handles_missing_tokens(api_instance: IATBApi) -> None:
     with patch("keyring.get_password", return_value="test_token"):
         with patch("kiteconnect.KiteConnect", return_value=mock_kite):
             api_instance._kite_client = mock_kite
-            cached_result = api_instance._ensure_instrument_token(mock_kite, "RELIANCE", None)
+            cached_result = api_instance._ensure_instrument_token(
+                mock_kite, "RELIANCE", None
+            )
             assert cached_result == "123456"
             # Only valid instruments should be cached
             assert "RELIANCE" in api_instance._instrument_cache
@@ -333,7 +335,9 @@ def test_instrument_cache_returns_none_for_not_found(api_instance: IATBApi) -> N
     with patch("keyring.get_password", return_value="test_token"):
         with patch("kiteconnect.KiteConnect", return_value=mock_kite):
             api_instance._kite_client = mock_kite
-            lookup_result = api_instance._ensure_instrument_token(mock_kite, "NOTFOUND", None)
+            lookup_result = api_instance._ensure_instrument_token(
+                mock_kite, "NOTFOUND", None
+            )
             assert lookup_result is None
             assert "NOTFOUND" not in api_instance._instrument_cache
 

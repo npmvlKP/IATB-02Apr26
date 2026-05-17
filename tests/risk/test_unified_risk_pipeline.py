@@ -18,23 +18,23 @@ from iatb.risk.kill_switch import KillSwitch
 from iatb.risk.risk_pipeline import RiskPipeline, RiskPipelineResult
 
 
-@pytest.fixture
+@pytest.fixture()
 def executor():
     return PaperExecutor(slippage_bps=Decimal("0"))
 
 
-@pytest.fixture
+@pytest.fixture()
 def kill_switch(executor):
     return KillSwitch(executor)
 
 
-@pytest.fixture
+@pytest.fixture()
 def throttle():
     # Allow a single operation per second for throttling tests
     return OrderThrottle(max_ops=1)
 
 
-@pytest.fixture
+@pytest.fixture()
 def pre_trade_config():
     return PreTradeConfig(
         max_order_quantity=Decimal("100"),
@@ -45,7 +45,7 @@ def pre_trade_config():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def daily_guard(kill_switch):
     # Large loss pct so it does not trigger during tests
     return DailyLossGuard(
@@ -55,13 +55,15 @@ def daily_guard(kill_switch):
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def audit_logger(tmp_path):
     return TradeAuditLogger(tmp_path / "audit.sqlite")
 
 
-@pytest.fixture
-def pipeline(kill_switch, throttle, pre_trade_config, executor, daily_guard, audit_logger):
+@pytest.fixture()
+def pipeline(
+    kill_switch, throttle, pre_trade_config, executor, daily_guard, audit_logger
+):
     pl = RiskPipeline(
         kill_switch=kill_switch,
         order_throttle=throttle,
@@ -74,7 +76,9 @@ def pipeline(kill_switch, throttle, pre_trade_config, executor, daily_guard, aud
     return pl
 
 
-def make_order(symbol="TEST", side=OrderSide.BUY, qty=Decimal("10"), price=Decimal("100")):
+def make_order(
+    symbol="TEST", side=OrderSide.BUY, qty=Decimal("10"), price=Decimal("100")
+):
     # ``OrderRequest`` expects an ``exchange`` enum; use a placeholder
     # that satisfies the type checker.
     from iatb.core.enums import Exchange

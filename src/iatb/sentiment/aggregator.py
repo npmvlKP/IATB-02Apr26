@@ -9,7 +9,11 @@ from decimal import Decimal
 
 from iatb.core.exceptions import ConfigError
 from iatb.sentiment.aion_analyzer import AionAnalyzer
-from iatb.sentiment.base import SentimentAnalyzer, SentimentScore, sentiment_label_from_score
+from iatb.sentiment.base import (
+    SentimentAnalyzer,
+    SentimentScore,
+    sentiment_label_from_score,
+)
 from iatb.sentiment.finbert_analyzer import FinbertAnalyzer
 from iatb.sentiment.helpers import compute_weighted_ensemble
 from iatb.sentiment.news_analyzer import NewsAnalyzer, NewsArticle, NewsSentimentResult
@@ -61,7 +65,9 @@ class SentimentAggregator:
         enable_news: bool = True,
         enable_social: bool = True,
     ) -> None:
-        if very_strong_threshold <= Decimal("0") or very_strong_threshold > Decimal("1"):
+        if very_strong_threshold <= Decimal("0") or very_strong_threshold > Decimal(
+            "1"
+        ):
             msg = "very_strong_threshold must be in (0, 1]"
             raise ConfigError(msg)
         self._very_strong_threshold = very_strong_threshold
@@ -107,8 +113,14 @@ class SentimentAggregator:
             status = None
 
         health = getattr(status, "model_health", {}).get(name) if status else None
-        if health and getattr(getattr(health, "status", object()), "value", None) == "available":
-            return analyzer or self._get_analyzer_instance(name), self._get_analyzer_weight(name)
+        if (
+            health
+            and getattr(getattr(health, "status", object()), "value", None)
+            == "available"
+        ):
+            return analyzer or self._get_analyzer_instance(
+                name
+            ), self._get_analyzer_weight(name)
         else:
             _LOGGER.warning("%s unavailable, using VADER as fallback", name.upper())
             return fallback or VaderAnalyzer(), VaderAnalyzer.weight
@@ -237,10 +249,13 @@ class SentimentAggregator:
 
     def analyze(self, text: str) -> tuple[SentimentScore, dict[str, SentimentScore]]:
         component_scores = {
-            name: analyzer.analyze(text) for name, (analyzer, _) in self._analyzers.items()
+            name: analyzer.analyze(text)
+            for name, (analyzer, _) in self._analyzers.items()
         }
         weights = {name: weight for name, (_, weight) in self._analyzers.items()}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         composite = SentimentScore(
             source="ensemble",
             score=composite_score,
@@ -250,7 +265,9 @@ class SentimentAggregator:
         )
         return composite, component_scores
 
-    def evaluate_instrument(self, text: str, volume_ratio: Decimal) -> SentimentGateResult:
+    def evaluate_instrument(
+        self, text: str, volume_ratio: Decimal
+    ) -> SentimentGateResult:
         composite, components = self.analyze(text)
         very_strong = abs(composite.score) >= self._very_strong_threshold
         volume_confirmed = has_volume_confirmation(volume_ratio)
@@ -287,7 +304,10 @@ class SentimentAggregator:
         # Apply recency weighting if articles are available
         if result.articles:
             recency_scores = [
-                (article.score, datetime.fromisoformat(article.metadata.get("published_at", "")))
+                (
+                    article.score,
+                    datetime.fromisoformat(article.metadata.get("published_at", "")),
+                )
                 for article in result.articles
                 if "published_at" in article.metadata
             ]
@@ -298,7 +318,9 @@ class SentimentAggregator:
                         datetime.now(UTC),
                     )
                     # Blend original score with recency-weighted score (70/30)
-                    blended = result.overall_score * Decimal("0.7") + recency_score * Decimal("0.3")
+                    blended = result.overall_score * Decimal(
+                        "0.7"
+                    ) + recency_score * Decimal("0.3")
                     from dataclasses import replace
 
                     result = replace(result, overall_score=blended)
@@ -413,12 +435,16 @@ class SentimentAggregator:
         component_scores: dict[str, SentimentScore] = dict(text_components)
 
         if self._enable_news and news_articles:
-            news_score = self._collect_news_component(news_articles, symbol or "unknown")
+            news_score = self._collect_news_component(
+                news_articles, symbol or "unknown"
+            )
             if news_score is not None:
                 component_scores["news"] = news_score
 
         if self._enable_social and social_posts:
-            social_score = self._collect_social_component(social_posts, symbol or "unknown")
+            social_score = self._collect_social_component(
+                social_posts, symbol or "unknown"
+            )
             if social_score is not None:
                 component_scores["social"] = social_score
 

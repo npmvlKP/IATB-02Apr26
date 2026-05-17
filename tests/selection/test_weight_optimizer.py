@@ -27,6 +27,13 @@ from iatb.selection.weight_optimizer import (
 random.seed(42)
 np.random.seed(42)
 
+# Skip tests requiring optuna if not available (system Python only)
+_optuna_available = True
+try:
+    import optuna  # noqa: F401
+except (ImportError, ModuleNotFoundError):
+    _optuna_available = False
+
 
 class TestValidateInputs:
     """Test input validation."""
@@ -76,7 +83,9 @@ class TestLoadOptuna:
         import importlib
         from unittest.mock import patch
 
-        with patch.object(importlib, "import_module", side_effect=ModuleNotFoundError()):
+        with patch.object(
+            importlib, "import_module", side_effect=ModuleNotFoundError()
+        ):
             with pytest.raises(ConfigError, match="optuna dependency required"):
                 _load_optuna()
 
@@ -147,7 +156,14 @@ class TestExtractBestWeights:
         mock_study = type(
             "MockStudy",
             (),
-            {"best_params": {"sentiment": 10, "strength": 20, "volume_profile": 30, "drl": 40}},
+            {
+                "best_params": {
+                    "sentiment": 10,
+                    "strength": 20,
+                    "volume_profile": 30,
+                    "drl": 40,
+                }
+            },
         )()
         weights = _extract_best_weights(mock_study)
         assert weights.sentiment == Decimal("0.10")
@@ -244,6 +260,9 @@ class TestComputeComposites:
         assert composites[0] == Decimal("1.0")
 
 
+@pytest.mark.skipif(
+    not _optuna_available, reason="optuna not available (system Python only)"
+)
 class TestOptimizeWeightsForRegime:
     """Test main optimization function."""
 
@@ -280,7 +299,9 @@ class TestOptimizeWeightsForRegime:
             mock_optuna.create_study.return_value = mock_study
             mock_optuna.samplers.TPESampler.return_value = MagicMock()
 
-            result = optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5)
+            result = optimize_weights_for_regime(
+                MarketRegime.BULL, history, returns, n_trials=5
+            )
 
             assert result.regime == MarketRegime.BULL
             assert result.trials == 5
@@ -309,7 +330,9 @@ class TestOptimizeWeightsForRegime:
             mock_optuna.create_study.return_value = mock_study
             mock_optuna.samplers.TPESampler.return_value = MagicMock()
 
-            result = optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5)
+            result = optimize_weights_for_regime(
+                MarketRegime.BULL, history, returns, n_trials=5
+            )
 
             assert result.regime == MarketRegime.BULL
             assert result.best_ic == Decimal("0.02")
@@ -338,8 +361,12 @@ class TestOptimizeWeightsForRegime:
             mock_optuna.samplers.TPESampler.return_value = MagicMock()
 
             # Run with same seed twice
-            optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5, seed=42)
-            optimize_weights_for_regime(MarketRegime.BULL, history, returns, n_trials=5, seed=42)
+            optimize_weights_for_regime(
+                MarketRegime.BULL, history, returns, n_trials=5, seed=42
+            )
+            optimize_weights_for_regime(
+                MarketRegime.BULL, history, returns, n_trials=5, seed=42
+            )
 
             # Verify sampler was called with seed
             mock_optuna.samplers.TPESampler.assert_called_with(seed=42)
@@ -367,7 +394,9 @@ class TestOptimizeWeightsForRegime:
                 mock_optuna.create_study.return_value = mock_study
                 mock_optuna.samplers.TPESampler.return_value = MagicMock()
 
-                result = optimize_weights_for_regime(regime, history, returns, n_trials=5)
+                result = optimize_weights_for_regime(
+                    regime, history, returns, n_trials=5
+                )
 
                 assert result.regime == regime
                 assert result.trials == 5
@@ -388,7 +417,9 @@ class TestOptimizeWeightsForRegime:
         assert weights.drl == Decimal("0.40")
 
         # Verify sum is 1.0
-        total = weights.sentiment + weights.strength + weights.volume_profile + weights.drl
+        total = (
+            weights.sentiment + weights.strength + weights.volume_profile + weights.drl
+        )
         assert total == Decimal("1.0")
 
     def test_suggest_weights_calls_trial_methods(self) -> None:

@@ -15,7 +15,7 @@ from iatb.ml.feature_engine import FeatureEngineer
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_ohlcv_rows() -> list[dict[str, Decimal]]:
     """Fixture providing valid OHLCV rows for testing."""
     return [
@@ -57,32 +57,38 @@ def valid_ohlcv_rows() -> list[dict[str, Decimal]]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_sentiment_scores() -> list[Decimal]:
     """Fixture providing valid sentiment scores."""
-    return [Decimal("0.0"), Decimal("0.2"), Decimal("0.1"), Decimal("-0.1"), Decimal("0.3")]
+    return [
+        Decimal("0.0"),
+        Decimal("0.2"),
+        Decimal("0.1"),
+        Decimal("-0.1"),
+        Decimal("0.3"),
+    ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_regime_labels() -> list[str]:
     """Fixture providing valid regime labels."""
     return ["NEUTRAL", "BULL", "BEAR", "NEUTRAL", "BULL"]
 
 
-@pytest.fixture
+@pytest.fixture()
 def valid_timestamps_utc() -> list[datetime]:
     """Fixture providing valid UTC timestamps."""
     start = datetime(2024, 1, 1, 9, 30, tzinfo=UTC)
     return [start + timedelta(minutes=idx) for idx in range(5)]
 
 
-@pytest.fixture
+@pytest.fixture()
 def feature_engineer() -> FeatureEngineer:
     """Fixture providing a FeatureEngineer instance with default volatility_window."""
     return FeatureEngineer(volatility_window=14)
 
 
-@pytest.fixture
+@pytest.fixture()
 def feature_engineer_min_window() -> FeatureEngineer:
     """Fixture providing a FeatureEngineer instance with minimum volatility_window."""
     return FeatureEngineer(volatility_window=2)
@@ -107,7 +113,10 @@ class TestScenario01ValidInputs:
     ) -> None:
         """Test that valid inputs produce feature vectors with correct shape."""
         result = feature_engineer.build_features(
-            valid_ohlcv_rows, valid_sentiment_scores, valid_regime_labels, valid_timestamps_utc
+            valid_ohlcv_rows,
+            valid_sentiment_scores,
+            valid_regime_labels,
+            valid_timestamps_utc,
         )
         # Should have n-1 vectors (one less than input rows)
         assert len(result) == len(valid_ohlcv_rows) - 1

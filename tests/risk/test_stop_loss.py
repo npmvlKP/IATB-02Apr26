@@ -34,7 +34,9 @@ class TestAtrStopPrice:
 
     def test_sell_stop_calculation(self) -> None:
         """Test SELL stop loss calculation."""
-        stop = atr_stop_price(Decimal("100"), Decimal("2"), OrderSide.SELL, Decimal("2"))
+        stop = atr_stop_price(
+            Decimal("100"), Decimal("2"), OrderSide.SELL, Decimal("2")
+        )
         assert stop == Decimal("104")
 
     def test_default_multiple(self) -> None:
@@ -59,7 +61,9 @@ class TestAtrStopPrice:
 
     def test_precision_handling(self) -> None:
         """Test Decimal precision handling."""
-        stop = atr_stop_price(Decimal("100.50"), Decimal("1.25"), OrderSide.BUY, Decimal("2.5"))
+        stop = atr_stop_price(
+            Decimal("100.50"), Decimal("1.25"), OrderSide.BUY, Decimal("2.5")
+        )
         expected = Decimal("100.50") - Decimal("1.25") * Decimal("2.5")
         assert stop == expected
 
@@ -74,22 +78,30 @@ class TestTrailingStopPrice:
 
     def test_buy_trailing_stop_up(self) -> None:
         """Test BUY trailing stop when price moves up."""
-        stop = trailing_stop_price(Decimal("95"), Decimal("110"), OrderSide.BUY, Decimal("0.01"))
+        stop = trailing_stop_price(
+            Decimal("95"), Decimal("110"), OrderSide.BUY, Decimal("0.01")
+        )
         assert stop == Decimal("108.90")
 
     def test_sell_trailing_stop_down(self) -> None:
         """Test SELL trailing stop when price moves down."""
-        stop = trailing_stop_price(Decimal("105"), Decimal("90"), OrderSide.SELL, Decimal("0.01"))
+        stop = trailing_stop_price(
+            Decimal("105"), Decimal("90"), OrderSide.SELL, Decimal("0.01")
+        )
         assert stop == Decimal("90.90")
 
     def test_buy_trailing_stop_down_preserves_previous(self) -> None:
         """Test BUY trailing stop preserves previous stop when price drops."""
-        stop = trailing_stop_price(Decimal("95"), Decimal("90"), OrderSide.BUY, Decimal("0.01"))
+        stop = trailing_stop_price(
+            Decimal("95"), Decimal("90"), OrderSide.BUY, Decimal("0.01")
+        )
         assert stop == Decimal("95")  # Previous stop preserved
 
     def test_sell_trailing_stop_up_preserves_previous(self) -> None:
         """Test SELL trailing stop preserves previous stop when price rises."""
-        stop = trailing_stop_price(Decimal("105"), Decimal("110"), OrderSide.SELL, Decimal("0.01"))
+        stop = trailing_stop_price(
+            Decimal("105"), Decimal("110"), OrderSide.SELL, Decimal("0.01")
+        )
         assert stop == Decimal("105")  # Previous stop preserved
 
     def test_negative_previous_stop_raises_error(self) -> None:
@@ -105,12 +117,16 @@ class TestTrailingStopPrice:
     def test_zero_trail_fraction_raises_error(self) -> None:
         """Test that zero trail fraction raises ConfigError."""
         with pytest.raises(ConfigError, match="must be between 0 and 1"):
-            trailing_stop_price(Decimal("95"), Decimal("100"), OrderSide.BUY, Decimal("0"))
+            trailing_stop_price(
+                Decimal("95"), Decimal("100"), OrderSide.BUY, Decimal("0")
+            )
 
     def test_one_trail_fraction_raises_error(self) -> None:
         """Test that trail fraction of 1 raises ConfigError."""
         with pytest.raises(ConfigError, match="must be between 0 and 1"):
-            trailing_stop_price(Decimal("95"), Decimal("100"), OrderSide.BUY, Decimal("1"))
+            trailing_stop_price(
+                Decimal("95"), Decimal("100"), OrderSide.BUY, Decimal("1")
+            )
 
     def test_precision_handling(self) -> None:
         """Test Decimal precision handling."""
@@ -190,7 +206,7 @@ class TestShouldAutoSquareoff:
 
     def test_auto_squareoff_constant(self) -> None:
         """Verify auto-squareoff time constant is correct."""
-        assert _AUTO_SQUAREOFF_UTC_TIME == time(hour=9, minute=40)
+        assert time(hour=9, minute=40) == _AUTO_SQUAREOFF_UTC_TIME
 
     def test_non_utc_datetime_raises_error(self) -> None:
         """Test that non-UTC datetime raises ConfigError."""
@@ -229,7 +245,7 @@ class TestShouldDrlExit:
 
     def test_default_threshold_constant(self) -> None:
         """Verify default threshold constant is correct."""
-        assert _DEFAULT_EXIT_PROB_THRESHOLD == Decimal("0.7")
+        assert Decimal("0.7") == _DEFAULT_EXIT_PROB_THRESHOLD
 
     def test_negative_probability_raises_error(self) -> None:
         """Test that negative probability raises ConfigError."""

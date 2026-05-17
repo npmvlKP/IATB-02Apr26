@@ -16,20 +16,20 @@ from iatb.core.queue import InProcessBackend, RedisStreamBackend
 class TestEventBusRefactored:
     """Tests for refactored EventBus with backend support."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_init_with_default_backend(self) -> None:
         """Test EventBus initialization with default backend."""
         bus = EventBus()
         assert isinstance(bus._backend, InProcessBackend)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_init_with_custom_backend(self) -> None:
         """Test EventBus initialization with custom backend."""
         custom_backend = InProcessBackend()
         bus = EventBus(backend=custom_backend)
         assert bus._backend is custom_backend
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_start_stop(self) -> None:
         """Test EventBus start and stop lifecycle."""
         bus = EventBus()
@@ -47,7 +47,7 @@ class TestEventBusRefactored:
         await bus.stop()  # Should be idempotent
         assert not bus.is_running
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscribe_unsubscribe(self) -> None:
         """Test subscribe and unsubscribe functionality."""
         bus = EventBus()
@@ -60,7 +60,7 @@ class TestEventBusRefactored:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_subscribe(self) -> None:
         """Test publishing and receiving events."""
         bus = EventBus()
@@ -79,7 +79,7 @@ class TestEventBusRefactored:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_validation(self) -> None:
         """Test that events are validated before publishing."""
         bus = EventBus()
@@ -97,7 +97,7 @@ class TestEventBusRefactored:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_not_running(self) -> None:
         """Test publishing when bus is not running."""
         bus = EventBus()
@@ -108,7 +108,7 @@ class TestEventBusRefactored:
         with pytest.raises(EventBusError, match="Event bus backend is not running"):
             await bus.publish("test_topic", test_event)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch(self) -> None:
         """Test batch publishing."""
         bus = EventBus()
@@ -118,7 +118,8 @@ class TestEventBusRefactored:
 
         # Create proper event objects
         events = [
-            MarketTickEvent(symbol=f"STOCK{i}", price=Decimal(f"{100 + i}.50")) for i in range(5)
+            MarketTickEvent(symbol=f"STOCK{i}", price=Decimal(f"{100 + i}.50"))
+            for i in range(5)
         ]
 
         await bus.publish_batch("test_topic", events)
@@ -134,7 +135,7 @@ class TestEventBusRefactored:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_empty(self) -> None:
         """Test batch publishing with empty list."""
         bus = EventBus()
@@ -145,7 +146,7 @@ class TestEventBusRefactored:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_subscribers(self) -> None:
         """Test multiple subscribers receive same event."""
         bus = EventBus()
@@ -172,8 +173,10 @@ class TestEventBusRefactored:
 
         await bus.stop()
 
-    @pytest.mark.skip(reason="Redis lazy import mocking is complex, requires actual Redis package")
-    @pytest.mark.asyncio
+    @pytest.mark.skip(
+        reason="Redis lazy import mocking is complex, requires actual Redis package"
+    )
+    @pytest.mark.asyncio()
     async def test_with_redis_backend(self) -> None:
         """Test EventBus with Redis backend."""
         import builtins
@@ -217,7 +220,7 @@ class TestEventBusRefactored:
             await bus.stop()
             assert not bus.is_running
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_is_running_property(self) -> None:
         """Test is_running property reflects backend state."""
         bus = EventBus()
@@ -233,7 +236,7 @@ class TestEventBusRefactored:
 class TestEventBusWithPersistence:
     """Tests for EventBus integrated with event persistence."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_with_persistence(self, tmp_path) -> None:
         """Test publishing events with persistence enabled."""
         bus = EventBus()
@@ -257,7 +260,7 @@ class TestEventBusWithPersistence:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_replay_events_to_bus(self, tmp_path) -> None:
         """Test replaying persisted events to event bus."""
         persistence = EventPersistence(storage_dir=tmp_path / "events")
@@ -295,7 +298,7 @@ class TestEventBusWithPersistence:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_topics(self) -> None:
         """Test handling multiple topics."""
         bus = EventBus()
@@ -322,7 +325,7 @@ class TestEventBusWithPersistence:
 
         await bus.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_high_throughput(self) -> None:
         """Test handling high throughput of events."""
         bus = EventBus()

@@ -9,7 +9,7 @@ from iatb.core.event_persistence import EventPersistence, PersistedEvent
 from iatb.core.exceptions import EventBusError
 
 
-@pytest.fixture
+@pytest.fixture()
 def temp_storage_dir(tmp_path: Path) -> Path:
     """Create temporary storage directory for tests."""
     storage_dir = tmp_path / "events"
@@ -17,7 +17,7 @@ def temp_storage_dir(tmp_path: Path) -> Path:
     return storage_dir
 
 
-@pytest.fixture
+@pytest.fixture()
 def persistence(temp_storage_dir: Path) -> EventPersistence:
     """Create EventPersistence instance with temporary storage."""
     return EventPersistence(storage_dir=temp_storage_dir)
@@ -26,7 +26,7 @@ def persistence(temp_storage_dir: Path) -> EventPersistence:
 class TestEventPersistence:
     """Tests for EventPersistence."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_save_event(self, persistence: EventPersistence) -> None:
         """Test saving an event."""
         test_event = {"data": "test_value", "timestamp": "2024-01-01T00:00:00Z"}
@@ -43,7 +43,7 @@ class TestEventPersistence:
         assert topic_dir.exists()
         assert len(list(topic_dir.glob("*.json"))) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_save_multiple_events(
         self,
         persistence: EventPersistence,
@@ -59,7 +59,7 @@ class TestEventPersistence:
         assert len(persisted_events) == 5
         assert [p.sequence for p in persisted_events] == [1, 2, 3, 4, 5]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_load_events(self, persistence: EventPersistence) -> None:
         """Test loading events from storage."""
         # Save events
@@ -73,7 +73,7 @@ class TestEventPersistence:
         assert len(loaded) == 3
         assert [e.event_data for e in loaded] == events
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_load_events_with_sequence_range(
         self,
         persistence: EventPersistence,
@@ -84,12 +84,14 @@ class TestEventPersistence:
             await persistence.save_event("test_topic", {"id": i})
 
         # Load events from sequence 5 to 7
-        loaded = await persistence.load_events("test_topic", start_sequence=5, end_sequence=7)
+        loaded = await persistence.load_events(
+            "test_topic", start_sequence=5, end_sequence=7
+        )
 
         assert len(loaded) == 3
         assert [e.sequence for e in loaded] == [5, 6, 7]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_load_events_nonexistent_topic(
         self,
         persistence: EventPersistence,
@@ -98,7 +100,7 @@ class TestEventPersistence:
         loaded = await persistence.load_events("nonexistent_topic")
         assert loaded == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_replay_events(self, persistence: EventPersistence) -> None:
         """Test replaying events with callback."""
         # Save events
@@ -117,7 +119,7 @@ class TestEventPersistence:
         assert count == 3
         assert received == events
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_replay_events_with_delay(
         self,
         persistence: EventPersistence,
@@ -144,7 +146,7 @@ class TestEventPersistence:
         # Should take at least 200ms (2 delays between 3 events)
         assert elapsed >= 0.2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_replay_events_with_range(
         self,
         persistence: EventPersistence,
@@ -170,7 +172,7 @@ class TestEventPersistence:
         assert count == 3
         assert [e["id"] for e in received] == [4, 5, 6]  # 0-indexed
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_replay_events_nonexistent_topic(
         self,
         persistence: EventPersistence,
@@ -179,7 +181,7 @@ class TestEventPersistence:
         count = await persistence.replay_events("nonexistent_topic", lambda x: None)
         assert count == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_clear_events_topic(self, persistence: EventPersistence) -> None:
         """Test clearing events for specific topic."""
         # Save events for two topics
@@ -195,7 +197,7 @@ class TestEventPersistence:
         assert await persistence.get_event_count("topic1") == 0
         assert await persistence.get_event_count("topic2") == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_clear_events_all(self, persistence: EventPersistence) -> None:
         """Test clearing all events."""
         # Save events for multiple topics
@@ -212,7 +214,7 @@ class TestEventPersistence:
         assert await persistence.get_event_count("topic2") == 0
         assert await persistence.get_event_count("topic3") == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_clear_events_nonexistent_topic(
         self,
         persistence: EventPersistence,
@@ -221,7 +223,7 @@ class TestEventPersistence:
         count = await persistence.clear_events("nonexistent_topic")
         assert count == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_event_count(self, persistence: EventPersistence) -> None:
         """Test getting event count for topic."""
         # Save events
@@ -231,7 +233,7 @@ class TestEventPersistence:
         count = await persistence.get_event_count("test_topic")
         assert count == 5
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_event_count_nonexistent_topic(
         self,
         persistence: EventPersistence,
@@ -240,7 +242,7 @@ class TestEventPersistence:
         count = await persistence.get_event_count("nonexistent_topic")
         assert count == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_serialize_pydantic_model(
         self,
         persistence: EventPersistence,
@@ -259,7 +261,7 @@ class TestEventPersistence:
         assert serialized["id"] == 1
         assert serialized["name"] == "test"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_serialize_dict(self, persistence: EventPersistence) -> None:
         """Test serializing dictionary."""
         data = {"id": 1, "name": "test"}
@@ -267,7 +269,7 @@ class TestEventPersistence:
 
         assert serialized == data
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_serialize_generic_object(
         self,
         persistence: EventPersistence,
@@ -286,7 +288,7 @@ class TestEventPersistence:
         assert "id" in serialized
         assert "name" in serialized
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_deserialize_event(self, persistence: EventPersistence) -> None:
         """Test deserializing event."""
         event_data = {"id": 1, "name": "test"}
@@ -294,8 +296,10 @@ class TestEventPersistence:
 
         assert deserialized == event_data
 
-    @pytest.mark.skip(reason="Platform-specific permission test not reliable on Windows")
-    @pytest.mark.asyncio
+    @pytest.mark.skip(
+        reason="Platform-specific permission test not reliable on Windows"
+    )
+    @pytest.mark.asyncio()
     async def test_save_event_failure(self, persistence: EventPersistence) -> None:
         """Test handling save event failure."""
         import stat
@@ -320,7 +324,7 @@ class TestEventPersistence:
                 # Ignore permission restoration errors
                 pass
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_load_corrupted_event(self, persistence: EventPersistence) -> None:
         """Test loading corrupted event file."""
         # Save a valid event

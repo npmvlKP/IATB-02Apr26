@@ -18,12 +18,12 @@ import pytest
 class TestZerodhaLoginSecurity:
     """Security tests for zerodha_login.ps1"""
 
-    @pytest.fixture
+    @pytest.fixture()
     def script_path(self):
         """Path to the zerodha_login.ps1 script"""
         return Path(__file__).parent.parent.parent / "scripts" / "zerodha_login.ps1"
 
-    @pytest.fixture
+    @pytest.fixture()
     def script_content(self, script_path):
         """Read script content for analysis"""
         return script_path.read_text()
@@ -162,7 +162,9 @@ class TestZerodhaLoginSecurity:
         """
         Verify no print() statements are used (per G9 gate).
         """
-        script_path = Path(__file__).parent.parent.parent / "scripts" / "zerodha_login.ps1"
+        script_path = (
+            Path(__file__).parent.parent.parent / "scripts" / "zerodha_login.ps1"
+        )
         # This is a PowerShell script, so print() doesn't apply
         # But we verify no Python inline code has print()
         content = script_path.read_text()

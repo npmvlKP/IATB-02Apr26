@@ -27,7 +27,12 @@ from iatb.broker.base import (
 )
 from iatb.broker.token_manager import ZerodhaTokenManager
 from iatb.core.exceptions import ConfigError
-from iatb.data.rate_limiter import CircuitBreaker, RateLimiter, RetryConfig, retry_with_backoff
+from iatb.data.rate_limiter import (
+    CircuitBreaker,
+    RateLimiter,
+    RetryConfig,
+    retry_with_backoff,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -586,7 +591,9 @@ class ZerodhaBroker(BrokerInterface):
             product_type=product_type,
         )
 
-    async def _execute_place_order(self, order_params: dict[str, Any]) -> Mapping[str, Any]:
+    async def _execute_place_order(
+        self, order_params: dict[str, Any]
+    ) -> Mapping[str, Any]:
         """Execute order placement with retry logic.
 
         Args:
@@ -717,14 +724,20 @@ class ZerodhaBroker(BrokerInterface):
                     transaction_type=self._parse_transaction_type_from_str(
                         order_data["transaction_type"]
                     ),
-                    order_type=self._parse_order_type_from_str(order_data["order_type"]),
+                    order_type=self._parse_order_type_from_str(
+                        order_data["order_type"]
+                    ),
                     quantity=int(order_data["quantity"]),
-                    price=Decimal(str(order_data["price"])) if order_data["price"] else None,
+                    price=Decimal(str(order_data["price"]))
+                    if order_data["price"]
+                    else None,
                     trigger_price=Decimal(str(order_data["trigger_price"]))
                     if order_data["trigger_price"]
                     else None,
                     status=self._parse_order_status(order_data["status"]),
-                    product_type=self._parse_product_type_from_str(order_data["product"]),
+                    product_type=self._parse_product_type_from_str(
+                        order_data["product"]
+                    ),
                     timestamp=datetime.fromisoformat(order_data["order_timestamp"]),
                     filled_quantity=int(order_data["filled_quantity"]),
                     average_price=Decimal(str(order_data["average_price"]))
@@ -754,14 +767,22 @@ class ZerodhaBroker(BrokerInterface):
         equity_data = response.get("equity", {})
 
         return Margin(
-            available_cash=Decimal(str(equity_data.get("available", {}).get("cash", 0))),
+            available_cash=Decimal(
+                str(equity_data.get("available", {}).get("cash", 0))
+            ),
             used_margin=Decimal(str(equity_data.get("used", {}).get("margin", 0))),
-            available_margin=Decimal(str(equity_data.get("available", {}).get("live_balance", 0))),
+            available_margin=Decimal(
+                str(equity_data.get("available", {}).get("live_balance", 0))
+            ),
             opening_balance=Decimal(str(equity_data.get("net", 0))),
         )
 
     async def get_order_history(
-        self, *, order_id: str, from_date: date | None = None, to_date: date | None = None
+        self,
+        *,
+        order_id: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> list[Mapping[str, Any]]:
         """Get order history for a specific order.
 

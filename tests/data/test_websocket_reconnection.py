@@ -39,7 +39,7 @@ class _FakeKiteTicker:
 class TestWebSocketReconnection:
     """Test WebSocket reconnection logic."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_state_tracking(self) -> None:
         """Test connection state transitions."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -56,7 +56,7 @@ class TestWebSocketReconnection:
         await provider.disconnect()
         assert provider._connection_state == ConnectionState.DISCONNECTED
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_exponential_backoff_calculation(self) -> None:
         """Test exponential backoff delay calculation."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -70,7 +70,7 @@ class TestWebSocketReconnection:
         assert provider._reconnect_backoff_base == 2.0
         assert provider._reconnect_backoff_max == 60.0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_heartbeat_monitor_initialization(self) -> None:
         """Test heartbeat monitor is started on connection."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -87,7 +87,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_heartbeat_timeout_detection(self) -> None:
         """Test heartbeat timeout triggers reconnection."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -108,7 +108,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_close_triggers_reconnection(self) -> None:
         """Test connection close event triggers reconnection."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -126,7 +126,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_connection_error_triggers_reconnection(self) -> None:
         """Test connection error event triggers reconnection."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -143,7 +143,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_max_reconnect_attempts(self) -> None:
         """Test max reconnect attempts limit."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -164,7 +164,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_reconnect_backoff_max_limit(self) -> None:
         """Test reconnect backoff is capped at max value."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -188,7 +188,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_disconnect_stops_reconnection(self) -> None:
         """Test disconnect stops reconnection attempts."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -205,37 +205,43 @@ class TestWebSocketReconnection:
 
         assert provider._should_stop is True
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_heartbeat_interval_raises(self) -> None:
         """Test invalid heartbeat interval raises ConfigError."""
-        with pytest.raises(ConfigError, match="heartbeat_interval_seconds must be positive"):
+        with pytest.raises(
+            ConfigError, match="heartbeat_interval_seconds must be positive"
+        ):
             KiteWebSocketProvider(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 heartbeat_interval_seconds=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_heartbeat_timeout_raises(self) -> None:
         """Test invalid heartbeat timeout raises ConfigError."""
-        with pytest.raises(ConfigError, match="heartbeat_timeout_seconds must be positive"):
+        with pytest.raises(
+            ConfigError, match="heartbeat_timeout_seconds must be positive"
+        ):
             KiteWebSocketProvider(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 heartbeat_timeout_seconds=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_reconnect_backoff_base_raises(self) -> None:
         """Test invalid reconnect backoff base raises ConfigError."""
-        with pytest.raises(ConfigError, match="reconnect_backoff_base must be greater than 1.0"):
+        with pytest.raises(
+            ConfigError, match="reconnect_backoff_base must be greater than 1.0"
+        ):
             KiteWebSocketProvider(  # noqa: S106
                 api_key="test_api_key",
                 access_token="test_access_token",
                 reconnect_backoff_base=1.0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_invalid_reconnect_backoff_max_raises(self) -> None:
         """Test invalid reconnect backoff max raises ConfigError."""
         with pytest.raises(ConfigError, match="reconnect_backoff_max must be positive"):
@@ -245,7 +251,7 @@ class TestWebSocketReconnection:
                 reconnect_backoff_max=0,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_on_connect_updates_heartbeat(self) -> None:
         """Test on_connect updates heartbeat timestamp."""
         provider = KiteWebSocketProvider(  # noqa: S106
@@ -262,7 +268,7 @@ class TestWebSocketReconnection:
 
         await provider.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_on_ticks_updates_heartbeat(self) -> None:
         """Test on_ticks updates heartbeat timestamp."""
         provider = KiteWebSocketProvider(  # noqa: S106

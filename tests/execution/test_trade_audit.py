@@ -12,7 +12,11 @@ from iatb.core.types import (
     create_timestamp,
 )
 from iatb.execution.base import ExecutionResult, OrderRequest
-from iatb.execution.trade_audit import TradeAuditEntry, TradeAuditLogger, _record_to_entry
+from iatb.execution.trade_audit import (
+    TradeAuditEntry,
+    TradeAuditLogger,
+    _record_to_entry,
+)
 from iatb.storage.sqlite_store import TradeAuditRecord
 
 
@@ -35,7 +39,9 @@ def _make_result(
     filled_quantity: Decimal = Decimal("10"),
     average_price: Decimal = Decimal("100.50"),
 ) -> ExecutionResult:
-    return ExecutionResult(order_id, status, filled_quantity, average_price, "test fill")
+    return ExecutionResult(
+        order_id, status, filled_quantity, average_price, "test fill"
+    )
 
 
 class TestRecordToEntry:

@@ -11,7 +11,11 @@ from typing import Any
 
 import tomli
 from pydantic.fields import FieldInfo
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from iatb.core.exceptions import ConfigError
 
@@ -32,7 +36,9 @@ class Config(BaseSettings):
     )
 
     @classmethod
-    def _load_toml_settings(cls, settings_cls: type[BaseSettings]) -> PydanticBaseSettingsSource:
+    def _load_toml_settings(
+        cls, settings_cls: type[BaseSettings]
+    ) -> PydanticBaseSettingsSource:
         """Load settings from TOML configuration file.
 
         Args:
@@ -268,7 +274,9 @@ class TomlSettingsSource(PydanticBaseSettingsSource):
                 flattened[key] = value
         return flattened
 
-    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+    def get_field_value(
+        self, field: FieldInfo, field_name: str
+    ) -> tuple[Any, str, bool]:
         """Get field value from TOML configuration.
 
         Args:

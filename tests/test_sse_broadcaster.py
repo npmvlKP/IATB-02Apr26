@@ -39,7 +39,7 @@ async def _get_test_broadcaster() -> SSEBroadcaster:
     return _test_broadcaster
 
 
-@pytest.fixture
+@pytest.fixture()
 async def event_bus() -> EventBus:
     """Create an event bus instance for testing."""
     bus = EventBus()
@@ -48,7 +48,7 @@ async def event_bus() -> EventBus:
     await bus.stop()
 
 
-@pytest.fixture
+@pytest.fixture()
 async def broadcaster(event_bus: EventBus) -> SSEBroadcaster:
     """Create and start a broadcaster instance."""
     b = SSEBroadcaster()
@@ -57,7 +57,7 @@ async def broadcaster(event_bus: EventBus) -> SSEBroadcaster:
     await b.stop()
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_scan_event() -> ScanUpdateEvent:
     """Create a sample scan update event."""
     return ScanUpdateEvent(
@@ -69,7 +69,7 @@ def sample_scan_event() -> ScanUpdateEvent:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_pnl_event() -> PnLUpdateEvent:
     """Create a sample PnL update event."""
     return PnLUpdateEvent(
@@ -86,14 +86,14 @@ def sample_pnl_event() -> PnLUpdateEvent:
 class TestSSEBroadcaster:
     """Test suite for SSE broadcaster."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_broadcaster_singleton(self) -> None:
         """Test that broadcaster is a singleton via async factory."""
         b1 = await get_broadcaster()
         b2 = await get_broadcaster()
         assert b1 is b2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_singleton_access(self) -> None:
         """Test that concurrent access to get_broadcaster is thread-safe."""
 
@@ -113,7 +113,7 @@ class TestSSEBroadcaster:
         for b in broadcasters[1:]:
             assert b is first
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_lock_created_in_event_loop(self) -> None:
         """Test that the lock is created lazily inside the event loop."""
         from iatb.core.sse_broadcaster import _broadcaster_lock, _get_broadcaster_lock
@@ -127,7 +127,7 @@ class TestSSEBroadcaster:
         lock2 = _get_broadcaster_lock()
         assert lock1 is lock2
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_broadcaster_lifecycle(self, event_bus: EventBus) -> None:
         """Test broadcaster start and stop."""
         b = SSEBroadcaster()
@@ -139,7 +139,7 @@ class TestSSEBroadcaster:
         await b.stop()
         assert not b._running
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_subscribe_creates_queue(self, broadcaster: SSEBroadcaster) -> None:
         """Test that subscribing creates a queue for the client."""
         assert len(broadcaster._subscribers) == 0
@@ -158,7 +158,7 @@ class TestSSEBroadcaster:
         await asyncio.sleep(0.1)
         assert len(broadcaster._subscribers) == 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_scan_event_forwarding(
         self,
         event_bus: EventBus,
@@ -186,7 +186,7 @@ class TestSSEBroadcaster:
             await b.stop()
             await gen.aclose()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_pnl_event_forwarding(
         self,
         event_bus: EventBus,
@@ -215,7 +215,7 @@ class TestSSEBroadcaster:
             await b.stop()
             await gen.aclose()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_subscribers(
         self,
         event_bus: EventBus,
@@ -253,7 +253,7 @@ class TestSSEBroadcaster:
             await gen2.aclose()
             await gen3.aclose()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_dead_subscriber_removal(
         self,
         event_bus: EventBus,
@@ -280,7 +280,7 @@ class TestSSEBroadcaster:
 
         await b.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_sse_format_scan_event(self, broadcaster: SSEBroadcaster) -> None:
         """Test SSE formatting for scan events."""
         event = ScanUpdateEvent(
@@ -302,7 +302,7 @@ class TestSSEBroadcaster:
         assert data["duration_ms"] == 2000
         assert data["errors"] == ["test error"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_sse_format_pnl_event(self, broadcaster: SSEBroadcaster) -> None:
         """Test SSE formatting for PnL events."""
         event = PnLUpdateEvent(
@@ -328,7 +328,7 @@ class TestSSEBroadcaster:
         assert data["trade_pnl"] == "500.00"
         assert data["cumulative_pnl"] == "2500.00"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_sse_format_generic_event(self, broadcaster: SSEBroadcaster) -> None:
         """Test SSE formatting for generic events."""
         # Mock a generic event with timestamp
@@ -348,7 +348,7 @@ class TestSSEBroadcaster:
 
         assert message == 'event: test-event\ndata: {"key":"value"}\n\n'
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_keepalive_message(self, broadcaster: SSEBroadcaster) -> None:
         """Test that keepalive messages are sent."""
         gen = broadcaster.subscribe()
@@ -364,7 +364,7 @@ class TestSSEBroadcaster:
         finally:
             await gen.aclose()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_multiple_subscriptions_cleanup(self, event_bus: EventBus) -> None:
         """Test cleanup of multiple subscriptions."""
         b = SSEBroadcaster()
@@ -392,22 +392,22 @@ class TestSSEBroadcaster:
 class TestFastAPISSEEndpoint:
     """Test suite for FastAPI SSE endpoint integration."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_events_stream_response(self) -> None:
         """Test that events stream returns proper response."""
+        pytest.importorskip("fastapi")
         from iatb.fastapi_app import events_stream
 
-        # This is a basic test - integration testing would require
-        # a running FastAPI test client
         response = await events_stream()
         assert response.media_type == "text/event-stream"
         assert response.headers["Cache-Control"] == "no-cache"
         assert response.headers["Connection"] == "keep-alive"
         assert response.headers["X-Accel-Buffering"] == "no"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_broadcaster_initialization_on_startup(self) -> None:
         """Test that broadcaster is available after app startup."""
+        pytest.importorskip("fastapi")
         from iatb.fastapi_app import get_broadcaster
 
         broadcaster = await get_broadcaster()

@@ -81,7 +81,6 @@ class AlertChannel(ABC):
         Returns:
             True if sent successfully, False otherwise.
         """
-        pass
 
 
 class TelegramAlerter(AlertChannel):
@@ -520,7 +519,9 @@ Manual disengagement required to resume trading.
             Formatted message.
         """
         level_key = (
-            AlertLevel(level) if level in AlertLevel.__members__.values() else AlertLevel.INFO
+            AlertLevel(level)
+            if level in AlertLevel.__members__.values()
+            else AlertLevel.INFO
         )
         level_emoji: str = {
             AlertLevel.INFO: "INFO",
@@ -1059,7 +1060,9 @@ class AlertAcknowledgmentTracker:
         Returns:
             True if acknowledged, False otherwise.
         """
-        return self.acknowledgments.get(alert_id, AlertAcknowledgment(alert_id, "")).acknowledged
+        return self.acknowledgments.get(
+            alert_id, AlertAcknowledgment(alert_id, "")
+        ).acknowledged
 
     def get_unacknowledged(
         self,
@@ -1073,10 +1076,14 @@ class AlertAcknowledgmentTracker:
         Returns:
             List of unacknowledged alerts.
         """
-        unacknowledged = [ack for ack in self.acknowledgments.values() if not ack.acknowledged]
+        unacknowledged = [
+            ack for ack in self.acknowledgments.values() if not ack.acknowledged
+        ]
 
         if rule_name:
-            unacknowledged = [ack for ack in unacknowledged if ack.rule_name == rule_name]
+            unacknowledged = [
+                ack for ack in unacknowledged if ack.rule_name == rule_name
+            ]
 
         return unacknowledged
 
@@ -1093,7 +1100,11 @@ class AlertAcknowledgmentTracker:
         to_remove = []
 
         for alert_id, ack in self.acknowledgments.items():
-            if ack.acknowledged and ack.acknowledged_at and ack.acknowledged_at < cutoff:
+            if (
+                ack.acknowledged
+                and ack.acknowledged_at
+                and ack.acknowledged_at < cutoff
+            ):
                 to_remove.append(alert_id)
 
         for alert_id in to_remove:

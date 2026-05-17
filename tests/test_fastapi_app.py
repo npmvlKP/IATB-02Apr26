@@ -14,13 +14,13 @@ from fastapi.testclient import TestClient
 from iatb import fastapi_app
 
 
-@pytest.fixture
+@pytest.fixture()
 def client() -> TestClient:
     """Create test client for FastAPI app."""
     return TestClient(fastapi_app.app)
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_api() -> MagicMock:
     """Create mock API instance."""
     api = MagicMock()
@@ -141,7 +141,9 @@ def test_ohlcv_chart_custom_interval(client: TestClient, mock_api: MagicMock) ->
     with patch.object(fastapi_app, "_api", mock_api):
         response = client.get("/charts/ohlcv/RELIANCE?interval=5minute")
         assert response.status_code == 200
-        mock_api.get_ohlcv.assert_called_once_with(ticker="RELIANCE", interval="5minute")
+        mock_api.get_ohlcv.assert_called_once_with(
+            ticker="RELIANCE", interval="5minute"
+        )
 
 
 def test_ohlcv_chart_error_not_found(client: TestClient, mock_api: MagicMock) -> None:
@@ -221,7 +223,9 @@ def test_get_api_raises_on_create_failure(mock_api: MagicMock) -> None:
         "os.environ",
         {"KITE_API_KEY": "test_key", "KITE_API_SECRET": "test_secret"},
     ):
-        with patch("iatb.fastapi_app.create_api", side_effect=Exception("Connection failed")):
+        with patch(
+            "iatb.fastapi_app.create_api", side_effect=Exception("Connection failed")
+        ):
             from fastapi import HTTPException
 
             with pytest.raises(HTTPException) as exc_info:
@@ -380,7 +384,9 @@ def test_multiple_ticker_requests(client: TestClient, mock_api: MagicMock) -> No
         assert mock_api.get_ohlcv.call_count == 3
 
 
-def test_ohlcv_with_ticker_whitespace_stripping(client: TestClient, mock_api: MagicMock) -> None:
+def test_ohlcv_with_ticker_whitespace_stripping(
+    client: TestClient, mock_api: MagicMock
+) -> None:
     """Test that ticker whitespace is properly stripped."""
     with patch.object(fastapi_app, "_api", mock_api):
         response = client.get("/charts/ohlcv/  RELIANCE  ")
@@ -410,7 +416,9 @@ def test_api_global_state_persistence() -> None:
             assert fastapi_app._api is api1
 
 
-def test_health_check_with_unhealthy_api(client: TestClient, mock_api: MagicMock) -> None:
+def test_health_check_with_unhealthy_api(
+    client: TestClient, mock_api: MagicMock
+) -> None:
     """Test health check endpoint when API reports unhealthy."""
     mock_api.health_check.return_value = {
         "status": "unhealthy",
@@ -424,7 +432,9 @@ def test_health_check_with_unhealthy_api(client: TestClient, mock_api: MagicMock
         assert data["detail"] == "relogin_required"
 
 
-def test_broker_status_with_relogin_required(client: TestClient, mock_api: MagicMock) -> None:
+def test_broker_status_with_relogin_required(
+    client: TestClient, mock_api: MagicMock
+) -> None:
     """Test broker status endpoint when relogin is required."""
     mock_api.broker_status.return_value = {
         "status": "relogin_required",

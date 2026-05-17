@@ -13,7 +13,7 @@ from iatb.storage.git_sync import (
 )
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_repo_root(tmp_path: Path) -> Path:
     """Create a mock git repository root."""
     repo_dir = tmp_path / "mock_repo"
@@ -23,7 +23,7 @@ def mock_repo_root(tmp_path: Path) -> Path:
     return repo_dir
 
 
-@pytest.fixture
+@pytest.fixture()
 def git_service(mock_repo_root: Path) -> GitSyncService:
     """Create GitSyncService instance."""
     return GitSyncService(mock_repo_root)
@@ -58,7 +58,9 @@ class TestGitSyncServiceInit:
 class TestRun:
     """Test _run method."""
 
-    def test_run_executes_command(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_run_executes_command(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         result = git_service._run(("git", "--version"))
         assert isinstance(result, subprocess.CompletedProcess)
 
@@ -102,7 +104,9 @@ class TestEnsureSuccess:
 class TestCurrentBranch:
     """Test current_branch method."""
 
-    def test_returns_branch_name(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_returns_branch_name(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
             branch = git_service.current_branch()
@@ -113,9 +117,13 @@ class TestCurrentBranch:
 class TestHeadCommit:
     """Test head_commit method."""
 
-    def test_returns_commit_hash(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_returns_commit_hash(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="abc123\n", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="abc123\n", stderr=""
+            )
             commit = git_service.head_commit()
             assert commit == "abc123"
 
@@ -123,7 +131,9 @@ class TestHeadCommit:
 class TestPullRebase:
     """Test pull_rebase method."""
 
-    def test_pull_rebase_success(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_pull_rebase_success(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0, stdout="main\n", stderr=""),
@@ -164,9 +174,13 @@ class TestPullRebase:
 class TestStatus:
     """Test status method."""
 
-    def test_status_success(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_status_success(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout=" M file.txt\n", stderr="")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=" M file.txt\n", stderr=""
+            )
 
             status = git_service.status()
 
@@ -182,9 +196,13 @@ class TestStatus:
 
             assert status == ""
 
-    def test_status_failure(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_status_failure(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=128, stdout="", stderr="not a git repo")
+            mock_run.return_value = MagicMock(
+                returncode=128, stdout="", stderr="not a git repo"
+            )
 
             with pytest.raises(ConfigError, match="git status failed"):
                 git_service.status()
@@ -193,7 +211,9 @@ class TestStatus:
 class TestResolveConflicts:
     """Test resolve_conflicts method."""
 
-    def test_resolve_with_ours(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_resolve_with_ours(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
@@ -201,7 +221,9 @@ class TestResolveConflicts:
 
             mock_run.assert_called_once_with(("git", "checkout", "--ours", "."))
 
-    def test_resolve_with_theirs(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_resolve_with_theirs(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
@@ -209,9 +231,13 @@ class TestResolveConflicts:
 
             mock_run.assert_called_once_with(("git", "checkout", "--theirs", "."))
 
-    def test_resolve_failure(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_resolve_failure(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="checkout failed")
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="checkout failed"
+            )
 
             with pytest.raises(ConfigError, match="git checkout --ours failed"):
                 git_service.resolve_conflicts(ConflictResolutionStrategy.OURS)
@@ -238,7 +264,9 @@ class TestCheckAuth:
             assert authenticated is True
             assert auth_type == "ssh"
 
-    def test_check_auth_no_remote(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_check_auth_no_remote(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
@@ -247,7 +275,9 @@ class TestCheckAuth:
             assert authenticated is False
             assert auth_type == "none"
 
-    def test_check_auth_error(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_check_auth_error(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
 
@@ -339,10 +369,14 @@ class TestPushWithRetry:
 
                 assert mock_run.call_count == 2
 
-    def test_push_exhausts_retries(self, git_service: GitSyncService, mock_repo_root: Path) -> None:
+    def test_push_exhausts_retries(
+        self, git_service: GitSyncService, mock_repo_root: Path
+    ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             with patch("time.sleep"):
-                mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="fail")
+                mock_run.return_value = MagicMock(
+                    returncode=1, stdout="", stderr="fail"
+                )
 
                 with pytest.raises(ConfigError, match="git push failed"):
                     git_service._push_with_retry("origin", "main")
@@ -354,7 +388,9 @@ class TestPushWithRetry:
     ) -> None:
         with patch.object(git_service, "_run") as mock_run:
             with patch("time.sleep") as mock_sleep:
-                mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="fail")
+                mock_run.return_value = MagicMock(
+                    returncode=1, stdout="", stderr="fail"
+                )
 
                 with pytest.raises(ConfigError):
                     git_service._push_with_retry("origin", "main")

@@ -53,22 +53,30 @@ class TestReconciliationConfig:
 
     def test_invalid_config_zero_deviation(self) -> None:
         """Test that zero max_price_deviation_pct raises error."""
-        with pytest.raises(ConfigError, match="max_price_deviation_pct must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_price_deviation_pct must be positive"
+        ):
             ReconciliationConfig(max_price_deviation_pct=Decimal("0"))
 
     def test_invalid_config_negative_deviation(self) -> None:
         """Test that negative max_price_deviation_pct raises error."""
-        with pytest.raises(ConfigError, match="max_price_deviation_pct must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_price_deviation_pct must be positive"
+        ):
             ReconciliationConfig(max_price_deviation_pct=Decimal("-0.01"))
 
     def test_invalid_config_zero_drift(self) -> None:
         """Test that zero max_timestamp_drift_seconds raises error."""
-        with pytest.raises(ConfigError, match="max_timestamp_drift_seconds must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_timestamp_drift_seconds must be positive"
+        ):
             ReconciliationConfig(max_timestamp_drift_seconds=0)
 
     def test_invalid_config_negative_drift(self) -> None:
         """Test that negative max_timestamp_drift_seconds raises error."""
-        with pytest.raises(ConfigError, match="max_timestamp_drift_seconds must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_timestamp_drift_seconds must be positive"
+        ):
             ReconciliationConfig(max_timestamp_drift_seconds=-10)
 
     def test_invalid_config_zero_jump(self) -> None:
@@ -113,7 +121,7 @@ class TestPriceDataPoint:
 class TestPriceReconciler:
     """Test PriceReconciler main functionality."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def config(self) -> ReconciliationConfig:
         """Default config for testing."""
         return ReconciliationConfig(
@@ -125,18 +133,20 @@ class TestPriceReconciler:
             max_price_jump_pct=Decimal("0.20"),
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def scanner_price(self) -> PriceDataPoint:
         """Scanner price point (EOD data)."""
         return PriceDataPoint(
             price=Decimal("1000.00"),
-            timestamp=datetime.now(UTC).replace(hour=15, minute=30, second=0, microsecond=0),
+            timestamp=datetime.now(UTC).replace(
+                hour=15, minute=30, second=0, microsecond=0
+            ),
             source="jugaad",
             symbol="RELIANCE",
             data_type="day",
         )
 
-    @pytest.fixture
+    @pytest.fixture()
     def execution_price(self) -> PriceDataPoint:
         """Execution price point (real-time tick)."""
         return PriceDataPoint(
@@ -147,7 +157,9 @@ class TestPriceReconciler:
             data_type="tick",
         )
 
-    def test_reconcile_prices_happy_path(self, config, scanner_price, execution_price) -> None:
+    def test_reconcile_prices_happy_path(
+        self, config, scanner_price, execution_price
+    ) -> None:
         """Test successful reconciliation with prices within threshold."""
         reconciler = PriceReconciler(config)
         result = reconciler.reconcile_prices(scanner_price, execution_price)
@@ -176,7 +188,9 @@ class TestPriceReconciler:
         assert result.severity == "critical"
         assert "exceeds max" in result.reason
 
-    def test_reconcile_prices_symbol_mismatch(self, config, scanner_price, execution_price) -> None:
+    def test_reconcile_prices_symbol_mismatch(
+        self, config, scanner_price, execution_price
+    ) -> None:
         """Test reconciliation fails with symbol mismatch."""
         # Change execution symbol
         wrong_symbol_price = PriceDataPoint(
@@ -194,7 +208,9 @@ class TestPriceReconciler:
         assert result.severity == "critical"
         assert "Symbol mismatch" in result.reason
 
-    def test_reconcile_prices_symbol_mapping_normalization(self, config, scanner_price) -> None:
+    def test_reconcile_prices_symbol_mapping_normalization(
+        self, config, scanner_price
+    ) -> None:
         """Test that symbol mapping normalization works (RELIANCE vs RELIANCE-EQ)."""
         # Scanner uses RELIANCE-EQ, execution uses RELIANCE
         scanner_with_suffix = PriceDataPoint(
@@ -219,7 +235,9 @@ class TestPriceReconciler:
         # Should pass because symbols normalize to same value
         assert result.passed is True
 
-    def test_reconcile_prices_stale_execution_price(self, config, scanner_price) -> None:
+    def test_reconcile_prices_stale_execution_price(
+        self, config, scanner_price
+    ) -> None:
         """Test reconciliation fails with stale execution price."""
         # Create execution price 2 minutes old (exceeds 60s threshold)
         stale_price = PriceDataPoint(
@@ -262,7 +280,9 @@ class TestPriceReconciler:
         assert result.severity == "error"
         assert "too old" in result.reason
 
-    def test_reconcile_prices_zero_price(self, config, scanner_price, execution_price) -> None:
+    def test_reconcile_prices_zero_price(
+        self, config, scanner_price, execution_price
+    ) -> None:
         """Test reconciliation fails with zero price."""
         zero_price = PriceDataPoint(
             price=Decimal("0"),
@@ -279,7 +299,9 @@ class TestPriceReconciler:
         assert result.severity == "critical"
         assert "Invalid price" in result.reason
 
-    def test_reconcile_prices_negative_price(self, config, scanner_price, execution_price) -> None:
+    def test_reconcile_prices_negative_price(
+        self, config, scanner_price, execution_price
+    ) -> None:
         """Test reconciliation fails with negative price."""
         negative_price = PriceDataPoint(
             price=Decimal("-10.00"),
@@ -436,7 +458,9 @@ class TestPriceReconciler:
         # The high deviation fails the price check before reaching CA detection
         assert "exceeds max" in result.reason
 
-    def test_reconcile_prices_disable_symbol_validation(self, config, scanner_price) -> None:
+    def test_reconcile_prices_disable_symbol_validation(
+        self, config, scanner_price
+    ) -> None:
         """Test reconciliation with symbol validation disabled."""
         # Disable symbol validation
         config_disabled = ReconciliationConfig(
@@ -538,7 +562,7 @@ class TestPriceReconciler:
 class TestReconcilerEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def config(self) -> ReconciliationConfig:
         """Default config for testing."""
         return ReconciliationConfig()

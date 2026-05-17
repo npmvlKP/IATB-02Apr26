@@ -28,7 +28,7 @@ from iatb.core.exchange_calendar import ExchangeCalendar, SessionWindow
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_calendar():
     """Mock ExchangeCalendar for testing."""
     calendar = MagicMock(spec=ExchangeCalendar)
@@ -39,33 +39,35 @@ def mock_calendar():
     return calendar
 
 
-@pytest.fixture
+@pytest.fixture()
 def mock_mcx_calendar():
     """Mock MCX calendar with extended hours."""
     calendar = MagicMock(spec=ExchangeCalendar)
-    calendar.session_for.return_value = SessionWindow(open_time=time(9, 0), close_time=time(23, 30))
+    calendar.session_for.return_value = SessionWindow(
+        open_time=time(9, 0), close_time=time(23, 30)
+    )
     return calendar
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_trading_time():
     """UTC time at 10:00 IST (04:30 UTC) on trading day."""
     return datetime(2026, 1, 5, 4, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_pre_market():
     """UTC time before market open (07:00 IST = 01:30 UTC)."""
     return datetime(2026, 1, 5, 1, 30, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def utc_post_mis_close():
     """UTC time after MIS close (15:30 IST = 10:00 UTC)."""
     return datetime(2026, 1, 5, 10, 0, 0, tzinfo=UTC)
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_timestamps():
     """Sample list of UTC timestamps for filtering tests."""
     return [
@@ -204,7 +206,9 @@ class TestValidateTradeProduct:
     def test_validate_mis_product_succeeds(self, mock_calendar, utc_trading_time):
         """Test validating MIS product succeeds."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = validate_trade_product(utc_trading_time, Exchange.NSE, "STOCKS", "MIS")
+            result = validate_trade_product(
+                utc_trading_time, Exchange.NSE, "STOCKS", "MIS"
+            )
             assert result == ProductType.MIS
 
     def test_validate_cnc_blocked_for_stocks(self, mock_calendar, utc_trading_time):
@@ -213,28 +217,42 @@ class TestValidateTradeProduct:
             with pytest.raises(ConfigError, match="DELIVERY.*blocked"):
                 validate_trade_product(utc_trading_time, Exchange.NSE, "STOCKS", "CNC")
 
-    def test_validate_delivery_blocked_for_options(self, mock_calendar, utc_trading_time):
+    def test_validate_delivery_blocked_for_options(
+        self, mock_calendar, utc_trading_time
+    ):
         """Test DELIVERY blocked for OPTIONS."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
             with pytest.raises(ConfigError, match="DELIVERY.*blocked"):
-                validate_trade_product(utc_trading_time, Exchange.NSE, "OPTIONS", "DELIVERY")
+                validate_trade_product(
+                    utc_trading_time, Exchange.NSE, "OPTIONS", "DELIVERY"
+                )
 
-    def test_validate_delivery_blocked_for_futures(self, mock_calendar, utc_trading_time):
+    def test_validate_delivery_blocked_for_futures(
+        self, mock_calendar, utc_trading_time
+    ):
         """Test DELIVERY blocked for FUTURES."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
             with pytest.raises(ConfigError, match="DELIVERY.*blocked"):
                 validate_trade_product(utc_trading_time, Exchange.NSE, "FUTURES", "CNC")
 
-    def test_validate_nrml_blocked_for_mis_assets(self, mock_calendar, utc_trading_time):
+    def test_validate_nrml_blocked_for_mis_assets(
+        self, mock_calendar, utc_trading_time
+    ):
         """Test NRML also blocked for MIS-required assets (only MIS allowed)."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = validate_trade_product(utc_trading_time, Exchange.NSE, "STOCKS", "NRML")
+            result = validate_trade_product(
+                utc_trading_time, Exchange.NSE, "STOCKS", "NRML"
+            )
             assert result == ProductType.NRML
 
-    def test_validate_non_mis_asset_allows_any_product(self, mock_calendar, utc_trading_time):
+    def test_validate_non_mis_asset_allows_any_product(
+        self, mock_calendar, utc_trading_time
+    ):
         """Test non-MIS-required asset allows any product type."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = validate_trade_product(utc_trading_time, Exchange.NSE, "BONDS", "CNC")
+            result = validate_trade_product(
+                utc_trading_time, Exchange.NSE, "BONDS", "CNC"
+            )
             assert result == ProductType.CNC
 
     def test_validate_requires_utc_timestamp(self):
@@ -246,13 +264,17 @@ class TestValidateTradeProduct:
     def test_validate_mcx_exchange(self, mock_mcx_calendar, utc_trading_time):
         """Test validation works for MCX exchange."""
         with patch.object(TradingSessions, "calendar", mock_mcx_calendar):
-            result = validate_trade_product(utc_trading_time, Exchange.MCX, "COMMODITIES", "MIS")  # noqa: B017
+            result = validate_trade_product(
+                utc_trading_time, Exchange.MCX, "COMMODITIES", "MIS"
+            )  # noqa: B017
             assert isinstance(result, ProductType)
 
     def test_validate_cds_exchange(self, mock_calendar, utc_trading_time):
         """Test validation works for CDS exchange."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
-            result = validate_trade_product(utc_trading_time, Exchange.CDS, "CURRENCY_FO", "MIS")
+            result = validate_trade_product(
+                utc_trading_time, Exchange.CDS, "CURRENCY_FO", "MIS"
+            )
             assert result == ProductType.MIS
 
 
@@ -463,7 +485,9 @@ class TestIntegration:
             result = validate_trade_product(utc_time, Exchange.NSE, "STOCKS", "MIS")
             assert result == ProductType.MIS
 
-    def test_delivery_blocked_across_all_mis_assets(self, mock_calendar, utc_trading_time):
+    def test_delivery_blocked_across_all_mis_assets(
+        self, mock_calendar, utc_trading_time
+    ):
         """Test DELIVERY blocked for all MIS-required assets."""
         with patch.object(TradingSessions, "calendar", mock_calendar):
             for asset in ["STOCKS", "OPTIONS", "FUTURES", "CURRENCY_FO"]:

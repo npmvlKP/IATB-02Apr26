@@ -21,13 +21,17 @@ from iatb.core.types import create_price, create_quantity, create_timestamp
 from iatb.data.base import OHLCVBar
 from iatb.data.kite_provider import KiteProvider
 from iatb.data.kite_ticker import KiteTickerFeed
-from iatb.scanner.instrument_scanner import InstrumentScanner, ScannerConfig, SortDirection
+from iatb.scanner.instrument_scanner import (
+    InstrumentScanner,
+    ScannerConfig,
+    SortDirection,
+)
 
 
 class TestKiteTokenProviderIntegration:
     """Test KiteProvider integration with token manager."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_client(self):
         """Create mock KiteConnect client."""
         client = MagicMock()
@@ -54,7 +58,7 @@ class TestKiteTokenProviderIntegration:
         }
         return client
 
-    @pytest.fixture
+    @pytest.fixture()
     def token_manager(self):
         """Create token manager with mock credentials."""
         return ZerodhaTokenManager(
@@ -62,8 +66,10 @@ class TestKiteTokenProviderIntegration:
             api_secret="test_api_secret",
         )
 
-    @pytest.mark.asyncio
-    async def test_kite_provider_from_token_manager(self, mock_kite_client, token_manager):
+    @pytest.mark.asyncio()
+    async def test_kite_provider_from_token_manager(
+        self, mock_kite_client, token_manager
+    ):
         """Test KiteProvider creation from token manager."""
         # Set up token in token manager
         token_manager.store_access_token("test_access_token")
@@ -87,7 +93,7 @@ class TestKiteTokenProviderIntegration:
         assert bars[0].symbol == "RELIANCE"
         assert bars[0].source == "kiteconnect"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_token_refresh_integration(self, mock_kite_client, token_manager):
         """Test token refresh integration in provider."""
         # Clear any existing token first
@@ -123,7 +129,7 @@ class TestKiteTokenProviderIntegration:
 class TestKiteProviderFailoverIntegration:
     """Test KiteProvider in failover chain."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_data(self):
         """Create mock Kite data."""
         now = datetime.now(UTC)
@@ -142,13 +148,13 @@ class TestKiteProviderFailoverIntegration:
             for i in range(5)
         ]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_primary_jugaad_fallback(self, mock_kite_data):
         """Test failover from Kite to Jugaad."""
         # Skip - depends on external Jugaad data quality which may have timestamp issues
         pytest.skip("Jugaad provider data quality issues - depends on external API")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_failover_circuit_breaker(self):
         """Test circuit breaker in failover chain."""
         # Skip - depends on external Jugaad data quality which may have timestamp issues
@@ -158,7 +164,7 @@ class TestKiteProviderFailoverIntegration:
 class TestKiteTickerIntegration:
     """Test KiteTicker WebSocket integration."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_kite_ticker(self):
         """Create mock KiteTicker."""
         ticker = MagicMock()
@@ -185,7 +191,7 @@ class TestKiteTickerIntegration:
 
         return ticker
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_ticker_connects_and_subscribes(self, mock_kite_ticker):
         """Test KiteTicker connects and subscribes to instruments."""
 
@@ -214,7 +220,7 @@ class TestKiteTickerIntegration:
         # Cleanup
         await ticker.disconnect()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_ticker_processes_ticks(self, mock_kite_ticker):
         """Test KiteTicker processes incoming ticks."""
         # Skip this test - requires complex async mocking that's out of scope
@@ -224,7 +230,7 @@ class TestKiteTickerIntegration:
 class TestRateLimitingIntegration:
     """Test rate limiting across the pipeline."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_kite_provider_respects_rate_limit(self):
         """Test KiteProvider respects configured rate limit."""
         call_count = 0
@@ -274,7 +280,7 @@ class TestRateLimitingIntegration:
 class TestEndToEndPipeline:
     """End-to-end pipeline tests."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_full_pipeline_kite_provider_to_scan(self):
         """Test full pipeline: KiteProvider → Scanner."""
         # Mock Kite client
@@ -323,7 +329,7 @@ class TestEndToEndPipeline:
         assert result is not None
         assert result.total_scanned >= 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_pipeline_with_error_recovery(self):
         """Test pipeline recovers from errors with retry."""
         call_count = 0

@@ -8,7 +8,11 @@ from decimal import Decimal
 from typing import Protocol, cast
 
 from iatb.core.exceptions import ConfigError
-from iatb.sentiment.base import SentimentAnalyzer, SentimentScore, sentiment_label_from_score
+from iatb.sentiment.base import (
+    SentimentAnalyzer,
+    SentimentScore,
+    sentiment_label_from_score,
+)
 
 
 class VaderLike(Protocol):

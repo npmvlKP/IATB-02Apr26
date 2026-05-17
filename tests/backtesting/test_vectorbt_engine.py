@@ -86,7 +86,7 @@ class TestVectorBTConfig:
 
 
 class TestVectorBTEngine:
-    @pytest.fixture
+    @pytest.fixture()
     def engine(self) -> VectorBTEngine:
         mock_vbt = MagicMock()
         mock_pandas_ta = MagicMock()
@@ -139,7 +139,10 @@ class TestVectorBTEngine:
             )
 
     def test_run_backtest_no_valid_sessions(self, engine: VectorBTEngine) -> None:
-        with patch("iatb.backtesting.vectorbt_engine.create_mis_session_mask", return_value=set()):
+        with patch(
+            "iatb.backtesting.vectorbt_engine.create_mis_session_mask",
+            return_value=set(),
+        ):
             with pytest.raises(ConfigError, match="No valid trading sessions"):
                 engine.run_backtest(
                     [Decimal("100"), Decimal("101")],
@@ -150,7 +153,8 @@ class TestVectorBTEngine:
         ts = _make_timestamps(20)
         prices = [Decimal("100") + Decimal(i) for i in range(20)]
         with patch(
-            "iatb.backtesting.vectorbt_engine.create_mis_session_mask", return_value={ts[0].date()}
+            "iatb.backtesting.vectorbt_engine.create_mis_session_mask",
+            return_value={ts[0].date()},
         ):
             result = engine.run_backtest(prices, ts)
             assert isinstance(result, BacktestResult)
@@ -162,7 +166,8 @@ class TestVectorBTEngine:
         scores = [Decimal("0.8") if 3 <= i <= 8 else Decimal("0.1") for i in range(20)]
         probs = [Decimal("0.8") if 3 <= i <= 8 else Decimal("0.1") for i in range(20)]
         with patch(
-            "iatb.backtesting.vectorbt_engine.create_mis_session_mask", return_value={ts[0].date()}
+            "iatb.backtesting.vectorbt_engine.create_mis_session_mask",
+            return_value={ts[0].date()},
         ):
             result = engine.run_backtest(prices, ts, scores, probs)
             assert isinstance(result, BacktestResult)
@@ -249,7 +254,9 @@ class TestVectorBTEngine:
                 _make_timestamps(5),
             )
 
-    def test_calculate_trade_statistics_all_winners(self, engine: VectorBTEngine) -> None:
+    def test_calculate_trade_statistics_all_winners(
+        self, engine: VectorBTEngine
+    ) -> None:
         trades = [
             {"net_pnl": Decimal("100"), "is_winner": True},
             {"net_pnl": Decimal("50"), "is_winner": True},
@@ -259,7 +266,9 @@ class TestVectorBTEngine:
         assert stats["losing_trades"] == 0
         assert stats["win_rate"] == Decimal("1")
 
-    def test_calculate_trade_statistics_all_losers(self, engine: VectorBTEngine) -> None:
+    def test_calculate_trade_statistics_all_losers(
+        self, engine: VectorBTEngine
+    ) -> None:
         trades = [
             {"net_pnl": Decimal("-100"), "is_winner": False},
             {"net_pnl": Decimal("-50"), "is_winner": False},

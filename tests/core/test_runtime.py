@@ -9,8 +9,10 @@ import iatb.core.runtime as runtime
 import pytest
 
 
-@pytest.mark.asyncio
-async def test_run_runtime_starts_and_stops_components(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio()
+async def test_run_runtime_starts_and_stops_components(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Runtime should start and stop engine around stop event."""
     lifecycle: list[str] = []
 
@@ -33,7 +35,7 @@ async def test_run_runtime_starts_and_stops_components(monkeypatch: pytest.Monke
     assert lifecycle == ["engine-start", "engine-stop"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_register_signal_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Signal handler registration should wire stop_event.set to signals."""
     import signal
@@ -50,7 +52,7 @@ async def test_register_signal_handlers(monkeypatch: pytest.MonkeyPatch) -> None
     assert len(registered) >= 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_main_runs_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
     """_main should invoke run_runtime and respect signal handlers."""
     called: list[str] = []
@@ -83,7 +85,7 @@ def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "asyncio.run" in called
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -> None:
     """Runtime should create its own stop event if not provided."""
     event_created: list[bool] = []
@@ -120,8 +122,10 @@ async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -
     assert len(event_created) > 0
 
 
-@pytest.mark.asyncio
-async def test_run_runtime_handles_engine_start_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio()
+async def test_run_runtime_handles_engine_start_error(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Runtime should handle errors during engine startup gracefully."""
 
     class _FailingEngine:
@@ -142,8 +146,10 @@ async def test_run_runtime_handles_engine_start_error(monkeypatch: pytest.Monkey
         await task
 
 
-@pytest.mark.asyncio
-async def test_run_runtime_handles_engine_stop_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio()
+async def test_run_runtime_handles_engine_stop_error(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Runtime should handle errors during engine stop gracefully."""
 
     class _EngineWithStopError:
@@ -168,8 +174,10 @@ async def test_run_runtime_handles_engine_stop_error(monkeypatch: pytest.MonkeyP
         await task
 
 
-@pytest.mark.asyncio
-async def test_main_handles_signal_handler_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio()
+async def test_main_handles_signal_handler_error(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
     """_main should propagate errors in signal handler registration."""
     called: list[str] = []
 
@@ -211,7 +219,7 @@ def test_main_logging_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(configured) > 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_multiple_runtime_instances(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that multiple runtime instances can run independently."""
     instance_count: list[int] = []

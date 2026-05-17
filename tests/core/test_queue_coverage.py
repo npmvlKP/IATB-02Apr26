@@ -31,7 +31,7 @@ from iatb.core.queue import (
 class TestInProcessBackendEdgeBranches:
     """Tests for uncovered edge branches in InProcessBackend."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_unsubscribe_queue_not_in_internal_queues(self) -> None:
         """Cover branch 126->128: queue not in _queues."""
         backend = InProcessBackend()
@@ -43,7 +43,7 @@ class TestInProcessBackendEdgeBranches:
         await backend.unsubscribe("topic", q1)
         await backend.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_no_subscribers_no_raise(self) -> None:
         """Cover line 167: publish_batch when topic has no subscribers."""
         backend = InProcessBackend()
@@ -53,7 +53,7 @@ class TestInProcessBackendEdgeBranches:
         await backend.publish_batch("topic", [{"data": 1}])
         await backend.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_empty_subscribers_list(self) -> None:
         """Cover lines 173-176: publish_batch iterates over empty queues."""
         backend = InProcessBackend()
@@ -64,7 +64,7 @@ class TestInProcessBackendEdgeBranches:
         await backend.publish_batch("topic", [{"data": 1}])
         await backend.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_empty_subscribers_list(self) -> None:
         """Cover publish when subscribers list is empty (line 138-139 branch)."""
         backend = InProcessBackend()
@@ -124,51 +124,51 @@ class TestMaxQueueSize:
 class TestBackendNotRunningErrors:
     """Tests for _validate_running error paths."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_inprocess_subscribe_not_running(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.subscribe("topic")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_inprocess_unsubscribe_not_running(self) -> None:
         backend = InProcessBackend()
         q: asyncio.Queue[object] = asyncio.Queue()
         with pytest.raises(EventBusError, match="not running"):
             await backend.unsubscribe("topic", q)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_inprocess_publish_not_running(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.publish("topic", {"data": 1})
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_inprocess_publish_batch_not_running(self) -> None:
         backend = InProcessBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.publish_batch("topic", [{"data": 1}])
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_redis_subscribe_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.subscribe("topic")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_redis_unsubscribe_not_running(self) -> None:
         backend = RedisStreamBackend()
         q: asyncio.Queue[object] = asyncio.Queue()
         with pytest.raises(EventBusError, match="not running"):
             await backend.unsubscribe("topic", q)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_redis_publish_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):
             await backend.publish("topic", {"data": 1})
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_redis_publish_batch_not_running(self) -> None:
         backend = RedisStreamBackend()
         with pytest.raises(EventBusError, match="not running"):
@@ -178,7 +178,7 @@ class TestBackendNotRunningErrors:
 class TestInProcessBackendConcurrency:
     """Additional concurrency tests for edge coverage."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_concurrent_pub_sub(self) -> None:
         """Test concurrent publish and subscribe."""
         backend = InProcessBackend()
@@ -197,7 +197,7 @@ class TestInProcessBackendConcurrency:
         assert total == 20
         await backend.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_to_topic_no_subscribers(self) -> None:
         """Test publish to a topic with no subscribers at all."""
         backend = InProcessBackend()
@@ -205,7 +205,7 @@ class TestInProcessBackendConcurrency:
         await backend.publish("empty_topic", {"data": 1})
         await backend.stop()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_publish_batch_to_topic_no_subscribers(self) -> None:
         """Test batch publish to a topic with no subscribers at all."""
         backend = InProcessBackend()

@@ -69,7 +69,10 @@ class SimulatedBroker(Executor):
         if self._rejection_rate > Decimal("0"):
             r = random.random()
             if r < float(self._rejection_rate):
-                self._orders[order_id] = {"status": OrderStatus.REJECTED, "request": request}
+                self._orders[order_id] = {
+                    "status": OrderStatus.REJECTED,
+                    "request": request,
+                }
                 return ExecutionResult(
                     order_id=order_id,
                     status=OrderStatus.REJECTED,
@@ -124,7 +127,10 @@ class SimulatedBroker(Executor):
 
     @property
     def total_notional(self) -> Decimal:
-        return sum(Decimal(str(f["quantity"])) * Decimal(str(f["fill_price"])) for f in self._fills)
+        return sum(
+            Decimal(str(f["quantity"])) * Decimal(str(f["fill_price"]))
+            for f in self._fills
+        )
 
 
 class LiveMarketSimulator(DataProvider):
@@ -196,7 +202,11 @@ class LiveMarketSimulator(DataProvider):
         result: dict[str, list[OHLCVBar]] = {}
         for sym in symbols:
             result[sym] = await self.get_ohlcv(
-                symbol=sym, exchange=exchange, timeframe=timeframe, since=since, limit=limit
+                symbol=sym,
+                exchange=exchange,
+                timeframe=timeframe,
+                since=since,
+                limit=limit,
             )
         return result
 
@@ -307,7 +317,7 @@ class TestSimulatedBrokerFills:
 class TestLiveSimulationPipeline:
     """Test full pipeline with live-like simulated data."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     @pytest.mark.skip(reason="scan_cycle._initialize_sentiment_analyzer does not exist")
     async def test_scan_cycle_with_simulated_data(self, tmp_path: Path) -> None:
         symbols = ["RELIANCE", "TCS", "INFY"]
@@ -325,8 +335,12 @@ class TestLiveSimulationPipeline:
                 {s: (Decimal("0.8"), True) for s in symbols}
             )
             with patch("iatb.scanner.scan_cycle._initialize_rl_predictor") as mock_rl:
-                mock_rl.return_value = create_mock_rl_predictor(probability=Decimal("0.7"))
-                with patch("iatb.scanner.scan_cycle._initialize_strength_scorer") as mock_ss:
+                mock_rl.return_value = create_mock_rl_predictor(
+                    probability=Decimal("0.7")
+                )
+                with patch(
+                    "iatb.scanner.scan_cycle._initialize_strength_scorer"
+                ) as mock_ss:
                     mock_ss.return_value = StrengthScorer(cache_enabled=False)
                     with patch("iatb.scanner.scan_cycle.check_ml_readiness"):
                         result = run_scan_cycle(
@@ -339,7 +353,7 @@ class TestLiveSimulationPipeline:
         assert result is not None
         assert result.timestamp_utc.tzinfo == UTC
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_simulated_trading_session(self, tmp_path: Path) -> None:
         base_prices = {"RELIANCE": Decimal("2500"), "TCS": Decimal("3500")}
         broker = SimulatedBroker(base_prices=base_prices, slippage_bps=Decimal("2"))
@@ -371,7 +385,7 @@ class TestLiveSimulationPipeline:
         db_trades = audit.query_daily_trades(today)
         assert len(db_trades) == 3
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_position_sizing_in_simulation(self) -> None:
         inputs = PositionSizingInput(
             equity=Decimal("1000000"),
@@ -396,7 +410,7 @@ class TestLiveSimulationPipeline:
         )
         assert vol_size > Decimal("0")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_market_data_tick_generation(self) -> None:
         provider = LiveMarketSimulator(["RELIANCE"], {"RELIANCE": Decimal("2500")})
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)

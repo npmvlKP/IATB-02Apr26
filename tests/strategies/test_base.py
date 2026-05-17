@@ -72,7 +72,7 @@ def test_strategy_base_on_signal_maps_to_strategy_order() -> None:
     assert order.side == OrderSide.BUY
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio()
 async def test_strategy_base_emit_signal_publishes_to_event_bus() -> None:
     strategy = StrategyBase(strategy_id="base_test")
     context = StrategyContext(

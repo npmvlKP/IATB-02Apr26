@@ -36,13 +36,13 @@ np.random.seed(42)
 torch.manual_seed(42)
 
 
-@pytest.fixture
+@pytest.fixture()
 def temp_output_dir() -> TemporaryDirectory:
     """Create temporary directory for report output."""
     return TemporaryDirectory()
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_positions() -> list[PositionData]:
     """Create sample position data for testing."""
     return [
@@ -65,7 +65,7 @@ def sample_positions() -> list[PositionData]:
     ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def sample_metrics(sample_positions: list[PositionData]) -> DailyRiskMetrics:
     """Create sample daily risk metrics for testing."""
     return create_daily_risk_metrics(
@@ -132,7 +132,9 @@ class TestReportConfig:
         )
         assert config.telegram_chat_id == "123456789"
 
-    def test_invalid_config_zero_drawdown(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_invalid_config_zero_drawdown(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test config validation fails with zero drawdown."""
         with pytest.raises(ConfigError, match="must be positive"):
             ReportConfig(
@@ -140,7 +142,9 @@ class TestReportConfig:
                 max_allowed_drawdown=Decimal("0"),
             )
 
-    def test_invalid_config_negative_drawdown(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_invalid_config_negative_drawdown(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test config validation fails with negative drawdown."""
         with pytest.raises(ConfigError, match="must be positive"):
             ReportConfig(
@@ -148,7 +152,9 @@ class TestReportConfig:
                 max_allowed_drawdown=Decimal("-0.10"),
             )
 
-    def test_invalid_config_confidence_too_low(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_invalid_config_confidence_too_low(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test config validation fails with confidence <= 0."""
         with pytest.raises(ConfigError, match="between 0 and 1"):
             ReportConfig(
@@ -156,7 +162,9 @@ class TestReportConfig:
                 confidence_level=Decimal("0"),
             )
 
-    def test_invalid_config_confidence_too_high(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_invalid_config_confidence_too_high(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test config validation fails with confidence >= 1."""
         with pytest.raises(ConfigError, match="between 0 and 1"):
             ReportConfig(
@@ -164,7 +172,9 @@ class TestReportConfig:
                 confidence_level=Decimal("1"),
             )
 
-    def test_invalid_config_email_no_recipients(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_invalid_config_email_no_recipients(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test config validation fails with email but no recipients."""
         with pytest.raises(ConfigError, match="Email recipients must be specified"):
             ReportConfig(
@@ -173,7 +183,9 @@ class TestReportConfig:
                 email_recipients=[],
             )
 
-    def test_invalid_config_telegram_no_chat_id(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_invalid_config_telegram_no_chat_id(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test config validation fails with Telegram but no chat_id."""
         with pytest.raises(ConfigError, match="Telegram chat_id must be specified"):
             ReportConfig(
@@ -203,7 +215,9 @@ class TestCreateDailyRiskMetrics:
         assert metrics.daily_return == Decimal("0.01")
         assert len(metrics.positions) == 2
 
-    def test_invalid_metrics_naive_datetime(self, sample_positions: list[PositionData]) -> None:
+    def test_invalid_metrics_naive_datetime(
+        self, sample_positions: list[PositionData]
+    ) -> None:
         """Test metrics validation fails with naive datetime."""
         # noqa: DTZ005 - Intentionally using naive datetime for validation test
         naive_datetime = datetime.now()
@@ -220,7 +234,9 @@ class TestCreateDailyRiskMetrics:
                 positions=sample_positions,
             )
 
-    def test_invalid_metrics_wrong_timezone(self, sample_positions: list[PositionData]) -> None:
+    def test_invalid_metrics_wrong_timezone(
+        self, sample_positions: list[PositionData]
+    ) -> None:
         """Test metrics validation fails with non-UTC timezone."""
         wrong_tz_datetime = datetime.now(tz=timezone(timedelta(hours=5, minutes=30)))
         with pytest.raises(ConfigError, match="must be UTC-aware"):
@@ -366,7 +382,9 @@ class TestCreateDailyRiskMetrics:
 class TestRiskReportGenerator:
     """Test RiskReportGenerator class."""
 
-    def test_generator_initialization(self, temp_output_dir: TemporaryDirectory) -> None:
+    def test_generator_initialization(
+        self, temp_output_dir: TemporaryDirectory
+    ) -> None:
         """Test initializing report generator."""
         config = ReportConfig(output_dir=Path(temp_output_dir.name))
         generator = RiskReportGenerator(config)
@@ -479,7 +497,9 @@ class TestRiskReportGenerator:
     ) -> None:
         """Test report generation with email notification."""
         # Mock the internal email function
-        mock_send_email = mocker.patch.object(RiskReportGenerator, "_send_email_notification")
+        mock_send_email = mocker.patch.object(
+            RiskReportGenerator, "_send_email_notification"
+        )
 
         config = ReportConfig(
             output_dir=Path(temp_output_dir.name),

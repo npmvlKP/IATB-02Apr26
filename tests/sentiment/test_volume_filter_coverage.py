@@ -17,7 +17,9 @@ class TestHasVolumeConfirmationHappyPath:
         assert result is True
 
     def test_volume_ratio_slightly_above_threshold_returns_true(self) -> None:
-        result = has_volume_confirmation(Decimal("1.50000000000000001"), threshold=Decimal("1.5"))
+        result = has_volume_confirmation(
+            Decimal("1.50000000000000001"), threshold=Decimal("1.5")
+        )
         assert result is True
 
     def test_volume_ratio_below_threshold_returns_false(self) -> None:
@@ -125,7 +127,7 @@ class TestMinVolumeRatioConstant:
         assert isinstance(MIN_VOLUME_RATIO, Decimal)
 
     def test_constant_is_positive(self) -> None:
-        assert MIN_VOLUME_RATIO > Decimal("0")
+        assert Decimal("0") < MIN_VOLUME_RATIO
 
     def test_constant_value(self) -> None:
-        assert MIN_VOLUME_RATIO == Decimal("1.5")
+        assert Decimal("1.5") == MIN_VOLUME_RATIO

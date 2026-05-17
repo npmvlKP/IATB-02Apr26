@@ -5,7 +5,10 @@ import logging
 from unittest.mock import patch
 
 import pytest
-from iatb.core.observability.logging_config import JsonFormatter, setup_structured_logging
+from iatb.core.observability.logging_config import (
+    JsonFormatter,
+    setup_structured_logging,
+)
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -20,7 +23,9 @@ class TestTraceLogCorrelation:
         """Setup observability for tests."""
         setup_structured_logging("DEBUG")
         # Set up tracing with test service name and disable exporters
-        provider = TracerProvider(resource=Resource.create({"service.name": "iatb-test"}))
+        provider = TracerProvider(
+            resource=Resource.create({"service.name": "iatb-test"})
+        )
         processor = SimpleSpanProcessor(ConsoleSpanExporter())
         provider.add_span_processor(processor)
         trace.set_tracer_provider(provider)

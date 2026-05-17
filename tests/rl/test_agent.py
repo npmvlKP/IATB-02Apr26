@@ -7,7 +7,12 @@ import numpy as np
 import pytest
 import torch
 from iatb.core.exceptions import ConfigError
-from iatb.rl.agent import RLAgent, RLAgentConfig, _normalize_action, _versioned_model_path
+from iatb.rl.agent import (
+    RLAgent,
+    RLAgentConfig,
+    _normalize_action,
+    _versioned_model_path,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
@@ -35,7 +40,9 @@ class _FakeAlgorithm:
     def learn(self, total_timesteps: int) -> None:
         self.learn_steps = total_timesteps
 
-    def predict(self, observation: list[float], deterministic: bool = True) -> tuple[int, None]:
+    def predict(
+        self, observation: list[float], deterministic: bool = True
+    ) -> tuple[int, None]:
         _ = deterministic
         _ = observation
         return 1, None
@@ -53,12 +60,16 @@ class _FakeAlgorithm:
 def test_rl_agent_train_predict_save_and_load(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
-    fake_module = SimpleNamespace(PPO=_FakeAlgorithm, A2C=_FakeAlgorithm, SAC=_FakeAlgorithm)
+    fake_module = SimpleNamespace(
+        PPO=_FakeAlgorithm, A2C=_FakeAlgorithm, SAC=_FakeAlgorithm
+    )
     monkeypatch.setattr("iatb.rl.agent.importlib.import_module", lambda _: fake_module)
     agent = RLAgent(RLAgentConfig(algorithm="PPO", timesteps=123, seed=7))
     agent.train(environment=object())
     assert agent.has_model
-    action = agent.predict([Decimal("1"), Decimal("2"), Decimal("3")], deterministic=True)
+    action = agent.predict(
+        [Decimal("1"), Decimal("2"), Decimal("3")], deterministic=True
+    )
     assert action == 1
     saved_path = agent.save(
         model_dir=str(tmp_path),
@@ -72,7 +83,9 @@ def test_rl_agent_train_predict_save_and_load(
     assert new_agent.has_model
 
 
-def test_rl_agent_validates_algorithm_and_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rl_agent_validates_algorithm_and_dependency(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
     with pytest.raises(ConfigError, match="unsupported RL algorithm"):
         RLAgent(RLAgentConfig(algorithm="DQN"))
     monkeypatch.setattr(
@@ -89,7 +102,9 @@ def test_rl_agent_requires_model_for_predict_and_save() -> None:
     with pytest.raises(ConfigError, match="model is not initialized"):
         agent.predict([Decimal("1")])
     with pytest.raises(ConfigError, match="model is not initialized"):
-        agent.save("models", git_hash="abc", timestamp_utc=datetime(2026, 1, 5, tzinfo=UTC))
+        agent.save(
+            "models", git_hash="abc", timestamp_utc=datetime(2026, 1, 5, tzinfo=UTC)
+        )
 
 
 def test_rl_agent_requires_predict_and_save_methods_when_model_is_set() -> None:
@@ -97,7 +112,9 @@ def test_rl_agent_requires_predict_and_save_methods_when_model_is_set() -> None:
         pass
 
     class _NoSave:
-        def predict(self, observation: list[float], deterministic: bool = True) -> tuple[int, None]:
+        def predict(
+            self, observation: list[float], deterministic: bool = True
+        ) -> tuple[int, None]:
             _ = observation
             _ = deterministic
             return 1, None
@@ -108,7 +125,9 @@ def test_rl_agent_requires_predict_and_save_methods_when_model_is_set() -> None:
         agent.predict([Decimal("1")])
     agent._model = _NoSave()
     with pytest.raises(ConfigError, match="does not provide save"):
-        agent.save("models", git_hash="abc", timestamp_utc=datetime(2026, 1, 5, tzinfo=UTC))
+        agent.save(
+            "models", git_hash="abc", timestamp_utc=datetime(2026, 1, 5, tzinfo=UTC)
+        )
 
 
 def test_rl_agent_handles_missing_sb3_methods(monkeypatch: pytest.MonkeyPatch) -> None:

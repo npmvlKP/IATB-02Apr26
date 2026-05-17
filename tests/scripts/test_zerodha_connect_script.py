@@ -13,7 +13,6 @@ import torch
 from iatb.core.exceptions import ConfigError
 from iatb.execution.zerodha_connection import ZerodhaSession
 
-# Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
@@ -32,7 +31,10 @@ _RELEVANT_ENV_VARS = (
 
 
 def _load_script_module() -> object:
-    spec = importlib.util.spec_from_file_location("zerodha_connect_script", _SCRIPT_PATH)
+    pytest.importorskip("keyring")
+    spec = importlib.util.spec_from_file_location(
+        "zerodha_connect_script", _SCRIPT_PATH
+    )
     if spec is None or spec.loader is None:
         msg = "Unable to load zerodha_connect.py"
         raise RuntimeError(msg)
@@ -137,7 +139,9 @@ def test_main_uses_valid_same_day_access_token(
             return session
 
     fake_token_manager = FakeTokenManager(api_key="kite-key", api_secret="kite-secret")
-    monkeypatch.setattr(module, "ZerodhaTokenManager", lambda **kwargs: fake_token_manager)
+    monkeypatch.setattr(
+        module, "ZerodhaTokenManager", lambda **kwargs: fake_token_manager
+    )
     monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
     exit_code = module.main(
         ["--env-file", str(env_path), "--no-auto-login", "--save-access-token"],

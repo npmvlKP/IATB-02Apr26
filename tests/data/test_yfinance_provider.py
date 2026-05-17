@@ -65,7 +65,7 @@ class _BadHistoryTicker:
 
 
 class TestYFinanceProvider:
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_normalizes_history(self) -> None:
         now = datetime(2026, 1, 1, 9, 15, tzinfo=UTC)
         rows = [
@@ -91,7 +91,7 @@ class TestYFinanceProvider:
         assert bars[0].open == create_price("100")
         assert bars[1].close == create_price("102")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_since_filters_rows(self) -> None:
         now = datetime(2026, 1, 1, 9, 15, tzinfo=UTC)
         rows = [
@@ -101,7 +101,9 @@ class TestYFinanceProvider:
                 {"Open": 101, "High": 103, "Low": 100, "Close": 102, "Volume": 1700},
             ),
         ]
-        provider = YFinanceProvider(client_factory=lambda _: _FakeTicker(rows, {"lastPrice": 102}))
+        provider = YFinanceProvider(
+            client_factory=lambda _: _FakeTicker(rows, {"lastPrice": 102})
+        )
         bars = await provider.get_ohlcv(
             symbol="RELIANCE",
             exchange=Exchange.NSE,
@@ -112,7 +114,7 @@ class TestYFinanceProvider:
         assert len(bars) == 1
         assert bars[0].timestamp.minute == 16
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_uses_fast_info(self) -> None:
         rows = [
             (
@@ -126,13 +128,15 @@ class TestYFinanceProvider:
             "lastPrice": 101,
             "lastVolume": 2200,
         }
-        provider = YFinanceProvider(client_factory=lambda _: _FakeTicker(rows, fast_info))
+        provider = YFinanceProvider(
+            client_factory=lambda _: _FakeTicker(rows, fast_info)
+        )
         ticker = await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
         assert ticker.bid == create_price("100.5")
         assert ticker.ask == create_price("101.5")
         assert ticker.last == create_price("101")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_unsupported_exchange_raises(self) -> None:
         provider = YFinanceProvider(client_factory=lambda _: _FakeTicker([], {}))
         with pytest.raises(ConfigError, match="Unsupported exchange"):
@@ -143,7 +147,7 @@ class TestYFinanceProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_unsupported_timeframe_raises(self) -> None:
         provider = YFinanceProvider(client_factory=lambda _: _FakeTicker([], {}))
         with pytest.raises(ConfigError, match="Unsupported yfinance timeframe"):
@@ -154,7 +158,7 @@ class TestYFinanceProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ohlcv_history_without_iterrows_raises(self) -> None:
         provider = YFinanceProvider(client_factory=lambda _: _BadHistoryTicker())
         with pytest.raises(ConfigError, match="iterrows"):
@@ -165,8 +169,10 @@ class TestYFinanceProvider:
                 limit=1,
             )
 
-    @pytest.mark.asyncio
-    async def test_get_ticker_uses_info_fallback_when_fast_info_unavailable(self) -> None:
+    @pytest.mark.asyncio()
+    async def test_get_ticker_uses_info_fallback_when_fast_info_unavailable(
+        self
+    ) -> None:
         rows = [
             (
                 datetime(2026, 1, 1, 9, 15, tzinfo=UTC),
@@ -182,7 +188,7 @@ class TestYFinanceProvider:
         assert snapshot.bid == create_price("111")
         assert snapshot.ask == create_price("111")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_ticker_invalid_numeric_payload_raises(self) -> None:
         rows = [
             (
@@ -191,7 +197,9 @@ class TestYFinanceProvider:
             )
         ]
         fast_info = {"bid": object(), "ask": 101, "lastPrice": 101, "lastVolume": 1000}
-        provider = YFinanceProvider(client_factory=lambda _: _FakeTicker(rows, fast_info))
+        provider = YFinanceProvider(
+            client_factory=lambda _: _FakeTicker(rows, fast_info)
+        )
         with pytest.raises(ConfigError, match="numeric-compatible"):
             await provider.get_ticker(symbol="RELIANCE", exchange=Exchange.NSE)
 
@@ -206,7 +214,7 @@ class TestYFinanceProvider:
         with pytest.raises(ConfigError, match="yfinance dependency"):
             YFinanceProvider._default_client_factory("RELIANCE.NS")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_vectorized_extraction_large_dataset_performance(self) -> None:
         """Test that vectorized extraction handles large datasets efficiently.
 
@@ -254,9 +262,11 @@ class TestYFinanceProvider:
 
         # Verify performance (should be very fast with vectorized approach)
         # Allow generous margin for test environment variations
-        assert elapsed_ms < 100, f"Vectorized extraction took {elapsed_ms:.2f}ms, expected <100ms"
+        assert (
+            elapsed_ms < 100
+        ), f"Vectorized extraction took {elapsed_ms:.2f}ms, expected <100ms"
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_vectorized_extraction_preserves_timestamps(self) -> None:
         """Test that vectorized extraction correctly preserves timestamps from DataFrame index."""
         now = datetime(2026, 1, 1, 9, 15, tzinfo=UTC)
@@ -288,7 +298,7 @@ class TestYFinanceProvider:
         assert bars[1].timestamp == now + timedelta(days=1)
         assert bars[2].timestamp == now + timedelta(days=2)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_fallback_to_iterrows_when_to_dict_fails(self) -> None:
         """Test that code falls back to iterrows() when to_dict() fails."""
 

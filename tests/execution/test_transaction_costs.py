@@ -5,7 +5,10 @@ import numpy as np
 import pytest
 import torch
 from iatb.core.exceptions import ConfigError
-from iatb.execution.transaction_costs import estimate_round_trip_cost, estimate_single_side_cost
+from iatb.execution.transaction_costs import (
+    estimate_round_trip_cost,
+    estimate_single_side_cost,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)

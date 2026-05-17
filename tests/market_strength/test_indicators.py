@@ -5,7 +5,11 @@ import numpy as np
 import pytest
 import torch
 from iatb.core.exceptions import ConfigError
-from iatb.market_strength.indicators import PandasTaIndicators, _last_decimal, _to_decimal
+from iatb.market_strength.indicators import (
+    PandasTaIndicators,
+    _last_decimal,
+    _to_decimal,
+)
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
