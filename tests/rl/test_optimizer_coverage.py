@@ -173,11 +173,15 @@ class TestBestParams:
         ):
             _best_params(mock_study, ["param1"])
 
+    def _mock_get_none(self, key):
+        """Helper to mock dict.get returning None."""
+        pass
+
     def test_best_params_missing_value_raises_error(self):
         """Test that missing param value raises ConfigError."""
         mock_study = MagicMock()
         mock_study.best_params = {"param1": 5}
-        mock_study.best_params.get = MagicMock(side_effect=lambda k: None)
+        mock_study.best_params.get = MagicMock(side_effect=self._mock_get_none)
 
         with pytest.raises(ConfigError, match="best_params missing int value"):
             _best_params(mock_study, ["param2"])
@@ -236,26 +240,26 @@ class TestBestValue:
 class TestRLParameterOptimizer:
     """Test RL parameter optimizer."""
 
+    def _make_objective(self, params):
+        """Helper function to create objective for testing."""
+        return Decimal("0.5")
+
     def test_optimizer_initialization(self):
         """Test optimizer initialization."""
-        objective = lambda params: Decimal("0.5")
-        optimizer = RLParameterOptimizer(objective)
+        optimizer = RLParameterOptimizer(self._make_objective)
 
-        assert optimizer._objective == objective
+        assert optimizer._objective == self._make_objective
         assert optimizer._n_trials == 20
         assert optimizer._seed == 42
 
     def test_invalid_n_trials_raises_error(self):
         """Test that invalid n_trials raises ConfigError."""
-        objective = lambda params: Decimal("0.5")
-
         with pytest.raises(ConfigError, match="n_trials must be positive"):
-            RLParameterOptimizer(objective, n_trials=0)
+            RLParameterOptimizer(self._make_objective, n_trials=0)
 
     def test_optimize_success(self):
         """Test successful optimization."""
-        objective = lambda params: Decimal("0.5")
-        optimizer = RLParameterOptimizer(objective, n_trials=10)
+        optimizer = RLParameterOptimizer(self._make_objective, n_trials=10)
 
         search_space = {"learning_rate": (1, 10)}
 
@@ -279,10 +283,13 @@ class TestRLParameterOptimizer:
                     assert result.best_value == Decimal("0.5")
                     assert result.trial_count == 10
 
+    def _make_invalid_objective(self, params):
+        """Helper function for invalid objective test."""
+        return Decimal("0.5")
+
     def test_optimize_no_optimize_method_raises_error(self):
         """Test that missing optimize method raises ConfigError."""
-        objective = lambda params: Decimal("0.5")
-        optimizer = RLParameterOptimizer(objective)
+        optimizer = RLParameterOptimizer(self._make_invalid_objective)
 
         search_space = {"learning_rate": (1, 10)}
 
@@ -303,6 +310,10 @@ class TestRLParameterOptimizer:
                     ):
                         optimizer.optimize(search_space)
 
+    def _mock_optimize_call(self, fn, n_trials):
+        """Helper to mock optimize calling the function."""
+        return fn(None)
+
     def test_objective_wrapper_calls_objective(self):
         """Test that objective wrapper calls the objective function."""
         objective = MagicMock(return_value=Decimal("0.5"))
@@ -315,7 +326,7 @@ class TestRLParameterOptimizer:
         mock_study.best_params = {"learning_rate": 5}
         mock_study.best_value = 0.5
 
-        mock_study.optimize = MagicMock(side_effect=lambda fn, n_trials: fn(None))
+        mock_study.optimize = MagicMock(side_effect=self._mock_optimize_call)
 
         with patch("iatb.rl.optimizer._load_optuna_module") as mock_load:
             with patch("iatb.rl.optimizer._build_sampler") as mock_sampler:
@@ -327,7 +338,7 @@ class TestRLParameterOptimizer:
                         mock_create.return_value = mock_study
                         mock_suggest.return_value = {"learning_rate": 5}
 
-                        result = optimizer.optimize(search_space)
+                        optimizer.optimize(search_space)
 
                         # Objective should have been called
                         objective.assert_called_once_with({"learning_rate": 5})
