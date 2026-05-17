@@ -451,6 +451,36 @@ class AuditExporter:
         )
         return table
 
+    def _create_pdf_elements(
+        self,
+        export_records: list[AuditExportRecord],
+    ) -> list[Any]:
+        """Create PDF elements (title, subtitle, table)."""
+        from reportlab.lib.styles import (  # type: ignore[import-untyped]
+            getSampleStyleSheet,
+        )
+        from reportlab.platypus import Paragraph  # type: ignore[import-untyped]
+
+        elements: list[Any] = []
+        styles = getSampleStyleSheet()
+
+        title = Paragraph(
+            f"Audit Trail Export - {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}",
+            styles["Heading1"],
+        )
+        elements.append(title)
+        subtitle = Paragraph(
+            f"Total Records: {len(export_records)}",
+            styles["Heading2"],
+        )
+        elements.append(subtitle)
+
+        if export_records:
+            table_data = self._build_pdf_table_data(export_records)
+            elements.append(self._create_pdf_table(table_data))
+
+        return elements
+
     def _write_pdf(
         self,
         file_path: Path,
@@ -459,13 +489,7 @@ class AuditExporter:
         """Write records to PDF file using reportlab."""
         try:
             from reportlab.lib.pagesizes import letter  # type: ignore[import-untyped]
-            from reportlab.lib.styles import (
-                getSampleStyleSheet,  # type: ignore[import-untyped]
-            )
-            from reportlab.platypus import (
-                Paragraph,
-                SimpleDocTemplate,
-            )
+            from reportlab.platypus import SimpleDocTemplate  # type: ignore[import-untyped]
 
             export_records = [
                 AuditExportRecord.from_trade_audit_record(
@@ -476,24 +500,7 @@ class AuditExporter:
             ]
 
             doc = SimpleDocTemplate(str(file_path), pagesize=letter)
-            elements: list[Any] = []
-            styles = getSampleStyleSheet()
-
-            title = Paragraph(
-                f"Audit Trail Export - {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}",
-                styles["Heading1"],
-            )
-            elements.append(title)
-            subtitle = Paragraph(
-                f"Total Records: {len(export_records)}",
-                styles["Heading2"],
-            )
-            elements.append(subtitle)
-
-            if export_records:
-                table_data = self._build_pdf_table_data(export_records)
-                elements.append(self._create_pdf_table(table_data))
-
+            elements = self._create_pdf_elements(export_records)
             doc.build(elements)
 
         except ImportError as exc:

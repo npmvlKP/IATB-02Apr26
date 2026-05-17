@@ -55,22 +55,28 @@ class TestCreateTrainingCallbacks:
             create_training_callbacks("/tmp/ck", "/tmp/tb", check_freq=0)
 
     def test_creates_dirs_and_returns_list(self, tmp_path: Path) -> None:
-        ck_dir = str(tmp_path / "ck")
-        tb_dir = str(tmp_path / "tb")
-        result = create_training_callbacks(ck_dir, tb_dir, check_freq=1000)
-        assert isinstance(result, list)
-        assert len(result) >= 2
-        assert Path(ck_dir).is_dir()
-        assert Path(tb_dir).is_dir()
+        with patch(
+            "iatb.rl.callbacks.importlib.import_module", side_effect=ModuleNotFoundError
+        ):
+            ck_dir = str(tmp_path / "ck")
+            tb_dir = str(tmp_path / "tb")
+            result = create_training_callbacks(ck_dir, tb_dir, check_freq=1000)
+            assert isinstance(result, list)
+            assert len(result) >= 2
+            assert Path(ck_dir).is_dir()
+            assert Path(tb_dir).is_dir()
 
     def test_with_custom_early_stop(self, tmp_path: Path) -> None:
-        es = SharpeDropEarlyStop(drop_threshold=Decimal("0.2"))
-        result = create_training_callbacks(
-            str(tmp_path / "ck"),
-            str(tmp_path / "tb"),
-            early_stop=es,
-        )
-        assert es in result
+        with patch(
+            "iatb.rl.callbacks.importlib.import_module", side_effect=ModuleNotFoundError
+        ):
+            es = SharpeDropEarlyStop(drop_threshold=Decimal("0.2"))
+            result = create_training_callbacks(
+                str(tmp_path / "ck"),
+                str(tmp_path / "tb"),
+                early_stop=es,
+            )
+            assert es in result
 
     def test_without_sb3_checkpoint(self, tmp_path: Path) -> None:
         with patch(
