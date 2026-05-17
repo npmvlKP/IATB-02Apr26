@@ -3,7 +3,7 @@ Normalized contracts for market data providers.
 """
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
@@ -19,8 +19,8 @@ from iatb.core.types import (
 
 
 def _utc_now_timestamp() -> Timestamp:
-    """Create a strict UTC timestamp for data-model defaults."""
-    return create_timestamp(datetime.now(UTC))
+    """Create a strict timezone.utc timestamp for data-model defaults."""
+    return create_timestamp(datetime.now(timezone.utc))
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class OHLCVBar:
     source: str = "unknown"
 
     def __post_init__(self) -> None:
-        """Enforce strict UTC timestamps at model construction."""
+        """Enforce strict timezone.utc timestamps at model construction."""
         object.__setattr__(self, "timestamp", create_timestamp(self.timestamp))
 
 
@@ -59,7 +59,7 @@ class TickerSnapshot:
     source: str = "unknown"
 
     def __post_init__(self) -> None:
-        """Enforce strict UTC timestamps at model construction."""
+        """Enforce strict timezone.utc timestamps at model construction."""
         object.__setattr__(self, "timestamp", create_timestamp(self.timestamp))
 
 

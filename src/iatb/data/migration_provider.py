@@ -12,7 +12,7 @@ It allows gradual migration from jugaad to other DataProvider implementations wi
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
@@ -111,7 +111,9 @@ class MigrationProvider(DataProvider):
             raise ConfigError(msg) from exc
 
     @staticmethod
-    def _extract_config_settings(config_dict: dict[str, object]) -> dict[str, str | bool | Decimal]:
+    def _extract_config_settings(
+        config_dict: dict[str, object]
+    ) -> dict[str, str | bool | Decimal]:
         """Extract migration settings from config dict."""
         data_config = config_dict.get("data", {})
         if not isinstance(data_config, dict):
@@ -177,7 +179,9 @@ class MigrationProvider(DataProvider):
                 limit=limit,
             )
 
-        return await self._get_ohlcv_single_path(symbol, exchange, timeframe, since, limit)
+        return await self._get_ohlcv_single_path(
+            symbol, exchange, timeframe, since, limit
+        )
 
     async def _get_ohlcv_single_path(
         self,
@@ -202,7 +206,9 @@ class MigrationProvider(DataProvider):
                 symbol,
                 exc,
             )
-            return await self._try_fallback_provider(symbol, exchange, timeframe, since, limit, exc)
+            return await self._try_fallback_provider(
+                symbol, exchange, timeframe, since, limit, exc
+            )
 
     async def _try_fallback_provider(
         self,
@@ -305,7 +311,9 @@ class MigrationProvider(DataProvider):
             return fallback_bars
 
         if isinstance(fallback_bars, BaseException):
-            _LOGGER.warning("Fallback provider failed for %s: %s", symbol, fallback_bars)
+            _LOGGER.warning(
+                "Fallback provider failed for %s: %s", symbol, fallback_bars
+            )
             return default_bars
 
         # Compare results
@@ -344,14 +352,26 @@ class MigrationProvider(DataProvider):
 
         if not bars_match:
             return self._create_mismatch_result(
-                symbol, exchange, default_source, fallback_source, default_bars, fallback_bars
+                symbol,
+                exchange,
+                default_source,
+                fallback_source,
+                default_bars,
+                fallback_bars,
             )
 
         if not default_bars or not fallback_bars:
-            return self._create_empty_result(symbol, exchange, default_source, fallback_source)
+            return self._create_empty_result(
+                symbol, exchange, default_source, fallback_source
+            )
 
         return self._compare_bars_content(
-            symbol, exchange, default_bars, fallback_bars, default_source, fallback_source
+            symbol,
+            exchange,
+            default_bars,
+            fallback_bars,
+            default_source,
+            fallback_source,
         )
 
     def _create_mismatch_result(
@@ -369,7 +389,7 @@ class MigrationProvider(DataProvider):
             exchange=exchange,
             default_source=default_source,
             fallback_source=fallback_source,
-            timestamp_utc=datetime.now(UTC),
+            timestamp_utc=datetime.now(timezone.utc),
             bars_count_match=False,
             price_diff_pct=Decimal("0"),
             volume_diff_pct=Decimal("0"),
@@ -390,7 +410,7 @@ class MigrationProvider(DataProvider):
             exchange=exchange,
             default_source=default_source,
             fallback_source=fallback_source,
-            timestamp_utc=datetime.now(UTC),
+            timestamp_utc=datetime.now(timezone.utc),
             bars_count_match=True,
             price_diff_pct=Decimal("0"),
             volume_diff_pct=Decimal("0"),
@@ -411,19 +431,25 @@ class MigrationProvider(DataProvider):
         latest_default = default_bars[-1]
         latest_fallback = fallback_bars[-1]
 
-        price_diff_pct = self._calculate_diff_pct(latest_default.close, latest_fallback.close)
-        volume_diff_pct = self._calculate_diff_pct(latest_default.volume, latest_fallback.volume)
+        price_diff_pct = self._calculate_diff_pct(
+            latest_default.close, latest_fallback.close
+        )
+        volume_diff_pct = self._calculate_diff_pct(
+            latest_default.volume, latest_fallback.volume
+        )
         max_diff_pct = max(abs(price_diff_pct), abs(volume_diff_pct))
 
         exceeds = max_diff_pct > self._max_diff_pct
-        warning = self._generate_warning(exceeds, price_diff_pct, volume_diff_pct, max_diff_pct)
+        warning = self._generate_warning(
+            exceeds, price_diff_pct, volume_diff_pct, max_diff_pct
+        )
 
         return ABTestResult(
             symbol=symbol,
             exchange=exchange,
             default_source=default_source,
             fallback_source=fallback_source,
-            timestamp_utc=datetime.now(UTC),
+            timestamp_utc=datetime.now(timezone.utc),
             bars_count_match=True,
             price_diff_pct=price_diff_pct,
             volume_diff_pct=volume_diff_pct,
@@ -433,7 +459,11 @@ class MigrationProvider(DataProvider):
         )
 
     def _generate_warning(
-        self, exceeds: bool, price_diff: Decimal, volume_diff: Decimal, max_diff: Decimal
+        self,
+        exceeds: bool,
+        price_diff: Decimal,
+        volume_diff: Decimal,
+        max_diff: Decimal,
     ) -> str | None:
         """Generate warning message if threshold exceeded."""
         if not exceeds:
@@ -456,7 +486,9 @@ class MigrationProvider(DataProvider):
     async def get_ticker(self, *, symbol: str, exchange: Exchange) -> TickerSnapshot:
         """Fetch ticker snapshot with optional fallback."""
         try:
-            return await self._default_provider.get_ticker(symbol=symbol, exchange=exchange)
+            return await self._default_provider.get_ticker(
+                symbol=symbol, exchange=exchange
+            )
         except Exception as exc:  # noqa: BLE001
             _LOGGER.warning(
                 "Default provider ticker failed for %s, trying fallback: %s",
@@ -464,9 +496,13 @@ class MigrationProvider(DataProvider):
                 exc,
             )
             try:
-                return await self._fallback_provider.get_ticker(symbol=symbol, exchange=exchange)
+                return await self._fallback_provider.get_ticker(
+                    symbol=symbol, exchange=exchange
+                )
             except Exception as fallback_exc:  # noqa: BLE001
-                msg = f"Both providers failed ticker for {symbol}: {exc}, {fallback_exc}"
+                msg = (
+                    f"Both providers failed ticker for {symbol}: {exc}, {fallback_exc}"
+                )
                 raise ConfigError(msg) from fallback_exc
 
     async def get_ohlcv_batch(
@@ -499,7 +535,11 @@ class MigrationProvider(DataProvider):
 
         # Fallback to parallel individual requests
         return await self._get_ohlcv_batch_parallel(
-            symbols=symbols, exchange=exchange, timeframe=timeframe, since=since, limit=limit
+            symbols=symbols,
+            exchange=exchange,
+            timeframe=timeframe,
+            since=since,
+            limit=limit,
         )
 
     async def _get_ohlcv_batch_parallel(
@@ -554,8 +594,12 @@ class MigrationProvider(DataProvider):
 
         total = len(self._ab_test_results)
         anomalies = sum(1 for r in self._ab_test_results if r.exceeds_threshold)
-        max_diff = max((r.max_diff_pct for r in self._ab_test_results), default=Decimal("0"))
-        avg_diff = sum(r.max_diff_pct for r in self._ab_test_results) / Decimal(str(total))
+        max_diff = max(
+            (r.max_diff_pct for r in self._ab_test_results), default=Decimal("0")
+        )
+        avg_diff = sum(r.max_diff_pct for r in self._ab_test_results) / Decimal(
+            str(total)
+        )
 
         return {
             "total_tests": total,

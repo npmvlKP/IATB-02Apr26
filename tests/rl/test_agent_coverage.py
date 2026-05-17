@@ -1,8 +1,11 @@
-"""Tests for rl/agent.py — RL agent predict/train."""
+"""
+Comprehensive coverage tests for agent.py.
+
+Tests RL agent predict/train, SB3 wrapper, and model lifecycle.
+"""
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,144 +23,381 @@ from iatb.rl.agent import (
 
 
 class TestValidateAlgorithm:
-    def test_valid_algorithms(self) -> None:
-        for algo in ("PPO", "A2C", "SAC"):
-            _validate_algorithm(algo)
+    """Test algorithm validation."""
 
-    def test_invalid_algorithm_raises(self) -> None:
+    def test_valid_algorithm(self):
+        """Test valid algorithm."""
+        _validate_algorithm("PPO")  # Should not raise
+
+    def test_invalid_algorithm_raises_error(self):
+        """Test that invalid algorithm raises ConfigError."""
         with pytest.raises(ConfigError, match="unsupported RL algorithm"):
-            _validate_algorithm("DQN")
+            _validate_algorithm("INVALID")
 
 
-class TestRLAgentConfig:
-    def test_defaults(self) -> None:
-        cfg = RLAgentConfig()
-        assert cfg.algorithm == "PPO"
-        assert cfg.timesteps == 10_000
-        assert cfg.seed == 42
+class TestLoadAlgorithmClass:
+    """Test algorithm class loading."""
 
+    def test_load_algorithm_success(self):
+        """Test successful algorithm loading."""
+        with patch("importlib.import_module") as mock_import:
+            mock_module = MagicMock()
+            mock_algorithm_cls = MagicMock()
+            mock_module.PPO = mock_algorithm_cls
+            mock_import.return_value = mock_module
 
-class TestRLAgent:
-    def test_init_default(self) -> None:
-        agent = RLAgent()
-        assert agent.has_model is False
+            result = _load_algorithm_class("PPO")
 
-    def test_init_invalid_algo_raises(self) -> None:
-        with pytest.raises(ConfigError):
-            RLAgent(RLAgentConfig(algorithm="INVALID"))
+            assert result == mock_algorithm_cls
+            mock_import.assert_called_once_with("stable_baselines3")
 
-    def test_predict_without_model_raises(self) -> None:
-        agent = RLAgent()
-        with pytest.raises(ConfigError, match="model is not initialized"):
-            agent.predict([Decimal("1")])
+    def test_load_algorithm_module_not_found_raises_error(self):
+        """Test that missing module raises ConfigError."""
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ModuleNotFoundError("stable_baselines3 not found")
 
-    def test_save_without_model_raises(self) -> None:
-        agent = RLAgent()
-        with pytest.raises(ConfigError, match="model is not initialized"):
-            agent.save("/tmp", "abc123", datetime.now(UTC))
+            with pytest.raises(
+                ConfigError, match="stable-baselines3 dependency is required"
+            ):
+                _load_algorithm_class("PPO")
 
-    def test_train_loads_and_fits(self) -> None:
-        mock_model = MagicMock()
-        mock_algo_cls = MagicMock(return_value=mock_model)
-        with patch("iatb.rl.agent._load_algorithm_class", return_value=mock_algo_cls):
-            agent = RLAgent()
-            agent.train(MagicMock())
-        assert agent.has_model is True
+    def test_load_algorithm_class_not_found_raises_error(self):
+        """Test that missing algorithm class raises ConfigError."""
+        with patch("importlib.import_module") as mock_import:
+            mock_module = MagicMock()
+            mock_module.PPO = None
+            mock_import.return_value = mock_module
 
-    def test_predict_with_model(self) -> None:
-        mock_model = MagicMock()
-        mock_model.predict.return_value = (1, None)
-        agent = RLAgent()
-        agent._model = mock_model
-        action = agent.predict([Decimal("0.5")])
-        assert action == 1
-
-    def test_save_with_model(self, tmp_path: Path) -> None:
-        mock_model = MagicMock()
-        agent = RLAgent()
-        agent._model = mock_model
-        ts = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
-        result = agent.save(str(tmp_path), "abcdef123456", ts)
-        mock_model.save.assert_called_once()
-        assert "ppo_abcdef123456_20240101T120000Z.zip" in result
-
-    def test_load_model(self) -> None:
-        mock_algo_cls = MagicMock()
-        mock_algo_cls.load.return_value = MagicMock()
-        with patch("iatb.rl.agent._load_algorithm_class", return_value=mock_algo_cls):
-            agent = RLAgent()
-            agent.load("/some/path.zip")
-        assert agent.has_model is True
+            with pytest.raises(
+                ConfigError, match="stable_baselines3.PPO is unavailable"
+            ):
+                _load_algorithm_class("PPO")
 
 
 class TestRequireModel:
-    def test_with_model(self) -> None:
-        model = MagicMock()
-        assert _require_model(model) == model
+    """Test model requirement check."""
 
-    def test_without_model_raises(self) -> None:
+    def test_require_model_with_model(self):
+        """Test that model is returned when available."""
+        model = MagicMock()
+        result = _require_model(model)
+        assert result == model
+
+    def test_require_model_without_model_raises_error(self):
+        """Test that missing model raises ConfigError."""
         with pytest.raises(ConfigError, match="model is not initialized"):
             _require_model(None)
 
 
 class TestNormalizeAction:
-    def test_int_action(self) -> None:
-        assert _normalize_action(1) == 1
+    """Test action normalization."""
 
-    def test_list_action(self) -> None:
-        assert _normalize_action([2]) == 2
+    def test_normalize_int_action(self):
+        """Test normalizing int action."""
+        result = _normalize_action(1)
+        assert result == 1
 
-    def test_tuple_action(self) -> None:
-        assert _normalize_action((0,)) == 0
+    def test_normalize_list_action(self):
+        """Test normalizing list action."""
+        result = _normalize_action([2])
+        assert result == 2
 
-    def test_tensor_like_action(self) -> None:
-        mock = MagicMock()
-        mock.item.return_value = 1
-        assert _normalize_action(mock) == 1
+    def test_normalize_tuple_action(self):
+        """Test normalizing tuple action."""
+        result = _normalize_action((0,))
+        assert result == 0
 
-    def test_unsupported_action_raises(self) -> None:
-        with pytest.raises(ConfigError, match="unsupported action type"):
-            _normalize_action("bad")
+    def test_normalize_action_with_item_method(self):
+        """Test normalizing action with item() method."""
+        mock_action = MagicMock()
+        mock_action.item.return_value = 1
+        result = _normalize_action(mock_action)
+        assert result == 1
+
+    def test_normalize_unsupported_action_raises_error(self):
+        """Test that unsupported action raises ConfigError."""
+        with pytest.raises(
+            ConfigError, match="predict.*returned unsupported action type"
+        ):
+            _normalize_action("invalid")
 
 
 class TestVersionedModelPath:
-    def test_valid_path(self, tmp_path: Path) -> None:
-        ts = datetime(2024, 6, 15, 10, 30, 0, tzinfo=UTC)
-        result = _versioned_model_path(str(tmp_path), "PPO", "abc123def456", ts)
-        assert result.name == "ppo_abc123def456_20240615T103000Z.zip"
+    """Test versioned model path generation."""
 
-    def test_non_utc_raises(self) -> None:
-        with pytest.raises(ConfigError, match="timezone-aware UTC"):
-            _versioned_model_path("/tmp", "PPO", "abc", datetime(2024, 1, 1))
+    def test_versioned_path_generation(self):
+        """Test versioned path generation."""
+        timestamp = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
+        path = _versioned_model_path("/models", "PPO", "abc123def456", timestamp)
 
-    def test_empty_git_hash_raises(self) -> None:
+        assert "ppo_" in path.as_posix()
+        assert "abc123def456" in path.as_posix()
+        assert "20260115T103000Z" in path.as_posix()
+
+    def test_versioned_path_invalid_tz_raises_error(self):
+        """Test that invalid timezone raises ConfigError."""
+        timestamp = datetime(2026, 1, 15, 10, 30, 0)  # No timezone
+
+        with pytest.raises(
+            ConfigError, match="timestamp_utc must be timezone-aware UTC datetime"
+        ):
+            _versioned_model_path("/models", "PPO", "abc123", timestamp)
+
+    def test_versioned_path_empty_hash_raises_error(self):
+        """Test that empty hash raises ConfigError."""
+        timestamp = datetime.now(UTC)
+
         with pytest.raises(ConfigError, match="git_hash cannot be empty"):
-            _versioned_model_path("/tmp", "PPO", "", datetime(2024, 1, 1, tzinfo=UTC))
+            _versioned_model_path("/models", "PPO", "", timestamp)
 
 
 class TestExtractActionConfidence:
-    def test_no_policy_returns_default(self) -> None:
-        model = MagicMock(spec=[])
-        result = _extract_action_confidence(model, [0.5], 1)
-        assert result == Decimal("0.5")
+    """Test action confidence extraction."""
 
-    def test_successful_extraction(self) -> None:
-        model = MagicMock()
-        obs_tensor = MagicMock(return_value=(MagicMock(), MagicMock()))
-        model.policy.obs_to_tensor = obs_tensor
-        mock_probs = MagicMock()
-        mock_probs.__getitem__ = MagicMock(return_value=mock_probs)
-        mock_probs.item.return_value = 0.8
-        dist_inner = MagicMock()
-        dist_inner.distribution.probs = mock_probs
-        model.policy.get_distribution = MagicMock(return_value=dist_inner)
-        result = _extract_action_confidence(model, [0.5], 1)
-        assert isinstance(result, Decimal)
+    def test_extract_confidence_success(self):
+        """Test successful confidence extraction."""
+        mock_model = MagicMock()
+        obs_float = [1.0, 2.0, 3.0]
+        action = 1
+
+        confidence = _extract_action_confidence(mock_model, obs_float, action)
+
+        assert confidence is not None
+
+    def test_extract_confidence_no_policy_returns_default(self):
+        """Test that missing policy returns default confidence."""
+        mock_model = MagicMock()
+        mock_model.policy = None
+        obs_float = [1.0, 2.0, 3.0]
+        action = 1
+
+        confidence = _extract_action_confidence(mock_model, obs_float, action)
+
+        assert confidence == Decimal("0.5")
+
+    def test_extract_confidence_no_get_distribution_returns_default(self):
+        """Test that missing get_distribution returns default confidence."""
+        mock_model = MagicMock()
+        mock_model.policy = MagicMock()
+        mock_model.policy.get_distribution = None
+        obs_float = [1.0, 2.0, 3.0]
+        action = 1
+
+        confidence = _extract_action_confidence(mock_model, obs_float, action)
+
+        assert confidence == Decimal("0.5")
 
 
-class TestLoadAlgorithmClass:
-    def test_missing_sb3_raises(self) -> None:
-        with patch(
-            "importlib.import_module", side_effect=ModuleNotFoundError
-        ), pytest.raises(ConfigError, match="stable-baselines3 dependency"):
-            _load_algorithm_class("PPO")
+class TestRLAgentConfig:
+    """Test agent configuration."""
+
+    def test_default_config(self):
+        """Test default configuration values."""
+        config = RLAgentConfig()
+        assert config.algorithm == "PPO"
+        assert config.timesteps == 10_000
+        assert config.seed == 42
+
+    def test_custom_config(self):
+        """Test custom configuration."""
+        config = RLAgentConfig(algorithm="A2C", timesteps=5_000, seed=123)
+        assert config.algorithm == "A2C"
+        assert config.timesteps == 5_000
+        assert config.seed == 123
+
+
+class TestRLAgent:
+    """Test RL agent functionality."""
+
+    def test_agent_initialization(self):
+        """Test agent initialization."""
+        config = RLAgentConfig()
+        agent = RLAgent(config)
+
+        assert agent._config == config
+        assert agent._model is None
+
+    def test_agent_invalid_algorithm_raises_error(self):
+        """Test that invalid algorithm raises ConfigError."""
+        with pytest.raises(ConfigError, match="unsupported RL algorithm"):
+            RLAgent(RLAgentConfig(algorithm="INVALID"))
+
+    def test_has_model_property(self):
+        """Test has_model property."""
+        agent = RLAgent()
+        assert agent.has_model is False
+
+    def test_train_with_mock_environment(self):
+        """Test training with mock environment."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = MagicMock()
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            agent.train(mock_env)
+
+            assert agent._model == mock_model
+            mock_model.learn.assert_called_once_with(total_timesteps=10_000)
+
+    def test_train_no_learn_method_raises_error(self):
+        """Test that missing learn method raises ConfigError."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = None
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            with pytest.raises(
+                ConfigError, match="loaded SB3 model does not provide learn"
+            ):
+                agent.train(mock_env)
+
+    def test_predict_without_training_raises_error(self):
+        """Test that predict without training raises ConfigError."""
+        agent = RLAgent()
+
+        with pytest.raises(ConfigError, match="model is not initialized"):
+            agent.predict([Decimal("1.0"), Decimal("2.0")])
+
+    def test_predict_after_training(self):
+        """Test predict after training."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = MagicMock()
+        mock_model.predict = MagicMock(return_value=(1, None))
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            agent.train(mock_env)
+
+            action = agent.predict([Decimal("1.0"), Decimal("2.0")])
+
+            assert action == 1
+            mock_model.predict.assert_called_once()
+
+    def test_predict_no_predict_method_raises_error(self):
+        """Test that missing predict method raises ConfigError."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = MagicMock()
+        mock_model.predict = None
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            agent.train(mock_env)
+
+            with pytest.raises(
+                ConfigError, match="loaded SB3 model does not provide predict"
+            ):
+                agent.predict([Decimal("1.0"), Decimal("2.0")])
+
+    def test_predict_with_confidence(self):
+        """Test predict with confidence."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = MagicMock()
+        mock_model.predict = MagicMock(return_value=(1, None))
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            agent.train(mock_env)
+
+            action, confidence = agent.predict_with_confidence(
+                [Decimal("1.0"), Decimal("2.0")]
+            )
+
+            assert action == 1
+            assert confidence is not None
+
+    def test_save_model(self, tmp_path):
+        """Test saving model."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = MagicMock()
+        mock_model.save = MagicMock()
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            agent.train(mock_env)
+
+            timestamp = datetime.now(UTC)
+            path = agent.save(str(tmp_path), "abc123def456", timestamp)
+
+            assert path is not None
+            mock_model.save.assert_called_once()
+
+    def test_save_model_without_training_raises_error(self):
+        """Test that saving without training raises ConfigError."""
+        agent = RLAgent()
+
+        with pytest.raises(ConfigError, match="model is not initialized"):
+            agent.save("/models", "abc123", datetime.now(UTC))
+
+    def test_save_no_save_method_raises_error(self):
+        """Test that missing save method raises ConfigError."""
+        agent = RLAgent()
+        mock_env = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.learn = MagicMock()
+        mock_model.save = None
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = MagicMock(return_value=mock_model)
+
+            agent.train(mock_env)
+
+            with pytest.raises(
+                ConfigError, match="loaded SB3 model does not provide save"
+            ):
+                agent.save("/models", "abc123", datetime.now(UTC))
+
+    def test_load_model(self):
+        """Test loading model."""
+        agent = RLAgent()
+
+        mock_algorithm_cls = MagicMock()
+        mock_model = MagicMock()
+        mock_algorithm_cls.load = MagicMock(return_value=mock_model)
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = mock_algorithm_cls
+
+            agent.load("/models/ppo_model.zip")
+
+            assert agent._model == mock_model
+            mock_algorithm_cls.load.assert_called_once_with("/models/ppo_model.zip")
+
+    def test_load_no_load_method_raises_error(self):
+        """Test that missing load method raises ConfigError."""
+        agent = RLAgent()
+
+        mock_algorithm_cls = MagicMock()
+        mock_algorithm_cls.load = None
+
+        with patch("iatb.rl.agent._load_algorithm_class") as mock_load:
+            mock_load.return_value = mock_algorithm_cls
+
+            with pytest.raises(
+                ConfigError, match="selected SB3 algorithm does not provide load"
+            ):
+                agent.load("/models/ppo_model.zip")

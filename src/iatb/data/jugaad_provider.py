@@ -6,7 +6,7 @@ import asyncio
 import importlib
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, cast
 
 from iatb.core.enums import Exchange
@@ -38,13 +38,15 @@ def _extract_value(payload: Mapping[str, object], keys: tuple[str, ...]) -> obje
 
 def _coerce_datetime(value: object) -> datetime:
     if isinstance(value, datetime):
-        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     if isinstance(value, date):
-        return datetime(value.year, value.month, value.day, tzinfo=UTC)
+        return datetime(value.year, value.month, value.day, tzinfo=timezone.utc)
     if isinstance(value, str):
         normalized = value.strip()
         parsed = datetime.fromisoformat(normalized)
-        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+        return (
+            parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+        )
     msg = f"Unsupported timestamp value from jugaad payload: {type(value).__name__}"
     raise ConfigError(msg)
 
@@ -95,7 +97,9 @@ def _iter_rows(frame: Any) -> Iterable[Mapping[str, object]]:
 class JugaadProvider(DataProvider):
     """NSE-focused provider backed by jugaad-data stock_df API."""
 
-    def __init__(self, stock_df_loader: Callable[[], Callable[..., object]] | None = None) -> None:
+    def __init__(
+        self, stock_df_loader: Callable[[], Callable[..., object]] | None = None
+    ) -> None:
         self._stock_df_loader = stock_df_loader or self._default_stock_df_loader
 
     @staticmethod
@@ -138,10 +142,14 @@ class JugaadProvider(DataProvider):
         )
         records = self._records_from_history(frame, since=since)
         clipped = records[-limit:]
-        return normalize_ohlcv_batch(clipped, symbol=symbol, exchange=exchange, source="jugaad")
+        return normalize_ohlcv_batch(
+            clipped, symbol=symbol, exchange=exchange, source="jugaad"
+        )
 
     async def get_ticker(self, *, symbol: str, exchange: Exchange) -> TickerSnapshot:
-        bars = await self.get_ohlcv(symbol=symbol, exchange=exchange, timeframe="1d", limit=1)
+        bars = await self.get_ohlcv(
+            symbol=symbol, exchange=exchange, timeframe="1d", limit=1
+        )
         if not bars:
             msg = f"No market data found for symbol {symbol}"
             raise ConfigError(msg)
@@ -160,7 +168,7 @@ class JugaadProvider(DataProvider):
 
     @staticmethod
     def _history_window(since: Timestamp | None, limit: int) -> tuple[date, date]:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         end_date = now.date()
         if since is not None:
             return since.date(), end_date
@@ -168,12 +176,14 @@ class JugaadProvider(DataProvider):
         return (now - timedelta(days=lookback_days)).date(), end_date
 
     @staticmethod
-    def _records_from_history(frame: object, since: Timestamp | None) -> list[dict[str, object]]:
+    def _records_from_history(
+        frame: object, since: Timestamp | None
+    ) -> list[dict[str, object]]:
         records: list[dict[str, object]] = []
         for payload in _iter_rows(frame):
             timestamp = _coerce_datetime(
                 _extract_value(payload, _OHLCV_KEYS["timestamp"])
-            ).astimezone(UTC)
+            ).astimezone(timezone.utc)
             if since is not None and timestamp < since:
                 continue
             records.append(

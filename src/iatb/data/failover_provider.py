@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, cast
 
 from iatb.core.enums import Exchange
@@ -43,7 +43,7 @@ class ProviderRecord:
     provider_name: str
     success: bool
     latency_seconds: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class CircuitBreaker:
@@ -130,7 +130,7 @@ class CircuitBreaker:
         is reached. If in HALF_OPEN state, immediately opens circuit.
         """
         self._failure_count += 1
-        self._last_failure_time = datetime.now(UTC)
+        self._last_failure_time = datetime.now(timezone.utc)
 
         if self._state == CircuitState.HALF_OPEN:
             # Failure in HALF_OPEN means recovery failed, open circuit
@@ -174,7 +174,7 @@ class CircuitBreaker:
         if self._last_failure_time is None:
             return True
 
-        elapsed = (datetime.now(UTC) - self._last_failure_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self._last_failure_time).total_seconds()
         if elapsed >= self._cooldown_seconds:
             # Cooldown expired, transition to HALF_OPEN for recovery probe
             self._state = CircuitState.HALF_OPEN
@@ -248,7 +248,9 @@ class FailoverProvider(DataProvider):
         self._metrics_latency = metrics_latency
 
         # Create circuit breakers for each provider
-        self._circuits = self._initialize_circuits(providers, cooldown_seconds, failure_threshold)
+        self._circuits = self._initialize_circuits(
+            providers, cooldown_seconds, failure_threshold
+        )
 
     def _initialize_circuits(
         self,
@@ -469,9 +471,9 @@ class FailoverProvider(DataProvider):
         Raises:
             Exception: If the provider fails.
         """
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(timezone.utc)
         result = await method_call(provider)
-        latency = (datetime.now(UTC) - start_time).total_seconds()
+        latency = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         # Record success and update metrics
         circuit.record_success()
@@ -536,7 +538,7 @@ class FailoverProvider(DataProvider):
                     "from_provider": from_provider,
                     "to_provider": to_provider,
                     "method_name": method_name,
-                    "timestamp": datetime.now(UTC).isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
         except ImportError:
@@ -574,7 +576,9 @@ class FailoverProvider(DataProvider):
                 "state": circuit.state.name,
                 "failure_count": circuit.failure_count,
                 "last_failure_time": (
-                    circuit.last_failure_time.isoformat() if circuit.last_failure_time else None
+                    circuit.last_failure_time.isoformat()
+                    if circuit.last_failure_time
+                    else None
                 ),
                 "available": circuit.is_available(),
             }

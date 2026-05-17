@@ -489,7 +489,9 @@ class AuditExporter:
         """Write records to PDF file using reportlab."""
         try:
             from reportlab.lib.pagesizes import letter  # type: ignore[import-untyped]
-            from reportlab.platypus import SimpleDocTemplate  # type: ignore[import-untyped]
+            from reportlab.platypus import (
+                SimpleDocTemplate,  # type: ignore[import-untyped]
+            )
 
             export_records = [
                 AuditExportRecord.from_trade_audit_record(

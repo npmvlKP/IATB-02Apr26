@@ -3,7 +3,7 @@ Fail-closed runtime validation for normalized data models.
 """
 
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from iatb.core.exceptions import ValidationError
@@ -25,7 +25,7 @@ def _validate_non_negative(value: Decimal, field_name: str) -> None:
 
 
 def _validate_timestamp_not_far_future(timestamp: datetime) -> None:
-    if timestamp > datetime.now(UTC) + _MAX_FUTURE_SKEW:
+    if timestamp > datetime.now(timezone.utc) + _MAX_FUTURE_SKEW:
         msg = "timestamp cannot be in the future beyond allowed skew"
         raise ValidationError(msg)
 

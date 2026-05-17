@@ -3,10 +3,10 @@ Shared utilities for the selection module.
 """
 
 from decimal import Decimal
-from enum import StrEnum
+from enum import Enum
 
 
-class DirectionalIntent(StrEnum):
+class DirectionalIntent(str, Enum):
     """Trade direction the selection pipeline is evaluating."""
 
     LONG = "LONG"

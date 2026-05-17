@@ -3,7 +3,7 @@ Extract continuous market strength score for instrument selection.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from iatb.core.enums import Exchange
@@ -60,15 +60,17 @@ def compute_strength_signal(
 
 
 def _validate_input(inputs: StrengthSignalInput, current: datetime) -> None:
-    if inputs.timestamp_utc.tzinfo != UTC:
+    if inputs.timestamp_utc.tzinfo != timezone.utc:
         msg = "timestamp_utc must be UTC"
         raise ConfigError(msg)
-    if current.tzinfo != UTC:
+    if current.tzinfo != timezone.utc:
         msg = "current_utc must be UTC"
         raise ConfigError(msg)
     if not inputs.instrument_symbol.strip():
         msg = "instrument_symbol cannot be empty"
         raise ConfigError(msg)
-    if inputs.regime_confidence < Decimal("0") or inputs.regime_confidence > Decimal("1"):
+    if inputs.regime_confidence < Decimal("0") or inputs.regime_confidence > Decimal(
+        "1"
+    ):
         msg = "regime_confidence must be in [0, 1]"
         raise ConfigError(msg)

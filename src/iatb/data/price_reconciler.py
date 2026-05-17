@@ -21,7 +21,7 @@ Current Architecture (single-source truth):
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
@@ -75,9 +75,9 @@ class PriceDataPoint:
     data_type: Literal["tick", "minute", "day"]
 
     def __post_init__(self) -> None:
-        """Ensure UTC timestamp."""
-        if self.timestamp.tzinfo != UTC:
-            msg = f"timestamp must be UTC-aware, got {self.timestamp.tzinfo}"
+        """Ensure timezone.utc timestamp."""
+        if self.timestamp.tzinfo != timezone.utc:
+            msg = f"timestamp must be timezone.utc-aware, got {self.timestamp.tzinfo}"
             raise ConfigError(msg)
 
 
@@ -125,12 +125,16 @@ class PriceReconciler:
         """
         # 1. Validate symbol mapping
         if self._config.validate_symbol_mapping:
-            symbol_result = self._validate_symbol_mapping(scanner_price, execution_price)
+            symbol_result = self._validate_symbol_mapping(
+                scanner_price, execution_price
+            )
             if not symbol_result.passed:
                 return symbol_result
 
         # 2. Check timestamp alignment
-        timestamp_result = self._check_timestamp_alignment(scanner_price, execution_price)
+        timestamp_result = self._check_timestamp_alignment(
+            scanner_price, execution_price
+        )
         if not timestamp_result.passed and self._config.strict_eod_alignment:
             return timestamp_result
 
@@ -215,9 +219,11 @@ class PriceReconciler:
             severity="info",
         )
 
-    def _check_scanner_timestamp(self, scanner_price: PriceDataPoint) -> ReconciliationResult:
+    def _check_scanner_timestamp(
+        self, scanner_price: PriceDataPoint
+    ) -> ReconciliationResult:
         """Check scanner price timestamp validity."""
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
 
         if scanner_price.data_type == "day":
             days_diff = (now - scanner_price.timestamp).days
@@ -251,9 +257,11 @@ class PriceReconciler:
             severity="info",
         )
 
-    def _check_execution_timestamp(self, execution_price: PriceDataPoint) -> ReconciliationResult:
+    def _check_execution_timestamp(
+        self, execution_price: PriceDataPoint
+    ) -> ReconciliationResult:
         """Check execution price timestamp validity."""
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         exec_drift = abs((now - execution_price.timestamp).total_seconds())
 
         if exec_drift > self._config.max_timestamp_drift_seconds:
@@ -293,7 +301,9 @@ class PriceReconciler:
                 severity="critical",
             )
 
-        deviation = abs(scanner_price.price - execution_price.price) / scanner_price.price
+        deviation = (
+            abs(scanner_price.price - execution_price.price) / scanner_price.price
+        )
 
         if deviation > self._config.max_price_deviation_pct:
             # Severity: critical if >5%, error if >2% (default threshold)
@@ -334,12 +344,20 @@ class PriceReconciler:
 
         Corporate actions cause sudden large price changes that are legitimate.
         """
-        scanner_vs_prev = self._calculate_deviation(scanner_price.price, prev_close_price)
-        exec_vs_prev = self._calculate_deviation(execution_price.price, prev_close_price)
+        scanner_vs_prev = self._calculate_deviation(
+            scanner_price.price, prev_close_price
+        )
+        exec_vs_prev = self._calculate_deviation(
+            execution_price.price, prev_close_price
+        )
 
         # Check for corporate action pattern
         ca_result = self._check_ca_pattern(
-            scanner_vs_prev, exec_vs_prev, scanner_price, execution_price, prev_close_price
+            scanner_vs_prev,
+            exec_vs_prev,
+            scanner_price,
+            execution_price,
+            prev_close_price,
         )
         if ca_result:
             return ca_result
@@ -352,7 +370,9 @@ class PriceReconciler:
             return mm_result
 
         # Inconclusive - treat as error
-        deviation = self._calculate_deviation(scanner_price.price, execution_price.price)
+        deviation = self._calculate_deviation(
+            scanner_price.price, execution_price.price
+        )
         return ReconciliationResult(
             passed=False,
             deviation_pct=deviation,
@@ -373,7 +393,10 @@ class PriceReconciler:
         prev_close_price: Price,
     ) -> ReconciliationResult | None:
         """Check if price pattern indicates corporate action."""
-        if scanner_vs_prev < Decimal("0.01") and exec_vs_prev > self._config.max_price_jump_pct:
+        if (
+            scanner_vs_prev < Decimal("0.01")
+            and exec_vs_prev > self._config.max_price_jump_pct
+        ):
             direction = "DOWN" if execution_price.price < prev_close_price else "UP"
             return ReconciliationResult(
                 passed=True,
@@ -397,7 +420,9 @@ class PriceReconciler:
     ) -> ReconciliationResult | None:
         """Check if price pattern indicates normal market movement."""
         if abs(scanner_vs_prev - exec_vs_prev) < Decimal("0.02"):
-            deviation = self._calculate_deviation(scanner_price.price, execution_price.price)
+            deviation = self._calculate_deviation(
+                scanner_price.price, execution_price.price
+            )
             return ReconciliationResult(
                 passed=True,
                 deviation_pct=deviation,

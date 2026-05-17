@@ -5,7 +5,7 @@ Provides strict type aliases for financial data to ensure type safety
 and prevent floating-point arithmetic errors.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import NewType
 
@@ -40,7 +40,7 @@ def create_timestamp(dt: datetime) -> Timestamp:
     if dt.tzinfo is None:
         msg = "Timestamp must be timezone-aware (UTC)"
         raise ValueError(msg)
-    if dt.tzinfo != UTC or dt.utcoffset() != timedelta(0):
+    if dt.tzinfo != timezone.utc or dt.utcoffset() != timedelta(0):
         msg = "Timestamp must use UTC timezone (tzinfo=UTC)"
         raise ValueError(msg)
     return Timestamp(dt)

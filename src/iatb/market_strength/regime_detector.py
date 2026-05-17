@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from enum import StrEnum
+from enum import Enum
 
 from iatb.core.events import RegimeChangeEvent
 from iatb.core.exceptions import ConfigError
@@ -15,7 +15,7 @@ from iatb.core.exceptions import ConfigError
 logger = logging.getLogger(__name__)
 
 
-class MarketRegime(StrEnum):
+class MarketRegime(str, Enum):
     BULL = "BULL"
     BEAR = "BEAR"
     SIDEWAYS = "SIDEWAYS"
@@ -77,7 +77,9 @@ class RegimeDetector:
                 "transition": event is not None,
             },
         )
-        return RegimeResult(regime=regime, confidence=confidence, transition_event=event)
+        return RegimeResult(
+            regime=regime, confidence=confidence, transition_event=event
+        )
 
     @staticmethod
     def _fit_model(
@@ -125,7 +127,9 @@ class RegimeDetector:
             return MarketRegime.BEAR
         return MarketRegime.SIDEWAYS
 
-    def _create_transition_event(self, regime: MarketRegime) -> RegimeChangeEvent | None:
+    def _create_transition_event(
+        self, regime: MarketRegime
+    ) -> RegimeChangeEvent | None:
         if self._last_regime is None or self._last_regime == regime:
             return None
         logger.info(

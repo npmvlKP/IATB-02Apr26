@@ -6,7 +6,7 @@ import asyncio
 import importlib
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -85,11 +85,15 @@ def _coerce_numeric_input(value: object, *, field_name: str) -> NumericInput:
 
 def _ensure_datetime(value: object) -> datetime:
     if isinstance(value, datetime):
-        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     if hasattr(value, "to_pydatetime"):
         converted = value.to_pydatetime()
         if isinstance(converted, datetime):
-            return converted if converted.tzinfo is not None else converted.replace(tzinfo=UTC)
+            return (
+                converted
+                if converted.tzinfo is not None
+                else converted.replace(tzinfo=timezone.utc)
+            )
     msg = f"Unsupported timestamp from yfinance history: {type(value).__name__}"
     raise ConfigError(msg)
 
@@ -163,7 +167,9 @@ class YFinanceProvider(DataProvider):
         history = await asyncio.to_thread(self._fetch_history, ticker, interval)
         records = self._build_ohlcv_records(history, since=since)
         clipped = records[-limit:]
-        return normalize_ohlcv_batch(clipped, symbol=symbol, exchange=exchange, source="yfinance")
+        return normalize_ohlcv_batch(
+            clipped, symbol=symbol, exchange=exchange, source="yfinance"
+        )
 
     async def get_ticker(self, *, symbol: str, exchange: Exchange) -> TickerSnapshot:
         _ensure_supported_exchange(exchange)
@@ -173,7 +179,9 @@ class YFinanceProvider(DataProvider):
         bid = _coerce_numeric_input(payload["bid"], field_name="bid")
         ask = _coerce_numeric_input(payload["ask"], field_name="ask")
         last = _coerce_numeric_input(payload["last"], field_name="last")
-        volume_24h = _coerce_numeric_input(payload["volume_24h"], field_name="volume_24h")
+        volume_24h = _coerce_numeric_input(
+            payload["volume_24h"], field_name="volume_24h"
+        )
         snapshot = TickerSnapshot(
             exchange=exchange,
             symbol=symbol,
@@ -198,10 +206,12 @@ class YFinanceProvider(DataProvider):
         return history
 
     @staticmethod
-    def _build_ohlcv_records(history: object, since: Timestamp | None) -> list[dict[str, object]]:
+    def _build_ohlcv_records(
+        history: object, since: Timestamp | None
+    ) -> list[dict[str, object]]:
         records: list[dict[str, object]] = []
         for timestamp, payload in _history_rows(history):
-            normalized_timestamp = _ensure_datetime(timestamp).astimezone(UTC)
+            normalized_timestamp = _ensure_datetime(timestamp).astimezone(timezone.utc)
             if since is not None and normalized_timestamp < since:
                 continue
             records.append(

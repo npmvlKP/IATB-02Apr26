@@ -5,7 +5,7 @@ Normalize sentiment aggregator output to [0, 1] selection signal.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -79,10 +79,10 @@ def _directional_bias(score: Decimal) -> str:
 
 
 def _validate_input(inputs: SentimentSignalInput, current: datetime) -> None:
-    if inputs.timestamp_utc.tzinfo != UTC:
+    if inputs.timestamp_utc.tzinfo != timezone.utc:
         msg = "timestamp_utc must be UTC"
         raise ConfigError(msg)
-    if current.tzinfo != UTC:
+    if current.tzinfo != timezone.utc:
         msg = "current_utc must be UTC"
         raise ConfigError(msg)
     if not inputs.instrument_symbol.strip():

@@ -3,9 +3,9 @@ Derive volume profile selection signal from POC, VAH, VAL structure.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
-from enum import StrEnum
+from enum import Enum
 
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
@@ -14,7 +14,7 @@ from iatb.selection._util import DirectionalIntent, clamp_01
 from iatb.selection.decay import temporal_decay
 
 
-class ProfileShape(StrEnum):
+class ProfileShape(str, Enum):
     P_BULLISH = "P"
     D_BALANCED = "D"
     B_BEARISH = "b"
@@ -69,7 +69,11 @@ def compute_volume_profile_signal(
     poc_prox = _regime_adjusted_poc(raw_poc, regime)
     va_width = _va_width_ratio(inputs.current_price, profile)
     shape_score = _shape_score_for_intent(shape, intent)
-    raw_score = (_W_POC_PROXIMITY * poc_prox) + (_W_VA_WIDTH * va_width) + (_W_SHAPE * shape_score)
+    raw_score = (
+        (_W_POC_PROXIMITY * poc_prox)
+        + (_W_VA_WIDTH * va_width)
+        + (_W_SHAPE * shape_score)
+    )
     decay = temporal_decay(inputs.timestamp_utc, current_utc, "volume_profile")
     decayed_score = clamp_01(raw_score * decay)
     poc_dist_pct = _poc_distance_pct(inputs.current_price, profile)
@@ -154,10 +158,10 @@ def _va_width_pct(price: Decimal, profile: VolumeProfile) -> Decimal:
 
 
 def _validate_input(inputs: VolumeProfileSignalInput, current: datetime) -> None:
-    if inputs.timestamp_utc.tzinfo != UTC:
+    if inputs.timestamp_utc.tzinfo != timezone.utc:
         msg = "timestamp_utc must be UTC"
         raise ConfigError(msg)
-    if current.tzinfo != UTC:
+    if current.tzinfo != timezone.utc:
         msg = "current_utc must be UTC"
         raise ConfigError(msg)
     if not inputs.instrument_symbol.strip():

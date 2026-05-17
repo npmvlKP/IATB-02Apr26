@@ -1,153 +1,405 @@
-"""Tests for rl/environment.py — trading environment step/reset."""
+"""
+Comprehensive coverage tests for environment.py.
 
-from datetime import UTC, datetime, time
+Tests trading environment step/reset, Gymnasium interface, and state management.
+"""
+
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.rl.environment import (
-    EnvironmentConfig,
+    TradingEnvConfig,
     TradingEnvironment,
-    _effective_lot_size,
-    _must_auto_square_off,
-    _next_position,
-    _step_info,
-    _validate_action,
-    _validate_inputs,
+    _action_to_order_side,
+    _compute_reward_sharpe,
+    _discrete_action_space,
+    _get_observation,
+    _reset_state,
+    _validate_environment,
 )
 
 
-def _utc_times(n: int) -> list[datetime]:
-    return [datetime(2024, 6, 15, 9, 15 + i, 0, tzinfo=UTC) for i in range(n)]
+class TestValidateEnvironment:
+    """Test environment validation."""
+
+    def test_valid_environment(self):
+        """Test valid environment."""
+        mock_env = MagicMock()
+        mock_env.observation_space = MagicMock()
+        mock_env.action_space = MagicMock()
+        mock_env.spec = MagicMock()
+
+        _validate_environment(mock_env)  # Should not raise
+
+    def test_missing_observation_space_raises_error(self):
+        """Test that missing observation_space raises ConfigError."""
+        mock_env = MagicMock()
+        mock_env.observation_space = None
+
+        with pytest.raises(ConfigError, match="environment missing observation_space"):
+            _validate_environment(mock_env)
+
+    def test_missing_action_space_raises_error(self):
+        """Test that missing action_space raises ConfigError."""
+        mock_env = MagicMock()
+        mock_env.observation_space = MagicMock()
+        mock_env.action_space = None
+
+        with pytest.raises(ConfigError, match="environment missing action_space"):
+            _validate_environment(mock_env)
 
 
-def _observations(n: int, features: int = 3) -> list[list[Decimal]]:
-    return [[Decimal(str(j)) for j in range(features)] for _ in range(n)]
+class TestDiscreteActionSpace:
+    """Test discrete action space."""
+
+    def test_discrete_action_space(self):
+        """Test creating discrete action space."""
+        space = _discrete_action_space(3)
+        assert space is not None
+
+    def test_invalid_action_count_raises_error(self):
+        """Test that invalid action count raises ConfigError."""
+        with pytest.raises(ConfigError, match="n_actions must be positive"):
+            _discrete_action_space(0)
 
 
-def _prices(n: int, base: Decimal = Decimal("100")) -> list[Decimal]:
-    return [base + Decimal(str(i)) for i in range(n)]
+class TestActionToOrderSide:
+    """Test action to order side conversion."""
+
+    def test_action_0_to_sell(self):
+        """Test action 0 converts to sell."""
+        with patch("iatb.rl.environment.OrderSide") as mock_order_side:
+            _action_to_order_side(0)
+            mock_order_side.SELL.assert_called_once()
+
+    def test_action_1_to_hold(self):
+        """Test action 1 converts to hold."""
+        result = _action_to_order_side(1)
+        assert result is None
+
+    def test_action_2_to_buy(self):
+        """Test action 2 converts to buy."""
+        with patch("iatb.rl.environment.OrderSide") as mock_order_side:
+            _action_to_order_side(2)
+            mock_order_side.BUY.assert_called_once()
+
+    def test_invalid_action_raises_error(self):
+        """Test that invalid action raises ConfigError."""
+        with pytest.raises(ConfigError, match="invalid discrete action"):
+            _action_to_order_side(5)
 
 
-class TestEnvironmentConfig:
-    def test_defaults(self) -> None:
-        cfg = EnvironmentConfig()
-        assert cfg.max_steps == 500
-        assert cfg.intraday is True
+class TestResetState:
+    """Test state reset."""
+
+    def test_reset_state(self):
+        """Test resetting state."""
+        config = TradingEnvConfig()
+        state = _reset_state(config)
+
+        assert state.position == 0
+        assert state.entry_price is None
+        assert state.unrealized_pnl == Decimal("0")
+        assert state.step_count == 0
 
 
-class TestValidateInputs:
-    def test_mismatched_lengths_raises(self) -> None:
-        with pytest.raises(ConfigError, match="equal length"):
-            _validate_inputs(_observations(5), _prices(3), _utc_times(5))
+class TestComputeRewardSharpe:
+    """Test Sharpe-based reward computation."""
 
-    def test_too_few_observations_raises(self) -> None:
-        with pytest.raises(ConfigError, match="at least two"):
-            _validate_inputs(_observations(1), _prices(1), _utc_times(1))
+    def test_compute_reward_sharpe(self):
+        """Test Sharpe reward computation."""
+        returns = [Decimal("0.01"), Decimal("0.02"), Decimal("0.015")]
+        risk_free = Decimal("0.02") / Decimal("252")
 
-    def test_empty_observation_row_raises(self) -> None:
-        with pytest.raises(ConfigError, match="at least one feature"):
-            _validate_inputs(
-                [[Decimal("1"), Decimal("2")], []],
-                _prices(2),
-                _utc_times(2),
-            )
+        reward = _compute_reward_sharpe(returns, risk_free)
 
-    def test_non_utc_timestamps_raises(self) -> None:
-        with pytest.raises(ConfigError, match="timezone-aware UTC"):
-            _validate_inputs(_observations(2), _prices(2), [datetime(2024, 1, 1)] * 2)
+        assert reward is not None
 
+    def test_compute_reward_sharpe_insufficient_returns(self):
+        """Test that insufficient returns return zero."""
+        returns = [Decimal("0.01")]
+        risk_free = Decimal("0.02") / Decimal("252")
 
-class TestValidateAction:
-    def test_valid_actions(self) -> None:
-        for a in (0, 1, 2):
-            _validate_action(a)
+        reward = _compute_reward_sharpe(returns, risk_free)
 
-    def test_invalid_action_raises(self) -> None:
-        with pytest.raises(ConfigError, match="action must be 0, 1, or 2"):
-            _validate_action(3)
+        assert reward == Decimal("0")
 
 
-class TestNextPosition:
-    def test_hold_action(self) -> None:
-        assert _next_position(0, 1, True) == 1
+class TestGetObservation:
+    """Test observation extraction."""
 
-    def test_buy_action(self) -> None:
-        assert _next_position(1, 0, True) == 1
+    def test_get_observation_with_position(self):
+        """Test observation with open position."""
+        mock_state = MagicMock()
+        mock_state.position = 1
+        mock_state.entry_price = Decimal("100")
+        mock_state.unrealized_pnl = Decimal("5")
+        mock_state.step_count = 10
 
-    def test_sell_action(self) -> None:
-        assert _next_position(2, 0, True) == -1
+        mock_obs = MagicMock()
+        mock_obs.price = Decimal("105")
 
-    def test_not_tradable_holds(self) -> None:
-        assert _next_position(1, 1, False) == 1
+        obs = _get_observation(mock_state, mock_obs)
 
+        assert obs is not None
 
-class TestMustAutoSquareOff:
-    def test_non_intraday(self) -> None:
-        cfg = EnvironmentConfig(intraday=False)
-        ts = datetime(2024, 6, 15, 10, 15, 0, tzinfo=UTC)
-        assert _must_auto_square_off(ts, cfg) is False
+    def test_get_observation_without_position(self):
+        """Test observation without open position."""
+        mock_state = MagicMock()
+        mock_state.position = 0
+        mock_state.entry_price = None
+        mock_state.unrealized_pnl = Decimal("0")
+        mock_state.step_count = 5
 
-    def test_intraday_before_square_off(self) -> None:
-        cfg = EnvironmentConfig(intraday=True, auto_square_off_ist=time(15, 10))
-        ts = datetime(2024, 6, 15, 10, 0, 0, tzinfo=UTC)
-        with patch("iatb.rl.environment.Clock") as mock_clock:
-            mock_ist = MagicMock()
-            mock_ist.time.return_value = time(14, 0)
-            mock_clock.to_ist.return_value = mock_ist
-            assert _must_auto_square_off(ts, cfg) is False
+        mock_obs = MagicMock()
+        mock_obs.price = Decimal("100")
 
+        obs = _get_observation(mock_state, mock_obs)
 
-class TestEffectiveLotSize:
-    def test_nse_returns_default(self) -> None:
-        cfg = EnvironmentConfig()
-        assert _effective_lot_size(cfg) == Decimal("1")
-
-    def test_mcx_returns_mcx_lot(self) -> None:
-        cfg = EnvironmentConfig(exchange=Exchange.MCX)
-        assert _effective_lot_size(cfg) == Decimal("50")
+        assert obs is not None
 
 
-class TestStepInfo:
-    def test_output_dict(self) -> None:
-        info = _step_info(5, True, False)
-        assert info["index"] == "5"
-        assert info["in_session"] == "1"
-        assert info["auto_square_off"] == "0"
+class TestTradingEnvConfig:
+    """Test trading environment configuration."""
+
+    def test_default_config(self):
+        """Test default configuration values."""
+        config = TradingEnvConfig()
+        assert config.max_steps == 1000
+        assert config.transaction_cost == Decimal("0.001")
+        assert config.sharpe_window == 20
 
 
 class TestTradingEnvironment:
-    def test_reset_returns_observation(self) -> None:
-        env = TradingEnvironment(_observations(5), _prices(5), _utc_times(5))
-        obs, info = env.reset()
-        assert len(obs) == 3
-        assert "seed" in info
+    """Test trading environment functionality."""
 
-    def test_step_returns_tuple(self) -> None:
-        with patch("iatb.rl.environment.session_masks") as mock_sm:
-            mock_sm.is_in_session.return_value = True
-            env = TradingEnvironment(_observations(5), _prices(5), _utc_times(5))
-            obs, reward, done, truncated, info = env.step(1)
-            assert isinstance(reward, Decimal)
-            assert isinstance(done, bool)
-            assert "index" in info
+    def test_environment_initialization(self):
+        """Test environment initialization."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
 
-    def test_invalid_action_raises(self) -> None:
-        env = TradingEnvironment(_observations(5), _prices(5), _utc_times(5))
-        with pytest.raises(ConfigError, match="action must be"):
-            env.step(5)
+        env = TradingEnvironment(mock_data_source, config)
 
-    def test_terminal_step_raises(self) -> None:
-        with patch("iatb.rl.environment.session_masks") as mock_sm:
-            mock_sm.is_in_session.return_value = True
-            env = TradingEnvironment(_observations(3), _prices(3), _utc_times(3))
-            env.step(0)
-            env.step(0)
-            with pytest.raises(ConfigError, match="cannot step beyond"):
-                env.step(0)
+        assert env._config == config
+        assert env._data_source == mock_data_source
 
-    def test_action_space_n(self) -> None:
-        env = TradingEnvironment(_observations(3), _prices(3), _utc_times(3))
-        assert env.action_space_n == 3
+    def test_environment_invalid_raises_error(self):
+        """Test that invalid environment raises ConfigError."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = None
+
+        with pytest.raises(ConfigError, match="environment missing observation_space"):
+            TradingEnvironment(mock_data_source, config)
+
+    def test_reset(self):
+        """Test environment reset."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+
+        env = TradingEnvironment(mock_data_source, config)
+
+        obs, info = env.reset(seed=42)
+
+        assert obs is not None
+        assert info is not None
+        assert env.state.position == 0
+
+    def test_step_buy(self):
+        """Test step with buy action."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("105")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        obs, reward, terminated, truncated, info = env.step(2)  # Buy
+
+        assert obs is not None
+        assert env.state.position == 1
+
+    def test_step_sell(self):
+        """Test step with sell action."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("105")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        obs, reward, terminated, truncated, info = env.step(0)  # Sell
+
+        assert obs is not None
+        assert env.state.position == -1
+
+    def test_step_hold(self):
+        """Test step with hold action."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("105")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        obs, reward, terminated, truncated, info = env.step(1)  # Hold
+
+        assert obs is not None
+        assert env.state.position == 0
+
+    def test_step_terminated_at_max_steps(self):
+        """Test that environment terminates at max_steps."""
+        config = TradingEnvConfig(max_steps=2)
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("105")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        env.step(1)  # Step 1
+        obs, reward, terminated, truncated, info = env.step(1)  # Step 2
+
+        assert terminated is True or truncated is True
+
+    def test_compute_pnl_long_position(self):
+        """Test PnL computation for long position."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("105")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        # Buy at 100
+        env.step(2)
+
+        # Step to 105
+        obs, reward, terminated, truncated, info = env.step(1)
+
+        assert env.state.unrealized_pnl > Decimal("0")
+
+    def test_compute_pnl_short_position(self):
+        """Test PnL computation for short position."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("95")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        # Sell at 100
+        env.step(0)
+
+        # Step to 95
+        obs, reward, terminated, truncated, info = env.step(1)
+
+        assert env.state.unrealized_pnl > Decimal("0")
+
+    def test_close_position(self):
+        """Test closing position."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.reset.return_value = MagicMock(price=Decimal("100"))
+        mock_data_source.step.return_value = (
+            MagicMock(price=Decimal("105")),
+            {},
+            False,
+            False,
+            {},
+        )
+
+        env = TradingEnvironment(mock_data_source, config)
+        env.reset()
+
+        # Buy
+        env.step(2)
+        assert env.state.position == 1
+
+        # Close position (sell)
+        env.step(0)
+        assert env.state.position == -1
+
+    def test_observation_space(self):
+        """Test observation space property."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.spec = MagicMock()
+
+        env = TradingEnvironment(mock_data_source, config)
+
+        assert env.observation_space is not None
+
+    def test_action_space(self):
+        """Test action space property."""
+        config = TradingEnvConfig()
+        mock_data_source = MagicMock()
+        mock_data_source.observation_space = MagicMock()
+        mock_data_source.action_space = MagicMock()
+        mock_data_source.spec = MagicMock()
+
+        env = TradingEnvironment(mock_data_source, config)
+
+        assert env.action_space is not None

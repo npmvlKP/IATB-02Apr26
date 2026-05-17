@@ -16,7 +16,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, cast
@@ -138,7 +138,7 @@ class CandleBuilder:
 
     def add_tick(self, tick: Tick) -> None:
         """Add a tick to the current candle or start a new one."""
-        timestamp_utc = tick.timestamp.astimezone(UTC)
+        timestamp_utc = tick.timestamp.astimezone(timezone.utc)
         candle_timestamp = self._candle_timestamp(timestamp_utc)
 
         if not self.current_candle or self._new_candle_needed(candle_timestamp):
@@ -215,7 +215,9 @@ class CandleBuilder:
             return
 
         candle = OHLCVBar(
-            timestamp=create_timestamp(cast(datetime, self.current_candle["timestamp"])),
+            timestamp=create_timestamp(
+                cast(datetime, self.current_candle["timestamp"])
+            ),
             exchange=self.exchange,
             symbol=self.symbol,
             open=cast(Price, self.current_candle["open"]),
@@ -322,7 +324,9 @@ class KiteWebSocketProvider(DataProvider):
         self._is_running = False
         self._connection_state = ConnectionState.DISCONNECTED
         self._ticker_instance: Any = None
-        self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=_TICK_QUEUE_MAXSIZE)
+        self._tick_queue: asyncio.Queue[Tick] = asyncio.Queue(
+            maxsize=_TICK_QUEUE_MAXSIZE
+        )
         self._tick_buffer = TickBuffer()
         self._tick_processor_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
@@ -408,7 +412,7 @@ class KiteWebSocketProvider(DataProvider):
         self._is_connected = True
         self._is_running = True
         self._connection_state = ConnectionState.CONNECTED
-        self._stats.connected_at = datetime.now(UTC)
+        self._stats.connected_at = datetime.now(timezone.utc)
         _LOGGER.info(
             "WebSocket connected",
             extra={"api_key": self._api_key[:8] + "..."},
@@ -607,7 +611,7 @@ class KiteWebSocketProvider(DataProvider):
 
     def _on_ticks(self, ws: Any, ticks: list[dict[str, object]]) -> None:
         """Handle incoming ticks."""
-        self._last_heartbeat_utc = datetime.now(UTC)
+        self._last_heartbeat_utc = datetime.now(timezone.utc)
         self._stats.ticks_received += len(ticks)
         self._stats.last_tick_at = self._last_heartbeat_utc
 
@@ -635,7 +639,7 @@ class KiteWebSocketProvider(DataProvider):
 
     def _on_connect(self, ws: Any, response: dict[str, object]) -> None:
         """Handle connection event."""
-        self._last_heartbeat_utc = datetime.now(UTC)
+        self._last_heartbeat_utc = datetime.now(timezone.utc)
         self._stats.connected_at = self._last_heartbeat_utc
         _LOGGER.info("WebSocket connection established")
 
@@ -684,7 +688,7 @@ class KiteWebSocketProvider(DataProvider):
         self._connection_state = ConnectionState.RECONNECTING
         self._reconnect_attempt += 1
         self._stats.reconnect_attempts = self._reconnect_attempt
-        self._stats.last_reconnect_at = datetime.now(UTC)
+        self._stats.last_reconnect_at = datetime.now(timezone.utc)
 
         if self._reconnect_attempt > self._max_reconnect_attempts:
             _LOGGER.error(
@@ -739,8 +743,8 @@ class KiteWebSocketProvider(DataProvider):
         self._is_connected = True
         self._connection_state = ConnectionState.CONNECTED
         self._reconnect_attempt = 0
-        self._last_heartbeat_utc = datetime.now(UTC)
-        self._stats.last_reconnect_at = datetime.now(UTC)
+        self._last_heartbeat_utc = datetime.now(timezone.utc)
+        self._stats.last_reconnect_at = datetime.now(timezone.utc)
 
         _LOGGER.info(
             "WebSocket reconnected successfully",
@@ -756,7 +760,7 @@ class KiteWebSocketProvider(DataProvider):
                 if self._should_stop:
                     break
 
-                now_utc = datetime.now(UTC)
+                now_utc = datetime.now(timezone.utc)
 
                 if self._last_heartbeat_utc is None:
                     self._last_heartbeat_utc = now_utc
@@ -764,7 +768,10 @@ class KiteWebSocketProvider(DataProvider):
 
                 time_since_last_heartbeat = now_utc - self._last_heartbeat_utc
 
-                if time_since_last_heartbeat.total_seconds() > self._heartbeat_timeout_seconds:
+                if (
+                    time_since_last_heartbeat.total_seconds()
+                    > self._heartbeat_timeout_seconds
+                ):
                     _LOGGER.warning(
                         "Heartbeat timeout detected",
                         extra={
@@ -814,7 +821,7 @@ class KiteWebSocketProvider(DataProvider):
             current_memory = 0
 
         self._stats.memory_usage_bytes = current_memory
-        self._stats.last_memory_check = datetime.now(UTC)
+        self._stats.last_memory_check = datetime.now(timezone.utc)
 
         if current_memory > self._stats.memory_peak_bytes:
             self._stats.memory_peak_bytes = current_memory
@@ -895,10 +902,14 @@ class KiteWebSocketProvider(DataProvider):
         if self._instrument_master:
             try:
                 token_int = (
-                    int(instrument_token) if isinstance(instrument_token, int | str) else None
+                    int(instrument_token)
+                    if isinstance(instrument_token, int | str)
+                    else None
                 )
                 if token_int:
-                    instrument = self._instrument_master.get_instrument_by_token(token_int)
+                    instrument = self._instrument_master.get_instrument_by_token(
+                        token_int
+                    )
                     if instrument:
                         exchange = instrument.exchange
             except (ValueError, TypeError):
@@ -921,10 +932,14 @@ class KiteWebSocketProvider(DataProvider):
 
             volume = tick_data.get("volume_traded", 0)
 
-            timestamp = datetime.now(UTC)
+            timestamp = datetime.now(timezone.utc)
             exchange_ts = tick_data.get("exchange_timestamp")
             if exchange_ts and isinstance(exchange_ts, datetime):
-                timestamp = exchange_ts if exchange_ts.tzinfo else exchange_ts.replace(tzinfo=UTC)
+                timestamp = (
+                    exchange_ts
+                    if exchange_ts.tzinfo
+                    else exchange_ts.replace(tzinfo=timezone.utc)
+                )
 
             exchange = self._resolve_exchange_from_token(instrument_token)
             symbol = str(instrument_token)

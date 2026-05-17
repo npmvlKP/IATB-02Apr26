@@ -5,10 +5,10 @@ Provides strongly-typed enums for exchange, market types,
 order properties, and status.
 """
 
-from enum import StrEnum
+from enum import Enum
 
 
-class Exchange(StrEnum):
+class Exchange(str, Enum):
     """Supported trading exchanges."""
 
     NSE = "NSE"
@@ -19,7 +19,7 @@ class Exchange(StrEnum):
     COINDCX = "COINDCX"
 
 
-class MarketType(StrEnum):
+class MarketType(str, Enum):
     """Types of markets available for trading."""
 
     SPOT = "SPOT"
@@ -28,14 +28,14 @@ class MarketType(StrEnum):
     CURRENCY_FO = "CURRENCY_FO"
 
 
-class OrderSide(StrEnum):
+class OrderSide(str, Enum):
     """Side of an order: buy or sell."""
 
     BUY = "BUY"
     SELL = "SELL"
 
 
-class OrderType(StrEnum):
+class OrderType(str, Enum):
     """Types of order execution."""
 
     MARKET = "MARKET"
@@ -44,7 +44,7 @@ class OrderType(StrEnum):
     STOP_LOSS_MARKET = "STOP_LOSS_MARKET"
 
 
-class OrderStatus(StrEnum):
+class OrderStatus(str, Enum):
     """Status of an order in its lifecycle."""
 
     PENDING = "PENDING"

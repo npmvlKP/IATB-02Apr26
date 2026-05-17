@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 _CACHE_TTL = timedelta(hours=24)
 
 # Supported exchanges for token resolution
-_SUPPORTED_EXCHANGES = frozenset({Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS})
+_SUPPORTED_EXCHANGES = frozenset(
+    {Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS}
+)
 
 
 def _ensure_supported_exchange(exchange: Exchange) -> None:
@@ -156,7 +158,9 @@ class SymbolTokenResolver:
         # Try cache first (unless force_refresh)
         if not force_refresh:
             try:
-                instrument = self._instrument_master.get_instrument(normalized_symbol, exchange)
+                instrument = self._instrument_master.get_instrument(
+                    normalized_symbol, exchange
+                )
                 return instrument.instrument_token
             except ConfigError:
                 logger.debug(
@@ -204,7 +208,9 @@ class SymbolTokenResolver:
 
         for symbol in symbols:
             try:
-                token = await self.resolve_token(symbol, exchange, force_refresh=force_refresh)
+                token = await self.resolve_token(
+                    symbol, exchange, force_refresh=force_refresh
+                )
                 results[symbol.strip()] = token
             except ConfigError as exc:
                 errors.append(f"{symbol}: {exc}")
@@ -236,7 +242,7 @@ class SymbolTokenResolver:
             ConfigError: If refresh fails or symbol still not found.
         """
         # Check if we need to refresh (rate limit: once per minute per exchange)
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         last_refresh = self._last_api_refresh.get(exchange)
         if last_refresh and (now - last_refresh) < timedelta(minutes=1):
             logger.debug("Skipping API refresh, recent fetch for %s", exchange.value)
@@ -272,16 +278,21 @@ class SymbolTokenResolver:
             # Call kite.instruments() - this is a blocking call
             import asyncio
 
-            raw_instruments = await asyncio.to_thread(kite_client.instruments, exchange.value)
+            raw_instruments = await asyncio.to_thread(
+                kite_client.instruments, exchange.value
+            )
 
             if not isinstance(raw_instruments, list):
                 msg = (
-                    f"Kite instruments() must return list, " f"got {type(raw_instruments).__name__}"
+                    f"Kite instruments() must return list, "
+                    f"got {type(raw_instruments).__name__}"
                 )
                 raise ConfigError(msg)
 
             # Process and load valid instruments
-            loaded_count = await self._process_and_load_instruments(raw_instruments, exchange)
+            loaded_count = await self._process_and_load_instruments(
+                raw_instruments, exchange
+            )
 
             logger.info(
                 "Loaded %d instruments from Kite API for %s",
@@ -290,7 +301,7 @@ class SymbolTokenResolver:
             )
 
             # Update last refresh timestamp
-            self._last_api_refresh[exchange] = datetime.now(UTC)
+            self._last_api_refresh[exchange] = datetime.now(timezone.utc)
 
         except Exception as exc:
             msg = f"Failed to refresh instruments from Kite API for {exchange.value}: {exc}"
@@ -311,7 +322,7 @@ class SymbolTokenResolver:
             Number of instruments loaded.
         """
         instruments = self._build_instruments_list(raw_instruments, exchange)
-        now_utc = datetime.now(UTC).isoformat()
+        now_utc = datetime.now(timezone.utc).isoformat()
         return self._load_instruments_to_cache(instruments, now_utc)
 
     def _build_instruments_list(
@@ -368,7 +379,7 @@ class SymbolTokenResolver:
 
         Args:
             instruments: List of Instrument objects to cache.
-            now_utc: Current UTC timestamp as ISO string.
+            now_utc: Current timezone.utc timestamp as ISO string.
 
         Returns:
             Number of instruments loaded.
@@ -382,7 +393,9 @@ class SymbolTokenResolver:
         loaded = 0
         try:
             with sqlite3.connect(db_path) as conn:
-                loaded = self._insert_instruments_batch(conn, insert_sql, instruments, now_utc)
+                loaded = self._insert_instruments_batch(
+                    conn, insert_sql, instruments, now_utc
+                )
                 conn.commit()
         except Exception as exc:
             logger.warning("Failed to connect to database: %s", exc)
@@ -417,7 +430,7 @@ class SymbolTokenResolver:
             conn: SQLite connection.
             insert_sql: SQL INSERT statement.
             instruments: List of Instrument objects.
-            now_utc: Current UTC timestamp.
+            now_utc: Current timezone.utc timestamp.
 
         Returns:
             Number of instruments inserted.
@@ -444,7 +457,9 @@ class SymbolTokenResolver:
                 )
                 loaded += 1
             except Exception as exc:
-                logger.warning("Failed to load instrument %s: %s", inst.trading_symbol, exc)
+                logger.warning(
+                    "Failed to load instrument %s: %s", inst.trading_symbol, exc
+                )
         return loaded
 
     def _map_instrument_type(self, raw: Mapping[str, Any]) -> InstrumentType:
@@ -521,11 +536,19 @@ class SymbolTokenResolver:
         try:
             # Kite returns expiry as datetime object or string
             if isinstance(value, datetime):
-                return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+                return (
+                    value
+                    if value.tzinfo is not None
+                    else value.replace(tzinfo=timezone.utc)
+                )
             if isinstance(value, str):
                 # Parse ISO format
                 parsed = datetime.fromisoformat(value.strip())
-                return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+                return (
+                    parsed
+                    if parsed.tzinfo is not None
+                    else parsed.replace(tzinfo=timezone.utc)
+                )
         except (ValueError, TypeError):
             pass
 

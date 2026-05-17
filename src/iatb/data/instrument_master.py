@@ -12,7 +12,7 @@ from __future__ import annotations
 import csv
 import logging
 import sqlite3
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -85,7 +85,8 @@ class InstrumentMaster:
                 "ON instruments (exchange, instrument_type)"
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_inst_name " "ON instruments (name, exchange)"
+                "CREATE INDEX IF NOT EXISTS idx_inst_name "
+                "ON instruments (name, exchange)"
             )
             conn.commit()
 
@@ -147,46 +148,64 @@ class InstrumentMaster:
             msg = f"Instrument CSV not found: {csv_path}"
             raise ConfigError(msg)
         self._purge_stale()
-        now_utc = datetime.now(UTC).isoformat()
+        now_utc = datetime.now(timezone.utc).isoformat()
         loaded = 0
         with csv_path.open(encoding="utf-8") as fh, self._connect() as conn:
             reader = csv.DictReader(fh)
             for row in reader:
                 try:
-                    conn.execute(_INSERT_SQL, _csv_row_to_db_tuple(row, exchange, now_utc))
+                    conn.execute(
+                        _INSERT_SQL, _csv_row_to_db_tuple(row, exchange, now_utc)
+                    )
                     loaded += 1
-                except (ValidationError, KeyError, InvalidOperation, ValueError, TypeError) as exc:
+                except (
+                    ValidationError,
+                    KeyError,
+                    InvalidOperation,
+                    ValueError,
+                    TypeError,
+                ) as exc:
                     logger.warning("Skipping invalid CSV row: %s", exc)
         conn.commit()
-        logger.info("Loaded %d instruments for %s from %s", loaded, exchange.value, csv_path)
+        logger.info(
+            "Loaded %d instruments for %s from %s", loaded, exchange.value, csv_path
+        )
 
         # Enforce cache size limit after loading
         self._enforce_cache_size_limit()
         return loaded
 
-    async def load_from_provider(self, provider: InstrumentProvider, exchange: Exchange) -> int:
+    async def load_from_provider(
+        self, provider: InstrumentProvider, exchange: Exchange
+    ) -> int:
         """Fetch instruments from a broker provider and cache."""
         instruments = await provider.fetch_instruments(exchange)
         self._purge_stale()
-        now_utc = datetime.now(UTC).isoformat()
+        now_utc = datetime.now(timezone.utc).isoformat()
         loaded = 0
         with self._connect() as conn:
             for inst in instruments:
                 conn.execute(_INSERT_SQL, _instrument_to_db_tuple(inst, now_utc))
                 loaded += 1
         conn.commit()
-        logger.info("Loaded %d instruments for %s from provider", loaded, exchange.value)
+        logger.info(
+            "Loaded %d instruments for %s from provider", loaded, exchange.value
+        )
 
         # Enforce cache size limit after loading
         self._enforce_cache_size_limit()
         return loaded
 
     def get_instrument(
-        self, symbol: str, exchange: Exchange, instrument_type: InstrumentType | None = None
+        self,
+        symbol: str,
+        exchange: Exchange,
+        instrument_type: InstrumentType | None = None,
     ) -> Instrument:
         """Lookup a single instrument by trading symbol or name and exchange."""
         query = (
-            "SELECT * FROM instruments " "WHERE (trading_symbol = ? OR name = ?) AND exchange = ?"
+            "SELECT * FROM instruments "
+            "WHERE (trading_symbol = ? OR name = ?) AND exchange = ?"
         )
         params: list[str] = [symbol.strip(), symbol.strip(), exchange.value]
         if instrument_type is not None:
@@ -221,21 +240,25 @@ class InstrumentMaster:
         """Get lot size for a specific instrument."""
         return self.get_instrument(symbol, exchange).lot_size
 
-    def get_available_types(self, underlying: str, exchange: Exchange) -> set[InstrumentType]:
+    def get_available_types(
+        self, underlying: str, exchange: Exchange
+    ) -> set[InstrumentType]:
         """Get all instrument types available for an underlying on an exchange."""
         query = (
             "SELECT DISTINCT instrument_type FROM instruments "
             "WHERE (name = ? OR trading_symbol = ?) AND exchange = ?"
         )
         with self._connect() as conn:
-            rows = conn.execute(query, (underlying.strip(), underlying.strip(), exchange.value))
+            rows = conn.execute(
+                query, (underlying.strip(), underlying.strip(), exchange.value)
+            )
         return {InstrumentType(str(r["instrument_type"])) for r in rows}
 
     def get_nearest_expiry(
         self, underlying: str, exchange: Exchange, instrument_type: InstrumentType
     ) -> date:
         """Get the nearest future expiry for an underlying and instrument type."""
-        today_str = datetime.now(UTC).date().isoformat()
+        today_str = datetime.now(timezone.utc).date().isoformat()
         query = (
             "SELECT DISTINCT expiry FROM instruments "
             "WHERE name = ? AND exchange = ? AND instrument_type = ? "
@@ -252,7 +275,7 @@ class InstrumentMaster:
         return date.fromisoformat(str(row["expiry"]))
 
     def _purge_stale(self) -> None:
-        cutoff = (datetime.now(UTC) - _CACHE_TTL).isoformat()
+        cutoff = (datetime.now(timezone.utc) - _CACHE_TTL).isoformat()
         with self._connect() as conn:
             deleted = conn.execute(
                 "DELETE FROM instruments WHERE fetched_at_utc < ?", (cutoff,)

@@ -15,7 +15,7 @@ Key endpoints wrapped:
 import asyncio
 import importlib
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -47,7 +47,9 @@ _INITIAL_RETRY_DELAY = 1.0  # seconds
 _RETRY_BACKOFF_MULTIPLIER = 2.0
 
 # Supported exchanges
-_SUPPORTED_EXCHANGES = frozenset({Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS})
+_SUPPORTED_EXCHANGES = frozenset(
+    {Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS}
+)
 
 # Interval mapping from IATB timeframe to Kite Connect interval
 _INTERVAL_MAP = {
@@ -122,10 +124,10 @@ def _coerce_numeric_input(value: object, *, field_name: str) -> str | int | Deci
 
 
 def _parse_kite_timestamp(value: object) -> datetime:
-    """Parse Kite timestamp to UTC datetime."""
+    """Parse Kite timestamp to timezone.utc datetime."""
     if isinstance(value, datetime):
         # Ensure timezone awareness
-        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     if isinstance(value, str):
         # Kite returns ISO format strings
         normalized = value.strip()
@@ -135,7 +137,7 @@ def _parse_kite_timestamp(value: object) -> datetime:
         if parsed.tzinfo is None:
             msg = f"Kite timestamp string must include timezone: {value!r}"
             raise ConfigError(msg)
-        return parsed.astimezone(UTC)
+        return parsed.astimezone(timezone.utc)
     msg = f"Unsupported timestamp from Kite: {type(value).__name__}"
     raise ConfigError(msg)
 
@@ -243,7 +245,9 @@ class KiteProvider(DataProvider):
     def _get_client(self) -> Any:
         """Get or create KiteConnect client instance."""
         if self._kite_client is None:
-            self._kite_client = self._kite_connect_factory(self._api_key, self._access_token)
+            self._kite_client = self._kite_connect_factory(
+                self._api_key, self._access_token
+            )
         return self._kite_client
 
     async def get_ohlcv(
@@ -296,9 +300,11 @@ class KiteProvider(DataProvider):
         self, since: Timestamp | None, limit: int
     ) -> tuple[datetime, datetime]:
         """Calculate start and end dates for historical data fetch."""
-        end_date = datetime.now(UTC)
+        end_date = datetime.now(timezone.utc)
         if since is not None:
-            start_date = datetime(since.year, since.month, since.day, tzinfo=UTC)
+            start_date = datetime(
+                since.year, since.month, since.day, tzinfo=timezone.utc
+            )
         else:
             start_date = end_date - timedelta(days=limit)
         return start_date, end_date
@@ -569,7 +575,9 @@ class KiteProvider(DataProvider):
                 continue
 
             try:
-                timestamp = _parse_kite_timestamp(raw_timestamp).astimezone(UTC)
+                timestamp = _parse_kite_timestamp(raw_timestamp).astimezone(
+                    timezone.utc
+                )
             except (ConfigError, ValueError):
                 continue
 

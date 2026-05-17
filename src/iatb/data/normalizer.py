@@ -4,7 +4,7 @@ Normalization helpers for provider-specific OHLCV payloads.
 
 import logging
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from iatb.core.enums import Exchange
@@ -48,11 +48,11 @@ def _parse_timestamp(value: object) -> datetime:
         if value.tzinfo is None:
             msg = "timestamp must be timezone-aware"
             raise ValidationError(msg)
-        return value.astimezone(UTC)
+        return value.astimezone(timezone.utc)
     if isinstance(value, int):
         timestamp_seconds = value / 1000 if value > 10_000_000_000 else value
         try:
-            return datetime.fromtimestamp(timestamp_seconds, tz=UTC)
+            return datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc)
         except (OverflowError, OSError, ValueError) as exc:
             msg = f"invalid unix timestamp: {value}"
             raise ValidationError(msg) from exc
@@ -71,7 +71,7 @@ def _parse_timestamp(value: object) -> datetime:
         if parsed.tzinfo is None:
             msg = "timestamp string must include timezone information"
             raise ValidationError(msg)
-        return parsed.astimezone(UTC)
+        return parsed.astimezone(timezone.utc)
     msg = f"Unsupported timestamp type: {type(value).__name__}"
     raise ValidationError(msg)
 

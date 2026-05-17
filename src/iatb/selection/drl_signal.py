@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -61,7 +61,8 @@ def compute_drl_signal(
     return DRLSignalOutput(
         score=decayed_score,
         confidence=confidence,
-        robust=conclusion.monte_carlo_robust and not conclusion.walk_forward_overfit_detected,
+        robust=conclusion.monte_carlo_robust
+        and not conclusion.walk_forward_overfit_detected,
         metadata={
             "oos_sharpe": str(conclusion.out_of_sample_sharpe),
             "max_drawdown_pct": str(conclusion.max_drawdown_pct),
@@ -98,7 +99,9 @@ def _sigmoid_normalize(sharpe: Decimal) -> Decimal:
     # API boundary: math.exp requires float; result immediately converted to Decimal.
     exponent = -float(sharpe)  # float required: math.exp API
     # Clamp exponent to avoid overflow in math.exp.
-    clamped = max(-500.0, min(500.0, exponent))  # API boundary: clamp uses float literals
+    clamped = max(
+        -500.0, min(500.0, exponent)
+    )  # API boundary: clamp uses float literals
     raw = Decimal(str(1.0 / (1.0 + math.exp(clamped))))  # float required: math.exp API
     return clamp_01(raw)
 
@@ -115,10 +118,10 @@ def _derive_confidence(conclusion: BacktestConclusion, decay: Decimal) -> Decima
 
 
 def _validate_conclusion(conclusion: BacktestConclusion, current: datetime) -> None:
-    if conclusion.timestamp_utc.tzinfo != UTC:
+    if conclusion.timestamp_utc.tzinfo != timezone.utc:
         msg = "timestamp_utc must be UTC"
         raise ConfigError(msg)
-    if current.tzinfo != UTC:
+    if current.tzinfo != timezone.utc:
         msg = "current_utc must be UTC"
         raise ConfigError(msg)
     if not conclusion.instrument_symbol.strip():
@@ -193,7 +196,11 @@ def _estimate_drawdown(result: EventDrivenResult) -> Decimal:
     for value in curve[1:]:
         if value > peak:
             peak = value
-        dd = (peak - value) / peak * Decimal("100") if peak > Decimal("0") else Decimal("0")
+        dd = (
+            (peak - value) / peak * Decimal("100")
+            if peak > Decimal("0")
+            else Decimal("0")
+        )
         if dd > max_dd:
             max_dd = dd
     return max_dd

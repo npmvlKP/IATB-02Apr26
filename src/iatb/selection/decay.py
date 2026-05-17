@@ -3,7 +3,7 @@ Temporal decay for signal freshness weighting.
 """
 
 import math
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from iatb.core.exceptions import ConfigError
@@ -44,10 +44,10 @@ def temporal_decay(
 
 
 def _validate_timestamps(signal: datetime, current: datetime) -> None:
-    if signal.tzinfo != UTC:
+    if signal.tzinfo != timezone.utc:
         msg = "signal_timestamp must be UTC"
         raise ConfigError(msg)
-    if current.tzinfo != UTC:
+    if current.tzinfo != timezone.utc:
         msg = "current_timestamp must be UTC"
         raise ConfigError(msg)
 
