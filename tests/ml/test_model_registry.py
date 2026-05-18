@@ -192,7 +192,9 @@ class TestModelRegistry:
         assert health.dll_loaded is True
 
     @patch("iatb.ml.model_registry.importlib.import_module")
-    def test_check_vader_availability_not_installed(self, mock_import: MagicMock) -> None:
+    def test_check_vader_availability_not_installed(
+        self, mock_import: MagicMock
+    ) -> None:
         """Test VADER availability check when not installed."""
         mock_import.side_effect = ImportError("vaderSentiment not found")
 
@@ -276,7 +278,9 @@ class TestModelRegistry:
     def test_initialize_registry(self) -> None:
         """Test registry initialization."""
         registry = ModelRegistry()
-        with patch.object(registry, "check_finbert_availability") as mock_finbert, patch.object(
+        with patch.object(
+            registry, "check_finbert_availability"
+        ) as mock_finbert, patch.object(
             registry, "check_vader_availability"
         ) as mock_vader, patch.object(registry, "check_aion_availability") as mock_aion:
             mock_finbert.return_value = ModelHealth(
@@ -305,7 +309,9 @@ class TestModelRegistry:
     def test_get_status(self) -> None:
         """Test getting registry status."""
         registry = ModelRegistry()
-        with patch.object(registry, "check_finbert_availability") as mock_finbert, patch.object(
+        with patch.object(
+            registry, "check_finbert_availability"
+        ) as mock_finbert, patch.object(
             registry, "check_vader_availability"
         ) as mock_vader, patch.object(registry, "check_aion_availability") as mock_aion:
             mock_finbert.return_value = ModelHealth(
@@ -338,9 +344,13 @@ class TestModelRegistry:
     def test_is_model_available(self) -> None:
         """Test checking if a specific model is available."""
         registry = ModelRegistry()
-        with patch.object(registry, "check_vader_availability") as mock_vader, patch.object(
+        with patch.object(
+            registry, "check_vader_availability"
+        ) as mock_vader, patch.object(
             registry, "check_finbert_availability"
-        ) as mock_finbert, patch.object(registry, "check_aion_availability") as mock_aion:
+        ) as mock_finbert, patch.object(
+            registry, "check_aion_availability"
+        ) as mock_aion:
             mock_vader.return_value = ModelHealth(
                 model_name="vader",
                 status=ModelStatus.AVAILABLE,

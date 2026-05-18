@@ -79,7 +79,9 @@ class ZerodhaTokenManager:
         self._env_path = env_path
         self._env_values = dict(env_values) if env_values else {}
         self._today_utc = today_utc or _utc_today()
-        self._token_store_path = self._resolve_token_store_path(env_path) if env_path else None
+        self._token_store_path = (
+            self._resolve_token_store_path(env_path) if env_path else None
+        )
         self._token_store_values = (
             _load_env_file(self._token_store_path)
             if self._token_store_path and self._token_store_path != self._env_path
@@ -326,7 +328,9 @@ class ZerodhaTokenManager:
 
         # Check environment variables (with alias support)
         if use_env_fallback:
-            env_token = os.getenv("ZERODHA_ACCESS_TOKEN") or os.getenv("KITE_ACCESS_TOKEN")
+            env_token = os.getenv("ZERODHA_ACCESS_TOKEN") or os.getenv(
+                "KITE_ACCESS_TOKEN"
+            )
             if env_token:
                 _LOGGER.debug("Retrieved token from environment variable")
                 return str(env_token)
@@ -369,11 +373,15 @@ class ZerodhaTokenManager:
         try:
             import kiteconnect  # type: ignore[import-untyped]  # noqa: PLC0415
         except ModuleNotFoundError as exc:
-            msg = "kiteconnect module is required. Install with: pip install kiteconnect"
+            msg = (
+                "kiteconnect module is required. Install with: pip install kiteconnect"
+            )
             raise ImportError(msg) from exc
 
         client = kiteconnect.KiteConnect(api_key=self._api_key, access_token=token)
-        _LOGGER.debug("Created KiteConnect client with API key %s", self._api_key[:8] + "...")
+        _LOGGER.debug(
+            "Created KiteConnect client with API key %s", self._api_key[:8] + "..."
+        )
         return client
 
     def resolve_saved_access_token(self) -> str | None:
@@ -398,7 +406,9 @@ class ZerodhaTokenManager:
                 "ZERODHA_ACCESS_TOKEN"
             ) or self._token_store_values.get("KITE_ACCESS_TOKEN")
             if token:
-                token_date = self._token_store_values.get("ZERODHA_ACCESS_TOKEN_DATE_UTC")
+                token_date = self._token_store_values.get(
+                    "ZERODHA_ACCESS_TOKEN_DATE_UTC"
+                )
                 if token_date and self._is_today(token_date):
                     _LOGGER.debug("Retrieved valid access token from .env file")
                     return str(token)
@@ -417,7 +427,9 @@ class ZerodhaTokenManager:
         # Check keyring first
         request_token = keyring.get_password(_KEYRING_SERVICE, _KEYRING_REQUEST_TOKEN)
         if request_token:
-            request_date = keyring.get_password(_KEYRING_SERVICE, _KEYRING_REQUEST_TOKEN_DATE)
+            request_date = keyring.get_password(
+                _KEYRING_SERVICE, _KEYRING_REQUEST_TOKEN_DATE
+            )
             if request_date and self._is_today(request_date):
                 _LOGGER.debug("Retrieved valid request token from keyring")
                 return str(request_token)
@@ -426,7 +438,9 @@ class ZerodhaTokenManager:
         if self._token_store_path and self._token_store_path.exists():
             token = self._token_store_values.get("ZERODHA_REQUEST_TOKEN")
             if token:
-                token_date = self._token_store_values.get("ZERODHA_REQUEST_TOKEN_DATE_UTC")
+                token_date = self._token_store_values.get(
+                    "ZERODHA_REQUEST_TOKEN_DATE_UTC"
+                )
                 if token_date and self._is_today(token_date):
                     _LOGGER.debug("Retrieved valid request token from .env file")
                     return str(token)
@@ -459,7 +473,9 @@ class ZerodhaTokenManager:
         # Always store in keyring (production path)
         self.store_access_token(access_token)
         if request_token:
-            keyring.set_password(_KEYRING_SERVICE, _KEYRING_REQUEST_TOKEN, request_token)
+            keyring.set_password(
+                _KEYRING_SERVICE, _KEYRING_REQUEST_TOKEN, request_token
+            )
             keyring.set_password(_KEYRING_SERVICE, _KEYRING_REQUEST_TOKEN_DATE, today)
         keyring.set_password(_KEYRING_SERVICE, _KEYRING_BROKER_VERIFIED, "true")
         _LOGGER.info("Tokens persisted to keyring")
@@ -552,7 +568,8 @@ class ZerodhaTokenManager:
                     and not stripped.startswith("#")
                     and "=" in stripped
                     and any(
-                        key in stripped for key in ("ZERODHA_ACCESS_TOKEN", "KITE_ACCESS_TOKEN")
+                        key in stripped
+                        for key in ("ZERODHA_ACCESS_TOKEN", "KITE_ACCESS_TOKEN")
                     )
                 ):
                     continue
@@ -614,7 +631,9 @@ def _persist_env_updates(env_path: Path, updates: Mapping[str, str]) -> None:
         env_path: Path to .env file.
         updates: Dictionary of key-value pairs to update.
     """
-    original_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    original_lines = (
+        env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    )
     rewritten: list[str] = []
     touched_keys: set[str] = set()
     for line in original_lines:

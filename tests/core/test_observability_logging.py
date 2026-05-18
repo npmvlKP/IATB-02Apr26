@@ -164,7 +164,9 @@ class TestSetupStructuredLogging:
         assert isinstance(handler.formatter, JsonFormatter)
 
     @patch("iatb.core.observability.logging_config.get_config")
-    def test_setup_uses_text_format_when_configured(self, mock_get_config: MagicMock) -> None:
+    def test_setup_uses_text_format_when_configured(
+        self, mock_get_config: MagicMock
+    ) -> None:
         """Test that text format is used when configured."""
         mock_config = MagicMock()
         mock_config.logging.format = "text"
@@ -176,7 +178,9 @@ class TestSetupStructuredLogging:
         assert isinstance(handler.formatter, logging.Formatter)
 
     @patch("iatb.core.observability.logging_config.get_config")
-    def test_setup_handles_config_failure_gracefully(self, mock_get_config: MagicMock) -> None:
+    def test_setup_handles_config_failure_gracefully(
+        self, mock_get_config: MagicMock
+    ) -> None:
         """Test that config failure doesn't break setup."""
         mock_get_config.side_effect = Exception("Config error")
 

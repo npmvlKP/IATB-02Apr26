@@ -84,7 +84,7 @@ def test_rl_agent_train_predict_save_and_load(
 
 
 def test_rl_agent_validates_algorithm_and_dependency(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with pytest.raises(ConfigError, match="unsupported RL algorithm"):
         RLAgent(RLAgentConfig(algorithm="DQN"))

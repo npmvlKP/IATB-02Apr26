@@ -75,9 +75,13 @@ def test_log_model_health_mixed_status(caplog: object) -> None:
         _log_model_health(status)
 
     # Verify correct symbols and fallback status
-    assert any("✓ model1: available (fallback: no)" in record.message for record in caplog.records)
     assert any(
-        "✗ model2: unavailable (fallback: yes)" in record.message for record in caplog.records
+        "✓ model1: available (fallback: no)" in record.message
+        for record in caplog.records
+    )
+    assert any(
+        "✗ model2: unavailable (fallback: yes)" in record.message
+        for record in caplog.records
     )
 
 
@@ -208,7 +212,11 @@ def test_determine_overall_status_single_unavailable() -> None:
         available_models=2,
         degraded_models=0,
         unavailable_models=1,
-        model_health={"model1": health_avail, "model2": health_avail, "model3": health_unavail},
+        model_health={
+            "model1": health_avail,
+            "model2": health_avail,
+            "model3": health_unavail,
+        },
     )
     errors: list[str] = []
 
@@ -342,7 +350,9 @@ def test_check_ml_readiness_registry_exception(caplog: object) -> None:
     """Test ML readiness check when registry raises exception."""
     errors: list[str] = []
 
-    with patch("iatb.ml.readiness.get_registry", side_effect=RuntimeError("Registry failed")):
+    with patch(
+        "iatb.ml.readiness.get_registry", side_effect=RuntimeError("Registry failed")
+    ):
         with caplog.at_level("ERROR"):
             result = check_ml_readiness(errors)
 
@@ -350,7 +360,8 @@ def test_check_ml_readiness_registry_exception(caplog: object) -> None:
     assert len(errors) == 1
     assert "ML readiness check failed: Registry failed" in errors[0]
     assert any(
-        "ML readiness check failed: Registry failed" in record.message for record in caplog.records
+        "ML readiness check failed: Registry failed" in record.message
+        for record in caplog.records
     )
 
 
@@ -471,7 +482,9 @@ def test_check_ml_readiness_exception_with_custom_error(caplog: object) -> None:
 
     errors: list[str] = []
 
-    with patch("iatb.ml.readiness.get_registry", side_effect=CustomError("Custom error")):
+    with patch(
+        "iatb.ml.readiness.get_registry", side_effect=CustomError("Custom error")
+    ):
         with caplog.at_level("ERROR"):
             result = check_ml_readiness(errors)
 

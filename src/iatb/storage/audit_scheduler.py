@@ -172,7 +172,9 @@ class AuditExportScheduler:
                     status=ScheduleStatus(data["status"]),
                     timestamp=datetime.fromisoformat(data["timestamp"]),
                     records_exported=data["records_exported"],
-                    file_path=Path(data["file_path"]) if data.get("file_path") else None,
+                    file_path=Path(data["file_path"])
+                    if data.get("file_path")
+                    else None,
                     error_message=data.get("error_message"),
                 )
         except Exception:

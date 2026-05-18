@@ -406,7 +406,9 @@ class TestHyperparameterOptimizer:
         assert best_params == {"param1": 0.5, "param2": 0.8}
 
     @patch("optuna.create_study")
-    def test_get_best_params_without_study_raises_error(self, mock_create_study: MagicMock) -> None:
+    def test_get_best_params_without_study_raises_error(
+        self, mock_create_study: MagicMock
+    ) -> None:
         """Test that getting best params without study raises error."""
         optimizer = HyperparameterOptimizer()
 
@@ -812,7 +814,9 @@ class TestEdgeCasesAndErrorHandling:
         assert logged_metrics["float_metric"] == 0.5
 
     @patch("optuna.create_study")
-    def test_get_best_params_study_not_created(self, mock_create_study: MagicMock) -> None:
+    def test_get_best_params_study_not_created(
+        self, mock_create_study: MagicMock
+    ) -> None:
         """Test getting best params without creating study raises error."""
         optimizer = HyperparameterOptimizer()
 
@@ -833,7 +837,9 @@ class TestEdgeCasesAndErrorHandling:
             optimizer.get_best_params()
 
     @patch("optuna.create_study")
-    def test_get_best_value_study_not_created(self, mock_create_study: MagicMock) -> None:
+    def test_get_best_value_study_not_created(
+        self, mock_create_study: MagicMock
+    ) -> None:
         """Test getting best value without creating study raises error."""
         optimizer = HyperparameterOptimizer()
 
@@ -1088,7 +1094,9 @@ class TestEdgeCasesAndErrorHandling:
             mock_model = MagicMock()
             tracker.log_pytorch_model(mock_model, input_example="example")
 
-        mock_pytorch_log_model.assert_called_once_with(mock_model, "model", input_example="example")
+        mock_pytorch_log_model.assert_called_once_with(
+            mock_model, "model", input_example="example"
+        )
 
     @patch("optuna.create_study")
     def test_optimize_without_tracker(self, mock_create_study: MagicMock) -> None:

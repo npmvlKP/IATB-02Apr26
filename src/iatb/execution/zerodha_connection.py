@@ -31,7 +31,9 @@ _KITE_VERSION_HEADER = "X-Kite-Version"
 _AUTH_HEADER_TEMPLATE = "token {api_key}:{access_token}"
 _REQUEST_TOKEN_PATTERN = re.compile(r"(?:^|[?&\\s])request_token=([^&\\s]+)")
 
-HttpRequest = Callable[[str, str, Mapping[str, str], bytes | None, int], Mapping[str, object]]
+HttpRequest = Callable[
+    [str, str, Mapping[str, str], bytes | None, int], Mapping[str, object]
+]
 
 
 @dataclass(frozen=True)
@@ -175,7 +177,9 @@ class ZerodhaConnection:
         response = self._request_json(
             path="/session/token",
             method="POST",
-            headers=self._request_headers({"Content-Type": "application/x-www-form-urlencoded"}),
+            headers=self._request_headers(
+                {"Content-Type": "application/x-www-form-urlencoded"}
+            ),
             body=payload,
         )
         data = _extract_data_mapping(response)
@@ -190,7 +194,9 @@ class ZerodhaConnection:
         )
         data = _extract_data_mapping(response)
         user_id = _extract_string(data, ("user_id",), field_name="user_id")
-        user_name = _extract_string(data, ("user_name", "user_shortname"), field_name="user_name")
+        user_name = _extract_string(
+            data, ("user_name", "user_shortname"), field_name="user_name"
+        )
         user_email = _extract_string(data, ("email",), field_name="email")
         return user_id, user_name, user_email
 
@@ -215,7 +221,9 @@ class ZerodhaConnection:
         url = f"{self._base_url}{path}"
         for attempt in range(1, self._max_retries + 1):
             try:
-                return self._http_request(url, method, headers, body, self._timeout_seconds)
+                return self._http_request(
+                    url, method, headers, body, self._timeout_seconds
+                )
             except ConfigError:
                 raise
             except (HTTPError, OSError, TimeoutError, URLError) as exc:
@@ -235,7 +243,9 @@ class ZerodhaConnection:
         return self._request_headers({_AUTHORIZATION_HEADER: token_value})
 
     @staticmethod
-    def _request_headers(extra_headers: Mapping[str, str] | None = None) -> dict[str, str]:
+    def _request_headers(
+        extra_headers: Mapping[str, str] | None = None,
+    ) -> dict[str, str]:
         headers: dict[str, str] = {_KITE_VERSION_HEADER: _KITE_VERSION}
         if extra_headers:
             headers.update(extra_headers)
@@ -338,7 +348,9 @@ def _extract_available_balance(payload: Mapping[str, object]) -> Decimal:
     raise ConfigError(msg)
 
 
-def _extract_segment_balance(payload: Mapping[str, object], segment: str) -> Decimal | None:
+def _extract_segment_balance(
+    payload: Mapping[str, object], segment: str
+) -> Decimal | None:
     segment_data = payload.get(segment)
     if not isinstance(segment_data, Mapping):
         return None

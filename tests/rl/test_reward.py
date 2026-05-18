@@ -49,7 +49,7 @@ class TestSharpeReward:
     """Tests for Sharpe ratio-based reward calculation."""
 
     def test_sharpe_reward_returns_positive_for_consistent_positive_returns(
-        self
+        self,
     ) -> None:
         """Test Sharpe reward positive for consistent positive returns."""
         returns = [

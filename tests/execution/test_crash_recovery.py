@@ -592,7 +592,11 @@ class TestCrashRecoveryMode:
 
         # Use high precision values
         request = OrderRequest(
-            Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("0.5"), price=Decimal("12345.67")
+            Exchange.NSE,
+            "NIFTY",
+            OrderSide.BUY,
+            Decimal("0.5"),
+            price=Decimal("12345.67"),
         )
 
         order_manager.place_order(request)
@@ -607,4 +611,6 @@ class TestCrashRecoveryMode:
             qty = Decimal(position_data["NIFTY"]["qty"])
             avg_price = Decimal(position_data["NIFTY"]["avg_price"])
             assert qty == Decimal("0.5")
-            assert avg_price > Decimal("12345")  # Should be close to original with slippage
+            assert avg_price > Decimal(
+                "12345"
+            )  # Should be close to original with slippage

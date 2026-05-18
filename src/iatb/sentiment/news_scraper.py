@@ -28,14 +28,11 @@ DEFAULT_RSS_FEEDS = {
 class XmlNode(Protocol):
     attrib: dict[str, str]
 
-    def findtext(self, path: str) -> str | None:
-        ...
+    def findtext(self, path: str) -> str | None: ...
 
-    def find(self, path: str) -> "XmlNode | None":
-        ...
+    def find(self, path: str) -> "XmlNode | None": ...
 
-    def findall(self, path: str) -> list["XmlNode"]:
-        ...
+    def findall(self, path: str) -> list["XmlNode"]: ...
 
 
 @dataclass(frozen=True)
@@ -168,7 +165,9 @@ class NewsScraper:
                 self._sleep(self._rate_limit_seconds)
         return headlines
 
-    def _parse_feed(self, source: str, xml_payload: str, limit: int) -> list[NewsHeadline]:
+    def _parse_feed(
+        self, source: str, xml_payload: str, limit: int
+    ) -> list[NewsHeadline]:
         try:
             root = cast(
                 XmlNode,
@@ -185,7 +184,13 @@ class NewsScraper:
         url = self._resolve_link(entry)
         published = self._find_text(
             entry,
-            ("pubDate", "published", "updated", f"{ATOM_NS}published", f"{ATOM_NS}updated"),
+            (
+                "pubDate",
+                "published",
+                "updated",
+                f"{ATOM_NS}published",
+                f"{ATOM_NS}updated",
+            ),
         )
         article_text = self._safe_extract_article(url, title)
         return NewsHeadline(

@@ -159,7 +159,9 @@ class MultiFactorScorer:
             component_contributions=contributions,
         )
 
-    def score_batch(self, inputs_list: list[MultiFactorInputs]) -> list[MultiFactorResult]:
+    def score_batch(
+        self, inputs_list: list[MultiFactorInputs]
+    ) -> list[MultiFactorResult]:
         """Score multiple instruments with rank-percentile normalization."""
         if not inputs_list:
             return []
@@ -220,14 +222,20 @@ class MultiFactorScorer:
             score += pb_score
             count += 1
         if factor.roe is not None:
-            roe_score = min(Decimal("1"), factor.roe / self._config.min_roe * Decimal("0.5"))
+            roe_score = min(
+                Decimal("1"), factor.roe / self._config.min_roe * Decimal("0.5")
+            )
             score += roe_score
             count += 1
         if factor.debt_to_equity is not None:
             de_score = max(
                 Decimal("0"),
                 Decimal("1")
-                - (factor.debt_to_equity / self._config.max_debt_equity * Decimal("0.5")),
+                - (
+                    factor.debt_to_equity
+                    / self._config.max_debt_equity
+                    * Decimal("0.5")
+                ),
             )
             score += de_score
             count += 1
@@ -258,7 +266,9 @@ class MultiFactorScorer:
             return Decimal("0.4")
         if pb > self._config.max_pb:
             return Decimal("0.2")
-        ideal = self._config.min_pb + (self._config.max_pb - self._config.min_pb) / Decimal("3")
+        ideal = self._config.min_pb + (
+            self._config.max_pb - self._config.min_pb
+        ) / Decimal("3")
         distance = abs(pb - ideal)
         max_distance = self._config.max_pb - self._config.min_pb
         return max(Decimal("0"), Decimal("1") - (distance / max_distance))
@@ -293,7 +303,9 @@ class MultiFactorScorer:
         if factor.price_momentum is not None:
             mom_score = min(
                 Decimal("1"),
-                max(Decimal("0"), (factor.price_momentum + Decimal("1")) / Decimal("2")),
+                max(
+                    Decimal("0"), (factor.price_momentum + Decimal("1")) / Decimal("2")
+                ),
             )
             score += mom_score
             count += 1
@@ -307,14 +319,16 @@ class MultiFactorScorer:
             return Decimal("0.3")
         mid = (self._config.rsi_oversold + self._config.rsi_overbought) / Decimal("2")
         distance = abs(rsi - mid)
-        max_distance = (self._config.rsi_overbought - self._config.rsi_oversold) / Decimal("2")
+        max_distance = (
+            self._config.rsi_overbought - self._config.rsi_oversold
+        ) / Decimal("2")
         return max(Decimal("0"), Decimal("1") - (distance / max_distance))
 
     def _score_sentiment(self, factor: SentimentFactor) -> Decimal:
         """Score sentiment factors (0-1)."""
-        avg_sentiment = (factor.news_score + factor.social_score + factor.analyst_rating) / Decimal(
-            "3"
-        )
+        avg_sentiment = (
+            factor.news_score + factor.social_score + factor.analyst_rating
+        ) / Decimal("3")
         weighted = (avg_sentiment * Decimal("0.7")) + (
             factor.insider_trading_score * Decimal("0.3")
         )
@@ -323,7 +337,9 @@ class MultiFactorScorer:
     def _score_strength(self, factor: StrengthFactor) -> Decimal:
         """Score strength factors (0-1)."""
         avg = (
-            factor.relative_strength + factor.sector_strength + factor.volume_confirmation
+            factor.relative_strength
+            + factor.sector_strength
+            + factor.volume_confirmation
         ) / Decimal("3")
         return min(Decimal("1"), max(Decimal("0"), avg))
 
@@ -350,7 +366,9 @@ class MultiFactorScorer:
             "strength": scores.strength_score * weights.strength,
         }
 
-    def _normalize_scores_across_batch(self, scores_list: list[FactorScores]) -> list[FactorScores]:
+    def _normalize_scores_across_batch(
+        self, scores_list: list[FactorScores]
+    ) -> list[FactorScores]:
         """Normalize scores across batch using rank-percentile."""
         if not scores_list:
             return []
@@ -381,6 +399,8 @@ def _rank_percentile(values: list[Decimal]) -> list[Decimal]:
     result = [Decimal("0")] * len(values)
     for rank, (_, original_idx) in enumerate(sorted_vals):
         result[original_idx] = (
-            Decimal(rank) / Decimal(len(values) - 1) if len(values) > 1 else Decimal("0.5")
+            Decimal(rank) / Decimal(len(values) - 1)
+            if len(values) > 1
+            else Decimal("0.5")
         )
     return result

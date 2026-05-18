@@ -15,7 +15,9 @@ torch.manual_seed(42)
 
 def test_monte_carlo_analyzer_runs_with_seeded_permutations() -> None:
     analyzer = MonteCarloAnalyzer(permutations=20, seed=7)
-    result = analyzer.run([Decimal("0.01"), Decimal("-0.005"), Decimal("0.008"), Decimal("0.004")])
+    result = analyzer.run(
+        [Decimal("0.01"), Decimal("-0.005"), Decimal("0.008"), Decimal("0.004")]
+    )
     assert result.permutations == 20
     assert isinstance(result.robust, bool)
 

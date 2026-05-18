@@ -43,7 +43,9 @@ def test_mcclellan_oscillator_deterministic_output() -> None:
     ("advancers", "decliners"),
     [(-1, 1), (1, -1)],
 )
-def test_advance_decline_ratio_negative_inputs_fail(advancers: int, decliners: int) -> None:
+def test_advance_decline_ratio_negative_inputs_fail(
+    advancers: int, decliners: int
+) -> None:
     with pytest.raises(ConfigError, match="cannot be negative"):
         advance_decline_ratio(advancers, decliners)
 

@@ -178,7 +178,11 @@ def test_regime_detector_handles_edge_case_minimal_features() -> None:
         [Decimal("0.03"), Decimal("0.3")],
     ]
     result = detector.detect(features)
-    assert result.regime in [MarketRegime.BULL, MarketRegime.BEAR, MarketRegime.SIDEWAYS]
+    assert result.regime in [
+        MarketRegime.BULL,
+        MarketRegime.BEAR,
+        MarketRegime.SIDEWAYS,
+    ]
     assert Decimal("0") <= result.confidence <= Decimal("1")
     assert result.transition_event is None  # First detection has no transition
 
@@ -222,7 +226,11 @@ def test_regime_detector_first_detection_no_transition() -> None:
     result = detector.detect(features)
     # First detection should have no transition event
     assert result.transition_event is None
-    assert result.regime in [MarketRegime.BULL, MarketRegime.BEAR, MarketRegime.SIDEWAYS]
+    assert result.regime in [
+        MarketRegime.BULL,
+        MarketRegime.BEAR,
+        MarketRegime.SIDEWAYS,
+    ]
 
 
 def test_regime_detector_error_on_missing_hmmlearn() -> None:

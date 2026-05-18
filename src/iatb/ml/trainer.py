@@ -11,8 +11,7 @@ from iatb.core.exceptions import ConfigError
 
 
 class _TrainableModel(Protocol):
-    def predict(self, features: list[Decimal]) -> object:
-        ...
+    def predict(self, features: list[Decimal]) -> object: ...
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,9 @@ class TrainingRunResult:
 
 
 class UnifiedTrainer:
-    def __init__(self, experiment_name: str = "iatb_ml", enable_tracking: bool = True) -> None:
+    def __init__(
+        self, experiment_name: str = "iatb_ml", enable_tracking: bool = True
+    ) -> None:
         self._experiment_name = experiment_name
         self._enable_tracking = enable_tracking
 
@@ -46,10 +47,14 @@ class UnifiedTrainer:
             validation_mae,
             self._enable_tracking,
         )
-        return TrainingRunResult(train_mae, validation_mae, self._experiment_name, run_id)
+        return TrainingRunResult(
+            train_mae, validation_mae, self._experiment_name, run_id
+        )
 
 
-def _validate_dataset(features: list[list[Decimal]], targets: list[Decimal], name: str) -> None:
+def _validate_dataset(
+    features: list[list[Decimal]], targets: list[Decimal], name: str
+) -> None:
     if not features or not targets:
         msg = f"{name} features and targets cannot be empty"
         raise ConfigError(msg)
@@ -108,7 +113,11 @@ def _log_mlflow(
     set_experiment = getattr(mlflow, "set_experiment", None)
     start_run = getattr(mlflow, "start_run", None)
     log_metric = getattr(mlflow, "log_metric", None)
-    if not callable(set_experiment) or not callable(start_run) or not callable(log_metric):
+    if (
+        not callable(set_experiment)
+        or not callable(start_run)
+        or not callable(log_metric)
+    ):
         msg = "mlflow API is incomplete for experiment tracking"
         raise ConfigError(msg)
     set_experiment(experiment_name)

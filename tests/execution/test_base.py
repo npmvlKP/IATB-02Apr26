@@ -40,13 +40,17 @@ def test_order_request_whitespace_symbol_raises_error() -> None:
 def test_order_request_negative_price_raises_error() -> None:
     """Test that negative price raises ConfigError."""
     with pytest.raises(ConfigError, match="price must be positive when provided"):
-        OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("-100"))
+        OrderRequest(
+            Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("-100")
+        )
 
 
 def test_order_request_zero_price_raises_error() -> None:
     """Test that zero price raises ConfigError."""
     with pytest.raises(ConfigError, match="price must be positive when provided"):
-        OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("0"))
+        OrderRequest(
+            Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("0")
+        )
 
 
 def test_execution_result_negative_filled_quantity_raises_error() -> None:
@@ -63,7 +67,9 @@ def test_execution_result_negative_average_price_raises_error() -> None:
 
 def test_order_request_with_valid_price() -> None:
     """Test that valid price is accepted."""
-    request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
     assert request.price == Decimal("100")
 
 

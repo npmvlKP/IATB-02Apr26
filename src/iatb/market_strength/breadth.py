@@ -47,7 +47,9 @@ def mcclellan_oscillator(
     if short_period <= 0 or long_period <= 0 or short_period >= long_period:
         msg = "periods must be positive and short_period < long_period"
         raise ConfigError(msg)
-    net_series = [Decimal(adv) - Decimal(dec) for adv, dec in zip(advances, declines, strict=True)]
+    net_series = [
+        Decimal(adv) - Decimal(dec) for adv, dec in zip(advances, declines, strict=True)
+    ]
     return _ema(net_series, short_period) - _ema(net_series, long_period)
 
 

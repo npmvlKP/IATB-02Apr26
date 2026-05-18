@@ -190,7 +190,9 @@ def positive_exit_reward(
     _validate_probability_input(exit_probability, threshold)
 
     # Weight PnL by confidence (exit probability)
-    confidence_weight = exit_probability if exit_probability >= threshold else Decimal("0")
+    confidence_weight = (
+        exit_probability if exit_probability >= threshold else Decimal("0")
+    )
     base_reward = pnl - costs
     reward = base_reward * confidence_weight
 
@@ -226,7 +228,10 @@ def _validate_composite_weights(sharpe_weight: Decimal, exit_weight: Decimal) ->
         msg = "sharpe_weight and exit_weight must sum to 1"
         _LOGGER.error(
             "Invalid reward weights",
-            extra={"sharpe_weight": str(sharpe_weight), "exit_weight": str(exit_weight)},
+            extra={
+                "sharpe_weight": str(sharpe_weight),
+                "exit_weight": str(exit_weight),
+            },
         )
         raise ValueError(msg)
 
@@ -303,7 +308,9 @@ def composite_reward(
     _validate_composite_weights(sharpe_weight, exit_weight)
 
     sharpe = sharpe_reward(returns, Decimal("0"))  # Costs handled at composite level
-    exit_reward = positive_exit_reward(exit_probability, pnl, exit_threshold, Decimal("0"))
+    exit_reward = positive_exit_reward(
+        exit_probability, pnl, exit_threshold, Decimal("0")
+    )
 
     # Apply costs once at composite level
     total_reward = (sharpe * sharpe_weight + exit_reward * exit_weight) - costs

@@ -32,7 +32,9 @@ class ForwardTester:
         config: ForwardTestConfig,
     ) -> ForwardTestResult:
         _validate_config(config)
-        iterations = min(len(signals), len(price_moves), config.duration_days, config.max_trades)
+        iterations = min(
+            len(signals), len(price_moves), config.duration_days, config.max_trades
+        )
         net_pnl = Decimal("0")
         for index in range(iterations):
             side = signals[index]

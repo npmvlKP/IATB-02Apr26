@@ -184,16 +184,22 @@ class IATBApi:
         """
         init_result = self._init_kite()
         if init_result.get("status") != "success":
-            return self._error_response(ticker, init_result.get("message", "Access token expired"))
+            return self._error_response(
+                ticker, init_result.get("message", "Access token expired")
+            )
 
         try:
             kite = self.get_kite_client()
-            instrument_token = self._ensure_instrument_token(kite, ticker, instrument_token)
+            instrument_token = self._ensure_instrument_token(
+                kite, ticker, instrument_token
+            )
             if not instrument_token:
                 return self._error_response(ticker, f"Instrument {ticker} not found")
 
             from_date, to_date = self._default_date_range(from_date, to_date)
-            data = self._fetch_historical_data(kite, instrument_token, from_date, to_date, interval)
+            data = self._fetch_historical_data(
+                kite, instrument_token, from_date, to_date, interval
+            )
             return self._success_response(ticker, data)
         except Exception as exc:
             _LOGGER.error("Failed to fetch OHLCV for %s: %s", ticker, exc)
@@ -227,7 +233,9 @@ class IATBApi:
         )
         return list(data) if data else []
 
-    def _success_response(self, ticker: str, data: list[dict[str, Any]]) -> dict[str, Any]:
+    def _success_response(
+        self, ticker: str, data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Create success response dict.
 
         Args:
@@ -301,7 +309,9 @@ class IATBApi:
         self._instrument_cache = {}
         _LOGGER.info("Instrument cache cleared")
 
-    def _default_date_range(self, from_date: str | None, to_date: str | None) -> tuple[str, str]:
+    def _default_date_range(
+        self, from_date: str | None, to_date: str | None
+    ) -> tuple[str, str]:
         """Get default date range (last 30 days).
 
         Args:

@@ -40,12 +40,12 @@ class MockBroker(BrokerInterface):
         )  # type: ignore[assignment]
         self.get_orders_async: AsyncMock[list[Order]] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.get_margins_async: AsyncMock[Margin] = AsyncMock(return_value=None)  # type: ignore[assignment]
-        self.get_order_history_async: AsyncMock[list[Mapping[str, Any]]] = (
-            AsyncMock(return_value=None)  # type: ignore[assignment]
-        )
-        self.get_holdings_async: AsyncMock[list[Mapping[str, Any]]] = (
-            AsyncMock(return_value=None)  # type: ignore[assignment]
-        )
+        self.get_order_history_async: AsyncMock[list[Mapping[str, Any]]] = AsyncMock(
+            return_value=None
+        )  # type: ignore[assignment]
+        self.get_holdings_async: AsyncMock[list[Mapping[str, Any]]] = AsyncMock(
+            return_value=None
+        )  # type: ignore[assignment]
         self.modify_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.get_quote_async: AsyncMock[dict[str, Any]] = AsyncMock(return_value=None)  # type: ignore[assignment]
 

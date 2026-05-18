@@ -141,7 +141,9 @@ class RiskPipeline:
             return rejection
 
         execution_result = self._step_4_paper_execution(order)
-        daily_loss_state = self._step_5_daily_loss_recording(order, execution_result, now_utc)
+        daily_loss_state = self._step_5_daily_loss_recording(
+            order, execution_result, now_utc
+        )
         audit_record_id = self._step_6_trade_audit_logging(
             order, execution_result, now_utc, strategy_id, algo_id
         )
@@ -256,7 +258,9 @@ class RiskPipeline:
         """Step 6: Log trade to audit database."""
         if self.trade_audit_logger is None:
             return ""
-        self.trade_audit_logger.log_order(order, result, strategy_id=strategy_id, algo_id=algo_id)
+        self.trade_audit_logger.log_order(
+            order, result, strategy_id=strategy_id, algo_id=algo_id
+        )
         return result.order_id
 
     def _process_buy_pnl(
@@ -341,12 +345,16 @@ class RiskPipeline:
             abs_current_qty = abs(current_qty)
             total_cost = (abs_current_qty * avg_entry_price) + (fill_qty * fill_price)
             new_abs_qty = abs_current_qty + fill_qty
-            new_avg = total_cost / new_abs_qty if new_abs_qty > Decimal("0") else Decimal("0")
+            new_avg = (
+                total_cost / new_abs_qty if new_abs_qty > Decimal("0") else Decimal("0")
+            )
             new_position_state = (-new_abs_qty, new_avg)
 
         return realized_pnl, new_position_state
 
-    def _calculate_realized_pnl(self, order: OrderRequest, result: ExecutionResult) -> Decimal:
+    def _calculate_realized_pnl(
+        self, order: OrderRequest, result: ExecutionResult
+    ) -> Decimal:
         """Calculate realized PnL for closing trades with full position tracking.
 
         For long positions (positive qty):
@@ -400,7 +408,9 @@ def _create_dummy_kill_switch() -> "KillSwitch":
             return 0
 
         def execute_order(self, request: OrderRequest) -> ExecutionResult:
-            return ExecutionResult("DUMMY", OrderStatus.FILLED, request.quantity, Decimal("100"))
+            return ExecutionResult(
+                "DUMMY", OrderStatus.FILLED, request.quantity, Decimal("100")
+            )
 
         def close_order(self, order_id: str) -> bool:
             return False

@@ -137,7 +137,9 @@ class TestRunGate:
         sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
         from run_gate import check_gate_g2
 
-        responses = [_result(["poetry", "run", "ruff", "format"], stdout="would reformat\n")]
+        responses = [
+            _result(["poetry", "run", "ruff", "format"], stdout="would reformat\n")
+        ]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
 
@@ -195,14 +197,18 @@ class TestRunGate:
         assert success is True
         assert "PASS" in output
 
-    def test_check_gate_g4_low_severity_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_gate_g4_low_severity_only(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test G4 (security) with only low-severity issues."""
         import sys
 
         sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
         from run_gate import check_gate_g4
 
-        responses = [_result(["poetry", "run", "bandit"], stdout="Low severity issue\n")]
+        responses = [
+            _result(["poetry", "run", "bandit"], stdout="Low severity issue\n")
+        ]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
 
@@ -231,7 +237,9 @@ class TestRunGate:
         sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
         from run_gate import check_gate_g5
 
-        responses = [_result(["gitleaks"], returncode=1, stdout="Leak found: API_KEY\n")]
+        responses = [
+            _result(["gitleaks"], returncode=1, stdout="Leak found: API_KEY\n")
+        ]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
 
@@ -245,7 +253,9 @@ class TestRunGate:
         sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
         from run_gate import check_gate_g6
 
-        responses = [_result(["poetry", "run", "pytest"], stdout="TOTAL 100 0 0 0 95.0%\n")]
+        responses = [
+            _result(["poetry", "run", "pytest"], stdout="TOTAL 100 0 0 0 95.0%\n")
+        ]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
 
@@ -253,7 +263,9 @@ class TestRunGate:
         assert success is True
         assert "PASS" in output
 
-    def test_check_gate_g6_fail_low_coverage(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_gate_g6_fail_low_coverage(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test G6 (tests) fail due to low coverage."""
         import sys
 

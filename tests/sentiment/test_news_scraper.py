@@ -118,7 +118,9 @@ def test_news_scraper_rejects_negative_rate_limit() -> None:
         )
 
 
-def test_default_fetcher_decodes_response_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_fetcher_decodes_response_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _Response:
         def __enter__(self) -> "_Response":
             return self
@@ -182,7 +184,9 @@ def test_default_article_extractor_returns_parsed_text(
     )
 
 
-def test_default_fetcher_handles_string_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_fetcher_handles_string_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test _default_fetcher handles non-bytes payload (line 51)."""
 
     class _StringResponse:

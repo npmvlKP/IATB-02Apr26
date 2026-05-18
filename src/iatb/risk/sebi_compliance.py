@@ -114,7 +114,10 @@ def validate_static_ips_config(static_ips: tuple[str, ...]) -> None:
         raise ConfigError(msg)
     _LOGGER.info(
         "Static IP validation passed",
-        extra={"ip_count": len(static_ips), "timestamp_utc": datetime.now(UTC).isoformat()},
+        extra={
+            "ip_count": len(static_ips),
+            "timestamp_utc": datetime.now(UTC).isoformat(),
+        },
     )
 
 

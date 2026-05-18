@@ -29,11 +29,9 @@ class _CCXTExchangeClient(Protocol):
         timeframe: str,
         since: int | None = None,
         limit: int | None = None,
-    ) -> object:
-        ...
+    ) -> object: ...
 
-    def fetch_ticker(self, symbol: str) -> object:
-        ...
+    def fetch_ticker(self, symbol: str) -> object: ...
 
 
 def _exchange_id(exchange: Exchange) -> str:
@@ -143,7 +141,9 @@ class CCXTProvider(DataProvider):
         bid = _coerce_numeric_input(payload["bid"], field_name="bid")
         ask = _coerce_numeric_input(payload["ask"], field_name="ask")
         last = _coerce_numeric_input(payload["last"], field_name="last")
-        volume_24h = _coerce_numeric_input(payload["volume_24h"], field_name="volume_24h")
+        volume_24h = _coerce_numeric_input(
+            payload["volume_24h"], field_name="volume_24h"
+        )
         snapshot = TickerSnapshot(
             exchange=exchange,
             symbol=symbol,
@@ -184,7 +184,9 @@ class CCXTProvider(DataProvider):
         bid = _extract_numeric(ticker, "bid") or last
         ask = _extract_numeric(ticker, "ask") or last
         volume = (
-            _extract_numeric(ticker, "baseVolume") or _extract_numeric(ticker, "quoteVolume") or 0
+            _extract_numeric(ticker, "baseVolume")
+            or _extract_numeric(ticker, "quoteVolume")
+            or 0
         )
         if last is None:
             msg = "CCXT ticker response missing last/close value"

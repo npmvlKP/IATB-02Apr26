@@ -36,10 +36,14 @@ def test_quantstats_reporter_rejects_invalid_inputs() -> None:
     with pytest.raises(ConfigError, match="cannot be empty"):
         reporter.build_report([], [], "x.html")
     with pytest.raises(ConfigError, match="length mismatch"):
-        reporter.build_report([Decimal("0.01")], [Decimal("0.01"), Decimal("0.02")], "x.html")
+        reporter.build_report(
+            [Decimal("0.01")], [Decimal("0.01"), Decimal("0.02")], "x.html"
+        )
 
 
-def test_quantstats_reporter_requires_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_quantstats_reporter_requires_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "iatb.backtesting.report.importlib.import_module",
         lambda _: (_ for _ in ()).throw(ModuleNotFoundError),

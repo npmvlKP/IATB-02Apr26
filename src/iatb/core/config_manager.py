@@ -330,7 +330,9 @@ class ConfigManager:
         Returns:
             New weights configuration with merged values.
         """
-        current_weights = self._weights_config if regime_weights is None else regime_weights
+        current_weights = (
+            self._weights_config if regime_weights is None else regime_weights
+        )
         return current_weights
 
     def _serialize_to_toml(self, config: WatchlistConfig) -> dict[str, dict[str, Any]]:

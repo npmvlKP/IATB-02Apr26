@@ -288,7 +288,9 @@ class PaperExecutor(Executor):
         )
         base_price = request.price if request.price is not None else Decimal("100")
         fill_price = apply_slippage(base_price=base_price, bps=bps, side=request.side)
-        self._update_positions(request.symbol, request.side, request.quantity, fill_price)
+        self._update_positions(
+            request.symbol, request.side, request.quantity, fill_price
+        )
         self._open_orders[order_id] = {
             "symbol": request.symbol,
             "side": request.side,
@@ -309,7 +311,9 @@ class PaperExecutor(Executor):
     ) -> None:
         """Update internal position book after a fill."""
         if side == OrderSide.BUY:
-            current_qty, current_avg = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
+            current_qty, current_avg = self._positions.get(
+                symbol, (Decimal("0"), Decimal("0"))
+            )
             new_qty = current_qty + quantity
             new_avg = (
                 ((current_qty * current_avg) + (quantity * fill_price)) / new_qty
@@ -318,10 +322,14 @@ class PaperExecutor(Executor):
             )
             self._positions[symbol] = (new_qty, new_avg)
         else:
-            current_qty, current_avg = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
+            current_qty, current_avg = self._positions.get(
+                symbol, (Decimal("0"), Decimal("0"))
+            )
             new_qty = current_qty - quantity if current_qty > quantity else Decimal("0")
             self._positions[symbol] = (
-                (new_qty, current_avg) if new_qty > Decimal("0") else (Decimal("0"), Decimal("0"))
+                (new_qty, current_avg)
+                if new_qty > Decimal("0")
+                else (Decimal("0"), Decimal("0"))
             )
 
     def _maybe_persist_state(self) -> None:

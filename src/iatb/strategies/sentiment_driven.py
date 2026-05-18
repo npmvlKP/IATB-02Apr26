@@ -39,13 +39,17 @@ class SentimentDrivenStrategy(StrategyBase):
     ) -> SignalEvent | None:
         if not self.can_emit_signal(context):
             return None
-        gate_result = self._aggregator.evaluate_instrument(inputs.text, inputs.volume_ratio)
+        gate_result = self._aggregator.evaluate_instrument(
+            inputs.text, inputs.volume_ratio
+        )
         if not gate_result.tradable:
             return None
         side = self._resolve_side(gate_result.composite.score)
         if side is None:
             return None
-        confidence = min(Decimal("1"), gate_result.composite.confidence + Decimal("0.10"))
+        confidence = min(
+            Decimal("1"), gate_result.composite.confidence + Decimal("0.10")
+        )
         return self.build_signal(
             context,
             side,

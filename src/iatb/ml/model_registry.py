@@ -203,7 +203,9 @@ class ModelRegistry:
         else:
             status = ModelStatus.ERROR
             fallback_available = True
-            _LOGGER.warning("FinBERT unavailable (will fallback to VADER): %s", error_msg)
+            _LOGGER.warning(
+                "FinBERT unavailable (will fallback to VADER): %s", error_msg
+            )
 
         load_time = datetime.now(UTC) - start_time
         load_time_ms = Decimal(str(load_time.total_seconds() * 1000))
@@ -346,8 +348,12 @@ class ModelRegistry:
         if not self._initialized:
             self.initialize()
 
-        available = sum(1 for h in self._health.values() if h.status == ModelStatus.AVAILABLE)
-        degraded = sum(1 for h in self._health.values() if h.status == ModelStatus.DEGRADED)
+        available = sum(
+            1 for h in self._health.values() if h.status == ModelStatus.AVAILABLE
+        )
+        degraded = sum(
+            1 for h in self._health.values() if h.status == ModelStatus.DEGRADED
+        )
         unavailable = sum(
             1
             for h in self._health.values()

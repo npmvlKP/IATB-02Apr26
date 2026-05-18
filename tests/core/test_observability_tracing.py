@@ -25,7 +25,9 @@ class TestSetupTracing:
         assert isinstance(provider, TracerProvider)
 
     @patch("iatb.core.observability.tracing.trace.set_tracer_provider")
-    def test_setup_tracing_sets_global_provider(self, mock_set_provider: MagicMock) -> None:
+    def test_setup_tracing_sets_global_provider(
+        self, mock_set_provider: MagicMock
+    ) -> None:
         """Test that setup_tracing sets global tracer provider."""
         provider = setup_tracing()
         mock_set_provider.assert_called_once_with(provider)
@@ -66,7 +68,9 @@ class TestSetupTracing:
 
     @patch.dict("os.environ", {"APP_VERSION": "1.0.0"})
     @patch("iatb.core.observability.tracing.trace.set_tracer_provider")
-    def test_setup_tracing_with_custom_version(self, mock_set_provider: MagicMock) -> None:
+    def test_setup_tracing_with_custom_version(
+        self, mock_set_provider: MagicMock
+    ) -> None:
         """Test that setup_tracing uses custom version from env."""
         provider = setup_tracing()
         # Provider should be created with version from env
@@ -74,7 +78,9 @@ class TestSetupTracing:
 
     @patch.dict("os.environ", {"ENVIRONMENT": "production"})
     @patch("iatb.core.observability.tracing.trace.set_tracer_provider")
-    def test_setup_tracing_with_custom_environment(self, mock_set_provider: MagicMock) -> None:
+    def test_setup_tracing_with_custom_environment(
+        self, mock_set_provider: MagicMock
+    ) -> None:
         """Test that setup_tracing uses custom environment from env."""
         provider = setup_tracing()
         assert isinstance(provider, TracerProvider)
@@ -195,7 +201,9 @@ class TestSpanContext:
         assert not mock_span.set_status.called
 
     @patch("iatb.core.observability.tracing.get_tracer")
-    def test_span_context_with_empty_attributes(self, mock_get_tracer: MagicMock) -> None:
+    def test_span_context_with_empty_attributes(
+        self, mock_get_tracer: MagicMock
+    ) -> None:
         """Test that SpanContext works with no attributes."""
         mock_tracer = MagicMock()
         mock_span_cm = MagicMock()
@@ -216,7 +224,9 @@ class TestAddSpanAttributes:
     """Tests for add_span_attributes function."""
 
     @patch("iatb.core.observability.tracing.trace.get_current_span")
-    def test_add_span_attributes_with_active_span(self, mock_get_span: MagicMock) -> None:
+    def test_add_span_attributes_with_active_span(
+        self, mock_get_span: MagicMock
+    ) -> None:
         """Test that add_span_attributes adds attributes to current span."""
         mock_span = MagicMock()
         mock_get_span.return_value = mock_span
@@ -227,7 +237,9 @@ class TestAddSpanAttributes:
         mock_span.set_attribute.assert_any_call("action", "test")
 
     @patch("iatb.core.observability.tracing.trace.get_current_span")
-    def test_add_span_attributes_with_no_active_span(self, mock_get_span: MagicMock) -> None:
+    def test_add_span_attributes_with_no_active_span(
+        self, mock_get_span: MagicMock
+    ) -> None:
         """Test that add_span_attributes handles no active span gracefully."""
         mock_get_span.return_value = None
 
@@ -235,7 +247,9 @@ class TestAddSpanAttributes:
         add_span_attributes(user_id="123", action="test")
 
     @patch("iatb.core.observability.tracing.trace.get_current_span")
-    def test_add_span_attributes_with_multiple_attributes(self, mock_get_span: MagicMock) -> None:
+    def test_add_span_attributes_with_multiple_attributes(
+        self, mock_get_span: MagicMock
+    ) -> None:
         """Test that add_span_attributes adds multiple attributes."""
         mock_span = MagicMock()
         mock_get_span.return_value = mock_span
@@ -276,7 +290,9 @@ class TestRecordException:
         assert mock_span.set_status.called
 
     @patch("iatb.core.observability.tracing.trace.get_current_span")
-    def test_record_exception_with_no_active_span(self, mock_get_span: MagicMock) -> None:
+    def test_record_exception_with_no_active_span(
+        self, mock_get_span: MagicMock
+    ) -> None:
         """Test that record_exception handles no active span gracefully."""
         mock_get_span.return_value = None
 
@@ -329,7 +345,9 @@ class TestIntegration:
         mock_span_cm.__exit__ = MagicMock(return_value=None)
         mock_tracer.start_as_current_span = MagicMock(return_value=mock_span_cm)
 
-        with patch("iatb.core.observability.tracing.get_tracer", return_value=mock_tracer):
+        with patch(
+            "iatb.core.observability.tracing.get_tracer", return_value=mock_tracer
+        ):
             with SpanContext("outer_span"):
                 with SpanContext("inner_span"):
                     pass

@@ -32,7 +32,11 @@ def _validate_atr_inputs(entry_price: Decimal, atr: Decimal, multiple: Decimal) 
         msg = "entry_price, atr, and multiple must be positive"
         _LOGGER.error(
             "Invalid atr_stop_price inputs",
-            extra={"entry_price": str(entry_price), "atr": str(atr), "multiple": str(multiple)},
+            extra={
+                "entry_price": str(entry_price),
+                "atr": str(atr),
+                "multiple": str(multiple),
+            },
         )
         raise ConfigError(msg)
 
@@ -61,7 +65,10 @@ def _calculate_atr_result(
 
 
 def atr_stop_price(
-    entry_price: Decimal, atr: Decimal, side: OrderSide, multiple: Decimal = Decimal("2")
+    entry_price: Decimal,
+    atr: Decimal,
+    side: OrderSide,
+    multiple: Decimal = Decimal("2"),
 ) -> Decimal:
     """Calculate ATR-based stop loss price.
 
@@ -109,12 +116,17 @@ def _validate_trailing_inputs(
         msg = "previous_stop and current_price must be positive"
         _LOGGER.error(
             "Invalid trailing_stop_price inputs",
-            extra={"previous_stop": str(previous_stop), "current_price": str(current_price)},
+            extra={
+                "previous_stop": str(previous_stop),
+                "current_price": str(current_price),
+            },
         )
         raise ConfigError(msg)
     if trail_fraction <= Decimal("0") or trail_fraction >= Decimal("1"):
         msg = "trail_fraction must be between 0 and 1"
-        _LOGGER.error("Invalid trail_fraction", extra={"trail_fraction": str(trail_fraction)})
+        _LOGGER.error(
+            "Invalid trail_fraction", extra={"trail_fraction": str(trail_fraction)}
+        )
         raise ConfigError(msg)
 
 
@@ -136,7 +148,9 @@ def _calculate_trailing_result(
         Tuple of (candidate, result) stop prices.
     """
     distance = current_price * trail_fraction
-    candidate = current_price - distance if side == OrderSide.BUY else current_price + distance
+    candidate = (
+        current_price - distance if side == OrderSide.BUY else current_price + distance
+    )
     if side == OrderSide.BUY:
         result = max(previous_stop, candidate)
     else:
@@ -204,7 +218,9 @@ def _validate_time_exit_inputs(
         raise ConfigError(msg)
     if max_hold_minutes <= 0:
         msg = "max_hold_minutes must be positive"
-        _LOGGER.error("Invalid max_hold_minutes", extra={"max_hold_minutes": max_hold_minutes})
+        _LOGGER.error(
+            "Invalid max_hold_minutes", extra={"max_hold_minutes": max_hold_minutes}
+        )
         raise ConfigError(msg)
 
 
@@ -236,7 +252,9 @@ def _log_time_exit_result(
     )
 
 
-def should_time_exit(entry_time_utc: datetime, now_utc: datetime, max_hold_minutes: int) -> bool:
+def should_time_exit(
+    entry_time_utc: datetime, now_utc: datetime, max_hold_minutes: int
+) -> bool:
     """Check if position should be exited based on maximum holding time.
 
     Args:
@@ -253,7 +271,9 @@ def should_time_exit(entry_time_utc: datetime, now_utc: datetime, max_hold_minut
     _validate_time_exit_inputs(entry_time_utc, now_utc, max_hold_minutes)
     elapsed = now_utc - entry_time_utc
     should_exit = elapsed >= timedelta(minutes=max_hold_minutes)
-    _log_time_exit_result(entry_time_utc, now_utc, max_hold_minutes, elapsed, should_exit)
+    _log_time_exit_result(
+        entry_time_utc, now_utc, max_hold_minutes, elapsed, should_exit
+    )
     return should_exit
 
 
@@ -269,7 +289,8 @@ def _validate_auto_squareoff_input(now_utc: datetime) -> None:
     if now_utc.tzinfo != UTC:
         msg = "now_utc must be timezone-aware UTC datetime"
         _LOGGER.error(
-            "Non-UTC datetime provided to should_auto_squareoff", extra={"now_utc": str(now_utc)}
+            "Non-UTC datetime provided to should_auto_squareoff",
+            extra={"now_utc": str(now_utc)},
         )
         raise ConfigError(msg)
 
@@ -315,7 +336,10 @@ def _validate_drl_exit_inputs(exit_probability: Decimal, threshold: Decimal) -> 
     """
     if exit_probability < Decimal("0") or exit_probability > Decimal("1"):
         msg = "exit_probability must be between 0 and 1"
-        _LOGGER.error("Invalid exit_probability", extra={"exit_probability": str(exit_probability)})
+        _LOGGER.error(
+            "Invalid exit_probability",
+            extra={"exit_probability": str(exit_probability)},
+        )
         raise ConfigError(msg)
     if threshold <= Decimal("0") or threshold >= Decimal("1"):
         msg = "threshold must be between 0 and 1 (exclusive of 1)"
@@ -366,7 +390,9 @@ def _check_stop_loss_hit(
         Tuple of (hit, reason) or (False, None) if not hit.
     """
     stop_hit = (
-        (current_price <= stop_price) if side == OrderSide.BUY else (current_price >= stop_price)
+        (current_price <= stop_price)
+        if side == OrderSide.BUY
+        else (current_price >= stop_price)
     )
     if stop_hit:
         _LOGGER.warning(
@@ -496,7 +522,9 @@ def _handle_drl_exit(
     Returns:
         Tuple of (should_exit, reason) or (False, None) if no exit.
     """
-    if exit_probability is not None and should_drl_exit(exit_probability, exit_prob_threshold):
+    if exit_probability is not None and should_drl_exit(
+        exit_probability, exit_prob_threshold
+    ):
         _LOGGER.info(
             "DRL positive exit signal",
             extra={

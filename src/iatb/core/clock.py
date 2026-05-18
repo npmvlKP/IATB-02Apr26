@@ -160,7 +160,9 @@ class ClockDriftDetector:
     def get_sync_status(self) -> dict[str, object]:
         """Get current sync status."""
         return {
-            "last_sync_utc": self._last_sync_utc.isoformat() if self._last_sync_utc else None,
+            "last_sync_utc": self._last_sync_utc.isoformat()
+            if self._last_sync_utc
+            else None,
             "current_drift_seconds": self._current_drift.total_seconds(),
             "sync_count": self._sync_count,
             "sync_failures": self._sync_failures,
@@ -239,7 +241,9 @@ class TradingSessions:
             raise ClockError(msg)
 
     @staticmethod
-    def _get_session_times(exchange: Literal["NSE", "BSE", "MCX", "CDS"]) -> tuple[time, time]:
+    def _get_session_times(
+        exchange: Literal["NSE", "BSE", "MCX", "CDS"],
+    ) -> tuple[time, time]:
         """Get regular session open/close times for an exchange."""
         try:
             exchange_enum = Exchange(exchange)
@@ -293,7 +297,9 @@ class TradingSessions:
             ist_open = datetime.combine(current_date, today_session.open_time)
             return Clock.ist_to_utc(ist_open)
 
-        return TradingSessions._next_open_time_for_date(exchange, current_date + timedelta(days=1))
+        return TradingSessions._next_open_time_for_date(
+            exchange, current_date + timedelta(days=1)
+        )
 
     @staticmethod
     def _next_open_time_for_date(exchange: Exchange, start_date: date) -> Timestamp:
@@ -313,7 +319,9 @@ class TradingSessions:
         """Check if MIS (intraday) trading is active at given UTC time."""
         TradingSessions._require_utc(utc_dt)
         if exchange not in MIS_SUPPORTED_EXCHANGES:
-            logger.debug("MIS not supported on exchange", extra={"exchange": exchange.value})
+            logger.debug(
+                "MIS not supported on exchange", extra={"exchange": exchange.value}
+            )
             return False
 
         ist_dt = Clock.to_ist(utc_dt)

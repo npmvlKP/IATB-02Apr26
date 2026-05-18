@@ -148,7 +148,9 @@ class TestScalingConfig:
 
 class TestClusterManager:
     def _make_cluster(self, max_nodes: int = 10) -> ClusterManager:
-        config = ScalingConfig(max_nodes=max_nodes, heartbeat_timeout=timedelta(seconds=90))
+        config = ScalingConfig(
+            max_nodes=max_nodes, heartbeat_timeout=timedelta(seconds=90)
+        )
         return ClusterManager(config)
 
     def test_register_node(self) -> None:

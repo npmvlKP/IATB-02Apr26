@@ -51,15 +51,17 @@ class MockBroker(BrokerInterface):
 
         self.place_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.cancel_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
-        self.get_positions_async: AsyncMock[list[Position]] = AsyncMock(return_value=None)  # type: ignore[assignment]
+        self.get_positions_async: AsyncMock[list[Position]] = AsyncMock(
+            return_value=None
+        )  # type: ignore[assignment]
         self.get_orders_async: AsyncMock[list[Order]] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.get_margins_async: AsyncMock[Margin] = AsyncMock(return_value=None)  # type: ignore[assignment]
-        self.get_order_history_async: AsyncMock[list[dict[str, Any]]] = (
-            AsyncMock(return_value=None)  # type: ignore[assignment]
-        )
-        self.get_holdings_async: AsyncMock[list[dict[str, Any]]] = (
-            AsyncMock(return_value=None)  # type: ignore[assignment]
-        )
+        self.get_order_history_async: AsyncMock[list[dict[str, Any]]] = AsyncMock(
+            return_value=None
+        )  # type: ignore[assignment]
+        self.get_holdings_async: AsyncMock[list[dict[str, Any]]] = AsyncMock(
+            return_value=None
+        )  # type: ignore[assignment]
         self.modify_order_async: AsyncMock[Order] = AsyncMock(return_value=None)  # type: ignore[assignment]
         self.get_quote_async: AsyncMock[dict[str, Any]] = AsyncMock(return_value=None)  # type: ignore[assignment]
 
@@ -103,7 +105,9 @@ class MockBroker(BrokerInterface):
         """Mock get margins."""
         return await self.get_margins_async()
 
-    async def get_order_history(self, *, order_id: str, from_date=None, to_date=None) -> list:
+    async def get_order_history(
+        self, *, order_id: str, from_date=None, to_date=None
+    ) -> list:
         """Mock get order history."""
         return await self.get_order_history_async(
             order_id=order_id, from_date=from_date, to_date=to_date
@@ -620,17 +624,25 @@ class TestLiveExecutor:
 
     def test_initialization_invalid_timeout_raises_error(self) -> None:
         """Test that invalid confirmation timeout raises ValueError."""
-        with pytest.raises(ValueError, match="confirmation_timeout_seconds must be positive"):
+        with pytest.raises(
+            ValueError, match="confirmation_timeout_seconds must be positive"
+        ):
             LiveExecutor(broker=self.mock_broker, confirmation_timeout_seconds=0)
 
     def test_initialization_invalid_poll_interval_raises_error(self) -> None:
         """Test that invalid poll interval raises ValueError."""
-        with pytest.raises(ValueError, match="confirmation_poll_interval_seconds must be positive"):
-            LiveExecutor(broker=self.mock_broker, confirmation_poll_interval_seconds=-0.5)
+        with pytest.raises(
+            ValueError, match="confirmation_poll_interval_seconds must be positive"
+        ):
+            LiveExecutor(
+                broker=self.mock_broker, confirmation_poll_interval_seconds=-0.5
+            )
 
     def test_initialization_negative_slippage_tolerance_raises_error(self) -> None:
         """Test that negative slippage tolerance raises ValueError."""
-        with pytest.raises(ValueError, match="slippage_tolerance_bps cannot be negative"):
+        with pytest.raises(
+            ValueError, match="slippage_tolerance_bps cannot be negative"
+        ):
             LiveExecutor(broker=self.mock_broker, slippage_tolerance_bps=Decimal("-10"))
 
     def test_broker_place_order_failure_raises_error(self) -> None:
@@ -642,7 +654,9 @@ class TestLiveExecutor:
             quantity=Decimal("10"),
         )
 
-        self.mock_broker.place_order_async.side_effect = RuntimeError("API connection failed")
+        self.mock_broker.place_order_async.side_effect = RuntimeError(
+            "API connection failed"
+        )
 
         with pytest.raises(ExecutionError, match="Order execution failed"):
             self.executor.execute_order(request)

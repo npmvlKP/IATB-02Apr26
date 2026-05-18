@@ -83,17 +83,23 @@ class TestATMSelector:
 class TestOTMByStrikesSelector:
     def test_call_2_strikes_otm(self) -> None:
         chain = _ce_chain()
-        result = OTMByStrikesSelector(n_strikes=2).select(chain, Decimal("24700"), OrderSide.BUY)
+        result = OTMByStrikesSelector(n_strikes=2).select(
+            chain, Decimal("24700"), OrderSide.BUY
+        )
         assert result.strike == Decimal("24900")
 
     def test_zero_strikes_equals_atm(self) -> None:
         chain = _ce_chain()
-        result = OTMByStrikesSelector(n_strikes=0).select(chain, Decimal("24700"), OrderSide.BUY)
+        result = OTMByStrikesSelector(n_strikes=0).select(
+            chain, Decimal("24700"), OrderSide.BUY
+        )
         assert result.strike == Decimal("24700")
 
     def test_put_2_strikes_otm(self) -> None:
         chain = _pe_chain()
-        result = OTMByStrikesSelector(n_strikes=2).select(chain, Decimal("24700"), OrderSide.SELL)
+        result = OTMByStrikesSelector(n_strikes=2).select(
+            chain, Decimal("24700"), OrderSide.SELL
+        )
         assert result.strike == Decimal("24500")
 
     def test_negative_n_strikes_fails(self) -> None:

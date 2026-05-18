@@ -197,7 +197,9 @@ class NewsAnalyzer:
         logger.info("Analyzed news for %d symbols", len(results))
         return results
 
-    def _filter_articles(self, articles: list[NewsArticle], symbol: str) -> list[NewsArticle]:
+    def _filter_articles(
+        self, articles: list[NewsArticle], symbol: str
+    ) -> list[NewsArticle]:
         """Filter articles by relevance and age."""
         now = datetime.now(UTC)
         filtered: list[NewsArticle] = []
@@ -207,7 +209,10 @@ class NewsAnalyzer:
             age_hours = (now - article.published_at).total_seconds() / 3600
             if age_hours > self._config.max_age_hours:
                 continue
-            if symbol not in article.symbols and symbol.lower() not in article.title.lower():
+            if (
+                symbol not in article.symbols
+                and symbol.lower() not in article.title.lower()
+            ):
                 continue
             filtered.append(article)
         return filtered
@@ -236,8 +241,12 @@ class NewsAnalyzer:
     def _compute_sentiment_score(self, text: str) -> Decimal:
         """Compute sentiment score from text using keyword analysis."""
         text_lower = text.lower()
-        positive_count = sum(1 for kw in self._config.positive_keywords if kw in text_lower)
-        negative_count = sum(1 for kw in self._config.negative_keywords if kw in text_lower)
+        positive_count = sum(
+            1 for kw in self._config.positive_keywords if kw in text_lower
+        )
+        negative_count = sum(
+            1 for kw in self._config.negative_keywords if kw in text_lower
+        )
         total = positive_count + negative_count
         if total == 0:
             return Decimal("0")
@@ -261,7 +270,9 @@ class NewsAnalyzer:
         )
         return max(Decimal("0"), min(Decimal("1"), base_confidence))
 
-    def _aggregate_sentiments(self, sentiments: list[SentimentScore]) -> tuple[Decimal, Decimal]:
+    def _aggregate_sentiments(
+        self, sentiments: list[SentimentScore]
+    ) -> tuple[Decimal, Decimal]:
         """Aggregate multiple sentiment scores."""
         if not sentiments:
             return Decimal("0"), Decimal("0")
@@ -301,7 +312,9 @@ class MockNewsSource:
     def fetch_articles(self, symbol: str, limit: int = 10) -> list[NewsArticle]:
         """Fetch mock articles for a symbol."""
         symbol_articles = [
-            a for a in self._articles if symbol in a.symbols or symbol in a.title.lower()
+            a
+            for a in self._articles
+            if symbol in a.symbols or symbol in a.title.lower()
         ]
         return symbol_articles[:limit]
 

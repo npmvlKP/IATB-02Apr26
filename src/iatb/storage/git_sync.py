@@ -101,7 +101,9 @@ class GitSyncService:
         self.run_gitleaks_scan()
         self._ensure_success(self._run(("git", "add", "-A")), "git add")
         commit_result = self._run(("git", "commit", "-m", commit_message))
-        has_nothing_to_commit = "nothing to commit" in self._combined_output(commit_result)
+        has_nothing_to_commit = "nothing to commit" in self._combined_output(
+            commit_result
+        )
         if commit_result.returncode != 0 and not has_nothing_to_commit:
             self._ensure_success(commit_result, "git commit")
         target_branch = branch if branch is not None else self.current_branch()
@@ -174,7 +176,15 @@ class GitSyncService:
         # Determine auth type from URL scheme
         if url.startswith("git@") or url.startswith("ssh://"):
             test_result = self._run(
-                ("ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "git@github.com")
+                (
+                    "ssh",
+                    "-T",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "ConnectTimeout=5",
+                    "git@github.com",
+                )
             )
             if test_result.returncode == 0:
                 return (True, "ssh")

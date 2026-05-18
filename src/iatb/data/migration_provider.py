@@ -112,7 +112,7 @@ class MigrationProvider(DataProvider):
 
     @staticmethod
     def _extract_config_settings(
-        config_dict: dict[str, object]
+        config_dict: dict[str, object],
     ) -> dict[str, str | bool | Decimal]:
         """Extract migration settings from config dict."""
         data_config = config_dict.get("data", {})

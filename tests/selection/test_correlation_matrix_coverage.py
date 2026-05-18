@@ -21,8 +21,20 @@ class TestComputePairwiseCorrelations:
     def test_happy_path_two_instruments_known_correlation(self) -> None:
         """Happy path: Two instruments with known price series → verify correlation value."""
         price_series = {
-            "A": [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115"), Decimal("120")],
-            "B": [Decimal("200"), Decimal("210"), Decimal("220"), Decimal("230"), Decimal("240")],
+            "A": [
+                Decimal("100"),
+                Decimal("105"),
+                Decimal("110"),
+                Decimal("115"),
+                Decimal("120"),
+            ],
+            "B": [
+                Decimal("200"),
+                Decimal("210"),
+                Decimal("220"),
+                Decimal("230"),
+                Decimal("240"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -36,9 +48,27 @@ class TestComputePairwiseCorrelations:
     def test_happy_path_three_instruments_all_pairs(self) -> None:
         """Happy path: Three instruments → verify all three pairs computed."""
         price_series = {
-            "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
-            "B": [Decimal("20"), Decimal("22"), Decimal("24"), Decimal("26"), Decimal("28")],
-            "C": [Decimal("30"), Decimal("33"), Decimal("36"), Decimal("39"), Decimal("42")],
+            "A": [
+                Decimal("10"),
+                Decimal("11"),
+                Decimal("12"),
+                Decimal("13"),
+                Decimal("14"),
+            ],
+            "B": [
+                Decimal("20"),
+                Decimal("22"),
+                Decimal("24"),
+                Decimal("26"),
+                Decimal("28"),
+            ],
+            "C": [
+                Decimal("30"),
+                Decimal("33"),
+                Decimal("36"),
+                Decimal("39"),
+                Decimal("42"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -56,8 +86,20 @@ class TestComputePairwiseCorrelations:
     def test_perfect_correlation_identical_series(self) -> None:
         """Perfect correlation: Identical price series → correlation ≈ 1.0."""
         price_series = {
-            "A": [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115"), Decimal("120")],
-            "B": [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115"), Decimal("120")],
+            "A": [
+                Decimal("100"),
+                Decimal("105"),
+                Decimal("110"),
+                Decimal("115"),
+                Decimal("120"),
+            ],
+            "B": [
+                Decimal("100"),
+                Decimal("105"),
+                Decimal("110"),
+                Decimal("115"),
+                Decimal("120"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -69,8 +111,20 @@ class TestComputePairwiseCorrelations:
     def test_perfect_anti_correlation_inverse_series(self) -> None:
         """Test inverse price series with positive returns (both increase)."""
         price_series = {
-            "A": [Decimal("100"), Decimal("110"), Decimal("120"), Decimal("130"), Decimal("140")],
-            "B": [Decimal("140"), Decimal("130"), Decimal("120"), Decimal("110"), Decimal("100")],
+            "A": [
+                Decimal("100"),
+                Decimal("110"),
+                Decimal("120"),
+                Decimal("130"),
+                Decimal("140"),
+            ],
+            "B": [
+                Decimal("140"),
+                Decimal("130"),
+                Decimal("120"),
+                Decimal("110"),
+                Decimal("100"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -84,7 +138,13 @@ class TestComputePairwiseCorrelations:
     def test_edge_single_symbol_returns_empty(self) -> None:
         """Edge: Single symbol → returns empty dict."""
         price_series = {
-            "A": [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115"), Decimal("120")],
+            "A": [
+                Decimal("100"),
+                Decimal("105"),
+                Decimal("110"),
+                Decimal("115"),
+                Decimal("120"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -94,8 +154,20 @@ class TestComputePairwiseCorrelations:
     def test_edge_zero_variance_series(self) -> None:
         """Edge: Zero variance series → correlation 0 (division by zero handled)."""
         price_series = {
-            "A": [Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100")],
-            "B": [Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100")],
+            "A": [
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+            ],
+            "B": [
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -106,8 +178,20 @@ class TestComputePairwiseCorrelations:
     def test_edge_zero_variance_one_series(self) -> None:
         """Edge: One series with zero variance → correlation 0."""
         price_series = {
-            "A": [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115"), Decimal("120")],
-            "B": [Decimal("200"), Decimal("200"), Decimal("200"), Decimal("200"), Decimal("200")],
+            "A": [
+                Decimal("100"),
+                Decimal("105"),
+                Decimal("110"),
+                Decimal("115"),
+                Decimal("120"),
+            ],
+            "B": [
+                Decimal("200"),
+                Decimal("200"),
+                Decimal("200"),
+                Decimal("200"),
+                Decimal("200"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -118,7 +202,13 @@ class TestComputePairwiseCorrelations:
     def test_edge_different_length_series(self) -> None:
         """Edge: Different length series → trimmed to min length."""
         price_series = {
-            "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
+            "A": [
+                Decimal("10"),
+                Decimal("11"),
+                Decimal("12"),
+                Decimal("13"),
+                Decimal("14"),
+            ],
             "B": [Decimal("20"), Decimal("22"), Decimal("24")],
         }
 
@@ -135,8 +225,20 @@ class TestComputePairwiseCorrelations:
         # This tests the clamping logic in _pearson
         # While it's hard to naturally get >1 with Pearson, we verify the clamping works
         price_series = {
-            "A": [Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100")],
-            "B": [Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100"), Decimal("100")],
+            "A": [
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+            ],
+            "B": [
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+                Decimal("100"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -151,8 +253,20 @@ class TestComputePairwiseCorrelations:
         """Edge: Clamping → correlation result < -1 gets clamped to -1."""
         # This tests the clamping logic in _pearson
         price_series = {
-            "A": [Decimal("100"), Decimal("105"), Decimal("110"), Decimal("115"), Decimal("120")],
-            "B": [Decimal("120"), Decimal("115"), Decimal("110"), Decimal("105"), Decimal("100")],
+            "A": [
+                Decimal("100"),
+                Decimal("105"),
+                Decimal("110"),
+                Decimal("115"),
+                Decimal("120"),
+            ],
+            "B": [
+                Decimal("120"),
+                Decimal("115"),
+                Decimal("110"),
+                Decimal("105"),
+                Decimal("100"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -169,7 +283,9 @@ class TestComputePairwiseCorrelations:
             "B": [Decimal("200")],
         }
 
-        with pytest.raises(ConfigError, match="price series must have at least 2 points"):
+        with pytest.raises(
+            ConfigError, match="price series must have at least 2 points"
+        ):
             compute_pairwise_correlations(price_series)
 
     def test_error_empty_price_series(self) -> None:
@@ -179,7 +295,9 @@ class TestComputePairwiseCorrelations:
             "B": [Decimal("200"), Decimal("210")],
         }
 
-        with pytest.raises(ConfigError, match="price series must have at least 2 points"):
+        with pytest.raises(
+            ConfigError, match="price series must have at least 2 points"
+        ):
             compute_pairwise_correlations(price_series)
 
     def test_edge_empty_dict_returns_empty(self) -> None:
@@ -190,8 +308,20 @@ class TestComputePairwiseCorrelations:
     def test_edge_zero_previous_price(self) -> None:
         """Edge: Zero previous price → return 0 for that calculation."""
         price_series = {
-            "A": [Decimal("0"), Decimal("10"), Decimal("20"), Decimal("30"), Decimal("40")],
-            "B": [Decimal("0"), Decimal("20"), Decimal("40"), Decimal("60"), Decimal("80")],
+            "A": [
+                Decimal("0"),
+                Decimal("10"),
+                Decimal("20"),
+                Decimal("30"),
+                Decimal("40"),
+            ],
+            "B": [
+                Decimal("0"),
+                Decimal("20"),
+                Decimal("40"),
+                Decimal("60"),
+                Decimal("80"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -217,10 +347,34 @@ class TestComputePairwiseCorrelations:
     def test_multiple_instruments_four_symbols(self) -> None:
         """Test with four instruments → verify 6 pairs computed."""
         price_series = {
-            "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
-            "B": [Decimal("20"), Decimal("22"), Decimal("24"), Decimal("26"), Decimal("28")],
-            "C": [Decimal("30"), Decimal("33"), Decimal("36"), Decimal("39"), Decimal("42")],
-            "D": [Decimal("40"), Decimal("44"), Decimal("48"), Decimal("52"), Decimal("56")],
+            "A": [
+                Decimal("10"),
+                Decimal("11"),
+                Decimal("12"),
+                Decimal("13"),
+                Decimal("14"),
+            ],
+            "B": [
+                Decimal("20"),
+                Decimal("22"),
+                Decimal("24"),
+                Decimal("26"),
+                Decimal("28"),
+            ],
+            "C": [
+                Decimal("30"),
+                Decimal("33"),
+                Decimal("36"),
+                Decimal("39"),
+                Decimal("42"),
+            ],
+            "D": [
+                Decimal("40"),
+                Decimal("44"),
+                Decimal("48"),
+                Decimal("52"),
+                Decimal("56"),
+            ],
         }
 
         result = compute_pairwise_correlations(price_series)
@@ -296,14 +450,18 @@ class TestReturnsFunction:
         """Error: Single price point → ConfigError."""
         prices = [Decimal("100")]
 
-        with pytest.raises(ConfigError, match="price series must have at least 2 points"):
+        with pytest.raises(
+            ConfigError, match="price series must have at least 2 points"
+        ):
             _returns(prices)
 
     def test_error_empty_price_series(self) -> None:
         """Error: Empty price series → ConfigError."""
         prices = []
 
-        with pytest.raises(ConfigError, match="price series must have at least 2 points"):
+        with pytest.raises(
+            ConfigError, match="price series must have at least 2 points"
+        ):
             _returns(prices)
 
     def test_constant_prices_zero_returns(self) -> None:

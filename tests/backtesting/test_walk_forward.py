@@ -17,7 +17,9 @@ torch.manual_seed(42)
 def test_walk_forward_optimizer_runs_expected_number_of_folds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sampler_module = SimpleNamespace(samplers=SimpleNamespace(TPESampler=lambda seed: object()))
+    sampler_module = SimpleNamespace(
+        samplers=SimpleNamespace(TPESampler=lambda seed: object())
+    )
     monkeypatch.setattr(
         "iatb.backtesting.walk_forward.importlib.import_module",
         lambda _: sampler_module,
@@ -32,7 +34,9 @@ def test_walk_forward_optimizer_runs_expected_number_of_folds(
 def test_walk_forward_optimizer_detects_overfitting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sampler_module = SimpleNamespace(samplers=SimpleNamespace(TPESampler=lambda seed: object()))
+    sampler_module = SimpleNamespace(
+        samplers=SimpleNamespace(TPESampler=lambda seed: object())
+    )
     monkeypatch.setattr(
         "iatb.backtesting.walk_forward.importlib.import_module",
         lambda _: sampler_module,
@@ -51,7 +55,9 @@ def test_walk_forward_optimizer_detects_overfitting(
             Decimal("1.2"),
         ]
     )
-    optimizer = WalkForwardOptimizer(n_splits=5, scorer=lambda values: next(scorer_values))
+    optimizer = WalkForwardOptimizer(
+        n_splits=5, scorer=lambda values: next(scorer_values)
+    )
     result = optimizer.run([Decimal("0.001")] * 20)
     assert result.overfitting_detected
 

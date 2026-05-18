@@ -55,13 +55,17 @@ def test_ensemble_strategy_emits_weighted_majority_signal() -> None:
         _context(),
         [
             WeightedSignal(
-                _signal("momentum", OrderSide.BUY, Decimal("0.8"), Decimal("1510")), Decimal("0.5")
+                _signal("momentum", OrderSide.BUY, Decimal("0.8"), Decimal("1510")),
+                Decimal("0.5"),
             ),
             WeightedSignal(
-                _signal("breakout", OrderSide.BUY, Decimal("0.7"), Decimal("1512")), Decimal("0.3")
+                _signal("breakout", OrderSide.BUY, Decimal("0.7"), Decimal("1512")),
+                Decimal("0.3"),
             ),
             WeightedSignal(
-                _signal("mean_reversion", OrderSide.SELL, Decimal("0.6"), Decimal("1508")),
+                _signal(
+                    "mean_reversion", OrderSide.SELL, Decimal("0.6"), Decimal("1508")
+                ),
                 Decimal("0.2"),
             ),
         ],
@@ -77,7 +81,8 @@ def test_ensemble_strategy_blocks_when_vote_threshold_not_met() -> None:
         _context(),
         [
             WeightedSignal(
-                _signal("momentum", OrderSide.BUY, Decimal("0.6"), Decimal("1510")), Decimal("0.5")
+                _signal("momentum", OrderSide.BUY, Decimal("0.6"), Decimal("1510")),
+                Decimal("0.5"),
             ),
             WeightedSignal(
                 _signal("breakout", OrderSide.SELL, Decimal("0.55"), Decimal("1507")),
@@ -94,10 +99,12 @@ def test_ensemble_strategy_blocks_on_tie() -> None:
         _context(),
         [
             WeightedSignal(
-                _signal("momentum", OrderSide.BUY, Decimal("0.7"), Decimal("1510")), Decimal("0.5")
+                _signal("momentum", OrderSide.BUY, Decimal("0.7"), Decimal("1510")),
+                Decimal("0.5"),
             ),
             WeightedSignal(
-                _signal("breakout", OrderSide.SELL, Decimal("0.7"), Decimal("1507")), Decimal("0.5")
+                _signal("breakout", OrderSide.SELL, Decimal("0.7"), Decimal("1507")),
+                Decimal("0.5"),
             ),
         ],
     )

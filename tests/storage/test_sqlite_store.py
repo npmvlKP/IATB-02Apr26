@@ -103,7 +103,9 @@ class TestSQLiteStoreQueryTrades:
                 side=OrderSide.BUY if i % 2 == 0 else OrderSide.SELL,
                 quantity=create_quantity(str(10 + i)),
                 price=create_price(str(1000 + i * 10)),
-                status=OrderStatus.FILLED if i % 2 == 0 else OrderStatus.PARTIALLY_FILLED,
+                status=OrderStatus.FILLED
+                if i % 2 == 0
+                else OrderStatus.PARTIALLY_FILLED,
                 strategy_id="strat-a" if i < 3 else "strat-b",
                 metadata={"source": "test"},
             )
@@ -263,7 +265,13 @@ class TestSQLiteStoreListTradesBySymbol:
 
     def _seed_trades(self) -> None:
         symbols = ["RELIANCE", "TCS", "RELIANCE", "INFY", "TCS"]
-        exchanges = [Exchange.NSE, Exchange.BSE, Exchange.NSE, Exchange.NSE, Exchange.BSE]
+        exchanges = [
+            Exchange.NSE,
+            Exchange.BSE,
+            Exchange.NSE,
+            Exchange.NSE,
+            Exchange.BSE,
+        ]
         for i, (sym, exc) in enumerate(zip(symbols, exchanges, strict=False)):
             record = TradeAuditRecord(
                 trade_id=f"trade-{i}",
@@ -364,7 +372,9 @@ class TestSQLiteStoreBatchInsert:
     def test_batch_insert_all_records_persisted(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path / "batch_audit.sqlite3")
         base = datetime(2026, 1, 1, 9, 0, 0, tzinfo=UTC)
-        records = [_record(f"batch-{i}", base + timedelta(minutes=i)) for i in range(100)]
+        records = [
+            _record(f"batch-{i}", base + timedelta(minutes=i)) for i in range(100)
+        ]
         store.append_trades_batch(records)
         for i in range(100):
             assert store.get_trade(f"batch-{i}") is not None

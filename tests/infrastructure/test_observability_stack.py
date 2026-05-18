@@ -1,4 +1,5 @@
 """Infrastructure tests to validate observability stack configuration."""
+
 from pathlib import Path
 
 import yaml
@@ -67,18 +68,24 @@ class TestObservabilityStack:
             for p in ports:
                 if isinstance(p, str):
                     host, container = p.split(":")
-                    port_mappings.append({"target": int(container), "published": int(host)})
+                    port_mappings.append(
+                        {"target": int(container), "published": int(host)}
+                    )
                 else:
                     port_mappings.append(p)
             for expected_port in expected["ports"]:
-                assert expected_port in port_mappings, f"{name}: missing port {expected_port}"
+                assert (
+                    expected_port in port_mappings
+                ), f"{name}: missing port {expected_port}"
 
     def test_prometheus_volume_mount(self):
         """Verify Prometheus has config volume mount."""
         compose = load_docker_compose()
         prom = compose["services"]["prometheus"]
         volumes = prom.get("volumes", [])
-        assert any("prometheus.yml" in v for v in volumes), "Prometheus: missing config volume"
+        assert any(
+            "prometheus.yml" in v for v in volumes
+        ), "Prometheus: missing config volume"
 
     def test_prometheus_config_scrape_jobs(self):
         """Verify prometheus.yml contains required scrape targets."""

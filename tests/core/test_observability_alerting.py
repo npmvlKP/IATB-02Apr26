@@ -47,9 +47,13 @@ class TestTelegramAlerter:
         assert not alerter.enabled
         assert alerter.bot is None
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
-    def test_alerter_initialization_with_credentials(self, mock_bot_class: MagicMock) -> None:
+    def test_alerter_initialization_with_credentials(
+        self, mock_bot_class: MagicMock
+    ) -> None:
         """Test that alerter initializes with credentials."""
         mock_bot = MagicMock()
         mock_bot_class.return_value = mock_bot
@@ -59,16 +63,22 @@ class TestTelegramAlerter:
         assert alerter.bot is not None
         mock_bot_class.assert_called_once_with(token="test_token")  # noqa: S106
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
-    def test_alerter_can_be_disabled_explicitly(self, mock_bot_class: MagicMock) -> None:
+    def test_alerter_can_be_disabled_explicitly(
+        self, mock_bot_class: MagicMock
+    ) -> None:
         """Test that alerter can be explicitly disabled."""
         alerter = TelegramAlerter(enabled=False)
         assert not alerter.enabled
         # Bot should not be initialized if explicitly disabled
         mock_bot_class.assert_not_called()
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_alerter_with_custom_credentials(self, mock_bot_class: MagicMock) -> None:
         """Test that alerter can use custom credentials."""
@@ -89,7 +99,9 @@ class TestTelegramAlerter:
         result = alerter.send_alert("Test message")
         assert result is False
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.asyncio.create_task")
     @patch("iatb.core.observability.alerting.asyncio.get_running_loop")
     @patch("iatb.core.observability.alerting.Bot")
@@ -112,7 +124,9 @@ class TestTelegramAlerter:
         assert result is True
         mock_create_task.assert_called_once()
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.asyncio.run")
     @patch("iatb.core.observability.alerting.asyncio.get_running_loop")
     @patch("iatb.core.observability.alerting.Bot")
@@ -134,7 +148,9 @@ class TestTelegramAlerter:
         assert result is True
         mock_asyncio_run.assert_called_once()
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_alert_with_context(self, mock_bot_class: MagicMock) -> None:
         """Test that send_alert includes context in message."""
@@ -150,7 +166,9 @@ class TestTelegramAlerter:
                 context={"user_id": "123", "action": "test"},
             )
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_alert_handles_telegram_error(self, mock_bot_class: MagicMock) -> None:
         """Test that send_alert handles TelegramError gracefully."""
@@ -164,7 +182,9 @@ class TestTelegramAlerter:
             result = alerter.send_alert("Test message")
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_trade_alert_buy(self, mock_bot_class: MagicMock) -> None:
         """Test that send_trade_alert works for BUY trades."""
@@ -182,7 +202,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_trade_alert_sell(self, mock_bot_class: MagicMock) -> None:
         """Test that send_trade_alert works for SELL trades."""
@@ -200,9 +222,13 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
-    def test_send_trade_alert_with_custom_timestamp(self, mock_bot_class: MagicMock) -> None:
+    def test_send_trade_alert_with_custom_timestamp(
+        self, mock_bot_class: MagicMock
+    ) -> None:
         """Test that send_trade_alert uses custom timestamp."""
         mock_bot = MagicMock()
         mock_bot.send_message = AsyncMock()
@@ -221,7 +247,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_error_alert(self, mock_bot_class: MagicMock) -> None:
         """Test that send_error_alert works."""
@@ -237,9 +265,13 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
-    def test_send_error_alert_with_exception_type(self, mock_bot_class: MagicMock) -> None:
+    def test_send_error_alert_with_exception_type(
+        self, mock_bot_class: MagicMock
+    ) -> None:
         """Test that send_error_alert includes exception type."""
         mock_bot = MagicMock()
         mock_bot.send_message = AsyncMock()
@@ -254,7 +286,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_health_alert_up(self, mock_bot_class: MagicMock) -> None:
         """Test that send_health_alert works for UP status."""
@@ -270,7 +304,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_health_alert_down(self, mock_bot_class: MagicMock) -> None:
         """Test that send_health_alert works for DOWN status."""
@@ -287,7 +323,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_health_alert_degraded(self, mock_bot_class: MagicMock) -> None:
         """Test that send_health_alert works for DEGRADED status."""
@@ -304,7 +342,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_pnl_alert_profit(self, mock_bot_class: MagicMock) -> None:
         """Test that send_pnl_alert works for profit."""
@@ -321,7 +361,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_pnl_alert_loss(self, mock_bot_class: MagicMock) -> None:
         """Test that send_pnl_alert works for loss."""
@@ -338,7 +380,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_pnl_alert_without_daily_pnl(self, mock_bot_class: MagicMock) -> None:
         """Test that send_pnl_alert works without daily PnL."""
@@ -354,7 +398,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_model_alert_available(self, mock_bot_class: MagicMock) -> None:
         """Test that send_model_alert works for available models."""
@@ -370,7 +416,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_model_alert_unavailable(self, mock_bot_class: MagicMock) -> None:
         """Test that send_model_alert works for unavailable models."""
@@ -387,7 +435,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_data_source_failure_alert(self, mock_bot_class: MagicMock) -> None:
         """Test that send_data_source_failure_alert works."""
@@ -404,7 +454,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_data_source_failure_alert_default_window(
         self,
@@ -423,7 +475,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_fallback_source_alert(self, mock_bot_class: MagicMock) -> None:
         """Test that send_fallback_source_alert works."""
@@ -440,7 +494,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_fallback_source_alert_without_reason(
         self,
@@ -459,7 +515,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_token_expiry_alert_critical(self, mock_bot_class: MagicMock) -> None:
         """Test that send_token_expiry_alert works for critical expiry."""
@@ -475,7 +533,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_token_expiry_alert_warning(self, mock_bot_class: MagicMock) -> None:
         """Test that send_token_expiry_alert works for warning expiry."""
@@ -491,7 +551,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     @patch("iatb.core.observability.alerting.InlineKeyboardMarkup")
     @patch("iatb.core.observability.alerting.InlineKeyboardButton")
@@ -517,7 +579,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_send_with_actions_without_buttons(self, mock_bot_class: MagicMock) -> None:
         """Test that send_with_actions works without buttons."""
@@ -533,7 +597,9 @@ class TestTelegramAlerter:
             )
             assert result is True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_format_message_includes_timestamp(self, mock_bot_class: MagicMock) -> None:
         """Test that _format_message includes timestamp."""
@@ -545,7 +611,9 @@ class TestTelegramAlerter:
 
         assert "2026-" in message  # Contains date
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_format_message_includes_level(self, mock_bot_class: MagicMock) -> None:
         """Test that _format_message includes alert level."""
@@ -568,9 +636,13 @@ class TestGetAlerter:
         alerter2 = get_alerter()
         assert alerter1 is alerter2
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
-    def test_get_alerter_creates_enabled_instance(self, mock_bot_class: MagicMock) -> None:
+    def test_get_alerter_creates_enabled_instance(
+        self, mock_bot_class: MagicMock
+    ) -> None:
         """Test that get_alerter creates enabled instance with credentials."""
         mock_bot = MagicMock()
         mock_bot_class.return_value = mock_bot
@@ -582,7 +654,9 @@ class TestGetAlerter:
 class TestIntegration:
     """Integration tests for alerting configuration."""
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_full_alerting_workflow(self, mock_bot_class: MagicMock) -> None:
         """Test a complete alerting workflow."""
@@ -623,7 +697,9 @@ class TestIntegration:
             # All should succeed without exceptions
             assert True
 
-    @patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"})
+    @patch.dict(
+        "os.environ", {"TELEGRAM_BOT_TOKEN": "test_token", "TELEGRAM_CHAT_ID": "123456"}
+    )
     @patch("iatb.core.observability.alerting.Bot")
     def test_different_alert_levels(self, mock_bot_class: MagicMock) -> None:
         """Test that all alert levels work correctly."""

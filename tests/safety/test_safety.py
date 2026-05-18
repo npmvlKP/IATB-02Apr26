@@ -265,7 +265,9 @@ class TestPreflightChecks:
         assert run_preflight_checks(executor, ks, data_dir, audit_path) is False
 
     @patch("iatb.core.preflight.ClockDriftDetector")
-    def test_missing_data_dir_fails(self, mock_detector_class: MagicMock, tmp_path: Path) -> None:
+    def test_missing_data_dir_fails(
+        self, mock_detector_class: MagicMock, tmp_path: Path
+    ) -> None:
         from iatb.core.preflight import run_preflight_checks
 
         # Mock clock drift to be within threshold

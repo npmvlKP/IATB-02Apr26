@@ -56,7 +56,12 @@ def _pearson(xs: list[Decimal], ys: list[Decimal]) -> Decimal:
     ys_trimmed = ys[-n:]
     mean_x = _mean(xs_trimmed)
     mean_y = _mean(ys_trimmed)
-    cov = _mean([(x - mean_x) * (y - mean_y) for x, y in zip(xs_trimmed, ys_trimmed, strict=True)])
+    cov = _mean(
+        [
+            (x - mean_x) * (y - mean_y)
+            for x, y in zip(xs_trimmed, ys_trimmed, strict=True)
+        ]
+    )
     var_x = _mean([(x - mean_x) ** 2 for x in xs_trimmed])
     var_y = _mean([(y - mean_y) ** 2 for y in ys_trimmed])
     if var_x == Decimal("0") or var_y == Decimal("0"):

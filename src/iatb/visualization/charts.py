@@ -31,7 +31,9 @@ def build_candlestick_chart(
     return figure
 
 
-def _validate_rows(rows: list[dict[str, object]], ema_period: int, bollinger_period: int) -> None:
+def _validate_rows(
+    rows: list[dict[str, object]], ema_period: int, bollinger_period: int
+) -> None:
     if len(rows) < 2:
         msg = "rows must include at least two OHLCV points"
         raise ConfigError(msg)
@@ -72,7 +74,9 @@ def _add_line_trace(figure: Any, go: Any, name: str, values: list[Decimal]) -> N
 
 
 def _add_volume_trace(figure: Any, go: Any, rows: list[dict[str, object]]) -> None:
-    figure.add_trace(go.Bar(y=[_as_float(row["volume"], "volume") for row in rows], name="Volume"))
+    figure.add_trace(
+        go.Bar(y=[_as_float(row["volume"], "volume") for row in rows], name="Volume")
+    )
 
 
 def _as_decimal(value: object, field_name: str) -> Decimal:
@@ -113,6 +117,7 @@ def _rolling_mean_abs_dev(values: list[Decimal], period: int) -> list[Decimal]:
         window = values[start : idx + 1]
         center = sum(window, Decimal("0")) / Decimal(len(window))
         output.append(
-            sum([abs(item - center) for item in window], Decimal("0")) / Decimal(len(window))
+            sum([abs(item - center) for item in window], Decimal("0"))
+            / Decimal(len(window))
         )
     return output

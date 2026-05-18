@@ -58,7 +58,9 @@ class JsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc,name-defined
         else:
             try:
                 config = get_config()
-                log_record["service.name"] = getattr(config, "service", {}).get("name", "iatb")
+                log_record["service.name"] = getattr(config, "service", {}).get(
+                    "name", "iatb"
+                )
             except Exception:
                 log_record["service.name"] = "iatb"
 
@@ -275,7 +277,9 @@ class LogContext:
             sinfo: str | None = None,
         ) -> logging.LogRecord:
             """Custom record factory with context."""
-            record = self.old_factory(name, level, fn, lno, msg, args, exc_info, func, sinfo)
+            record = self.old_factory(
+                name, level, fn, lno, msg, args, exc_info, func, sinfo
+            )
             for key, value in self.context.items():
                 setattr(record, key, value)
             return record  # type: ignore[no-any-return]

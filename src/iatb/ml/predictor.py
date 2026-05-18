@@ -11,7 +11,9 @@ from iatb.ml.base import PredictionResult, Predictor
 class EnsemblePredictor(Predictor):
     """Weighted-voting ensemble across multiple predictor models."""
 
-    def __init__(self, predictors: list[Predictor], weights: list[Decimal] | None = None) -> None:
+    def __init__(
+        self, predictors: list[Predictor], weights: list[Decimal] | None = None
+    ) -> None:
         if not predictors:
             msg = "predictors cannot be empty"
             raise ConfigError(msg)
@@ -20,7 +22,9 @@ class EnsemblePredictor(Predictor):
 
     def predict(self, features: list[Decimal]) -> PredictionResult:
         predictions = [predictor.predict(features) for predictor in self._predictors]
-        weighted_score = _weighted_average([item.score for item in predictions], self._weights)
+        weighted_score = _weighted_average(
+            [item.score for item in predictions], self._weights
+        )
         weighted_confidence = _weighted_average(
             [item.confidence for item in predictions], self._weights
         )
@@ -45,7 +49,9 @@ def _normalize_weights(weights: list[Decimal] | None, size: int) -> list[Decimal
 
 
 def _weighted_average(values: list[Decimal], weights: list[Decimal]) -> Decimal:
-    numerator = sum([values[idx] * weights[idx] for idx in range(len(values))], Decimal("0"))
+    numerator = sum(
+        [values[idx] * weights[idx] for idx in range(len(values))], Decimal("0")
+    )
     denominator = sum(weights, Decimal("0"))
     return numerator / denominator
 

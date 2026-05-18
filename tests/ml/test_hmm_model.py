@@ -27,7 +27,9 @@ def test_hmm_model_fit_and_predict_regime(monkeypatch: pytest.MonkeyPatch) -> No
     assert model.predict_regime([Decimal("0.8")]) == "BULL"
 
 
-def test_hmm_model_validates_inputs_and_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hmm_model_validates_inputs_and_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     model = HMMRegimeModel()
     with pytest.raises(ConfigError, match="fitted before predict_regime"):
         model.predict_regime([Decimal("0.1")])

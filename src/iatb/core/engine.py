@@ -84,7 +84,10 @@ class Engine:
             logger.info("Starting engine")
 
             # Preflight checks
-            if self._config.execution_mode == "live" and not self._config.live_trading_enabled:
+            if (
+                self._config.execution_mode == "live"
+                and not self._config.live_trading_enabled
+            ):
                 raise EngineError(
                     "Live trading enabled in config but live_trading_enabled is False",
                 )

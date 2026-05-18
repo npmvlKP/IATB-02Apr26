@@ -2,7 +2,6 @@
 Tests for core enum definitions.
 """
 
-
 import random
 
 import numpy as np

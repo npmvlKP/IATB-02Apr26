@@ -138,13 +138,28 @@ class FundamentalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate P/E, P/B, and ROE ratio metrics."""
         score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
-            metrics.pe_ratio, self._check_pe_ratio, reasons, score, [total_checks], [passed_checks]
+            metrics.pe_ratio,
+            self._check_pe_ratio,
+            reasons,
+            score,
+            [total_checks],
+            [passed_checks],
         )
         score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
-            metrics.pb_ratio, self._check_pb_ratio, reasons, score, [total_checks], [passed_checks]
+            metrics.pb_ratio,
+            self._check_pb_ratio,
+            reasons,
+            score,
+            [total_checks],
+            [passed_checks],
         )
         score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
-            metrics.roe, self._check_roe, reasons, score, [total_checks], [passed_checks]
+            metrics.roe,
+            self._check_roe,
+            reasons,
+            score,
+            [total_checks],
+            [passed_checks],
         )
         return score, total_checks, passed_checks
 
@@ -185,7 +200,12 @@ class FundamentalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate dividend, earnings, and revenue growth metrics."""
         if self._config.min_dividend_yield is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_optional_metric(
                 metrics.dividend_yield,
                 self._check_dividend_yield,
                 reasons,
@@ -194,7 +214,12 @@ class FundamentalFilter:
                 [passed_checks],
             )
         if self._config.min_earnings_growth is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_optional_metric(
                 metrics.earnings_growth,
                 self._check_earnings_growth,
                 reasons,
@@ -203,7 +228,12 @@ class FundamentalFilter:
                 [passed_checks],
             )
         if self._config.min_revenue_growth is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_optional_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_optional_metric(
                 metrics.revenue_growth,
                 self._check_revenue_growth,
                 reasons,
@@ -279,9 +309,13 @@ class FundamentalFilter:
         passed = passed_checks == total_checks
 
         if passed:
-            logger.debug("%s passed fundamental filter: score=%.2f", metrics.symbol, final_score)
+            logger.debug(
+                "%s passed fundamental filter: score=%.2f", metrics.symbol, final_score
+            )
         else:
-            logger.info("%s failed fundamental filter: %s", metrics.symbol, "; ".join(reasons))
+            logger.info(
+                "%s failed fundamental filter: %s", metrics.symbol, "; ".join(reasons)
+            )
 
         return FilterResult(
             symbol=metrics.symbol,
@@ -291,7 +325,9 @@ class FundamentalFilter:
             metrics=metrics,
         )
 
-    def filter_batch(self, metrics_list: list[FundamentalMetrics]) -> list[FilterResult]:
+    def filter_batch(
+        self, metrics_list: list[FundamentalMetrics]
+    ) -> list[FilterResult]:
         """Filter multiple instruments."""
         results = [self.evaluate(m) for m in metrics_list]
         passed_count = sum(1 for r in results if r.passed)
@@ -350,7 +386,9 @@ class FundamentalFilter:
             if self._config.min_pb is None:
                 msg = "min_pb must be set when max_pb is set"
                 raise ValueError(msg)
-            ideal = self._config.min_pb + (self._config.max_pb - self._config.min_pb) / Decimal("3")
+            ideal = self._config.min_pb + (
+                self._config.max_pb - self._config.min_pb
+            ) / Decimal("3")
         distance = abs(pb - ideal)
         max_dist = (
             self._config.max_pb - self._config.min_pb
@@ -363,7 +401,11 @@ class FundamentalFilter:
     def _check_roe(self, roe: Decimal) -> tuple[bool, Decimal, str]:
         """Check ROE."""
         if roe < self._config.min_roe:
-            return False, Decimal("0"), f"ROE {roe} below minimum {self._config.min_roe}"
+            return (
+                False,
+                Decimal("0"),
+                f"ROE {roe} below minimum {self._config.min_roe}",
+            )
         score = min(Decimal("1"), roe / (self._config.min_roe * Decimal("2")))
         return True, score, ""
 
@@ -437,14 +479,18 @@ class FundamentalFilter:
                 f"Market cap {mc} above maximum {self._config.max_market_cap}",
             )
         ideal = self._config.min_market_cap or mc
-        if self._config.max_market_cap is not None and self._config.min_market_cap is not None:
+        if (
+            self._config.max_market_cap is not None
+            and self._config.min_market_cap is not None
+        ):
             ideal = self._config.min_market_cap + (
                 self._config.max_market_cap - self._config.min_market_cap
             ) / Decimal("2")
         distance = abs(mc - ideal)
         max_dist = (
             (self._config.max_market_cap - self._config.min_market_cap) / Decimal("2")
-            if self._config.max_market_cap is not None and self._config.min_market_cap is not None
+            if self._config.max_market_cap is not None
+            and self._config.min_market_cap is not None
             else ideal
         )
         score = max(Decimal("0"), Decimal("1") - (distance / max_dist))
@@ -465,7 +511,9 @@ class FundamentalFilter:
         score = min(Decimal("1"), rg / (min_rg * Decimal("2")))
         return True, score, ""
 
-    def _check_profitability(self, metrics: FundamentalMetrics) -> tuple[bool, Decimal, str]:
+    def _check_profitability(
+        self, metrics: FundamentalMetrics
+    ) -> tuple[bool, Decimal, str]:
         """Check basic profitability."""
         if metrics.roe is None:
             return True, Decimal("1"), ""

@@ -16,14 +16,18 @@ class PortfolioRiskSnapshot:
     drawdown_breached: bool
 
 
-def compute_var(returns: list[Decimal], confidence: Decimal = Decimal("0.95")) -> Decimal:
+def compute_var(
+    returns: list[Decimal], confidence: Decimal = Decimal("0.95")
+) -> Decimal:
     _validate_returns(returns, confidence)
     ordered = sorted(returns)
     index = int((Decimal("1") - confidence) * Decimal(len(ordered) - 1))
     return abs(ordered[index])
 
 
-def compute_cvar(returns: list[Decimal], confidence: Decimal = Decimal("0.95")) -> Decimal:
+def compute_cvar(
+    returns: list[Decimal], confidence: Decimal = Decimal("0.95")
+) -> Decimal:
     var = compute_var(returns, confidence)
     tail = [value for value in returns if value <= -var]
     if not tail:
@@ -52,7 +56,9 @@ def build_risk_snapshot(
     var_95 = compute_var(returns)
     cvar_95 = compute_cvar(returns)
     max_drawdown = compute_max_drawdown(equity_curve)
-    return PortfolioRiskSnapshot(var_95, cvar_95, max_drawdown, max_drawdown > max_allowed_drawdown)
+    return PortfolioRiskSnapshot(
+        var_95, cvar_95, max_drawdown, max_drawdown > max_allowed_drawdown
+    )
 
 
 def _validate_returns(returns: list[Decimal], confidence: Decimal) -> None:

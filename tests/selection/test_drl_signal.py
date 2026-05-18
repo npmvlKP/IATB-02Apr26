@@ -752,7 +752,7 @@ class TestComputeDRLSignalFromAgent:
         assert result == expected
 
     def test_compute_drl_signal_from_agent_without_model_no_fallback_raises(
-        self
+        self,
     ) -> None:
         """Test that missing conclusion when no model raises error."""
         from unittest.mock import Mock

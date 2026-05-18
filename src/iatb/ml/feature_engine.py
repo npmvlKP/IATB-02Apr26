@@ -41,7 +41,12 @@ def _validate_lengths(
     regime_labels: list[str],
     timestamps_utc: list[datetime],
 ) -> None:
-    sizes = {len(ohlcv_rows), len(sentiment_scores), len(regime_labels), len(timestamps_utc)}
+    sizes = {
+        len(ohlcv_rows),
+        len(sentiment_scores),
+        len(regime_labels),
+        len(timestamps_utc),
+    }
     if len(sizes) != 1:
         msg = "ohlcv_rows, sentiment_scores, regime_labels, timestamps_utc must share equal length"
         raise ConfigError(msg)
@@ -98,7 +103,9 @@ def _field(row: dict[str, Decimal], key: str) -> Decimal:
     return Decimal(value)
 
 
-def _moving_average(rows: list[dict[str, Decimal]], index: int, key: str, window: int) -> Decimal:
+def _moving_average(
+    rows: list[dict[str, Decimal]], index: int, key: str, window: int
+) -> Decimal:
     start = max(0, index - window + 1)
     values = [_field(row, key) for row in rows[start : index + 1]]
     return _mean(values)

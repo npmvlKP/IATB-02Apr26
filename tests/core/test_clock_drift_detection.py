@@ -44,9 +44,9 @@ class TestClockDriftDetector:
         detector = ClockDriftDetector()
         now_utc = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=now_utc), patch.object(
-            detector, "_get_local_time", return_value=now_utc
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=now_utc
+        ), patch.object(detector, "_get_local_time", return_value=now_utc):
             drift = detector.check_drift()
 
         assert isinstance(drift, timedelta)
@@ -56,9 +56,9 @@ class TestClockDriftDetector:
         detector = ClockDriftDetector()
         now_utc = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=now_utc), patch.object(
-            detector, "_get_local_time", return_value=now_utc
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=now_utc
+        ), patch.object(detector, "_get_local_time", return_value=now_utc):
             detector.check_drift()
 
         assert detector._sync_count == 1
@@ -79,9 +79,9 @@ class TestClockDriftDetector:
         now_utc = datetime.now(UTC)
         ntp_time = now_utc + timedelta(seconds=10)
 
-        with patch.object(detector, "_query_ntp_time", return_value=ntp_time), patch.object(
-            detector, "_get_local_time", return_value=now_utc
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=ntp_time
+        ), patch.object(detector, "_get_local_time", return_value=now_utc):
             drift = detector.check_drift()
 
         assert detector.is_drift_exceeded()
@@ -93,9 +93,9 @@ class TestClockDriftDetector:
         now_utc = datetime.now(UTC)
         ntp_time = now_utc + timedelta(seconds=1)
 
-        with patch.object(detector, "_query_ntp_time", return_value=ntp_time), patch.object(
-            detector, "_get_local_time", return_value=now_utc
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=ntp_time
+        ), patch.object(detector, "_get_local_time", return_value=now_utc):
             drift = detector.check_drift()
 
         assert not detector.is_drift_exceeded()
@@ -106,9 +106,9 @@ class TestClockDriftDetector:
         detector = ClockDriftDetector()
         now_utc = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=now_utc), patch.object(
-            detector, "_get_local_time", return_value=now_utc
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=now_utc
+        ), patch.object(detector, "_get_local_time", return_value=now_utc):
             detector.check_drift()
 
             status = detector.get_sync_status()
@@ -131,7 +131,9 @@ class TestClockDriftDetector:
 
     def test_query_ntp_time_fallback_to_next_server(self) -> None:
         """Test NTP query falls back to next server on failure."""
-        detector = ClockDriftDetector(ntp_servers=["server1.example.com", "server2.example.com"])
+        detector = ClockDriftDetector(
+            ntp_servers=["server1.example.com", "server2.example.com"]
+        )
 
         def mock_query_server(server: str) -> datetime:
             if server == "server1.example.com":
@@ -145,7 +147,9 @@ class TestClockDriftDetector:
 
     def test_query_ntp_time_all_servers_fail(self) -> None:
         """Test NTP query returns None when all servers fail."""
-        detector = ClockDriftDetector(ntp_servers=["server1.example.com", "server2.example.com"])
+        detector = ClockDriftDetector(
+            ntp_servers=["server1.example.com", "server2.example.com"]
+        )
 
         def mock_query_server(server: str) -> datetime:
             raise Exception("Server failed")
@@ -194,9 +198,9 @@ class TestClockDriftDetector:
         now_utc = datetime.now(UTC)
         ntp_time = now_utc - timedelta(seconds=10)
 
-        with patch.object(detector, "_query_ntp_time", return_value=ntp_time), patch.object(
-            detector, "_get_local_time", return_value=now_utc
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=ntp_time
+        ), patch.object(detector, "_get_local_time", return_value=now_utc):
             drift = detector.check_drift()
 
         assert detector.is_drift_exceeded()
@@ -207,9 +211,9 @@ class TestClockDriftDetector:
         detector = ClockDriftDetector(drift_threshold_seconds=1.0)
         local_time = datetime.now(UTC)
 
-        with patch.object(detector, "_query_ntp_time", return_value=local_time), patch.object(
-            detector, "_get_local_time", return_value=local_time
-        ):
+        with patch.object(
+            detector, "_query_ntp_time", return_value=local_time
+        ), patch.object(detector, "_get_local_time", return_value=local_time):
             drift = detector.check_drift()
 
         assert not detector.is_drift_exceeded()
@@ -416,12 +420,16 @@ class TestTradingSessions:
 
     def test_get_mis_square_off_time_for_unsupported_exchange(self) -> None:
         """Test get_mis_square_off_time for unsupported exchange."""
-        result = TradingSessions.get_mis_square_off_time(Exchange.BINANCE, date(2024, 1, 1))
+        result = TradingSessions.get_mis_square_off_time(
+            Exchange.BINANCE, date(2024, 1, 1)
+        )
 
         assert result is None
 
     def test_get_mis_square_off_time_for_non_trading_day(self) -> None:
         """Test get_mis_square_off_time for non-trading day."""
-        result = TradingSessions.get_mis_square_off_time(Exchange.NSE, date(2024, 1, 1))  # Monday
+        result = TradingSessions.get_mis_square_off_time(
+            Exchange.NSE, date(2024, 1, 1)
+        )  # Monday
 
         assert result is not None

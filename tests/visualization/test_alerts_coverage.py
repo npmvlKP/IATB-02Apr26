@@ -75,8 +75,12 @@ class TestRateLimitBoundaries:
         )
         now = UTC_START
         assert dispatcher.send_alert(AlertType.BREAKOUT, "msg-1", now)
-        assert not dispatcher.send_alert(AlertType.BREAKOUT, "msg-2", now + timedelta(seconds=1))
-        assert not dispatcher.send_alert(AlertType.BREAKOUT, "msg-3", now + timedelta(seconds=59))
+        assert not dispatcher.send_alert(
+            AlertType.BREAKOUT, "msg-2", now + timedelta(seconds=1)
+        )
+        assert not dispatcher.send_alert(
+            AlertType.BREAKOUT, "msg-3", now + timedelta(seconds=59)
+        )
 
     def test_max_per_minute_one_resets_after_minute(self) -> None:
         sent: list[tuple[str, str]] = []
@@ -88,8 +92,12 @@ class TestRateLimitBoundaries:
         )
         now = UTC_START
         assert dispatcher.send_alert(AlertType.BREAKOUT, "msg-1", now)
-        assert not dispatcher.send_alert(AlertType.BREAKOUT, "msg-2", now + timedelta(seconds=30))
-        assert dispatcher.send_alert(AlertType.BREAKOUT, "msg-3", now + timedelta(seconds=61))
+        assert not dispatcher.send_alert(
+            AlertType.BREAKOUT, "msg-2", now + timedelta(seconds=30)
+        )
+        assert dispatcher.send_alert(
+            AlertType.BREAKOUT, "msg-3", now + timedelta(seconds=61)
+        )
         assert len(sent) == 2
 
     def test_max_per_minute_five_allows_five_consecutive(self) -> None:
@@ -102,8 +110,12 @@ class TestRateLimitBoundaries:
         )
         now = UTC_START
         for i in range(5):
-            assert dispatcher.send_alert(AlertType.BREAKOUT, f"msg-{i}", now + timedelta(seconds=i))
-        assert not dispatcher.send_alert(AlertType.BREAKOUT, "msg-6", now + timedelta(seconds=5))
+            assert dispatcher.send_alert(
+                AlertType.BREAKOUT, f"msg-{i}", now + timedelta(seconds=i)
+            )
+        assert not dispatcher.send_alert(
+            AlertType.BREAKOUT, "msg-6", now + timedelta(seconds=5)
+        )
         assert len(sent) == 5
 
     def test_max_per_minute_ten_allows_ten_consecutive(self) -> None:
@@ -192,7 +204,9 @@ class TestSenderCallbackArguments:
 class TestBuildSenderTokenPropagation:
     """_build_sender passes bot_token through to Bot constructor."""
 
-    def test_bot_token_passed_to_constructor(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_bot_token_passed_to_constructor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         captured_tokens: list[str] = []
 
         class _Bot:
@@ -236,8 +250,12 @@ class TestDispatcherIsolation:
         now = UTC_START
         assert dispatcher_a.send_alert(AlertType.BREAKOUT, "a-1", now)
         assert dispatcher_b.send_alert(AlertType.BREAKOUT, "b-1", now)
-        assert not dispatcher_a.send_alert(AlertType.BREAKOUT, "a-2", now + timedelta(seconds=1))
-        assert not dispatcher_b.send_alert(AlertType.BREAKOUT, "b-2", now + timedelta(seconds=1))
+        assert not dispatcher_a.send_alert(
+            AlertType.BREAKOUT, "a-2", now + timedelta(seconds=1)
+        )
+        assert not dispatcher_b.send_alert(
+            AlertType.BREAKOUT, "b-2", now + timedelta(seconds=1)
+        )
         assert len(sent_a) == 1
         assert len(sent_b) == 1
 
@@ -259,8 +277,12 @@ class TestDispatcherIsolation:
         now = UTC_START
         assert dispatcher_a.send_alert(AlertType.BREAKOUT, "a-1", now)
         assert dispatcher_b.send_alert(AlertType.BREAKOUT, "b-1", now)
-        assert dispatcher_a.send_alert(AlertType.BREAKOUT, "a-2", now + timedelta(seconds=1))
-        assert not dispatcher_b.send_alert(AlertType.BREAKOUT, "b-2", now + timedelta(seconds=1))
+        assert dispatcher_a.send_alert(
+            AlertType.BREAKOUT, "a-2", now + timedelta(seconds=1)
+        )
+        assert not dispatcher_b.send_alert(
+            AlertType.BREAKOUT, "b-2", now + timedelta(seconds=1)
+        )
         assert len(sent_a) == 2
         assert len(sent_b) == 1
 
@@ -329,7 +351,9 @@ class TestDeprecationWarning:
     """Module-level deprecation warning is raised on import."""
 
     def test_direct_import_raises_deprecation_warning(self) -> None:
-        with pytest.warns(DeprecationWarning, match="iatb.visualization.alerts is deprecated"):
+        with pytest.warns(
+            DeprecationWarning, match="iatb.visualization.alerts is deprecated"
+        ):
             importlib.reload(alerts_mod)
 
 

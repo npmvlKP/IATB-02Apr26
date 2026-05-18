@@ -34,7 +34,9 @@ class MonteCarloAnalyzer:
             msg = "returns must contain at least two points"
             raise ConfigError(msg)
         base_sharpe = _sharpe_like(returns)
-        sampled = [_sharpe_like(self._permute(returns)) for _ in range(self._permutations)]
+        sampled = [
+            _sharpe_like(self._permute(returns)) for _ in range(self._permutations)
+        ]
         sampled.sort()
         percentile_5 = sampled[max(0, (len(sampled) * 5 // 100) - 1)]
         return MonteCarloResult(

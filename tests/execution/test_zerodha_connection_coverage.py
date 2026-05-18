@@ -53,7 +53,9 @@ def test_zerodha_connection_constructor_empty_api_secret():
 def test_zerodha_connection_constructor_invalid_url():
     """Test that invalid base_url raises error."""
     with pytest.raises(ConfigError, match="Zerodha base_url must use http or https"):
-        ZerodhaConnection(api_key="key", api_secret="secret", base_url="ftp://api.example.com")  # noqa: S106
+        ZerodhaConnection(
+            api_key="key", api_secret="secret", base_url="ftp://api.example.com"
+        )  # noqa: S106
 
     with pytest.raises(ConfigError, match="Zerodha base_url must include host"):
         ZerodhaConnection(api_key="key", api_secret="secret", base_url="https://")  # noqa: S106
@@ -441,7 +443,9 @@ def test_is_retryable_exception_http_429():
     """Test that HTTP 429 is retryable."""
     from urllib.error import HTTPError
 
-    exc = HTTPError(url="http://test", code=429, msg="Too Many Requests", hdrs=None, fp=None)
+    exc = HTTPError(
+        url="http://test", code=429, msg="Too Many Requests", hdrs=None, fp=None
+    )
     assert _is_retryable_exception(exc) is True
 
 
@@ -449,7 +453,9 @@ def test_is_retryable_exception_http_500():
     """Test that HTTP 500 is retryable."""
     from urllib.error import HTTPError
 
-    exc = HTTPError(url="http://test", code=500, msg="Internal Server Error", hdrs=None, fp=None)
+    exc = HTTPError(
+        url="http://test", code=500, msg="Internal Server Error", hdrs=None, fp=None
+    )
     assert _is_retryable_exception(exc) is True
 
 

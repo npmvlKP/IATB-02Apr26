@@ -175,6 +175,7 @@ class TestBestParams:
 
     def test_best_params_missing_value_raises_error(self):
         """Test that missing param value raises ConfigError."""
+
         # Use a custom mock object that mimics dict behavior
         class MockBestParams(dict):
             def get(self, key, default=None):
@@ -182,7 +183,7 @@ class TestBestParams:
                 if key == "param2":
                     return None
                 return super().get(key, default)
-        
+
         mock_study = MagicMock()
         mock_study.best_params = MockBestParams({"param1": 5})
 

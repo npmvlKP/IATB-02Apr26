@@ -52,7 +52,10 @@ class LSTMModel(Predictor):
         score = self._predict_score(features)
         confidence = min(Decimal("1"), max(Decimal("0"), abs(score)))
         return PredictionResult(
-            symbol="ENSEMBLE", score=score, confidence=confidence, regime_label="SIDEWAYS"
+            symbol="ENSEMBLE",
+            score=score,
+            confidence=confidence,
+            regime_label="SIDEWAYS",
         )
 
     def _predict_score(self, sequence: list[Decimal]) -> Decimal:
@@ -60,7 +63,9 @@ class LSTMModel(Predictor):
             msg = "sequence length mismatch for LSTM inference"
             raise ConfigError(msg)
         last_value = sequence[-1]
-        return last_value + (self._weight / Decimal("100")) - (self._bias / Decimal("100"))
+        return (
+            last_value + (self._weight / Decimal("100")) - (self._bias / Decimal("100"))
+        )
 
 
 def _load_torch() -> object:

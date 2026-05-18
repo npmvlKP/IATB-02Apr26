@@ -40,7 +40,9 @@ def resolve_aion_predictor() -> PredictFn:
 def validate_and_parse_aion_prediction(raw_prediction: object) -> tuple[str, Decimal]:
     """Parse and validate AION prediction output."""
     if isinstance(raw_prediction, Mapping):
-        label = str(raw_prediction.get("label", raw_prediction.get("sentiment", "NEUTRAL")))
+        label = str(
+            raw_prediction.get("label", raw_prediction.get("sentiment", "NEUTRAL"))
+        )
         value = raw_prediction.get("score", raw_prediction.get("confidence", "0.70"))
         confidence = Decimal(str(value))
         if confidence < Decimal("0"):
@@ -55,7 +57,9 @@ def validate_and_parse_aion_prediction(raw_prediction: object) -> tuple[str, Dec
     raise ConfigError(msg)
 
 
-def resolve_finbert_predictor(model_id: str) -> Callable[[str], list[Mapping[str, object]]]:
+def resolve_finbert_predictor(
+    model_id: str,
+) -> Callable[[str], list[Mapping[str, object]]]:
     """Resolve FinBERT prediction function from transformers dependency."""
     try:
         transformers = importlib.import_module("transformers")
@@ -82,7 +86,9 @@ def resolve_finbert_predictor(model_id: str) -> Callable[[str], list[Mapping[str
     return lambda text: pipeline_fn(text, truncation=True)
 
 
-def parse_finbert_label_score(predictions: list[Mapping[str, object]]) -> tuple[str, Decimal]:
+def parse_finbert_label_score(
+    predictions: list[Mapping[str, object]],
+) -> tuple[str, Decimal]:
     """Parse FinBERT prediction output to label and confidence."""
     if not predictions:
         msg = "FinBERT response must contain at least one mapping prediction"

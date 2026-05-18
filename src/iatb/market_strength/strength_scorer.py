@@ -82,7 +82,10 @@ class StrengthScorer:
             return False
         if inputs.volatility_atr_pct > _MAX_ACCEPTABLE_ATR_PCT:
             return False
-        return self.score(validated_exchange, inputs) >= _EXCHANGE_MIN_SCORE[validated_exchange]
+        return (
+            self.score(validated_exchange, inputs)
+            >= _EXCHANGE_MIN_SCORE[validated_exchange]
+        )
 
     @staticmethod
     def _validate(exchange: object, inputs: StrengthInputs) -> Exchange:

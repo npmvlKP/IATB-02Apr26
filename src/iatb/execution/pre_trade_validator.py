@@ -121,7 +121,9 @@ def _check_quantity(request: OrderRequest, config: PreTradeConfig) -> None:
         raise ConfigError(msg)
 
 
-def _check_notional(request: OrderRequest, price: Decimal, config: PreTradeConfig) -> None:
+def _check_notional(
+    request: OrderRequest, price: Decimal, config: PreTradeConfig
+) -> None:
     notional = request.quantity * price
     if notional > config.max_order_value:
         msg = f"notional {notional} exceeds max {config.max_order_value}"
@@ -178,7 +180,9 @@ def _create_price_data_points(
 ) -> tuple[PriceDataPoint, PriceDataPoint, Price | None]:
     """Create price data points for scanner and execution."""
     scanner_data = _create_scanner_data_point(scanner_price, scanner_timestamp, symbol)
-    execution_data = _create_execution_data_point(execution_price, execution_timestamp, symbol)
+    execution_data = _create_execution_data_point(
+        execution_price, execution_timestamp, symbol
+    )
     prev_close = Price(prev_close_price) if prev_close_price else None
     return scanner_data, execution_data, prev_close
 
@@ -240,7 +244,9 @@ def validate_with_price_reconciliation(
     return _perform_reconciliation(scanner_data, execution_data, prev_close, config)
 
 
-def _create_scanner_data_point(price: Decimal, timestamp: datetime, symbol: str) -> PriceDataPoint:
+def _create_scanner_data_point(
+    price: Decimal, timestamp: datetime, symbol: str
+) -> PriceDataPoint:
     """Create PriceDataPoint for scanner (Kite via DataProvider) source."""
     return PriceDataPoint(
         price=Price(price),

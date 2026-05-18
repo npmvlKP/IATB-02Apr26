@@ -209,7 +209,8 @@ class TestEventLoopManagement:
         for i in range(30):
             bars.append(
                 MockBar(
-                    timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=UTC) - timedelta(days=i),
+                    timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=UTC)
+                    - timedelta(days=i),
                     open_price=Decimal("100") + Decimal(str(i)),
                     high=Decimal("105") + Decimal(str(i)),
                     low=Decimal("95") + Decimal(str(i)),

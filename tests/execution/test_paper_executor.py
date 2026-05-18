@@ -47,22 +47,32 @@ def test_paper_executor_thread_safe_counter() -> None:
     executor = PaperExecutor(slippage_bps=Decimal("5"))
     num_threads = 10
     orders_per_thread = 100
-    request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
 
     def execute_orders() -> list[str]:
-        return [executor.execute_order(request).order_id for _ in range(orders_per_thread)]
+        return [
+            executor.execute_order(request).order_id for _ in range(orders_per_thread)
+        ]
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor_pool:
-        results = list(executor_pool.map(lambda _: execute_orders(), range(num_threads)))
+        results = list(
+            executor_pool.map(lambda _: execute_orders(), range(num_threads))
+        )
 
     # Flatten results
-    all_order_ids = [order_id for thread_results in results for order_id in thread_results]
+    all_order_ids = [
+        order_id for thread_results in results for order_id in thread_results
+    ]
 
     # Check that all order IDs are unique
     assert len(all_order_ids) == len(set(all_order_ids)), "Duplicate order IDs found"
 
     # Check that all order IDs are in correct format and sequence
-    expected_ids = {f"PAPER-{i:06d}" for i in range(1, num_threads * orders_per_thread + 1)}
+    expected_ids = {
+        f"PAPER-{i:06d}" for i in range(1, num_threads * orders_per_thread + 1)
+    }
     actual_ids = set(all_order_ids)
     assert actual_ids == expected_ids, f"Expected {expected_ids}, got {actual_ids}"
 
@@ -73,7 +83,9 @@ def test_paper_executor_thread_safe_counter() -> None:
 def test_paper_executor_order_lifecycle() -> None:
     """Test proper order lifecycle: add, keep, close individually, cancel_all."""
     executor = PaperExecutor(slippage_bps=Decimal("5"))
-    request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
 
     # Execute 3 orders
     result1 = executor.execute_order(request)
@@ -110,7 +122,9 @@ def test_paper_executor_order_lifecycle() -> None:
 def test_paper_executor_close_order_edge_cases() -> None:
     """Test close_order edge cases."""
     executor = PaperExecutor(slippage_bps=Decimal("5"))
-    request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
 
     # Close order from empty set
     assert executor.close_order("PAPER-000001") is False
@@ -175,7 +189,9 @@ def test_paper_executor_concurrent_lifecycle_operations() -> None:
     executor = PaperExecutor(slippage_bps=Decimal("5"))
     num_threads = 5
     orders_per_thread = 20
-    request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
 
     def execute_and_close() -> int:
         """Execute orders and close half of them."""
@@ -194,7 +210,9 @@ def test_paper_executor_concurrent_lifecycle_operations() -> None:
         return closed_count
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor_pool:
-        closed_counts = list(executor_pool.map(lambda _: execute_and_close(), range(num_threads)))
+        closed_counts = list(
+            executor_pool.map(lambda _: execute_and_close(), range(num_threads))
+        )
 
     total_closed = sum(closed_counts)
     total_orders = num_threads * orders_per_thread
@@ -302,7 +320,9 @@ def test_exchange_specific_slippage_nse_futures() -> None:
 
 def test_exchange_specific_slippage_bse() -> None:
     executor = PaperExecutor()
-    request = OrderRequest(Exchange.BSE, "TCS", OrderSide.BUY, Decimal("5"), price=Decimal("500"))
+    request = OrderRequest(
+        Exchange.BSE, "TCS", OrderSide.BUY, Decimal("5"), price=Decimal("500")
+    )
     result = executor.execute_order(request)
     # base 5 bps * volume factor ≈ 4.639 bps
     assert result.average_price.quantize(Decimal("0.001")) == Decimal("500.232")
@@ -310,7 +330,9 @@ def test_exchange_specific_slippage_bse() -> None:
 
 def test_exchange_specific_slippage_mcx() -> None:
     executor = PaperExecutor()
-    request = OrderRequest(Exchange.MCX, "GOLD", OrderSide.BUY, Decimal("2"), price=Decimal("3000"))
+    request = OrderRequest(
+        Exchange.MCX, "GOLD", OrderSide.BUY, Decimal("2"), price=Decimal("3000")
+    )
     result = executor.execute_order(request)
     # base 8 bps * volume factor ≈ 7.636 bps
     assert result.average_price.quantize(Decimal("0.001")) == Decimal("3002.291")
@@ -318,7 +340,9 @@ def test_exchange_specific_slippage_mcx() -> None:
 
 def test_exchange_specific_slippage_sell_side() -> None:
     executor = PaperExecutor()
-    request = OrderRequest(Exchange.NSE, "INFY", OrderSide.SELL, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "INFY", OrderSide.SELL, Decimal("1"), price=Decimal("100")
+    )
     result = executor.execute_order(request)
     # base 3 bps * volume factor ≈ 2.912 bps, sell => 100 - 0.029
     assert result.average_price.quantize(Decimal("0.001")) == Decimal("99.971")
@@ -331,7 +355,9 @@ def test_volume_adjustment_lowers_slippage() -> None:
     """Higher volume should result in lower effective slippage."""
     executor = PaperExecutor()
     # Low quantity
-    req_low = OrderRequest(Exchange.NSE, "A", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    req_low = OrderRequest(
+        Exchange.NSE, "A", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
     # High quantity
     req_high = OrderRequest(
         Exchange.NSE, "A", OrderSide.BUY, Decimal("100000"), price=Decimal("100")
@@ -352,7 +378,9 @@ def test_volume_adjustment_lowers_slippage() -> None:
 def test_override_bps_takes_priority() -> None:
     """When slippage_bps is explicitly provided, it should override exchange-specific."""
     executor = PaperExecutor(slippage_bps=Decimal("50"))
-    request = OrderRequest(Exchange.NSE, "X", OrderSide.BUY, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "X", OrderSide.BUY, Decimal("1"), price=Decimal("100")
+    )
     result = executor.execute_order(request)
     # 50 bps = 0.5%
     # slippage = 100 * 0.005 = 0.50

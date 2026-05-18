@@ -46,7 +46,9 @@ class _FakeTab:
 class _FakeStreamlit:
     def __init__(self) -> None:
         self.titles: list[str] = []
-        self._tabs = [_FakeTab() for _ in REQUIRED_MARKET_TABS + (INSTRUMENT_SCANNER_TAB,)]
+        self._tabs = [
+            _FakeTab() for _ in REQUIRED_MARKET_TABS + (INSTRUMENT_SCANNER_TAB,)
+        ]
 
     def title(self, text: str) -> None:
         self.titles.append(text)
@@ -57,7 +59,9 @@ class _FakeStreamlit:
 
 
 def test_dashboard_payload_and_render() -> None:
-    payload = build_dashboard_payload({"NSE EQ": {"signals": 3}, "Crypto": {"signals": 5}})
+    payload = build_dashboard_payload(
+        {"NSE EQ": {"signals": 3}, "Crypto": {"signals": 5}}
+    )
     assert set(payload.keys()) == set(REQUIRED_MARKET_TABS)
     streamlit = _FakeStreamlit()
     rendered = render_dashboard(payload, streamlit)

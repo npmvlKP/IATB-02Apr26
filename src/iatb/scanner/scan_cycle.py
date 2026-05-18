@@ -309,7 +309,9 @@ def _initialize_data_provider(
         Configured DataProvider or None if initialization fails.
     """
     if data_provider is not None:
-        _LOGGER.info("  ✓ Using provided data provider: %s", type(data_provider).__name__)
+        _LOGGER.info(
+            "  ✓ Using provided data provider: %s", type(data_provider).__name__
+        )
         return data_provider
 
     # Try to create KiteProvider from environment variables
@@ -320,7 +322,9 @@ def _initialize_data_provider(
     except ConfigError as exc:
         error_msg = f"KiteProvider initialization failed: {exc}"
         _LOGGER.warning("  ⚠ %s", error_msg)
-        _LOGGER.warning("  ⚠ Scanner will require custom_data or explicit data_provider")
+        _LOGGER.warning(
+            "  ⚠ Scanner will require custom_data or explicit data_provider"
+        )
         errors.append(error_msg)
         return None
 
@@ -357,9 +361,21 @@ def _initialize_analyzers_and_order_manager(
     if order_manager is None:
         order_manager = _create_order_manager(audit_logger, errors)
         if order_manager is None:
-            return sentiment_aggregator, regime_detector, instrument_scorer, strength_scorer, None
+            return (
+                sentiment_aggregator,
+                regime_detector,
+                instrument_scorer,
+                strength_scorer,
+                None,
+            )
 
-    return sentiment_aggregator, regime_detector, instrument_scorer, strength_scorer, order_manager
+    return (
+        sentiment_aggregator,
+        regime_detector,
+        instrument_scorer,
+        strength_scorer,
+        order_manager,
+    )
 
 
 def _create_scanner(
@@ -544,7 +560,11 @@ def _execute_single_trade(
 
         pnl, was_filled = _calculate_fill_pnl(result)
         _log_trade_execution(
-            trade_count, side, candidate.symbol, result.average_price, result.status.value
+            trade_count,
+            side,
+            candidate.symbol,
+            result.average_price,
+            result.status.value,
         )
 
         return trade_count, pnl
@@ -759,7 +779,9 @@ def _prepare_scan_symbols(symbols: Sequence[str] | None) -> Sequence[str]:
     config_symbols = _load_symbols_from_config()
     if config_symbols:
         _cached_symbols = config_symbols
-        _LOGGER.info("Using %d symbols loaded from config/watchlist.toml", len(config_symbols))
+        _LOGGER.info(
+            "Using %d symbols loaded from config/watchlist.toml", len(config_symbols)
+        )
         return config_symbols
 
     # Config loading failed, clear cache to force fresh reload next time
@@ -954,7 +976,10 @@ def _execute_scan_pipeline(
 
 
 def _initialize_scan_cycle_logging(
-    timestamp_utc: datetime, symbols: Sequence[str] | None, max_trades: int, errors: list[str]
+    timestamp_utc: datetime,
+    symbols: Sequence[str] | None,
+    max_trades: int,
+    errors: list[str],
 ) -> None:
     """Initialize logging for scan cycle.
 
@@ -1004,7 +1029,9 @@ def _initialize_scan_cycle(
     errors: list[str] = []
     _initialize_scan_cycle_logging(timestamp_utc, symbols, max_trades, errors)
     symbols = _prepare_scan_symbols(symbols)
-    comps = _initialize_scan_components(order_manager, audit_logger, data_provider, errors)
+    comps = _initialize_scan_components(
+        order_manager, audit_logger, data_provider, errors
+    )
     return (
         timestamp_utc,
         symbols,
@@ -1089,7 +1116,9 @@ def _handle_scan_result_or_early_return(
     """
     if scanner_result is None:
         return _create_early_return_result(errors, timestamp_utc)
-    return _create_final_result(scanner_result, trades_executed, total_pnl, errors, timestamp_utc)
+    return _create_final_result(
+        scanner_result, trades_executed, total_pnl, errors, timestamp_utc
+    )
 
 
 def _execute_full_scan_cycle(  # noqa: G10
@@ -1123,7 +1152,9 @@ def _execute_full_scan_cycle(  # noqa: G10
     Returns:
         ScanCycleResult with results, trades, PnL, errors.
     """
-    if _check_order_manager_and_return_early_if_needed(order_manager, errors, timestamp_utc):
+    if _check_order_manager_and_return_early_if_needed(
+        order_manager, errors, timestamp_utc
+    ):
         return _create_early_return_result(errors, timestamp_utc)
 
     scanner_result, trades_executed, total_pnl = _execute_scan_pipeline(
@@ -1238,7 +1269,9 @@ def _run_timed_stage(
         return result
     except Exception as exc:
         duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
-        pipeline_run.record_stage(stage, success=False, duration_ms=duration_ms, error=str(exc))
+        pipeline_run.record_stage(
+            stage, success=False, duration_ms=duration_ms, error=str(exc)
+        )
         raise
 
 
@@ -1264,7 +1297,12 @@ def run_scan_cycle(
 
     try:
         result = _run_scan_cycle_with_params(
-            symbols, max_trades, order_manager, audit_logger, data_provider, scanner_config
+            symbols,
+            max_trades,
+            order_manager,
+            audit_logger,
+            data_provider,
+            scanner_config,
         )
         result.pipeline_id = pipeline_id
         pipeline_run.finish()

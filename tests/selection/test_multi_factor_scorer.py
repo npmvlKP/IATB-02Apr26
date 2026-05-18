@@ -26,7 +26,12 @@ class TestFactorWeights:
     def test_default_weights_sum_to_one(self) -> None:
         """Test that default weights sum to 1.0."""
         weights = FactorWeights()
-        total = weights.fundamental + weights.technical + weights.sentiment + weights.strength
+        total = (
+            weights.fundamental
+            + weights.technical
+            + weights.sentiment
+            + weights.strength
+        )
         assert total == Decimal("1")
 
     def test_custom_weights_sum_to_one(self) -> None:
@@ -37,12 +42,19 @@ class TestFactorWeights:
             sentiment=Decimal("0.2"),
             strength=Decimal("0.2"),
         )
-        total = weights.fundamental + weights.technical + weights.sentiment + weights.strength
+        total = (
+            weights.fundamental
+            + weights.technical
+            + weights.sentiment
+            + weights.strength
+        )
         assert total == Decimal("1")
 
     def test_weights_sum_not_one_raises_error(self) -> None:
         """Test that weights not summing to 1.0 raises ConfigError."""
-        with pytest.raises(ConfigError, match="factor weights must sum to 1.0, got 1.2"):
+        with pytest.raises(
+            ConfigError, match="factor weights must sum to 1.0, got 1.2"
+        ):
             FactorWeights(
                 fundamental=Decimal("0.3"),
                 technical=Decimal("0.3"),

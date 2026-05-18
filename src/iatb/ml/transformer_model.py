@@ -31,7 +31,9 @@ class TransformerModel(Predictor):
         _load_torch()
         self._initialized = True
 
-    def train(self, feature_sequences: list[list[Decimal]], targets: list[Decimal]) -> Decimal:
+    def train(
+        self, feature_sequences: list[list[Decimal]], targets: list[Decimal]
+    ) -> Decimal:
         _validate_inputs(feature_sequences, targets)
         if not self._initialized:
             self.initialize()
@@ -49,7 +51,10 @@ class TransformerModel(Predictor):
         score = self._predict_score(features)
         confidence = min(Decimal("1"), max(Decimal("0"), abs(score)))
         return PredictionResult(
-            symbol="ENSEMBLE", score=score, confidence=confidence, regime_label="SIDEWAYS"
+            symbol="ENSEMBLE",
+            score=score,
+            confidence=confidence,
+            regime_label="SIDEWAYS",
         )
 
     def _predict_score(self, features: list[Decimal]) -> Decimal:
@@ -75,7 +80,9 @@ def _attention_proxy(features: list[Decimal]) -> Decimal:
     return sum(weighted, Decimal("0")) / Decimal(len(weighted))
 
 
-def _validate_inputs(feature_sequences: list[list[Decimal]], targets: list[Decimal]) -> None:
+def _validate_inputs(
+    feature_sequences: list[list[Decimal]], targets: list[Decimal]
+) -> None:
     if not feature_sequences or not targets:
         msg = "feature_sequences and targets cannot be empty"
         raise ConfigError(msg)

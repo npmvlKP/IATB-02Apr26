@@ -2,7 +2,6 @@
 Tests for CCXT provider integration.
 """
 
-
 import random
 from decimal import Decimal
 

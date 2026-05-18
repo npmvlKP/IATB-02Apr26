@@ -117,7 +117,9 @@ class LiquidityFilteredSelector:
         self, chain: list[Instrument], underlying_price: Decimal, side: OrderSide
     ) -> Instrument:
         _validate_chain(chain, underlying_price)
-        filtered = [inst for inst in chain if inst.lot_size >= Decimal(str(self._min_volume))]
+        filtered = [
+            inst for inst in chain if inst.lot_size >= Decimal(str(self._min_volume))
+        ]
         if not filtered:
             filtered = chain
         return self._inner.select(filtered, underlying_price, side)

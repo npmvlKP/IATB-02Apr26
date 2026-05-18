@@ -31,7 +31,9 @@ class TestLogContext:
 
 class TestCreateFileHandler:
     @patch("iatb.core.observability.logging_config.get_config")
-    def test_returns_none_when_file_logging_disabled(self, mock_get_config: MagicMock) -> None:
+    def test_returns_none_when_file_logging_disabled(
+        self, mock_get_config: MagicMock
+    ) -> None:
         from iatb.core.observability.logging_config import _create_file_handler
 
         mock_config = MagicMock()
@@ -44,7 +46,9 @@ class TestCreateFileHandler:
         assert result is None
 
     @patch("iatb.core.observability.logging_config.get_config")
-    def test_returns_none_when_no_logging_config(self, mock_get_config: MagicMock) -> None:
+    def test_returns_none_when_no_logging_config(
+        self, mock_get_config: MagicMock
+    ) -> None:
         from iatb.core.observability.logging_config import _create_file_handler
 
         mock_config = MagicMock()
@@ -152,10 +156,18 @@ class TestSetupStructuredLogging:
 
         # Patch the helper functions to avoid side effects
         with (
-            patch("iatb.core.observability.logging_config._create_console_handler") as mock_console,
-            patch("iatb.core.observability.logging_config._create_file_handler") as mock_file,
-            patch("iatb.core.observability.logging_config._configure_logging_format") as mock_fmt,
-            patch("iatb.core.observability.logging_config._configure_module_levels") as mock_mod,
+            patch(
+                "iatb.core.observability.logging_config._create_console_handler"
+            ) as mock_console,
+            patch(
+                "iatb.core.observability.logging_config._create_file_handler"
+            ) as mock_file,
+            patch(
+                "iatb.core.observability.logging_config._configure_logging_format"
+            ) as mock_fmt,
+            patch(
+                "iatb.core.observability.logging_config._configure_module_levels"
+            ) as mock_mod,
         ):
             mock_console.return_value = MagicMock()
             mock_file.return_value = None
@@ -170,10 +182,18 @@ class TestSetupStructuredLogging:
 
         mock_file_handler = MagicMock()
         with (
-            patch("iatb.core.observability.logging_config._create_console_handler") as mock_console,
-            patch("iatb.core.observability.logging_config._create_file_handler") as mock_file,
-            patch("iatb.core.observability.logging_config._configure_logging_format") as mock_fmt,
-            patch("iatb.core.observability.logging_config._configure_module_levels") as mock_mod,
+            patch(
+                "iatb.core.observability.logging_config._create_console_handler"
+            ) as mock_console,
+            patch(
+                "iatb.core.observability.logging_config._create_file_handler"
+            ) as mock_file,
+            patch(
+                "iatb.core.observability.logging_config._configure_logging_format"
+            ) as mock_fmt,
+            patch(
+                "iatb.core.observability.logging_config._configure_module_levels"
+            ) as mock_mod,
         ):
             mock_console.return_value = MagicMock()
             mock_file.return_value = mock_file_handler

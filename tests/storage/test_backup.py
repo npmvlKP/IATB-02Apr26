@@ -25,7 +25,9 @@ from iatb.storage.backup import (
 
 def _create_sqlite_db(path: Path) -> Path:
     conn = sqlite3.connect(str(path))
-    conn.execute("CREATE TABLE trade_audit_log (trade_id TEXT PRIMARY KEY, data TEXT NOT NULL)")
+    conn.execute(
+        "CREATE TABLE trade_audit_log (trade_id TEXT PRIMARY KEY, data TEXT NOT NULL)"
+    )
     conn.execute("INSERT INTO trade_audit_log VALUES ('t1', 'test-data-1')")
     conn.commit()
     conn.close()
@@ -344,7 +346,9 @@ class TestBackupManagerCreateBackup:
 
 
 class TestBackupManagerRestore:
-    def _create_backup_for_restore(self, tmp_path: Path) -> tuple[BackupManager, str, Path, Path]:
+    def _create_backup_for_restore(
+        self, tmp_path: Path
+    ) -> tuple[BackupManager, str, Path, Path]:
         db_path = _create_sqlite_db(tmp_path / "audit.sqlite3")
         cfg_dir = tmp_path / "configs"
         cfg_dir.mkdir()
@@ -368,14 +372,18 @@ class TestBackupManagerRestore:
         result = manager.restore_backup(backup_id)
         assert result.success is True
         conn = sqlite3.connect(str(db_path))
-        row = conn.execute("SELECT data FROM trade_audit_log WHERE trade_id = 't1'").fetchone()
+        row = conn.execute(
+            "SELECT data FROM trade_audit_log WHERE trade_id = 't1'"
+        ).fetchone()
         conn.close()
         assert row is not None
         assert row[0] == "test-data-1"
 
     def test_restore_config_files(self, tmp_path: Path) -> None:
         manager, backup_id, _, cfg_dir = self._create_backup_for_restore(tmp_path)
-        (cfg_dir / "settings.toml").write_text("execution_mode = 'live'", encoding="utf-8")
+        (cfg_dir / "settings.toml").write_text(
+            "execution_mode = 'live'", encoding="utf-8"
+        )
         result = manager.restore_backup(backup_id)
         assert result.success is True
         content = (cfg_dir / "settings.toml").read_text(encoding="utf-8")
@@ -443,7 +451,9 @@ class TestBackupManagerRestore:
         assert result.success is True
         manifest_path = Path(result.backup_dir) / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["sqlite_files"] = [{"source": str(db_path), "dest": "nonexistent_file.sqlite3"}]
+        manifest["sqlite_files"] = [
+            {"source": str(db_path), "dest": "nonexistent_file.sqlite3"}
+        ]
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         restore_result = manager.restore_backup(result.backup_id)
         assert restore_result.success is False
@@ -591,8 +601,16 @@ class TestExportTradingState:
     def test_export_with_multiple_orders(self, tmp_path: Path) -> None:
         positions: dict[str, tuple[Decimal, Decimal]] = {}
         orders: dict[str, dict[str, Any]] = {
-            "ord-1": {"symbol": "RELIANCE", "quantity": Decimal("5"), "price": Decimal("2500")},
-            "ord-2": {"symbol": "TCS", "quantity": Decimal("10"), "price": Decimal("3500")},
+            "ord-1": {
+                "symbol": "RELIANCE",
+                "quantity": Decimal("5"),
+                "price": Decimal("2500"),
+            },
+            "ord-2": {
+                "symbol": "TCS",
+                "quantity": Decimal("10"),
+                "price": Decimal("3500"),
+            },
         }
         out = tmp_path / "state.json"
         export_trading_state(positions, orders, out)
@@ -602,7 +620,11 @@ class TestExportTradingState:
     def test_export_order_decimal_conversion(self, tmp_path: Path) -> None:
         positions: dict[str, tuple[Decimal, Decimal]] = {}
         orders: dict[str, dict[str, Any]] = {
-            "ord-1": {"symbol": "X", "quantity": Decimal("1.5"), "price": Decimal("99.99")},
+            "ord-1": {
+                "symbol": "X",
+                "quantity": Decimal("1.5"),
+                "price": Decimal("99.99"),
+            },
         }
         out = tmp_path / "state.json"
         export_trading_state(positions, orders, out)
@@ -624,7 +646,9 @@ class TestExportTradingState:
 class TestLoadTradingState:
     def test_load_roundtrip(self, tmp_path: Path) -> None:
         positions = {"RELIANCE": (Decimal("10"), Decimal("2500.50"))}
-        orders: dict[str, dict[str, Any]] = {"ord-1": {"symbol": "RELIANCE", "side": "BUY"}}
+        orders: dict[str, dict[str, Any]] = {
+            "ord-1": {"symbol": "RELIANCE", "side": "BUY"}
+        }
         out = tmp_path / "state.json"
         export_trading_state(positions, orders, out)
         loaded_pos, loaded_orders = load_trading_state(out)
@@ -690,7 +714,9 @@ class TestManifestPersistence:
     def test_manifest_missing_keys_raises_on_restore(self, tmp_path: Path) -> None:
         backup_dir = tmp_path / "backups" / "backup_bad"
         backup_dir.mkdir(parents=True)
-        (backup_dir / "manifest.json").write_text('{"backup_id": "bad"}', encoding="utf-8")
+        (backup_dir / "manifest.json").write_text(
+            '{"backup_id": "bad"}', encoding="utf-8"
+        )
         config = _make_config(tmp_path)
         manager = BackupManager(config)
         with pytest.raises(ConfigError, match="missing required keys"):
@@ -751,7 +777,9 @@ class TestManifestPersistence:
         BackupManager._sqlite_online_backup(src, dest)
         assert dest.exists()
         conn = sqlite3.connect(str(dest))
-        row = conn.execute("SELECT data FROM trade_audit_log WHERE trade_id = 't1'").fetchone()
+        row = conn.execute(
+            "SELECT data FROM trade_audit_log WHERE trade_id = 't1'"
+        ).fetchone()
         conn.close()
         assert row is not None
         assert row[0] == "test-data-1"
@@ -856,7 +884,9 @@ class TestCorruptedBackupHandling:
         with pytest.raises((ConfigError, TypeError)):
             manager.restore_backup("backup_null_checksums")
 
-    def test_manifest_with_empty_checksums_passes_validation(self, tmp_path: Path) -> None:
+    def test_manifest_with_empty_checksums_passes_validation(
+        self, tmp_path: Path
+    ) -> None:
         backup_dir = tmp_path / "backups" / "backup_no_checksums"
         backup_dir.mkdir(parents=True)
         (backup_dir / "manifest.json").write_text(
@@ -901,9 +931,14 @@ class TestCorruptedBackupHandling:
             manager.restore_backup(result.backup_id)
 
     def test_restore_validates_all_sources_roundtrip(self, tmp_path: Path) -> None:
-        manager, result, db_path, duckdb_path, cfg_dir, state_path = self._full_backup_setup(
-            tmp_path
-        )
+        (
+            manager,
+            result,
+            db_path,
+            duckdb_path,
+            cfg_dir,
+            state_path,
+        ) = self._full_backup_setup(tmp_path)
         conn = sqlite3.connect(str(db_path))
         conn.execute("DELETE FROM trade_audit_log")
         conn.commit()
@@ -914,7 +949,9 @@ class TestCorruptedBackupHandling:
         restore_result = manager.restore_backup(result.backup_id)
         assert restore_result.success is True
         conn = sqlite3.connect(str(db_path))
-        row = conn.execute("SELECT data FROM trade_audit_log WHERE trade_id = 't1'").fetchone()
+        row = conn.execute(
+            "SELECT data FROM trade_audit_log WHERE trade_id = 't1'"
+        ).fetchone()
         conn.close()
         assert row is not None
         assert row[0] == "test-data-1"

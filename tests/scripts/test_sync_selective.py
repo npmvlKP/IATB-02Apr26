@@ -82,10 +82,16 @@ class TestSyncSelective:
         assert result is True
         assert len(runner.calls) == 4  # 3 git add + 1 git status --short
 
-    def test_stage_specific_files_partial_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_stage_specific_files_partial_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test staging when some files fail to stage."""
         responses = [
-            _result(["git", "add", "fix_*.py"], returncode=1, stderr="pathspec did not match"),
+            _result(
+                ["git", "add", "fix_*.py"],
+                returncode=1,
+                stderr="pathspec did not match",
+            ),
             _result(["git", "add", "sync_*.py"]),
             _result(["git", "status"]),
         ]
@@ -100,11 +106,21 @@ class TestSyncSelective:
         result = stage_specific_files(["fix_*.py", "sync_*.py"])
         assert result is True  # Still true because at least one file staged
 
-    def test_stage_specific_files_all_fail(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_stage_specific_files_all_fail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test staging when all files fail to stage."""
         responses = [
-            _result(["git", "add", "fix_*.py"], returncode=1, stderr="pathspec did not match"),
-            _result(["git", "add", "sync_*.py"], returncode=1, stderr="pathspec did not match"),
+            _result(
+                ["git", "add", "fix_*.py"],
+                returncode=1,
+                stderr="pathspec did not match",
+            ),
+            _result(
+                ["git", "add", "sync_*.py"],
+                returncode=1,
+                stderr="pathspec did not match",
+            ),
         ]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
@@ -120,9 +136,14 @@ class TestSyncSelective:
     def test_create_commit_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test successful commit creation."""
         responses = [
-            _result(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout="optimize/feature\n"),
+            _result(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout="optimize/feature\n",
+            ),
             _result(["git", "commit"], returncode=0),
-            _result(["git", "log"], stdout="abc123 feat(feature): selective file updates\n"),
+            _result(
+                ["git", "log"], stdout="abc123 feat(feature): selective file updates\n"
+            ),
         ]
         runner = _Runner(responses)
         monkeypatch.setattr("subprocess.run", runner)
@@ -138,7 +159,10 @@ class TestSyncSelective:
     def test_create_commit_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test commit creation failure."""
         responses = [
-            _result(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout="optimize/feature\n"),
+            _result(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout="optimize/feature\n",
+            ),
             _result(["git", "commit"], returncode=1, stderr="commit failed\n"),
         ]
         runner = _Runner(responses)
@@ -155,7 +179,10 @@ class TestSyncSelective:
     def test_push_to_remote_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test successful push to remote."""
         responses = [
-            _result(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout="optimize/feature\n"),
+            _result(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout="optimize/feature\n",
+            ),
             _result(["git", "push"], returncode=0, stdout="Success\n"),
         ]
         runner = _Runner(responses)
@@ -172,7 +199,10 @@ class TestSyncSelective:
     def test_push_to_remote_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test push to remote failure."""
         responses = [
-            _result(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout="optimize/feature\n"),
+            _result(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout="optimize/feature\n",
+            ),
             _result(["git", "push"], returncode=1, stderr="push failed\n"),
         ]
         runner = _Runner(responses)
@@ -190,7 +220,10 @@ class TestSyncSelective:
         """Test successful sync verification."""
         responses = [
             _result(["git", "rev-parse", "HEAD"], stdout="abc123\n"),
-            _result(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout="optimize/feature\n"),
+            _result(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout="optimize/feature\n",
+            ),
             _result(["git", "fetch"]),
             _result(["git", "rev-parse", "origin/optimize/feature"], stdout="abc123\n"),
         ]
@@ -209,7 +242,10 @@ class TestSyncSelective:
         """Test sync verification when hashes don't match."""
         responses = [
             _result(["git", "rev-parse", "HEAD"], stdout="abc123\n"),
-            _result(["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout="optimize/feature\n"),
+            _result(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stdout="optimize/feature\n",
+            ),
             _result(["git", "fetch"]),
             _result(["git", "rev-parse", "origin/optimize/feature"], stdout="def456\n"),
         ]

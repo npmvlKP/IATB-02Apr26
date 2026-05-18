@@ -313,7 +313,9 @@ class TestNewsAnalyzer:
         articles = [
             NewsArticle(
                 title=f"Article {i}",
-                content="TEST shows strong growth" if i % 2 == 0 else "TEST shows weak performance",
+                content="TEST shows strong growth"
+                if i % 2 == 0
+                else "TEST shows weak performance",
                 source=f"Source{i}",
                 published_at=now,
                 symbols=["TEST"],

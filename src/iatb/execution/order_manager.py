@@ -92,7 +92,9 @@ class OrderManager:
         self._total_exposure = total_exposure
         # Propagate market snapshot to the risk pipeline
         if hasattr(self, "_risk_pipeline"):
-            self._risk_pipeline.update_market_data(last_prices, positions, total_exposure)
+            self._risk_pipeline.update_market_data(
+                last_prices, positions, total_exposure
+            )
 
     def receive_heartbeat(self, heartbeat_utc: datetime) -> None:
         if heartbeat_utc.tzinfo != UTC:
@@ -267,7 +269,9 @@ class OrderManager:
         now = datetime.now(UTC)
 
         if request.side == OrderSide.BUY:
-            self._process_buy_order(symbol, fill_qty, fill_price, current_qty, avg_entry_price, now)
+            self._process_buy_order(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price, now
+            )
         elif request.side == OrderSide.SELL:
             self._process_sell_order(
                 symbol, fill_qty, fill_price, current_qty, avg_entry_price, now
@@ -285,10 +289,14 @@ class OrderManager:
         """Process BUY order for PnL recording."""
         if current_qty < Decimal("0"):
             # Closing short position - realize PnL
-            self._realize_short_pnl(symbol, fill_qty, fill_price, current_qty, avg_entry_price, now)
+            self._realize_short_pnl(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price, now
+            )
         else:
             # Opening or adding to long position - no realized PnL
-            self._add_to_long_position(symbol, fill_qty, fill_price, current_qty, avg_entry_price)
+            self._add_to_long_position(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price
+            )
 
     def _process_sell_order(
         self,
@@ -302,10 +310,14 @@ class OrderManager:
         """Process SELL order for PnL recording."""
         if current_qty > Decimal("0"):
             # Closing long position - realize PnL
-            self._realize_long_pnl(symbol, fill_qty, fill_price, current_qty, avg_entry_price, now)
+            self._realize_long_pnl(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price, now
+            )
         else:
             # Opening or adding to short position - no realized PnL
-            self._add_to_short_position(symbol, fill_qty, fill_price, current_qty, avg_entry_price)
+            self._add_to_short_position(
+                symbol, fill_qty, fill_price, current_qty, avg_entry_price
+            )
 
     def _realize_short_pnl(
         self,
@@ -537,7 +549,9 @@ class OrderManager:
         }
 
         order_data = payload.get("order_status", {})
-        self._order_status = {oid: OrderStatus(value) for oid, value in order_data.items()}
+        self._order_status = {
+            oid: OrderStatus(value) for oid, value in order_data.items()
+        }
 
         exposure = payload.get("total_exposure", "0")
         self._total_exposure = Decimal(str(exposure))

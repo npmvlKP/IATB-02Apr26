@@ -114,7 +114,9 @@ class TestOHLCVNormalizer:
     def test_normalize_record_rejects_invalid_numeric_type(self) -> None:
         payload = _raw_ohlcv("2026-01-01T09:15:00+00:00")
         payload["open"] = object()
-        with pytest.raises(ValidationError, match="open must be Decimal, int, float, or str"):
+        with pytest.raises(
+            ValidationError, match="open must be Decimal, int, float, or str"
+        ):
             normalize_ohlcv_record(
                 payload,
                 symbol="NIFTY",

@@ -42,7 +42,9 @@ def _make_bar(offset_minutes: int, symbol: str = "RELIANCE") -> OHLCVBar:
     )
 
 
-def _make_ticker(bid: str = "99", ask: str = "101", last: str = "100") -> TickerSnapshot:
+def _make_ticker(
+    bid: str = "99", ask: str = "101", last: str = "100"
+) -> TickerSnapshot:
     return TickerSnapshot(
         timestamp=create_timestamp(_BASE_TIMESTAMP),
         exchange=Exchange.NSE,

@@ -53,7 +53,9 @@ def test_optimizer_runs_optuna_study_with_deterministic_sampler(
         samplers=SimpleNamespace(TPESampler=_FakeSampler),
         create_study=lambda direction, sampler: _FakeStudy(),
     )
-    monkeypatch.setattr("iatb.rl.optimizer.importlib.import_module", lambda _: fake_optuna)
+    monkeypatch.setattr(
+        "iatb.rl.optimizer.importlib.import_module", lambda _: fake_optuna
+    )
 
     def objective(params: dict[str, int]) -> Decimal:
         return Decimal(params["fast"]) + Decimal(params["slow"])
@@ -65,7 +67,9 @@ def test_optimizer_runs_optuna_study_with_deterministic_sampler(
     assert result.sampler_name == "_FakeSampler"
 
 
-def test_optimizer_validates_search_space_and_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_optimizer_validates_search_space_and_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     optimizer = RLParameterOptimizer(objective=lambda params: Decimal("1"), n_trials=1)
     with pytest.raises(ConfigError, match="search_space cannot be empty"):
         optimizer.optimize({})
@@ -88,12 +92,16 @@ def test_optimizer_validates_trials_bounds_and_optuna_interfaces(
     bad_sampler_module = SimpleNamespace(
         samplers=SimpleNamespace(), create_study=lambda **kwargs: _FakeStudy()
     )
-    monkeypatch.setattr("iatb.rl.optimizer.importlib.import_module", lambda _: bad_sampler_module)
+    monkeypatch.setattr(
+        "iatb.rl.optimizer.importlib.import_module", lambda _: bad_sampler_module
+    )
     with pytest.raises(ConfigError, match="TPESampler is unavailable"):
         optimizer.optimize({"window": (1, 2)})
 
 
-def test_optimizer_rejects_bad_trial_and_best_params(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_optimizer_rejects_bad_trial_and_best_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _BadTrial:
         def suggest_int(self, name: str, low: int, high: int) -> str:
             _ = name
@@ -126,13 +134,17 @@ def test_optimizer_rejects_bad_trial_and_best_params(monkeypatch: pytest.MonkeyP
         samplers=SimpleNamespace(TPESampler=_FakeSampler),
         create_study=lambda direction, sampler: _BadTrialStudy(),
     )
-    monkeypatch.setattr("iatb.rl.optimizer.importlib.import_module", lambda _: bad_trial_module)
+    monkeypatch.setattr(
+        "iatb.rl.optimizer.importlib.import_module", lambda _: bad_trial_module
+    )
     with pytest.raises(ConfigError, match="must be int"):
         optimizer.optimize({"window": (1, 2)})
     bad_params_module = SimpleNamespace(
         samplers=SimpleNamespace(TPESampler=_FakeSampler),
         create_study=lambda direction, sampler: _BadParamsStudy(),
     )
-    monkeypatch.setattr("iatb.rl.optimizer.importlib.import_module", lambda _: bad_params_module)
+    monkeypatch.setattr(
+        "iatb.rl.optimizer.importlib.import_module", lambda _: bad_params_module
+    )
     with pytest.raises(ConfigError, match="best_params missing int value"):
         optimizer.optimize({"window": (1, 2)})

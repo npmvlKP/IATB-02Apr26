@@ -4,6 +4,7 @@ Tests for slippage validation functionality in PaperExecutor.
 These tests validate that deterministic slippage model produces
 realistic fills within acceptable bounds when compared to market prices.
 """
+
 from decimal import Decimal
 
 from iatb.core.enums import Exchange, MarketType, OrderSide
@@ -229,11 +230,15 @@ def test_paper_executor_fills_are_conservative_illiquid() -> None:
     """End-to-end test: MCX fills should be conservative
     (≤ target) for illiquid instruments."""
     executor = PaperExecutor()
-    request = OrderRequest(Exchange.MCX, "GOLD", OrderSide.BUY, Decimal("2"), price=Decimal("3000"))
+    request = OrderRequest(
+        Exchange.MCX, "GOLD", OrderSide.BUY, Decimal("2"), price=Decimal("3000")
+    )
     result = executor.execute_order(request)
 
     # Get expected slippage from model
-    expected_slippage_bps = _compute_slippage_bps(Exchange.MCX, MarketType.SPOT, Decimal("2"), None)
+    expected_slippage_bps = _compute_slippage_bps(
+        Exchange.MCX, MarketType.SPOT, Decimal("2"), None
+    )
 
     # Validate against actual computed slippage
     is_valid, message, actual_bps = validate_fill_against_market(
@@ -255,11 +260,15 @@ def test_paper_executor_fills_are_conservative_illiquid() -> None:
 def test_paper_executor_sell_orders_are_conservative() -> None:
     """End-to-end test: Sell orders should be conservative (≤ target)."""
     executor = PaperExecutor()
-    request = OrderRequest(Exchange.NSE, "INFY", OrderSide.SELL, Decimal("1"), price=Decimal("100"))
+    request = OrderRequest(
+        Exchange.NSE, "INFY", OrderSide.SELL, Decimal("1"), price=Decimal("100")
+    )
     result = executor.execute_order(request)
 
     # Get expected slippage from model
-    expected_slippage_bps = _compute_slippage_bps(Exchange.NSE, MarketType.SPOT, Decimal("1"), None)
+    expected_slippage_bps = _compute_slippage_bps(
+        Exchange.NSE, MarketType.SPOT, Decimal("1"), None
+    )
 
     # Validate against actual computed slippage
     is_valid, message, actual_bps = validate_fill_against_market(

@@ -66,7 +66,9 @@ def _create_objective(
     return objective
 
 
-def _log_optimization_result(regime: MarketRegime, best_ic: Decimal, improved: bool) -> None:
+def _log_optimization_result(
+    regime: MarketRegime, best_ic: Decimal, improved: bool
+) -> None:
     """Log optimization result.
 
     Args:

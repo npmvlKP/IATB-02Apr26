@@ -95,7 +95,9 @@ class TestWatchlistConfig:
         )
         entries = config.get_all_entries()
         assert len(entries) == 4
-        assert any(e.exchange == Exchange.NSE and e.symbol == "RELIANCE" for e in entries)
+        assert any(
+            e.exchange == Exchange.NSE and e.symbol == "RELIANCE" for e in entries
+        )
         assert any(e.exchange == Exchange.NSE and e.symbol == "TCS" for e in entries)
         assert any(e.exchange == Exchange.BSE and e.symbol == "SBIN" for e in entries)
         assert any(e.exchange == Exchange.MCX and e.symbol == "GOLD" for e in entries)
@@ -118,7 +120,9 @@ class TestConfigManager:
         manager = ConfigManager()
         assert manager._config_path == Path("config/watchlist.toml")
 
-    def test_init_with_env_override(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_init_with_env_override(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Test initialization with environment variable override."""
         custom_path = tmp_path / "custom_watchlist.toml"
         monkeypatch.setenv(WATCHLIST_CONFIG_ENV_VAR, str(custom_path))
@@ -344,7 +348,9 @@ symbols = ["RELIANCE"]
 class TestGlobalConfigManager:
     """Tests for global config manager functions."""
 
-    def test_get_config_manager_singleton(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_config_manager_singleton(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that get_config_manager returns singleton instance."""
         monkeypatch.delenv(WATCHLIST_CONFIG_ENV_VAR, raising=False)
         reset_config_manager()
@@ -364,7 +370,9 @@ class TestGlobalConfigManager:
 
         assert manager1 is not manager2
 
-    def test_config_manager_persists_across_calls(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_config_manager_persists_across_calls(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that config changes persist across get_config_manager calls."""
         monkeypatch.delenv(WATCHLIST_CONFIG_ENV_VAR, raising=False)
         reset_config_manager()

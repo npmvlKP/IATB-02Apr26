@@ -1,0 +1,22 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-8.4.2, pluggy-1.6.0
+rootdir: g:\IATB-02Apr26\IATB
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-0.23.8, cov-4.1.0, mock-3.15.1, xdist-3.8.0
+asyncio: mode=Mode.AUTO
+created: 24/24 workers
+24 workers [95 items]
+
+........................................................................ [ 75%]
+.......................                                                  [100%]
+============================== warnings summary ===============================
+C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: 24 warnings
+  C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: DeprecationWarning: pythonjsonlogger.jsonlogger has been moved to pythonjsonlogger.json
+    warnings.warn(
+
+src\iatb\data\__init__.py:17: 24 warnings
+  g:\IATB-02Apr26\IATB\src\iatb\data\__init__.py:17: DeprecationWarning: KiteTickerFeed is deprecated. Use KiteWebSocketProvider instead. This module will be removed in a future version.
+    from iatb.data.kite_ticker import KiteTickerFeed
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====================== 95 passed, 48 warnings in 11.03s =======================

@@ -45,7 +45,9 @@ class TestPreMarketTokenValidation:
 
     def test_is_token_valid_for_pre_market_invalid_timestamp(self) -> None:
         """Test pre-market validation returns False with invalid timestamp."""
-        with patch.object(keyring, "get_password", side_effect=["test_token", "invalid"]):
+        with patch.object(
+            keyring, "get_password", side_effect=["test_token", "invalid"]
+        ):
             manager = ZerodhaTokenManager(
                 api_key="test_key",
                 api_secret="test_secret",  # noqa: S106
@@ -110,7 +112,9 @@ class TestTokenAutoRefresh:
 
     def test_should_refresh_token_invalid_timestamp(self) -> None:
         """Test should_refresh_token returns True with invalid timestamp."""
-        with patch.object(keyring, "get_password", side_effect=["test_token", "invalid"]):
+        with patch.object(
+            keyring, "get_password", side_effect=["test_token", "invalid"]
+        ):
             manager = ZerodhaTokenManager(
                 api_key="test_key",
                 api_secret="test_secret",  # noqa: S106
@@ -237,7 +241,9 @@ class TestTokenAutoRefresh:
     def test_auto_refresh_token_success(self) -> None:
         """Test auto_refresh_token successfully refreshes token."""
         token_time = datetime(2026, 4, 28, 0, 10, 0, tzinfo=UTC)
-        mock_http_post = MagicMock(return_value={"data": {"access_token": "new_access_token"}})
+        mock_http_post = MagicMock(
+            return_value={"data": {"access_token": "new_access_token"}}
+        )
 
         with patch.object(
             keyring,

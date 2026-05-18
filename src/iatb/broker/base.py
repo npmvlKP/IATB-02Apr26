@@ -197,7 +197,11 @@ class BrokerInterface(Protocol):
         ...
 
     async def get_order_history(
-        self, *, order_id: str, from_date: date | None = None, to_date: date | None = None
+        self,
+        *,
+        order_id: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> list[Mapping[str, Any]]:
         """Get order history for a specific order.
 

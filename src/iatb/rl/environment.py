@@ -52,7 +52,9 @@ class TradingEnvironment:
         self._position = 0
         return list(self._observations[0]), {"seed": str(seed)}
 
-    def step(self, action: int) -> tuple[list[Decimal], Decimal, bool, bool, dict[str, str]]:
+    def step(
+        self, action: int
+    ) -> tuple[list[Decimal], Decimal, bool, bool, dict[str, str]]:
         _validate_action(action)
         if self._index >= len(self._close_prices) - 1:
             msg = "cannot step beyond terminal observation"
@@ -64,12 +66,17 @@ class TradingEnvironment:
         auto_square_off = _must_auto_square_off(timestamp_now, self._config)
         if auto_square_off and self._position != 0:
             self._position = 0
-        reward = _step_reward(self._close_prices, self._index, self._position, self._config)
+        reward = _step_reward(
+            self._close_prices, self._index, self._position, self._config
+        )
         if self._position != prior_position:
             reward -= _transaction_cost(self._config)
         self._index += 1
         self._steps += 1
-        done = self._index >= len(self._close_prices) - 1 or self._steps >= self._config.max_steps
+        done = (
+            self._index >= len(self._close_prices) - 1
+            or self._steps >= self._config.max_steps
+        )
         info = _step_info(self._index, tradable, auto_square_off)
         return list(self._observations[self._index]), reward, done, False, info
 
@@ -79,7 +86,9 @@ def _validate_inputs(
     close_prices: list[Decimal],
     timestamps_utc: list[datetime],
 ) -> None:
-    if len(observations) != len(close_prices) or len(observations) != len(timestamps_utc):
+    if len(observations) != len(close_prices) or len(observations) != len(
+        timestamps_utc
+    ):
         msg = "observations, close_prices, and timestamps_utc must have equal length"
         raise ConfigError(msg)
     if len(observations) < 2:
@@ -129,7 +138,9 @@ def _step_reward(
 
 def _transaction_cost(config: EnvironmentConfig) -> Decimal:
     lot_size = _effective_lot_size(config)
-    costs = calculate_indian_costs(config.trade_notional * lot_size, config.market_segment)
+    costs = calculate_indian_costs(
+        config.trade_notional * lot_size, config.market_segment
+    )
     return costs.total
 
 

@@ -117,7 +117,9 @@ def test_compute_weighted_ensemble_equal_weights() -> None:
         ),
     }
     weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-    composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+    composite_score, composite_confidence = compute_weighted_ensemble(
+        component_scores, weights
+    )
     assert composite_score == Decimal("0.70")
     assert composite_confidence == Decimal("0.85")
 
@@ -141,7 +143,9 @@ def test_compute_weighted_ensemble_unequal_weights() -> None:
         ),
     }
     weights = {"finbert": Decimal("0.7"), "aion": Decimal("0.3")}
-    composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+    composite_score, composite_confidence = compute_weighted_ensemble(
+        component_scores, weights
+    )
     assert composite_score == Decimal("0.72")
     assert composite_confidence == Decimal("0.875")
 
@@ -165,7 +169,9 @@ def test_compute_weighted_ensemble_confidence_capped() -> None:
         ),
     }
     weights = {"finbert": Decimal("0.6"), "aion": Decimal("0.5")}  # Total > 1
-    composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+    composite_score, composite_confidence = compute_weighted_ensemble(
+        component_scores, weights
+    )
     assert composite_confidence <= Decimal("1")
 
 
@@ -188,7 +194,9 @@ def test_compute_weighted_ensemble_negative_scores() -> None:
         ),
     }
     weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-    composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+    composite_score, composite_confidence = compute_weighted_ensemble(
+        component_scores, weights
+    )
     assert composite_score == Decimal("-0.60")
     assert composite_confidence == Decimal("0.85")
 
@@ -237,7 +245,9 @@ def test_resolve_aion_predictor_no_usable_interface_raises(
         "iatb.sentiment.helpers.importlib.import_module",
         lambda _: type("obj", (), {})(),
     )
-    with pytest.raises(ConfigError, match="does not expose a usable prediction interface"):
+    with pytest.raises(
+        ConfigError, match="does not expose a usable prediction interface"
+    ):
         resolve_aion_predictor()
 
 
@@ -251,7 +261,9 @@ def test_resolve_aion_predictor_finds_predict(
         return {"label": "POSITIVE", "score": "0.85"}
 
     mock_module = type("obj", (), {"predict": mock_predict})()
-    monkeypatch.setattr("iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module)
+    monkeypatch.setattr(
+        "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module
+    )
     predictor = resolve_aion_predictor()
     assert predictor is not None
     assert predictor("test") == {"label": "POSITIVE", "score": "0.85"}
@@ -276,7 +288,9 @@ def test_compute_weighted_ensemble_precision_handling() -> None:
         ),
     }
     weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-    composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+    composite_score, composite_confidence = compute_weighted_ensemble(
+        component_scores, weights
+    )
     assert composite_score == Decimal("0.4999995")
     assert composite_confidence == Decimal("0.4999995")
 
@@ -293,6 +307,8 @@ def test_compute_weighted_ensemble_single_component() -> None:
         ),
     }
     weights = {"finbert": Decimal("1.0")}
-    composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+    composite_score, composite_confidence = compute_weighted_ensemble(
+        component_scores, weights
+    )
     assert composite_score == Decimal("0.85")
     assert composite_confidence == Decimal("0.9")

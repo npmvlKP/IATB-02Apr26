@@ -72,7 +72,9 @@ def test_resolve_saved_access_token_rejects_stale_date(tmp_path: Path) -> None:
         assert manager.resolve_saved_access_token() is None
 
 
-def test_resolve_saved_request_token_reads_dotenv_store_for_example_file(tmp_path: Path) -> None:
+def test_resolve_saved_request_token_reads_dotenv_store_for_example_file(
+    tmp_path: Path,
+) -> None:
     """Test that request token is read from .env when using .env.example."""
     today = datetime.now(UTC).date()
     env_example_path = tmp_path / ".env.example"
@@ -103,7 +105,9 @@ def test_resolve_saved_request_token_reads_dotenv_store_for_example_file(tmp_pat
         assert manager.resolve_saved_request_token() == "req-fresh"  # noqa: S105
 
 
-def test_resolve_saved_request_token_ignores_example_file_token_values(tmp_path: Path) -> None:
+def test_resolve_saved_request_token_ignores_example_file_token_values(
+    tmp_path: Path,
+) -> None:
     """Test that request token ignores values in .env.example."""
     today = datetime.now(UTC).date()
     env_example_path = tmp_path / ".env.example"
@@ -131,7 +135,9 @@ def test_resolve_saved_request_token_ignores_example_file_token_values(tmp_path:
         assert manager.resolve_saved_request_token() is None
 
 
-def test_persist_session_tokens_writes_to_dotenv_when_env_file_is_example(tmp_path: Path) -> None:
+def test_persist_session_tokens_writes_to_dotenv_when_env_file_is_example(
+    tmp_path: Path,
+) -> None:
     """Test that persist_session_tokens writes to .env when using .env.example."""
     today = datetime.now(UTC).date()
     env_example_path = tmp_path / ".env.example"
@@ -161,7 +167,9 @@ def test_persist_session_tokens_writes_to_dotenv_when_env_file_is_example(tmp_pa
             assert "BROKER_OAUTH_2FA_VERIFIED=true" in persisted
 
 
-def test_resolve_saved_access_token_prioritizes_keyring_over_env(tmp_path: Path) -> None:
+def test_resolve_saved_access_token_prioritizes_keyring_over_env(
+    tmp_path: Path,
+) -> None:
     """Test that resolve_saved_access_token prioritizes keyring storage."""
     today = datetime.now(UTC).date()
     env_path = tmp_path / ".env"

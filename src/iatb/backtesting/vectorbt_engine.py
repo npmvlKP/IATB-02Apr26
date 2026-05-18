@@ -44,7 +44,9 @@ class VectorBTConfig:
 
     # Exchange and market settings
     exchange: Exchange = Exchange.NSE
-    segment: Literal["equity_delivery", "equity_intraday", "fo", "mcx"] = "equity_intraday"
+    segment: Literal["equity_delivery", "equity_intraday", "fo", "mcx"] = (
+        "equity_intraday"
+    )
     initial_capital: Decimal = Decimal("100000")
 
     # Trading parameters
@@ -72,10 +74,14 @@ class VectorBTConfig:
         if self.commission_pct < Decimal("0"):
             msg = "commission_pct cannot be negative"
             raise ConfigError(msg)
-        if self.min_composite_score < Decimal("0") or self.min_composite_score > Decimal("1"):
+        if self.min_composite_score < Decimal(
+            "0"
+        ) or self.min_composite_score > Decimal("1"):
             msg = "min_composite_score must be in [0, 1]"
             raise ConfigError(msg)
-        if self.min_exit_probability < Decimal("0") or self.min_exit_probability > Decimal("1"):
+        if self.min_exit_probability < Decimal(
+            "0"
+        ) or self.min_exit_probability > Decimal("1"):
             msg = "min_exit_probability must be in [0, 1]"
             raise ConfigError(msg)
         if self.train_pct <= Decimal("0") or self.train_pct >= Decimal("1"):
@@ -252,7 +258,9 @@ class VectorBTEngine:
             raise ConfigError(msg)
 
         session_mask = self._create_session_mask(timestamps)
-        filtered_data = self._apply_session_mask(prices, timestamps, scores, probs, session_mask)
+        filtered_data = self._apply_session_mask(
+            prices, timestamps, scores, probs, session_mask
+        )
 
         if not filtered_data["prices"]:
             msg = "No valid trading sessions in data"
@@ -405,7 +413,9 @@ class VectorBTEngine:
         Returns:
             WalkForwardResult with degradation metrics.
         """
-        cagr_degrade = self._calculate_degradation(train_metrics.cagr, test_metrics.cagr)
+        cagr_degrade = self._calculate_degradation(
+            train_metrics.cagr, test_metrics.cagr
+        )
         sharpe_degrade = self._calculate_degradation(
             train_metrics.sharpe_ratio, test_metrics.sharpe_ratio
         )
@@ -421,7 +431,9 @@ class VectorBTEngine:
             win_rate_degradation=win_rate_degrade,
         )
 
-    def _calculate_degradation(self, train_value: Decimal, test_value: Decimal) -> Decimal:
+    def _calculate_degradation(
+        self, train_value: Decimal, test_value: Decimal
+    ) -> Decimal:
         """Calculate degradation between train and test values.
 
         Args:
@@ -489,13 +501,19 @@ class VectorBTEngine:
         for _ in range(self._config.num_simulations):
             shuffled = self._shuffle_returns(prices)
             sim_prices = self._apply_shuffled_returns(prices, shuffled)
-            result = self.run_backtest(sim_prices, timestamps, composite_scores, exit_probabilities)
-            final_equity = self._config.initial_capital * (Decimal("1") + result.total_return)
+            result = self.run_backtest(
+                sim_prices, timestamps, composite_scores, exit_probabilities
+            )
+            final_equity = self._config.initial_capital * (
+                Decimal("1") + result.total_return
+            )
             final_equities.append(final_equity)
 
         return final_equities
 
-    def _build_monte_carlo_result(self, sorted_equities: list[Decimal], n: int) -> MonteCarloResult:
+    def _build_monte_carlo_result(
+        self, sorted_equities: list[Decimal], n: int
+    ) -> MonteCarloResult:
         """Build Monte Carlo result from sorted equities.
 
         Args:
@@ -505,7 +523,9 @@ class VectorBTEngine:
         Returns:
             MonteCarloResult with all metrics.
         """
-        mean_eq, median_eq, std_eq = self._calculate_equity_statistics(sorted_equities, n)
+        mean_eq, median_eq, std_eq = self._calculate_equity_statistics(
+            sorted_equities, n
+        )
         prob_profit, prob_5pct, prob_10pct = self._calculate_return_probabilities(
             sorted_equities, n
         )
@@ -555,16 +575,22 @@ class VectorBTEngine:
         Returns:
             Tuple of (prob_profit, prob_5pct, prob_10pct).
         """
-        profit_count = sum(1 for e in sorted_equities if e > self._config.initial_capital)
+        profit_count = sum(
+            1 for e in sorted_equities if e > self._config.initial_capital
+        )
         prob_profit = Decimal(str(profit_count)) / Decimal(str(n))
 
         five_pct_count = sum(
-            1 for e in sorted_equities if e >= self._config.initial_capital * Decimal("1.05")
+            1
+            for e in sorted_equities
+            if e >= self._config.initial_capital * Decimal("1.05")
         )
         prob_5pct = Decimal(str(five_pct_count)) / Decimal(str(n))
 
         ten_pct_count = sum(
-            1 for e in sorted_equities if e >= self._config.initial_capital * Decimal("1.10")
+            1
+            for e in sorted_equities
+            if e >= self._config.initial_capital * Decimal("1.10")
         )
         prob_10pct = Decimal(str(ten_pct_count)) / Decimal(str(n))
 
@@ -578,7 +604,9 @@ class VectorBTEngine:
         start_date = timestamps[0].date()
         end_date = timestamps[-1].date()
 
-        valid_dates = set(create_mis_session_mask(self._config.exchange, start_date, end_date))
+        valid_dates = set(
+            create_mis_session_mask(self._config.exchange, start_date, end_date)
+        )
 
         return [ts.date() in valid_dates for ts in timestamps]
 
@@ -667,7 +695,9 @@ class VectorBTEngine:
         gross_pnl = exit_price - entry_price
         net_pnl = gross_pnl - total_entry_cost - total_exit_cost
 
-        return_pct = (net_pnl / entry_price) if entry_price > Decimal("0") else Decimal("0")
+        return_pct = (
+            (net_pnl / entry_price) if entry_price > Decimal("0") else Decimal("0")
+        )
 
         return {
             "entry_price": entry_price,
@@ -723,7 +753,9 @@ class VectorBTEngine:
             avg_exit_probability=integration_scores["avg_exit_probability"],
         )
 
-    def _calculate_trade_statistics(self, trades: list[dict[str, Any]]) -> dict[str, Any]:
+    def _calculate_trade_statistics(
+        self, trades: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Calculate trade statistics.
 
         Args:
@@ -746,7 +778,9 @@ class VectorBTEngine:
 
         gross_profit = sum(wins)
         gross_loss = abs(sum(losses))
-        profit_factor = gross_profit / gross_loss if gross_loss > Decimal("0") else Decimal("0")
+        profit_factor = (
+            gross_profit / gross_loss if gross_loss > Decimal("0") else Decimal("0")
+        )
 
         return {
             "total_trades": total_trades,
@@ -774,7 +808,9 @@ class VectorBTEngine:
             else Decimal("0")
         )
 
-    def _calculate_cagr(self, data: dict[str, list[Any]], total_return: Decimal) -> Decimal:
+    def _calculate_cagr(
+        self, data: dict[str, list[Any]], total_return: Decimal
+    ) -> Decimal:
         """Calculate Compound Annual Growth Rate.
 
         Args:
@@ -795,7 +831,9 @@ class VectorBTEngine:
         years = total_seconds / seconds_in_year
 
         if years > Decimal("0"):
-            return ((Decimal("1") + total_return) ** (Decimal("1") / years)) - Decimal("1")
+            return ((Decimal("1") + total_return) ** (Decimal("1") / years)) - Decimal(
+                "1"
+            )
         return Decimal("0")
 
     def _calculate_sharpe_ratio(self, trades: list[dict[str, Any]]) -> Decimal:
@@ -812,12 +850,20 @@ class VectorBTEngine:
             return Decimal("0")
 
         avg_return = sum(returns) / Decimal(str(len(returns)))
-        variance = sum((r - avg_return) ** 2 for r in returns) / Decimal(str(len(returns)))
+        variance = sum((r - avg_return) ** 2 for r in returns) / Decimal(
+            str(len(returns))
+        )
         std_return = variance.sqrt() if variance >= Decimal("0") else Decimal("0")
 
-        return Decimal(str(avg_return / std_return)) if std_return > Decimal("0") else Decimal("0")
+        return (
+            Decimal(str(avg_return / std_return))
+            if std_return > Decimal("0")
+            else Decimal("0")
+        )
 
-    def _calculate_max_drawdown_from_trades(self, trades: list[dict[str, Any]]) -> Decimal:
+    def _calculate_max_drawdown_from_trades(
+        self, trades: list[dict[str, Any]]
+    ) -> Decimal:
         """Calculate max drawdown from trades.
 
         Args:
@@ -829,7 +875,9 @@ class VectorBTEngine:
         equity_curve = self._build_equity_curve(trades)
         return self._calculate_max_drawdown(equity_curve)
 
-    def _calculate_cost_breakdown(self, trades: list[dict[str, Any]]) -> dict[str, Decimal]:
+    def _calculate_cost_breakdown(
+        self, trades: list[dict[str, Any]]
+    ) -> dict[str, Decimal]:
         """Calculate cost breakdown from trades.
 
         Args:
@@ -867,8 +915,12 @@ class VectorBTEngine:
         """
         total = Decimal("0")
         for trade in trades:
-            entry_cost = calculate_indian_costs(trade["entry_price"], self._config.segment)
-            exit_cost = calculate_indian_costs(trade["exit_price"], self._config.segment)
+            entry_cost = calculate_indian_costs(
+                trade["entry_price"], self._config.segment
+            )
+            exit_cost = calculate_indian_costs(
+                trade["exit_price"], self._config.segment
+            )
             total += getattr(entry_cost, cost_type, Decimal("0"))
             total += getattr(exit_cost, cost_type, Decimal("0"))
         return total
@@ -883,9 +935,15 @@ class VectorBTEngine:
             Dict with timing information.
         """
         start_date = (
-            data["timestamps"][0].date() if data["timestamps"] else datetime.now(UTC).date()
+            data["timestamps"][0].date()
+            if data["timestamps"]
+            else datetime.now(UTC).date()
         )
-        end_date = data["timestamps"][-1].date() if data["timestamps"] else datetime.now(UTC).date()
+        end_date = (
+            data["timestamps"][-1].date()
+            if data["timestamps"]
+            else datetime.now(UTC).date()
+        )
         num_days = (end_date - start_date).days + 1
 
         return {
@@ -894,7 +952,9 @@ class VectorBTEngine:
             "num_days": num_days,
         }
 
-    def _calculate_integration_scores(self, data: dict[str, list[Any]]) -> dict[str, Decimal]:
+    def _calculate_integration_scores(
+        self, data: dict[str, list[Any]]
+    ) -> dict[str, Decimal]:
         """Calculate integration score averages.
 
         Args:
@@ -909,7 +969,9 @@ class VectorBTEngine:
             else Decimal("0")
         )
         avg_exit_probability = (
-            sum(data["probs"]) / Decimal(str(len(data["probs"]))) if data["probs"] else Decimal("0")
+            sum(data["probs"]) / Decimal(str(len(data["probs"])))
+            if data["probs"]
+            else Decimal("0")
         )
 
         return {
@@ -945,9 +1007,15 @@ class VectorBTEngine:
     def _empty_result(self, data: dict[str, list[Any]]) -> BacktestResult:
         """Return empty result when no trades executed."""
         start_date = (
-            data["timestamps"][0].date() if data["timestamps"] else datetime.now(UTC).date()
+            data["timestamps"][0].date()
+            if data["timestamps"]
+            else datetime.now(UTC).date()
         )
-        end_date = data["timestamps"][-1].date() if data["timestamps"] else datetime.now(UTC).date()
+        end_date = (
+            data["timestamps"][-1].date()
+            if data["timestamps"]
+            else datetime.now(UTC).date()
+        )
 
         return BacktestResult(
             total_return=Decimal("0"),

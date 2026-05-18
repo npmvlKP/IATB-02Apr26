@@ -164,7 +164,9 @@ class TestAlertAcknowledgmentTracker:
         tracker = AlertAcknowledgmentTracker()
         tracker.register_alert("alert_1", "rule1")
         tracker.acknowledge("alert_1", "user1", "api")
-        tracker.acknowledgments["alert_1"].acknowledged_at = datetime.now(UTC) - timedelta(hours=1)
+        tracker.acknowledgments["alert_1"].acknowledged_at = datetime.now(
+            UTC
+        ) - timedelta(hours=1)
         cleaned = tracker.cleanup_old_alerts(max_age_hours=0)
         assert cleaned == 1
 
@@ -342,7 +344,9 @@ class TestTelegramAlerterRateLimiting:
         assert alerter.send_alert("msg-2")
         assert not alerter.send_alert("msg-3")
 
-        alerter._sent_timestamps = [ts - timedelta(minutes=2) for ts in alerter._sent_timestamps]
+        alerter._sent_timestamps = [
+            ts - timedelta(minutes=2) for ts in alerter._sent_timestamps
+        ]
         assert alerter.send_alert("msg-4")
         assert len(sent) == 3
 

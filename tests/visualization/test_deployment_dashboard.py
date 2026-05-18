@@ -62,7 +62,9 @@ def test_get_engine_status_uptime_calculation() -> None:
 
 def test_get_broker_status_token_invalid() -> None:
     """Test broker status when token is invalid."""
-    result = get_broker_status(uid="ABC123", balance=Decimal("100000.0"), token_valid=False)
+    result = get_broker_status(
+        uid="ABC123", balance=Decimal("100000.0"), token_valid=False
+    )
 
     assert result["status"] == "relogin_required"
     assert result["uid"] is None
@@ -72,7 +74,9 @@ def test_get_broker_status_token_invalid() -> None:
 
 def test_get_broker_status_token_valid() -> None:
     """Test broker status when token is valid."""
-    result = get_broker_status(uid="ABC123", balance=Decimal("100000.0"), token_valid=True)
+    result = get_broker_status(
+        uid="ABC123", balance=Decimal("100000.0"), token_valid=True
+    )
 
     assert result["status"] == "connected"
     assert result["uid"] == "ABC123"
@@ -92,7 +96,9 @@ def test_get_broker_status_no_uid_balance() -> None:
 
 def test_get_broker_status_negative_balance() -> None:
     """Test broker status handles negative balance."""
-    result = get_broker_status(uid="ABC123", balance=Decimal("-5000.0"), token_valid=True)
+    result = get_broker_status(
+        uid="ABC123", balance=Decimal("-5000.0"), token_valid=True
+    )
 
     assert result["status"] == "connected"
     assert result["uid"] == "ABC123"
@@ -389,7 +395,9 @@ def test_get_dashboard_summary_missing_components() -> None:
     assert result["overall_status"] == "degraded"
     assert result["components"]["engine"] == "ok"
     assert result["components"]["broker"] == "ok"
-    assert result["components"]["system"] == "warning"  # Missing system defaults to "warning"
+    assert (
+        result["components"]["system"] == "warning"
+    )  # Missing system defaults to "warning"
     assert result["components"]["database"] == "error"
 
 
@@ -453,7 +461,9 @@ def test_integration_unhealthy_dashboard_scenario() -> None:
     assert summary["overall_status"] == "degraded"
     assert summary["components"]["engine"] == "error"
     assert summary["components"]["broker"] == "error"
-    assert summary["components"]["system"] == "warning"  # System unhealthy is "warning" not "error"
+    assert (
+        summary["components"]["system"] == "warning"
+    )  # System unhealthy is "warning" not "error"
     assert summary["components"]["database"] == "error"
 
 
@@ -469,7 +479,9 @@ def test_system_status_zero_values() -> None:
 
 def test_system_status_max_values() -> None:
     """Test system status with maximum values."""
-    result = get_system_status(cpu_percent=100.0, memory_percent=100.0, disk_percent=100.0)
+    result = get_system_status(
+        cpu_percent=100.0, memory_percent=100.0, disk_percent=100.0
+    )
 
     assert result["cpu_percent"] == 100.0
     assert result["memory_percent"] == 100.0

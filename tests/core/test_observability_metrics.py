@@ -583,19 +583,25 @@ class TestStartMetricsServer:
     """Tests for start_metrics_server function."""
 
     @patch("iatb.core.observability.metrics.start_http_server")
-    def test_start_metrics_server_starts_server(self, mock_start_server: MagicMock) -> None:
+    def test_start_metrics_server_starts_server(
+        self, mock_start_server: MagicMock
+    ) -> None:
         """Test that start_metrics_server starts the HTTP server."""
         start_metrics_server(port=9090)
         mock_start_server.assert_called_once_with(9090)
 
     @patch("iatb.core.observability.metrics.start_http_server")
-    def test_start_metrics_server_with_default_port(self, mock_start_server: MagicMock) -> None:
+    def test_start_metrics_server_with_default_port(
+        self, mock_start_server: MagicMock
+    ) -> None:
         """Test that start_metrics_server uses default port."""
         start_metrics_server()
         mock_start_server.assert_called_once_with(9090)
 
     @patch("iatb.core.observability.metrics.start_http_server")
-    def test_start_metrics_server_with_custom_port(self, mock_start_server: MagicMock) -> None:
+    def test_start_metrics_server_with_custom_port(
+        self, mock_start_server: MagicMock
+    ) -> None:
         """Test that start_metrics_server uses custom port."""
         start_metrics_server(port=8080)
         mock_start_server.assert_called_once_with(8080)

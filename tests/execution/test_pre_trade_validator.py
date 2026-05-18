@@ -66,15 +66,21 @@ class TestPreTradeConfig:
             _make_config(max_order_value=Decimal("-1"))
 
     def test_zero_max_price_deviation_raises(self) -> None:
-        with pytest.raises(ConfigError, match="max_price_deviation_pct must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_price_deviation_pct must be positive"
+        ):
             _make_config(max_price_deviation_pct=Decimal("0"))
 
     def test_negative_max_position_per_symbol_raises(self) -> None:
-        with pytest.raises(ConfigError, match="max_position_per_symbol must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_position_per_symbol must be positive"
+        ):
             _make_config(max_position_per_symbol=Decimal("-10"))
 
     def test_negative_max_portfolio_exposure_raises(self) -> None:
-        with pytest.raises(ConfigError, match="max_portfolio_exposure must be positive"):
+        with pytest.raises(
+            ConfigError, match="max_portfolio_exposure must be positive"
+        ):
             _make_config(max_portfolio_exposure=Decimal("-1"))
 
 
@@ -131,11 +137,15 @@ class TestCheckNotional:
     def test_exceeds_limit_raises(self) -> None:
         request = _make_request(quantity=Decimal("10000"))
         with pytest.raises(ConfigError, match="notional"):
-            _check_notional(request, Decimal("1000"), _make_config(max_order_value=Decimal("100")))
+            _check_notional(
+                request, Decimal("1000"), _make_config(max_order_value=Decimal("100"))
+            )
 
     def test_exact_limit_passes(self) -> None:
         request = _make_request(quantity=Decimal("10"))
-        _check_notional(request, Decimal("100"), _make_config(max_order_value=Decimal("1000")))
+        _check_notional(
+            request, Decimal("100"), _make_config(max_order_value=Decimal("1000"))
+        )
 
 
 class TestCheckPriceDeviation:
@@ -165,7 +175,9 @@ class TestCheckPriceDeviation:
     def test_negative_last_price_skips_check(self) -> None:
         request = _make_request(price=Decimal("999"))
         config = _make_config()
-        _check_price_deviation(request, Decimal("999"), {"NIFTY": Decimal("-1")}, config)
+        _check_price_deviation(
+            request, Decimal("999"), {"NIFTY": Decimal("-1")}, config
+        )
 
 
 class TestCheckPositionLimit:

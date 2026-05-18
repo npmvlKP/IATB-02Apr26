@@ -8,7 +8,9 @@ from datetime import UTC, date, datetime, time, timedelta, timezone
 try:
     import torch
 except OSError:
-    torch = None  # torch may fail to load on some Windows environments (e.g., missing DLLs)
+    torch = (
+        None  # torch may fail to load on some Windows environments (e.g., missing DLLs)
+    )
 
 import numpy as np
 import pytest
@@ -257,13 +259,17 @@ class TestTradingSessions:
         """Test inability to resolve next session fails closed."""
 
         class NeverOpenCalendar(ExchangeCalendar):
-            def session_for(self, exchange: Exchange, trading_date: date) -> SessionWindow | None:
+            def session_for(
+                self, exchange: Exchange, trading_date: date
+            ) -> SessionWindow | None:
                 return None
 
         original_calendar = TradingSessions.calendar
         TradingSessions.calendar = NeverOpenCalendar(
             regular_sessions={
-                Exchange.NSE: SessionWindow(open_time=time(9, 15), close_time=time(15, 30))
+                Exchange.NSE: SessionWindow(
+                    open_time=time(9, 15), close_time=time(15, 30)
+                )
             },
             holidays={Exchange.NSE: set()},
             special_sessions={Exchange.NSE: {}},

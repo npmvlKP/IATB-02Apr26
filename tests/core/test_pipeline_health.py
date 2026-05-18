@@ -120,7 +120,9 @@ class TestPipelineRun:
         monitor = self._create_monitor()
         run = monitor.start_run("test-002")
 
-        run.record_stage(PipelineStage.DATA_FETCH, success=False, duration_ms=100, error="fail")
+        run.record_stage(
+            PipelineStage.DATA_FETCH, success=False, duration_ms=100, error="fail"
+        )
 
         assert run.current_stage == PipelineStage.DATA_FETCH
         assert PipelineStage.DATA_FETCH not in run.stages_completed
@@ -217,7 +219,9 @@ class TestPipelineHealthMonitor:
 
         for i in range(3):
             run = monitor.start_run(f"fail-{i}")
-            run.record_stage(PipelineStage.SCAN, success=False, duration_ms=10, error="x")
+            run.record_stage(
+                PipelineStage.SCAN, success=False, duration_ms=10, error="x"
+            )
             run.finish()
 
         assert monitor.get_consecutive_failures() == 3
@@ -226,7 +230,9 @@ class TestPipelineHealthMonitor:
         monitor = PipelineHealthMonitor()
 
         run_fail = monitor.start_run("f")
-        run_fail.record_stage(PipelineStage.SCAN, success=False, duration_ms=10, error="x")
+        run_fail.record_stage(
+            PipelineStage.SCAN, success=False, duration_ms=10, error="x"
+        )
         run_fail.finish()
 
         run_ok = monitor.start_run("ok")
@@ -240,7 +246,9 @@ class TestPipelineHealthMonitor:
 
         for i in range(2):
             run = monitor.start_run(f"f-{i}")
-            run.record_stage(PipelineStage.SCAN, success=False, duration_ms=10, error="x")
+            run.record_stage(
+                PipelineStage.SCAN, success=False, duration_ms=10, error="x"
+            )
             run.finish()
 
         assert monitor.is_healthy() is True
@@ -250,7 +258,9 @@ class TestPipelineHealthMonitor:
 
         for i in range(2):
             run = monitor.start_run(f"f-{i}")
-            run.record_stage(PipelineStage.SCAN, success=False, duration_ms=10, error="x")
+            run.record_stage(
+                PipelineStage.SCAN, success=False, duration_ms=10, error="x"
+            )
             run.finish()
 
         assert monitor.is_healthy() is False

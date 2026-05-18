@@ -78,7 +78,9 @@ class TestExchangeCalendar:
         assert session.close_time == time(17, 30)
 
     def test_get_regular_session_unknown(self) -> None:
-        calendar = ExchangeCalendar(regular_sessions={}, holidays={}, special_sessions={})
+        calendar = ExchangeCalendar(
+            regular_sessions={}, holidays={}, special_sessions={}
+        )
         assert calendar.get_regular_session(Exchange.BINANCE) is None
 
     def test_session_for_weekday(self) -> None:
@@ -105,7 +107,9 @@ class TestExchangeCalendar:
         assert session.close_time == time(19, 0)
 
     def test_session_for_unknown_exchange(self) -> None:
-        calendar = ExchangeCalendar(regular_sessions={}, holidays={}, special_sessions={})
+        calendar = ExchangeCalendar(
+            regular_sessions={}, holidays={}, special_sessions={}
+        )
         assert calendar.session_for(Exchange.BINANCE, date(2024, 1, 1)) is None
 
     def test_is_holiday(self) -> None:
@@ -113,24 +117,34 @@ class TestExchangeCalendar:
         assert not DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.NSE, date(2024, 1, 2))
 
     def test_is_holiday_unknown_exchange(self) -> None:
-        assert not DEFAULT_EXCHANGE_CALENDAR.is_holiday(Exchange.BINANCE, date(2024, 1, 1))
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_holiday(
+            Exchange.BINANCE, date(2024, 1, 1)
+        )
 
     def test_is_trading_day_weekday(self) -> None:
         assert DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, date(2024, 1, 1))
         assert DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.BSE, date(2024, 1, 1))
 
     def test_is_trading_day_weekend(self) -> None:
-        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, date(2024, 1, 6))
-        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, date(2024, 1, 7))
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(
+            Exchange.NSE, date(2024, 1, 6)
+        )
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(
+            Exchange.NSE, date(2024, 1, 7)
+        )
 
     def test_is_trading_day_holiday(self) -> None:
-        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, date(2026, 1, 26))
+        assert not DEFAULT_EXCHANGE_CALENDAR.is_trading_day(
+            Exchange.NSE, date(2026, 1, 26)
+        )
 
     def test_is_trading_day_special_session(self) -> None:
         assert DEFAULT_EXCHANGE_CALENDAR.is_trading_day(Exchange.NSE, date(2026, 11, 8))
 
     def test_is_trading_day_unknown_exchange(self) -> None:
-        calendar = ExchangeCalendar(regular_sessions={}, holidays={}, special_sessions={})
+        calendar = ExchangeCalendar(
+            regular_sessions={}, holidays={}, special_sessions={}
+        )
         assert not calendar.is_trading_day(Exchange.BINANCE, date(2024, 1, 1))
 
     def test_empty_calendar(self) -> None:

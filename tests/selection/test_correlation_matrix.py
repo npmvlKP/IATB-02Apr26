@@ -18,8 +18,20 @@ torch.manual_seed(42)
 def test_compute_pairwise_correlations_basic() -> None:
     """Test compute_pairwise_correlations with basic inputs."""
     price_series = {
-        "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
-        "B": [Decimal("20"), Decimal("22"), Decimal("24"), Decimal("26"), Decimal("28")],
+        "A": [
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+        ],
+        "B": [
+            Decimal("20"),
+            Decimal("22"),
+            Decimal("24"),
+            Decimal("26"),
+            Decimal("28"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)
@@ -33,9 +45,27 @@ def test_compute_pairwise_correlations_basic() -> None:
 def test_compute_pairwise_correlations_three_series() -> None:
     """Test compute_pairwise_correlations with three series."""
     price_series = {
-        "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
-        "B": [Decimal("20"), Decimal("22"), Decimal("24"), Decimal("26"), Decimal("28")],
-        "C": [Decimal("100"), Decimal("95"), Decimal("105"), Decimal("90"), Decimal("110")],
+        "A": [
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+        ],
+        "B": [
+            Decimal("20"),
+            Decimal("22"),
+            Decimal("24"),
+            Decimal("26"),
+            Decimal("28"),
+        ],
+        "C": [
+            Decimal("100"),
+            Decimal("95"),
+            Decimal("105"),
+            Decimal("90"),
+            Decimal("110"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)
@@ -54,7 +84,13 @@ def test_compute_pairwise_correlations_three_series() -> None:
 def test_compute_pairwise_correlations_single_series() -> None:
     """Test compute_pairwise_correlations with single series returns empty."""
     price_series = {
-        "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
+        "A": [
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)
@@ -71,8 +107,20 @@ def test_compute_pairwise_correlations_empty() -> None:
 def test_compute_pairwise_correlations_zero_correlation() -> None:
     """Test compute_pairwise_correlations with uncorrelated series."""
     price_series = {
-        "A": [Decimal("10"), Decimal("20"), Decimal("30"), Decimal("40"), Decimal("50")],
-        "B": [Decimal("10"), Decimal("30"), Decimal("20"), Decimal("40"), Decimal("30")],
+        "A": [
+            Decimal("10"),
+            Decimal("20"),
+            Decimal("30"),
+            Decimal("40"),
+            Decimal("50"),
+        ],
+        "B": [
+            Decimal("10"),
+            Decimal("30"),
+            Decimal("20"),
+            Decimal("40"),
+            Decimal("30"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)
@@ -99,7 +147,13 @@ def test_compute_pairwise_correlations_with_zero_prices() -> None:
 def test_compute_pairwise_correlations_different_lengths() -> None:
     """Test compute_pairwise_correlations with different length series."""
     price_series = {
-        "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
+        "A": [
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+        ],
         "B": [Decimal("20"), Decimal("22"), Decimal("24")],
     }
 
@@ -138,8 +192,20 @@ def test_compute_pairwise_correlations_single_price_point() -> None:
 def test_compute_pairwise_correlations_constant_prices() -> None:
     """Test compute_pairwise_correlations with constant prices (zero variance)."""
     price_series = {
-        "A": [Decimal("10"), Decimal("10"), Decimal("10"), Decimal("10"), Decimal("10")],
-        "B": [Decimal("20"), Decimal("20"), Decimal("20"), Decimal("20"), Decimal("20")],
+        "A": [
+            Decimal("10"),
+            Decimal("10"),
+            Decimal("10"),
+            Decimal("10"),
+            Decimal("10"),
+        ],
+        "B": [
+            Decimal("20"),
+            Decimal("20"),
+            Decimal("20"),
+            Decimal("20"),
+            Decimal("20"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)
@@ -152,8 +218,20 @@ def test_compute_pairwise_correlations_constant_prices() -> None:
 def test_compute_pairwise_correlations_partial_constant() -> None:
     """Test compute_pairwise_correlations with one constant series."""
     price_series = {
-        "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
-        "B": [Decimal("20"), Decimal("20"), Decimal("20"), Decimal("20"), Decimal("20")],
+        "A": [
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+        ],
+        "B": [
+            Decimal("20"),
+            Decimal("20"),
+            Decimal("20"),
+            Decimal("20"),
+            Decimal("20"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)
@@ -166,8 +244,20 @@ def test_compute_pairwise_correlations_partial_constant() -> None:
 def test_compute_pairwise_correlations_clamping() -> None:
     """Test compute_pairwise_correlations clamps to [-1, 1]."""
     price_series = {
-        "A": [Decimal("10"), Decimal("11"), Decimal("12"), Decimal("13"), Decimal("14")],
-        "B": [Decimal("20"), Decimal("22"), Decimal("24"), Decimal("26"), Decimal("28")],
+        "A": [
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+        ],
+        "B": [
+            Decimal("20"),
+            Decimal("22"),
+            Decimal("24"),
+            Decimal("26"),
+            Decimal("28"),
+        ],
     }
 
     result = compute_pairwise_correlations(price_series)

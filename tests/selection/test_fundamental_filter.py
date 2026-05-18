@@ -159,8 +159,12 @@ class TestFundamentalFilter:
         """Test getting passed instruments."""
         filter_obj = FundamentalFilter()
         metrics_list = [
-            FundamentalMetrics(symbol="PASS", pe_ratio=Decimal("15"), roe=Decimal("0.1")),
-            FundamentalMetrics(symbol="FAIL", pe_ratio=Decimal("50"), roe=Decimal("0.02")),
+            FundamentalMetrics(
+                symbol="PASS", pe_ratio=Decimal("15"), roe=Decimal("0.1")
+            ),
+            FundamentalMetrics(
+                symbol="FAIL", pe_ratio=Decimal("50"), roe=Decimal("0.02")
+            ),
         ]
         results = filter_obj.filter_batch(metrics_list)
         passed = filter_obj.get_passed(results)
@@ -259,7 +263,9 @@ class TestFundamentalFilter:
         """Test with require_profitability=False and positive ROE passes."""
         # require_profitability=False disables the negative ROE check
         # But min_roe still applies
-        config = FundamentalFilterConfig(require_profitability=False, min_roe=Decimal("0.01"))
+        config = FundamentalFilterConfig(
+            require_profitability=False, min_roe=Decimal("0.01")
+        )
         filter_obj = FundamentalFilter(config)
         metrics = FundamentalMetrics(symbol="TEST", roe=Decimal("0.02"))
         result = filter_obj.evaluate(metrics)
@@ -406,7 +412,9 @@ class TestFundamentalFilter:
         filter_obj = FundamentalFilter(config)
         metrics = FundamentalMetrics(
             symbol="TEST",
-            pe_ratio=Decimal("-10"),  # Negative P/E (possible for loss-making companies)
+            pe_ratio=Decimal(
+                "-10"
+            ),  # Negative P/E (possible for loss-making companies)
             pb_ratio=Decimal("2"),
             roe=Decimal("-0.05"),  # Negative ROE
         )
@@ -423,7 +431,9 @@ class TestFundamentalFilter:
         assert not result_low.passed
         assert "Market cap" in "; ".join(result_low.reasons)
         # Above minimum
-        metrics_high = FundamentalMetrics(symbol="TEST_HIGH", market_cap=Decimal("2000"))
+        metrics_high = FundamentalMetrics(
+            symbol="TEST_HIGH", market_cap=Decimal("2000")
+        )
         result_high = filter_obj.evaluate(metrics_high)
         assert result_high.passed
 

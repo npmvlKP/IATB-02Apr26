@@ -55,7 +55,9 @@ class TestTechnicalFilterConfig:
 
     def test_invalid_bollinger_position_raises_error(self) -> None:
         """Test that invalid Bollinger position raises ConfigError."""
-        with pytest.raises(ConfigError, match="min_bollinger_position must be in \\[0, 1\\]"):
+        with pytest.raises(
+            ConfigError, match="min_bollinger_position must be in \\[0, 1\\]"
+        ):
             TechnicalFilterConfig(min_bollinger_position=Decimal("-0.1"))
 
     def test_min_bollinger_greater_than_max_raises_error(self) -> None:
@@ -65,7 +67,8 @@ class TestTechnicalFilterConfig:
             match="min_bollinger_position cannot be greater than max_bollinger_position",
         ):
             TechnicalFilterConfig(
-                min_bollinger_position=Decimal("0.8"), max_bollinger_position=Decimal("0.2")
+                min_bollinger_position=Decimal("0.8"),
+                max_bollinger_position=Decimal("0.2"),
             )
 
     def test_negative_volume_ratio_raises_error(self) -> None:
@@ -75,7 +78,9 @@ class TestTechnicalFilterConfig:
 
     def test_ma_period_short_greater_than_long_raises_error(self) -> None:
         """Test that short MA period > long MA period raises ConfigError."""
-        with pytest.raises(ConfigError, match="ma_period_short must be less than ma_period_long"):
+        with pytest.raises(
+            ConfigError, match="ma_period_short must be less than ma_period_long"
+        ):
             TechnicalFilterConfig(ma_period_short=50, ma_period_long=20)
 
 
@@ -132,7 +137,9 @@ class TestTechnicalFilter:
         """Test filtering with bearish MACD when bullish required."""
         config = TechnicalFilterConfig(require_macd_bullish=True)
         filter_obj = TechnicalFilter(config)
-        metrics = TechnicalMetrics(symbol="TEST", macd=Decimal("0.2"), macd_signal=Decimal("0.5"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", macd=Decimal("0.2"), macd_signal=Decimal("0.5")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.passed is False
         assert "MACD" in result.reasons[0]
@@ -141,7 +148,9 @@ class TestTechnicalFilter:
         """Test filtering with bearish MA when bullish required."""
         config = TechnicalFilterConfig(require_ma_bullish=True)
         filter_obj = TechnicalFilter(config)
-        metrics = TechnicalMetrics(symbol="TEST", ma_short=Decimal("90"), ma_long=Decimal("100"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", ma_short=Decimal("90"), ma_long=Decimal("100")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.passed is False
         assert "MA" in result.reasons[0]
@@ -197,7 +206,9 @@ class TestTechnicalFilter:
         """Test filtering with high ATR ratio."""
         config = TechnicalFilterConfig(max_atr_ratio=Decimal("0.05"))
         filter_obj = TechnicalFilter(config)
-        metrics = TechnicalMetrics(symbol="TEST", atr=Decimal("10"), price=Decimal("100"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", atr=Decimal("10"), price=Decimal("100")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.passed is False
         assert "ATR ratio" in result.reasons[0]
@@ -288,28 +299,36 @@ class TestTechnicalFilter:
     def test_macd_histogram_positive(self) -> None:
         """Test positive MACD histogram gets higher score."""
         filter_obj = TechnicalFilter()
-        metrics = TechnicalMetrics(symbol="TEST", macd=Decimal("0.5"), macd_signal=Decimal("0.3"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", macd=Decimal("0.5"), macd_signal=Decimal("0.3")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.score > Decimal("0.5")
 
     def test_macd_histogram_negative(self) -> None:
         """Test negative MACD histogram gets lower score."""
         filter_obj = TechnicalFilter()
-        metrics = TechnicalMetrics(symbol="TEST", macd=Decimal("0.3"), macd_signal=Decimal("0.5"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", macd=Decimal("0.3"), macd_signal=Decimal("0.5")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.score < Decimal("0.5")
 
     def test_bullish_ma_cross(self) -> None:
         """Test bullish MA cross gets high score."""
         filter_obj = TechnicalFilter()
-        metrics = TechnicalMetrics(symbol="TEST", ma_short=Decimal("110"), ma_long=Decimal("100"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", ma_short=Decimal("110"), ma_long=Decimal("100")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.score > Decimal("0.8")
 
     def test_bearish_ma_cross(self) -> None:
         """Test bearish MA cross gets lower score."""
         filter_obj = TechnicalFilter()
-        metrics = TechnicalMetrics(symbol="TEST", ma_short=Decimal("90"), ma_long=Decimal("100"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", ma_short=Decimal("90"), ma_long=Decimal("100")
+        )
         result = filter_obj.evaluate(metrics)
         # Bearish MA cross still gets good score, just not as high as bullish
         assert result.score > Decimal("0.5")
@@ -439,7 +458,9 @@ class TestTechnicalFilter:
         """Test ATR ratio scoring."""
         config = TechnicalFilterConfig(max_atr_ratio=Decimal("0.1"))
         filter_obj = TechnicalFilter(config)
-        metrics = TechnicalMetrics(symbol="TEST", atr=Decimal("5"), price=Decimal("100"))
+        metrics = TechnicalMetrics(
+            symbol="TEST", atr=Decimal("5"), price=Decimal("100")
+        )
         result = filter_obj.evaluate(metrics)
         assert result.passed is True
         # ATR ratio is 0.05, which is exactly at threshold, gives score of 0.5

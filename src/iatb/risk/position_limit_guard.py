@@ -53,7 +53,9 @@ class PositionLimitConfig:
         if self.max_total_notional <= Decimal("0"):
             msg = "max_total_notional must be positive"
             raise ConfigError(msg)
-        if self.alert_threshold_pct <= Decimal("0") or self.alert_threshold_pct > Decimal("1"):
+        if self.alert_threshold_pct <= Decimal(
+            "0"
+        ) or self.alert_threshold_pct > Decimal("1"):
             msg = "alert_threshold_pct must be in (0, 1]"
             raise ConfigError(msg)
 
@@ -172,7 +174,9 @@ class PositionLimitGuard:
                      exchange_total, config).
         """
         config = self.get_limit_config(exchange)
-        current_qty, current_notional = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
+        current_qty, current_notional = self._positions.get(
+            symbol, (Decimal("0"), Decimal("0"))
+        )
         projected_qty = current_qty + quantity
         projected_notional = current_notional + (quantity * price)
         exchange_total = self._exchange_totals[exchange]
@@ -335,13 +339,19 @@ class PositionLimitGuard:
         projected_total = exchange_total + (quantity * price)
 
         # API boundary: timing parameter, not financial (pre-check duration)
-        record_risk_check_duration("position_limit_guard_validate_order", 0.0)  # API boundary
+        record_risk_check_duration(
+            "position_limit_guard_validate_order", 0.0
+        )  # API boundary
 
-        self._check_quantity_limit(projected_qty, config.max_quantity_per_symbol, symbol, exchange)
+        self._check_quantity_limit(
+            projected_qty, config.max_quantity_per_symbol, symbol, exchange
+        )
         self._check_notional_limit(
             projected_notional, config.max_notional_per_symbol, symbol, exchange
         )
-        self._check_exchange_total_limit(projected_total, config.max_total_notional, exchange)
+        self._check_exchange_total_limit(
+            projected_total, config.max_total_notional, exchange
+        )
 
         return self._build_position_state(
             exchange, symbol, current_qty, price, exchange_total, config
@@ -368,7 +378,9 @@ class PositionLimitGuard:
         self.get_limit_config(exchange)
         self._symbol_exchange[symbol] = exchange
 
-        current_qty, current_notional = self._positions.get(symbol, (Decimal("0"), Decimal("0")))
+        current_qty, current_notional = self._positions.get(
+            symbol, (Decimal("0"), Decimal("0"))
+        )
         new_qty = current_qty + quantity_delta
         notional_delta = abs(quantity_delta) * price
         new_notional = current_notional + notional_delta
@@ -471,7 +483,8 @@ class PositionLimitGuard:
 
             alert_key = f"{config.exchange.value}:{symbol}"
             should_alert = (
-                qty_pct >= config.alert_threshold_pct or notional_pct >= config.alert_threshold_pct
+                qty_pct >= config.alert_threshold_pct
+                or notional_pct >= config.alert_threshold_pct
             )
 
             if not should_alert:
@@ -635,7 +648,9 @@ class PositionLimitGuard:
         return {
             "total_notional": self._exchange_totals[exchange],
             "total_notional_limit": config.max_total_notional,
-            "position_count": Decimal(str(self._get_position_count_for_exchange(exchange))),
+            "position_count": Decimal(
+                str(self._get_position_count_for_exchange(exchange))
+            ),
         }
 
     def _get_position_count_for_exchange(self, exchange: ExchangeType) -> int:
@@ -667,7 +682,9 @@ class PositionLimitGuard:
         self._last_alert_time.clear()
         for exchange in self._exchange_totals:
             self._exchange_totals[exchange] = Decimal("0")
-        _LOGGER.info("Position limit guard reset", extra={"timestamp_utc": now_utc.isoformat()})
+        _LOGGER.info(
+            "Position limit guard reset", extra={"timestamp_utc": now_utc.isoformat()}
+        )
 
 
 def _validate_utc(dt: datetime) -> None:

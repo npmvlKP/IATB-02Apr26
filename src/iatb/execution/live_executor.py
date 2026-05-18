@@ -99,7 +99,9 @@ class LiveExecutor(Executor):
         if confirmation_timeout_seconds <= 0:
             msg = "confirmation_timeout_seconds must be positive"
             raise ValueError(msg)
-        if confirmation_poll_interval_seconds <= 0:  # API boundary: timing parameter validation
+        if (
+            confirmation_poll_interval_seconds <= 0
+        ):  # API boundary: timing parameter validation
             msg = "confirmation_poll_interval_seconds must be positive"
             raise ValueError(msg)
         if slippage_tolerance_bps < Decimal("0"):
@@ -405,7 +407,9 @@ class LiveExecutor(Executor):
             self._slippage_tolerance_bps,
         )
 
-    def _convert_broker_order_to_result(self, broker_order: BrokerOrder) -> ExecutionResult:
+    def _convert_broker_order_to_result(
+        self, broker_order: BrokerOrder
+    ) -> ExecutionResult:
         """Convert broker Order to ExecutionResult.
 
         Args:
@@ -425,7 +429,9 @@ class LiveExecutor(Executor):
 
         filled_qty = Decimal(str(broker_order.filled_quantity))
         avg_price = (
-            Decimal(str(broker_order.average_price)) if broker_order.average_price else Decimal("0")
+            Decimal(str(broker_order.average_price))
+            if broker_order.average_price
+            else Decimal("0")
         )
 
         message = f"broker order: {broker_order.order_id} ({status.value})"

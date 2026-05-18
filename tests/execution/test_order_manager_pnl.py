@@ -8,6 +8,7 @@ Tests cover:
 - Type precision: Decimal calculations
 - Timezone handling: UTC datetime
 """
+
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock

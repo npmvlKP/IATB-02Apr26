@@ -61,7 +61,9 @@ def _checkpoint_callback_or_none(checkpoint_dir: str, check_freq: int) -> object
     callback_cls = getattr(module, "CheckpointCallback", None)
     if not callable(callback_cls):
         return None
-    callback = callback_cls(save_freq=check_freq, save_path=checkpoint_dir, name_prefix="iatb_rl")
+    callback = callback_cls(
+        save_freq=check_freq, save_path=checkpoint_dir, name_prefix="iatb_rl"
+    )
     return cast(object, callback)
 
 

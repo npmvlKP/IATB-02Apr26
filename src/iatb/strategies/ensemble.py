@@ -32,7 +32,9 @@ class EnsembleStrategy(StrategyBase):
             return None
         if not weighted_signals:
             return None
-        buy_score, sell_score, total_weight, weighted_price = self._accumulate(weighted_signals)
+        buy_score, sell_score, total_weight, weighted_price = self._accumulate(
+            weighted_signals
+        )
         if total_weight <= Decimal("0"):
             return None
         side, side_score = self._winning_side(buy_score, sell_score)
@@ -72,7 +74,9 @@ class EnsembleStrategy(StrategyBase):
         return buy_score, sell_score, total_weight, weighted_price_sum / price_weight
 
     @staticmethod
-    def _winning_side(buy_score: Decimal, sell_score: Decimal) -> tuple[OrderSide | None, Decimal]:
+    def _winning_side(
+        buy_score: Decimal, sell_score: Decimal
+    ) -> tuple[OrderSide | None, Decimal]:
         if buy_score > sell_score:
             return OrderSide.BUY, buy_score
         if sell_score > buy_score:

@@ -29,7 +29,9 @@ class TestResolveAionPredictor:
         mock_predict = MagicMock(return_value={"label": "POSITIVE", "score": "0.85"})
         mock_module = MagicMock()
         mock_module.predict = mock_predict
-        monkeypatch.setattr("iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module)
+        monkeypatch.setattr(
+            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module
+        )
         predictor = resolve_aion_predictor()
         assert predictor is mock_predict
         assert predictor("test") == {"label": "POSITIVE", "score": "0.85"}
@@ -48,7 +50,9 @@ class TestResolveAionPredictor:
         del mock_module.predict
         del mock_module.analyze
         del mock_module.analyze_sentiment
-        monkeypatch.setattr("iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module)
+        monkeypatch.setattr(
+            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module
+        )
         predictor = resolve_aion_predictor()
         # The predictor should be the analyze method from the model instance
         result = predictor("test")
@@ -58,12 +62,16 @@ class TestResolveAionPredictor:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test resolve_aion_predictor with module exposing analyze function."""
-        mock_analyze = MagicMock(return_value={"sentiment": "NEUTRAL", "confidence": "0.60"})
+        mock_analyze = MagicMock(
+            return_value={"sentiment": "NEUTRAL", "confidence": "0.60"}
+        )
         mock_module = MagicMock()
         mock_module.analyze = mock_analyze
         mock_module.predict = None  # Ensure predict is not found
         mock_module.analyze_sentiment = None  # Ensure analyze_sentiment is not found
-        monkeypatch.setattr("iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module)
+        monkeypatch.setattr(
+            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module
+        )
         predictor = resolve_aion_predictor()
         assert predictor is mock_analyze
 
@@ -83,8 +91,12 @@ class TestResolveAionPredictor:
     ) -> None:
         """Test that module installed but no usable interface raises ConfigError."""
         mock_module = MagicMock(spec_set=[])  # Empty module
-        monkeypatch.setattr("iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module)
-        with pytest.raises(ConfigError, match="does not expose a usable prediction interface"):
+        monkeypatch.setattr(
+            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_module
+        )
+        with pytest.raises(
+            ConfigError, match="does not expose a usable prediction interface"
+        ):
             resolve_aion_predictor()
 
 
@@ -138,7 +150,9 @@ class TestValidateAndParseAionPrediction:
         assert label == "NEUTRAL"
         assert confidence == Decimal("0.70")
 
-    def test_validate_and_parse_aion_prediction_negative_confidence_raises(self) -> None:
+    def test_validate_and_parse_aion_prediction_negative_confidence_raises(
+        self,
+    ) -> None:
         """Test that negative confidence raises ConfigError."""
         prediction = {"label": "POSITIVE", "score": -0.5}
         with pytest.raises(ConfigError, match="AION confidence cannot be negative"):
@@ -146,12 +160,18 @@ class TestValidateAndParseAionPrediction:
 
     def test_validate_and_parse_aion_prediction_unsupported_format_raises(self) -> None:
         """Error: Unsupported AION prediction format raises ConfigError."""
-        with pytest.raises(ConfigError, match="Unsupported AION prediction output format"):
+        with pytest.raises(
+            ConfigError, match="Unsupported AION prediction output format"
+        ):
             validate_and_parse_aion_prediction(123)
 
-    def test_validate_and_parse_aion_prediction_tuple_single_element_raises(self) -> None:
+    def test_validate_and_parse_aion_prediction_tuple_single_element_raises(
+        self,
+    ) -> None:
         """Test that tuple with less than 2 elements falls through to unsupported format."""
-        with pytest.raises(ConfigError, match="Unsupported AION prediction output format"):
+        with pytest.raises(
+            ConfigError, match="Unsupported AION prediction output format"
+        ):
             validate_and_parse_aion_prediction(("ONLY_ONE",))
 
 
@@ -168,11 +188,14 @@ class TestResolveFinbertPredictor:
     ) -> None:
         """Test resolve_finbert_predictor with valid transformers mock."""
         mock_pipeline = MagicMock()
-        mock_pipeline.return_value = MagicMock(return_value=[{"label": "POSITIVE", "score": 0.95}])
+        mock_pipeline.return_value = MagicMock(
+            return_value=[{"label": "POSITIVE", "score": 0.95}]
+        )
         mock_transformers = MagicMock()
         mock_transformers.pipeline = mock_pipeline
         monkeypatch.setattr(
-            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_transformers
+            "iatb.sentiment.helpers.importlib.import_module",
+            lambda _: mock_transformers,
         )
         predictor = resolve_finbert_predictor("ProsusAI/finbert")
         assert callable(predictor)
@@ -197,7 +220,8 @@ class TestResolveFinbertPredictor:
         mock_transformers = MagicMock(spec_set=["pipeline"])
         del mock_transformers.pipeline  # Remove pipeline attribute
         monkeypatch.setattr(
-            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_transformers
+            "iatb.sentiment.helpers.importlib.import_module",
+            lambda _: mock_transformers,
         )
         with pytest.raises(ConfigError, match="pipeline is unavailable"):
             resolve_finbert_predictor("ProsusAI/finbert")
@@ -210,7 +234,9 @@ class TestResolveFinbertPredictor:
             "iatb.sentiment.helpers.importlib.import_module",
             lambda _: (_ for _ in ()).throw(OSError("DLL load failed")),
         )
-        with pytest.raises(ConfigError, match="transformers/PyTorch dependency unavailable"):
+        with pytest.raises(
+            ConfigError, match="transformers/PyTorch dependency unavailable"
+        ):
             resolve_finbert_predictor("ProsusAI/finbert")
 
     def test_resolve_finbert_predictor_oserror_pipeline_creation(
@@ -218,9 +244,12 @@ class TestResolveFinbertPredictor:
     ) -> None:
         """Test OSError during pipeline creation (PyTorch DLL loading failure)."""
         mock_transformers = MagicMock()
-        mock_transformers.pipeline.side_effect = OSError("DLL load failed during pipeline creation")
+        mock_transformers.pipeline.side_effect = OSError(
+            "DLL load failed during pipeline creation"
+        )
         monkeypatch.setattr(
-            "iatb.sentiment.helpers.importlib.import_module", lambda _: mock_transformers
+            "iatb.sentiment.helpers.importlib.import_module",
+            lambda _: mock_transformers,
         )
         with pytest.raises(ConfigError, match="PyTorch unavailable"):
             resolve_finbert_predictor("ProsusAI/finbert")
@@ -302,7 +331,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("0.70")
         assert composite_confidence == Decimal("0.85")
 
@@ -325,7 +356,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("0.7"), "aion": Decimal("0.3")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("0.72")
         assert composite_confidence == Decimal("0.875")
 
@@ -348,7 +381,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("0.6"), "aion": Decimal("0.5")}  # Total > 1
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_confidence <= Decimal("1")
 
     def test_compute_weighted_ensemble_zero_total_weight_raises(self) -> None:
@@ -378,7 +413,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("1.0")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("0.85")
         assert composite_confidence == Decimal("0.9")
 
@@ -401,7 +438,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("-0.60")
         assert composite_confidence == Decimal("0.85")
 
@@ -424,7 +463,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("0.4999995")
         assert composite_confidence == Decimal("0.4999995")
 
@@ -440,7 +481,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("1.0")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("0.5")
         assert composite_confidence == Decimal("0")
 
@@ -456,7 +499,9 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("1.0")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("1.0")
         assert composite_confidence == Decimal("1.0")
 
@@ -479,6 +524,8 @@ class TestComputeWeightedEnsemble:
             ),
         }
         weights = {"finbert": Decimal("0.5"), "aion": Decimal("0.5")}
-        composite_score, composite_confidence = compute_weighted_ensemble(component_scores, weights)
+        composite_score, composite_confidence = compute_weighted_ensemble(
+            component_scores, weights
+        )
         assert composite_score == Decimal("0.5")
         assert composite_confidence == Decimal("0.5")

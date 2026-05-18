@@ -109,8 +109,12 @@ def _compute_contributions(
     signals: SignalScores,
     weights: RegimeWeights,
 ) -> dict[str, Decimal]:
-    sent = _gated(weights.sentiment, signals.sentiment_score, signals.sentiment_confidence)
-    stren = _gated(weights.strength, signals.strength_score, signals.strength_confidence)
+    sent = _gated(
+        weights.sentiment, signals.sentiment_score, signals.sentiment_confidence
+    )
+    stren = _gated(
+        weights.strength, signals.strength_score, signals.strength_confidence
+    )
     vp_score = signals.volume_profile_score
     vp_conf = signals.volume_profile_confidence
     vp = _gated(weights.volume_profile, vp_score, vp_conf)

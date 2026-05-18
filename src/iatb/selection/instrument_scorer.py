@@ -118,8 +118,13 @@ class InstrumentScorer:
             return instrument_signals
 
         active = instrument_signals[:]
-        if self._filter_config.enable_technical_filtering and self._filter_config.technical_filter:
-            active = _apply_technical_filter(active, self._filter_config.technical_filter)
+        if (
+            self._filter_config.enable_technical_filtering
+            and self._filter_config.technical_filter
+        ):
+            active = _apply_technical_filter(
+                active, self._filter_config.technical_filter
+            )
             logger.info(
                 "Technical filter: %d/%d instruments remaining",
                 len(active),
@@ -130,7 +135,9 @@ class InstrumentScorer:
             self._filter_config.enable_fundamental_filtering
             and self._filter_config.fundamental_filter
         ):
-            active = _apply_fundamental_filter(active, self._filter_config.fundamental_filter)
+            active = _apply_fundamental_filter(
+                active, self._filter_config.fundamental_filter
+            )
             logger.info(
                 "Fundamental filter: %d instruments remaining",
                 len(active),
@@ -145,7 +152,8 @@ class InstrumentScorer:
     ) -> SelectionResult:
         """Rank, filter, and select top-N instruments."""
         candidates = [
-            (s.symbol, s.exchange, s.composite.composite_score, _build_metadata(s)) for s in scored
+            (s.symbol, s.exchange, s.composite.composite_score, _build_metadata(s))
+            for s in scored
         ]
         return rank_and_select(candidates, self._ranking_config, correlations)
 

@@ -151,7 +151,9 @@ def test_sebi_compliance_oauth_2fa_not_required(tmp_path: Path) -> None:
     )
     manager = SEBIComplianceManager(config)
     # Should not raise even without 2FA
-    manager.assert_oauth_2fa_verified(oauth_authenticated=False, two_factor_verified=False)
+    manager.assert_oauth_2fa_verified(
+        oauth_authenticated=False, two_factor_verified=False
+    )
 
 
 def test_sebi_compliance_oauth_2fa_only_oauth(tmp_path: Path) -> None:
@@ -160,7 +162,9 @@ def test_sebi_compliance_oauth_2fa_only_oauth(tmp_path: Path) -> None:
         SEBIComplianceConfig("ALG-101", tmp_path / "audit.db", ("192.168.1.1",))
     )
     with pytest.raises(ConfigError, match="OAuth 2FA verification is required"):
-        manager.assert_oauth_2fa_verified(oauth_authenticated=True, two_factor_verified=False)
+        manager.assert_oauth_2fa_verified(
+            oauth_authenticated=True, two_factor_verified=False
+        )
 
 
 def test_sebi_compliance_oauth_2fa_only_2fa(tmp_path: Path) -> None:
@@ -169,7 +173,9 @@ def test_sebi_compliance_oauth_2fa_only_2fa(tmp_path: Path) -> None:
         SEBIComplianceConfig("ALG-101", tmp_path / "audit.db", ("192.168.1.1",))
     )
     with pytest.raises(ConfigError, match="OAuth 2FA verification is required"):
-        manager.assert_oauth_2fa_verified(oauth_authenticated=False, two_factor_verified=True)
+        manager.assert_oauth_2fa_verified(
+            oauth_authenticated=False, two_factor_verified=True
+        )
 
 
 def test_sebi_compliance_auto_logout_custom_time(tmp_path: Path) -> None:
@@ -192,7 +198,9 @@ def test_sebi_compliance_auto_logout_naive_datetime(tmp_path: Path) -> None:
     manager = SEBIComplianceManager(
         SEBIComplianceConfig("ALG-101", tmp_path / "audit.db", ("192.168.1.1",))
     )
-    with pytest.raises(ConfigError, match="now_utc must be timezone-aware UTC datetime"):
+    with pytest.raises(
+        ConfigError, match="now_utc must be timezone-aware UTC datetime"
+    ):
         manager.should_auto_logout(
             datetime(2024, 1, 1, 10, 0)
         )  # Naive datetime without tzinfo # noqa: DTZ001

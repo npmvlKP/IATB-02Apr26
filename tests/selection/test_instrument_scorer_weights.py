@@ -23,7 +23,9 @@ class TestInstrumentScorerWeightLoading:
     def test_instrument_scorer_loads_weights_from_config(self) -> None:
         """Test that InstrumentScorer loads weights from config when requested."""
         # Mock the config manager
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_manager = MagicMock()
             mock_manager.get_weights_config.return_value = {
                 "BULL": {
@@ -73,7 +75,9 @@ class TestInstrumentScorerWeightLoading:
         # This test verifies that when config loading fails, the scorer still works
         # We can't easily mock the config loading from weight_optimizer,
         # so we test the default behavior
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_manager = MagicMock()
             mock_manager.get_weights_config.return_value = {}
             mock_get_manager.return_value = mock_manager
@@ -106,7 +110,9 @@ drl = "0.20"
         )
 
         # Mock the config manager
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_manager = MagicMock()
             mock_manager.get_weights_config.return_value = {
                 "BULL": {
@@ -131,9 +137,13 @@ drl = "0.20"
             assert MarketRegime.SIDEWAYS in weights
             assert weights[MarketRegime.BULL].sentiment == Decimal("0.25")
 
-    def test_load_weights_from_config_handles_missing_fields(self, tmp_path: Path) -> None:
+    def test_load_weights_from_config_handles_missing_fields(
+        self, tmp_path: Path
+    ) -> None:
         """Test that weight loading handles missing fields gracefully."""
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_manager = MagicMock()
             # Missing 'drl' field
             mock_manager.get_weights_config.return_value = {
@@ -150,9 +160,13 @@ drl = "0.20"
             # Should return empty dict because BULL weights are incomplete
             assert len(weights) == 0
 
-    def test_load_weights_from_config_handles_invalid_regime(self, tmp_path: Path) -> None:
+    def test_load_weights_from_config_handles_invalid_regime(
+        self, tmp_path: Path
+    ) -> None:
         """Test that weight loading handles invalid regime names gracefully."""
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_manager = MagicMock()
             mock_manager.get_weights_config.return_value = {
                 "INVALID_REGIME": {
@@ -232,7 +246,9 @@ class TestWeightLoadingEdgeCases:
 
     def test_empty_weights_config(self) -> None:
         """Test loading from empty weights config."""
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_manager = MagicMock()
             mock_manager.get_weights_config.return_value = {}
             mock_get_manager.return_value = mock_manager
@@ -243,7 +259,9 @@ class TestWeightLoadingEdgeCases:
 
     def test_config_manager_exception(self) -> None:
         """Test handling of ConfigManager exception."""
-        with patch("iatb.selection.weight_optimizer.get_config_manager") as mock_get_manager:
+        with patch(
+            "iatb.selection.weight_optimizer.get_config_manager"
+        ) as mock_get_manager:
             mock_get_manager.side_effect = Exception("Config manager error")
 
             weights = _load_weights_from_config()

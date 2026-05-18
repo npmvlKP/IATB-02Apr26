@@ -61,7 +61,13 @@ def test_assign_ranks_ties() -> None:
 
 def test_compute_ic_basic() -> None:
     scores = [Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("5")]
-    returns = [Decimal("0.1"), Decimal("0.2"), Decimal("0.3"), Decimal("0.4"), Decimal("0.5")]
+    returns = [
+        Decimal("0.1"),
+        Decimal("0.2"),
+        Decimal("0.3"),
+        Decimal("0.4"),
+        Decimal("0.5"),
+    ]
     result = compute_information_coefficient(scores, returns)
     assert isinstance(result, ICResult)
     assert result.sample_size == 5
@@ -76,6 +82,12 @@ def test_check_alpha_decay_below_threshold() -> None:
 
 def test_check_alpha_decay_above_threshold() -> None:
     scores = [Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("5")]
-    returns = [Decimal("0.1"), Decimal("0.2"), Decimal("0.3"), Decimal("0.4"), Decimal("0.5")]
+    returns = [
+        Decimal("0.1"),
+        Decimal("0.2"),
+        Decimal("0.3"),
+        Decimal("0.4"),
+        Decimal("0.5"),
+    ]
     result = check_alpha_decay(scores, returns)
     assert result is False

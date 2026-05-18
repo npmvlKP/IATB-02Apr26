@@ -26,11 +26,19 @@ def test_portfolio_risk_metrics_and_snapshot() -> None:
         Decimal("-0.01"),
         Decimal("0.005"),
     ]
-    equity_curve = [Decimal("100"), Decimal("98"), Decimal("101"), Decimal("97"), Decimal("102")]
+    equity_curve = [
+        Decimal("100"),
+        Decimal("98"),
+        Decimal("101"),
+        Decimal("97"),
+        Decimal("102"),
+    ]
     var_95 = compute_var(returns)
     cvar_95 = compute_cvar(returns)
     max_dd = compute_max_drawdown(equity_curve)
-    snapshot = build_risk_snapshot(returns, equity_curve, max_allowed_drawdown=Decimal("0.03"))
+    snapshot = build_risk_snapshot(
+        returns, equity_curve, max_allowed_drawdown=Decimal("0.03")
+    )
     assert var_95 >= Decimal("0")
     assert cvar_95 >= var_95
     assert max_dd > Decimal("0")

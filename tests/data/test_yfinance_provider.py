@@ -171,7 +171,7 @@ class TestYFinanceProvider:
 
     @pytest.mark.asyncio()
     async def test_get_ticker_uses_info_fallback_when_fast_info_unavailable(
-        self
+        self,
     ) -> None:
         rows = [
             (

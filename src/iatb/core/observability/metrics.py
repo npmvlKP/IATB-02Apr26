@@ -322,7 +322,9 @@ def record_risk_check_duration(check_type: str, duration_seconds: float) -> None
         check_type: Type of risk check (position_limit, drawdown, exposure, etc.).
         duration_seconds: Duration in seconds.
     """
-    iatb_risk_check_duration_seconds.labels(check_type=check_type).observe(duration_seconds)
+    iatb_risk_check_duration_seconds.labels(check_type=check_type).observe(
+        duration_seconds
+    )
 
 
 # Data provider metrics
@@ -376,7 +378,9 @@ def record_data_source_latency(
     ).observe(latency_seconds)
 
 
-def track_execution_time(metric: Histogram | Summary, labels: dict[str, str]) -> Callable[..., Any]:
+def track_execution_time(
+    metric: Histogram | Summary, labels: dict[str, str]
+) -> Callable[..., Any]:
     """Decorator to track execution time of a function.
 
     Args:
@@ -480,7 +484,9 @@ def record_data_source_fallback(from_source: str, to_source: str) -> None:
         from_source: Source that failed.
         to_source: Fallback source being used.
     """
-    data_source_fallback_total.labels(from_source=from_source, to_source=to_source).inc()
+    data_source_fallback_total.labels(
+        from_source=from_source, to_source=to_source
+    ).inc()
 
 
 def update_data_freshness(source: str, freshness_seconds: float) -> None:

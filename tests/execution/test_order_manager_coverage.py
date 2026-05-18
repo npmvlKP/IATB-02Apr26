@@ -37,7 +37,9 @@ class _MockExecutor(Executor):
         # Use predefined result if available, otherwise create a default
         if request.symbol in self.execution_results:
             return self.execution_results[request.symbol]
-        return ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("100"))
+        return ExecutionResult(
+            "OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("100")
+        )
 
     def cancel_all(self) -> int:
         self.cancel_count += 1
@@ -94,7 +96,11 @@ class _MockTradeAuditLogger:
         self.logged_orders: list[tuple[OrderRequest, ExecutionResult, str, str]] = []
 
     def log_order(
-        self, request: OrderRequest, result: ExecutionResult, strategy_id: str, algo_id: str
+        self,
+        request: OrderRequest,
+        result: ExecutionResult,
+        strategy_id: str,
+        algo_id: str,
     ) -> None:
         self.logged_orders.append((request, result, strategy_id, algo_id))
 
@@ -110,7 +116,11 @@ class _MockRiskPipeline:
         self.audit_logger = None
 
     def process_order(
-        self, request: OrderRequest, now: datetime, strategy_id: str = "", algo_id: str = ""
+        self,
+        request: OrderRequest,
+        now: datetime,
+        strategy_id: str = "",
+        algo_id: str = "",
     ) -> object:
         """Return a mock PipelineResult object."""
         from dataclasses import dataclass
@@ -179,7 +189,9 @@ def test_place_order_async_equivalent_behavior():
     request2 = OrderRequest(Exchange.NSE, "NIFTY-2", OrderSide.BUY, Decimal("10"))
     import asyncio
 
-    async_result = asyncio.run(manager.place_order_async(request2, strategy_id="STRAT-1"))
+    async_result = asyncio.run(
+        manager.place_order_async(request2, strategy_id="STRAT-1")
+    )
 
     # Verify equivalent behavior
     assert sync_result.status == async_result.status
@@ -204,7 +216,11 @@ def test_update_market_data_propagates_to_risk_pipeline():
 
     # Verify market data was propagated to risk pipeline
     assert len(risk_pipeline.market_data_updates) == 1
-    (updated_prices, updated_positions, updated_exposure) = risk_pipeline.market_data_updates[0]
+    (
+        updated_prices,
+        updated_positions,
+        updated_exposure,
+    ) = risk_pipeline.market_data_updates[0]
     assert updated_prices == last_prices
     assert updated_positions == positions
     assert updated_exposure == total_exposure
@@ -393,7 +409,9 @@ def test_weighted_average_entry_price_calculation():
 def test_risk_pipeline_rejects_order():
     """Test that risk pipeline rejection raises ConfigError."""
     executor = _MockExecutor()
-    risk_pipeline = _MockRiskPipeline(allowed=False, rejection_reason="Risk limit exceeded")
+    risk_pipeline = _MockRiskPipeline(
+        allowed=False, rejection_reason="Risk limit exceeded"
+    )
 
     manager = OrderManager(executor)
     # Replace the risk pipeline with our mock
@@ -409,7 +427,9 @@ def test_save_state_permission_error(tmp_path: Path, caplog) -> None:
     """Test save_state with permission error logs error."""
     executor = _MockExecutor()
     # Use a path that cannot be written to (simulate permission error)
-    state_path = Path("C:/System32/readonly_state.json")  # System directory, likely read-only
+    state_path = Path(
+        "C:/System32/readonly_state.json"
+    )  # System directory, likely read-only
 
     manager = OrderManager(executor, state_persistence_path=state_path)
 
@@ -417,7 +437,9 @@ def test_save_state_permission_error(tmp_path: Path, caplog) -> None:
         # This should fail gracefully and log an error
         manager.save_state(state_path)
         # Verify error was logged
-        assert len(caplog.records) > 0 or True  # Pass test regardless, just verify no crash
+        assert (
+            len(caplog.records) > 0 or True
+        )  # Pass test regardless, just verify no crash
 
 
 def test_position_flip_scenarios():
@@ -426,7 +448,10 @@ def test_position_flip_scenarios():
     manager = OrderManager(executor)
 
     # Test short to long flip
-    manager._position_state["NIFTY"] = (Decimal("-10"), Decimal("100"))  # Short position
+    manager._position_state["NIFTY"] = (
+        Decimal("-10"),
+        Decimal("100"),
+    )  # Short position
 
     request = OrderRequest(
         Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("20")
@@ -441,12 +466,17 @@ def test_position_flip_scenarios():
     assert new_avg == Decimal("90")
 
     # Test long to short flip
-    manager._position_state["RELIANCE"] = (Decimal("10"), Decimal("2000"))  # Long position
+    manager._position_state["RELIANCE"] = (
+        Decimal("10"),
+        Decimal("2000"),
+    )  # Long position
 
     flip_request = OrderRequest(
         Exchange.NSE, "RELIANCE", OrderSide.SELL, Decimal("20")
     )  # Sell enough to flip
-    flip_result = ExecutionResult("OID-2", OrderStatus.FILLED, Decimal("20"), Decimal("2100"))
+    flip_result = ExecutionResult(
+        "OID-2", OrderStatus.FILLED, Decimal("20"), Decimal("2100")
+    )
 
     manager._record_pnl(flip_request, flip_result)
 
@@ -517,7 +547,9 @@ def test_kill_switch_engaged_raises_config_error():
     """Test that kill switch engaged raises ConfigError."""
     executor = _MockExecutor()
     kill_switch = _MockKillSwitch(allowed=False)
-    risk_pipeline = _MockRiskPipeline(allowed=False, rejection_reason="kill switch engaged")
+    risk_pipeline = _MockRiskPipeline(
+        allowed=False, rejection_reason="kill switch engaged"
+    )
 
     manager = OrderManager(executor, kill_switch=kill_switch)
     # Replace the risk pipeline with our mock
@@ -533,7 +565,9 @@ def test_throttle_exceeded_raises_config_error():
     """Test that throttle exceeded raises ConfigError."""
     executor = _MockExecutor()
     throttle = _MockOrderThrottle(allowed=False)
-    risk_pipeline = _MockRiskPipeline(allowed=False, rejection_reason="OPS throttle exceeded")
+    risk_pipeline = _MockRiskPipeline(
+        allowed=False, rejection_reason="OPS throttle exceeded"
+    )
 
     manager = OrderManager(executor, order_throttle=throttle)
     # Replace the risk pipeline with our mock
@@ -553,7 +587,9 @@ def test_receive_heartbeat_with_naive_datetime_raises_config_error():
     # Naive datetime without timezone (intentionally used for error testing)
     naive_dt = datetime(2024, 1, 1, 10, 0, tzinfo=UTC).replace(tzinfo=None)
 
-    with pytest.raises(ConfigError, match="heartbeat_utc must be timezone-aware UTC datetime"):
+    with pytest.raises(
+        ConfigError, match="heartbeat_utc must be timezone-aware UTC datetime"
+    ):
         manager.receive_heartbeat(naive_dt)
 
 
@@ -565,7 +601,9 @@ def test_check_dead_man_switch_with_naive_datetime_raises_config_error():
     # Naive datetime without timezone (intentionally used for error testing)
     naive_dt = datetime(2024, 1, 1, 10, 0, tzinfo=UTC).replace(tzinfo=None)
 
-    with pytest.raises(ConfigError, match="now_utc must be timezone-aware UTC datetime"):
+    with pytest.raises(
+        ConfigError, match="now_utc must be timezone-aware UTC datetime"
+    ):
         manager.check_dead_man_switch(naive_dt)
 
 
@@ -637,7 +675,10 @@ def test_add_to_short_position_weighted_average():
     manager = OrderManager(executor)
 
     # Test adding to short position
-    manager._position_state["NIFTY"] = (Decimal("-10"), Decimal("100"))  # Short 10 @ 100
+    manager._position_state["NIFTY"] = (
+        Decimal("-10"),
+        Decimal("100"),
+    )  # Short 10 @ 100
 
     request = OrderRequest(
         Exchange.NSE, "NIFTY", OrderSide.SELL, Decimal("10"), price=Decimal("110")
@@ -680,10 +721,15 @@ def test_realize_short_pnl_partial_close():
     manager = OrderManager(executor)
 
     # Start with short position
-    manager._position_state["NIFTY"] = (Decimal("-20"), Decimal("100"))  # Short 20 @ 100
+    manager._position_state["NIFTY"] = (
+        Decimal("-20"),
+        Decimal("100"),
+    )  # Short 20 @ 100
 
     # Buy 5 (partial close)
-    request = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("5"), price=Decimal("90"))
+    request = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("5"), price=Decimal("90")
+    )
     result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("5"), Decimal("90"))
 
     manager._record_pnl(request, result)
@@ -823,7 +869,9 @@ def test_crash_recovery_mode_skips_filled_orders():
     request = OrderRequest(
         Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"), price=Decimal("100")
     )
-    filled_result = ExecutionResult("OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("100"))
+    filled_result = ExecutionResult(
+        "OID-1", OrderStatus.FILLED, Decimal("10"), Decimal("100")
+    )
 
     # Add filled order to state
     manager._order_status[filled_result.order_id] = filled_result.status

@@ -54,7 +54,9 @@ def freeze_limit_slices(
     return slices
 
 
-def fixed_fractional_size(data: PositionSizingInput, *, lot_size: Decimal | None = None) -> Decimal:
+def fixed_fractional_size(
+    data: PositionSizingInput, *, lot_size: Decimal | None = None
+) -> Decimal:
     _validate_inputs(data)
     risk_amount = data.equity * data.risk_fraction
     stop_distance = abs(data.entry_price - data.stop_price)

@@ -423,7 +423,9 @@ class TestIntegrationScenarios:
         # Scenario: Trading on Monday, scanner from Friday
         scanner_price = Decimal("1000.00")
         execution_price = Decimal("1015.00")  # 1.5% gap
-        scanner_ts = datetime.now(UTC).replace(hour=15, minute=30) - timedelta(days=3)  # Friday
+        scanner_ts = datetime.now(UTC).replace(hour=15, minute=30) - timedelta(
+            days=3
+        )  # Friday
         execution_ts = datetime.now(UTC)  # Monday
         symbol = "WIPRO"
         prev_close = Decimal("1000.00")

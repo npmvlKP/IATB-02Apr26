@@ -66,7 +66,9 @@ class TradeAuditLogger:
             f"{record.quantity}|{record.price}|{record.status.value}|"
             f"{self._prev_hash.hex()}"
         )
-        digest = hmac.new(self._hmac_key, message.encode("utf-8"), hashlib.sha256).digest()
+        digest = hmac.new(
+            self._hmac_key, message.encode("utf-8"), hashlib.sha256
+        ).digest()
         return digest.hex()
 
     def log_order(
@@ -131,7 +133,9 @@ class TradeAuditLogger:
                 f"{record.quantity}|{record.price}|{record.status.value}|"
                 f"{prev_hash.hex()}"
             )
-            expected = hmac.new(self._hmac_key, message.encode("utf-8"), hashlib.sha256).hexdigest()
+            expected = hmac.new(
+                self._hmac_key, message.encode("utf-8"), hashlib.sha256
+            ).hexdigest()
             if not hmac.compare_digest(stored_hash, expected):
                 logger.error("Chain tamper detected at trade %s", record.trade_id)
                 return False
@@ -140,10 +144,16 @@ class TradeAuditLogger:
 
     def query_daily_trades(self, target_date: date) -> list[TradeAuditEntry]:
         """Retrieve all trades for a given date."""
-        start_time = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
-        end_time = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+        start_time = datetime.combine(target_date, datetime.min.time()).replace(
+            tzinfo=UTC
+        )
+        end_time = datetime.combine(target_date, datetime.max.time()).replace(
+            tzinfo=UTC
+        )
 
-        trades = self._store.query_trades(start_time=start_time, end_time=end_time, limit=10000)
+        trades = self._store.query_trades(
+            start_time=start_time, end_time=end_time, limit=10000
+        )
 
         return [_record_to_entry(trade) for trade in trades]
 

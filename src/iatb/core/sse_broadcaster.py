@@ -112,7 +112,9 @@ class SSEBroadcaster:
                         try:
                             subscriber.put_nowait(event_data)
                         except Exception as exc:
-                            _LOGGER.warning("Failed to send event to subscriber: %s", exc)
+                            _LOGGER.warning(
+                                "Failed to send event to subscriber: %s", exc
+                            )
                             dead_subscribers.append(subscriber)
 
                     # Remove dead subscribers
@@ -185,7 +187,9 @@ class SSEBroadcaster:
             >>> async for message in broadcaster.subscribe():
             ...     _LOGGER.info("Message: %s", message)
         """
-        queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
+        queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue(
+            maxsize=_SSE_QUEUE_MAXSIZE
+        )
 
         async with self._lock:
             self._subscribers.append(queue)

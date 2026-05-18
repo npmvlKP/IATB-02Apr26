@@ -126,13 +126,19 @@ def _validate_order_update_event(event: object) -> None:
     _validate_exchange(event)
     _validate_order_side(event)
     _validate_order_type(event)
-    _validate_non_empty_text(_get_attr(event, "order_id"), "order_id", MAX_IDENTIFIER_LENGTH)
+    _validate_non_empty_text(
+        _get_attr(event, "order_id"), "order_id", MAX_IDENTIFIER_LENGTH
+    )
     _validate_non_empty_text(_get_attr(event, "symbol"), "symbol", MAX_SYMBOL_LENGTH)
 
     quantity = _as_decimal(_get_attr(event, "quantity"), "quantity")
-    filled_quantity = _as_decimal(_get_attr(event, "filled_quantity"), "filled_quantity")
+    filled_quantity = _as_decimal(
+        _get_attr(event, "filled_quantity"), "filled_quantity"
+    )
     _validate_decimal_range(quantity, "quantity", Decimal("0"), MAX_QUANTITY)
-    _validate_decimal_range(filled_quantity, "filled_quantity", Decimal("0"), MAX_QUANTITY)
+    _validate_decimal_range(
+        filled_quantity, "filled_quantity", Decimal("0"), MAX_QUANTITY
+    )
     if filled_quantity > quantity:
         msg = "filled_quantity cannot exceed quantity"
         raise ValidationError(msg)
@@ -160,7 +166,9 @@ def _validate_order_update_event(event: object) -> None:
 def _validate_signal_event(event: object) -> None:
     _validate_exchange(event)
     _validate_order_side(event)
-    _validate_non_empty_text(_get_attr(event, "strategy_id"), "strategy_id", MAX_IDENTIFIER_LENGTH)
+    _validate_non_empty_text(
+        _get_attr(event, "strategy_id"), "strategy_id", MAX_IDENTIFIER_LENGTH
+    )
     _validate_non_empty_text(_get_attr(event, "symbol"), "symbol", MAX_SYMBOL_LENGTH)
     quantity = _as_decimal(_get_attr(event, "quantity"), "quantity")
     _validate_decimal_range(quantity, "quantity", Decimal("0"), MAX_QUANTITY)
@@ -170,7 +178,9 @@ def _validate_signal_event(event: object) -> None:
 
     price = _get_optional_attr(event, "price")
     if price is not None:
-        _validate_decimal_range(_as_decimal(price, "price"), "price", Decimal("0"), MAX_PRICE)
+        _validate_decimal_range(
+            _as_decimal(price, "price"), "price", Decimal("0"), MAX_PRICE
+        )
 
 
 def _validate_scan_update_event(event: object) -> None:
@@ -216,7 +226,9 @@ def _validate_scan_update_event(event: object) -> None:
 
 def _validate_pnl_update_event(event: object) -> None:
     """Validate PnL update events for SSE broadcasting."""
-    _validate_non_empty_text(_get_attr(event, "order_id"), "order_id", MAX_IDENTIFIER_LENGTH)
+    _validate_non_empty_text(
+        _get_attr(event, "order_id"), "order_id", MAX_IDENTIFIER_LENGTH
+    )
     _validate_non_empty_text(_get_attr(event, "symbol"), "symbol", MAX_SYMBOL_LENGTH)
     _validate_non_empty_text(_get_attr(event, "side"), "side", 16)
 
@@ -237,7 +249,9 @@ def _validate_pnl_update_event(event: object) -> None:
 
 
 def _validate_regime_change_event(event: object) -> None:
-    _validate_non_empty_text(_get_attr(event, "regime_type"), "regime_type", MAX_IDENTIFIER_LENGTH)
+    _validate_non_empty_text(
+        _get_attr(event, "regime_type"), "regime_type", MAX_IDENTIFIER_LENGTH
+    )
     _validate_non_empty_text(
         _get_attr(event, "description"),
         "description",

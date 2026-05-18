@@ -78,7 +78,9 @@ class TestCheckClockDrift:
         _check_clock_drift()
 
     @patch("iatb.core.preflight.ClockDriftDetector")
-    def test_check_clock_drift_custom_threshold(self, mock_detector_class: MagicMock) -> None:
+    def test_check_clock_drift_custom_threshold(
+        self, mock_detector_class: MagicMock
+    ) -> None:
         """Test clock drift check with custom threshold."""
         mock_detector = MagicMock()
         mock_detector.check_drift.return_value = timedelta(seconds=500)
@@ -86,7 +88,9 @@ class TestCheckClockDrift:
         _check_clock_drift(max_drift_seconds=1000)
 
     @patch("iatb.core.preflight.ClockDriftDetector")
-    def test_check_clock_drift_exceeds_threshold(self, mock_detector_class: MagicMock) -> None:
+    def test_check_clock_drift_exceeds_threshold(
+        self, mock_detector_class: MagicMock
+    ) -> None:
         """Test clock drift check fails when drift exceeds threshold."""
         mock_detector = MagicMock()
         mock_detector.check_drift.return_value = timedelta(seconds=10)
@@ -215,7 +219,9 @@ class TestRunPreflightChecks:
         # Mock clock drift to return a small drift within threshold
         mock_detector = MagicMock()
         mock_detector.check_drift.return_value = timedelta(seconds=0.5)
-        monkeypatch.setattr("iatb.core.preflight.ClockDriftDetector", lambda: mock_detector)
+        monkeypatch.setattr(
+            "iatb.core.preflight.ClockDriftDetector", lambda: mock_detector
+        )
 
         result = run_preflight_checks(
             executor=mock_executor,
@@ -354,7 +360,9 @@ class TestRunPreflightChecks:
         # Mock clock drift to return a small drift within threshold
         mock_detector = MagicMock()
         mock_detector.check_drift.return_value = timedelta(seconds=0.5)
-        monkeypatch.setattr("iatb.core.preflight.ClockDriftDetector", lambda: mock_detector)
+        monkeypatch.setattr(
+            "iatb.core.preflight.ClockDriftDetector", lambda: mock_detector
+        )
 
         result = run_preflight_checks(
             executor=mock_executor,

@@ -27,7 +27,9 @@ def test_transformer_model_train_and_predict(monkeypatch: pytest.MonkeyPatch) ->
     assert prediction.score.is_finite()
 
 
-def test_transformer_model_validates_inputs_and_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_transformer_model_validates_inputs_and_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     model = TransformerModel()
     with pytest.raises(ConfigError, match="trained before predict"):
         model.predict([Decimal("0.1")])

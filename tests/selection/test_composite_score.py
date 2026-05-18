@@ -192,7 +192,9 @@ class TestComputeCompositeScore:
             volume_profile=Decimal("0"),
             drl=Decimal("0"),
         )
-        result = compute_composite_score(signals, MarketRegime.BULL, custom_weights=custom)
+        result = compute_composite_score(
+            signals, MarketRegime.BULL, custom_weights=custom
+        )
         assert result.composite_score >= Decimal("0")
         assert result.weights_used is custom
 

@@ -307,7 +307,9 @@ def ohlcv_chart_endpoint(ticker: str, interval: str = "day") -> dict[str, Any]:
         result = api.get_ohlcv(ticker=ticker, interval=interval)
 
         if result.get("status") == "error":
-            status_code = 404 if "not found" in result.get("message", "").lower() else 502
+            status_code = (
+                404 if "not found" in result.get("message", "").lower() else 502
+            )
             raise HTTPException(
                 status_code=status_code,
                 detail=result.get("message", "Failed to fetch OHLCV data"),
@@ -370,7 +372,9 @@ def get_watchlist_config() -> dict[str, Any]:
         config_manager = get_config_manager()
         config = config_manager.get_config()
 
-        total_symbols = len(config.nse) + len(config.bse) + len(config.mcx) + len(config.cds)
+        total_symbols = (
+            len(config.nse) + len(config.bse) + len(config.mcx) + len(config.cds)
+        )
 
         return {
             "nse": config.nse,
@@ -389,7 +393,9 @@ def get_watchlist_config() -> dict[str, Any]:
         ) from exc
 
 
-def _build_watchlist_response(config: WatchlistConfig, config_path: Path) -> dict[str, Any]:
+def _build_watchlist_response(
+    config: WatchlistConfig, config_path: Path
+) -> dict[str, Any]:
     """Build watchlist response from configuration.
 
     Args:
@@ -399,7 +405,9 @@ def _build_watchlist_response(config: WatchlistConfig, config_path: Path) -> dic
     Returns:
         Response dictionary with watchlist data.
     """
-    total_symbols = len(config.nse) + len(config.bse) + len(config.mcx) + len(config.cds)
+    total_symbols = (
+        len(config.nse) + len(config.bse) + len(config.mcx) + len(config.cds)
+    )
 
     return {
         "nse": config.nse,
@@ -495,7 +503,9 @@ def ml_status_endpoint() -> dict[str, Any]:
             models[model_name] = {
                 "status": health.status.value,
                 "last_check": health.last_check.isoformat(),
-                "load_time_ms": str(health.load_time_ms) if health.load_time_ms else None,
+                "load_time_ms": str(health.load_time_ms)
+                if health.load_time_ms
+                else None,
                 "dll_loaded": health.dll_loaded,
                 "fallback_available": health.fallback_available,
                 "error_message": health.error_message,

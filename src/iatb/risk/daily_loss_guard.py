@@ -198,7 +198,9 @@ class DailyLossGuard:
         self._limit = starting_nav * self._max_pct
         self._cumulative_pnl = Decimal("0")
         self._trade_count = 0
-        logger.info("Daily loss guard reset: NAV=%s, limit=%s", starting_nav, self._limit)
+        logger.info(
+            "Daily loss guard reset: NAV=%s, limit=%s", starting_nav, self._limit
+        )
         self._persist_state(now_utc)
 
     def save_state(self, now_utc: datetime) -> None:

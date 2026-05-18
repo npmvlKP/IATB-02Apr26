@@ -161,7 +161,10 @@ def test_scanner_determine_category_edge_cases():
     assert InstrumentScanner._determine_category("NIFTYCE") == InstrumentCategory.OPTION
     assert InstrumentScanner._determine_category("NIFTYPE") == InstrumentCategory.OPTION
     # Long symbol name (>10 chars) should be OPTION
-    assert InstrumentScanner._determine_category("VERYLONGOPTION") == InstrumentCategory.OPTION
+    assert (
+        InstrumentScanner._determine_category("VERYLONGOPTION")
+        == InstrumentCategory.OPTION
+    )
 
 
 # ============================================================================

@@ -26,7 +26,11 @@ torch.manual_seed(42)
 def _profile_payload() -> dict[str, object]:
     return {
         "status": "success",
-        "data": {"user_id": "AB1234", "user_name": "Trader", "email": "trader@example.com"},
+        "data": {
+            "user_id": "AB1234",
+            "user_name": "Trader",
+            "email": "trader@example.com",
+        },
     }
 
 
@@ -71,7 +75,9 @@ def test_extract_request_token_from_text_handles_status_first_query() -> None:
 
 
 def test_extract_request_token_from_text_handles_encoded_ampersand() -> None:
-    redirect_text = "https://localhost/callback?status=success&amp;request_token=req-xyz"
+    redirect_text = (
+        "https://localhost/callback?status=success&amp;request_token=req-xyz"
+    )
     assert extract_request_token_from_text(redirect_text) == "req-xyz"
 
 
@@ -82,7 +88,9 @@ def test_extract_request_token_from_text_handles_query_fragment_only() -> None:
 
 def test_extract_request_token_from_redirect_url_rejects_missing_token() -> None:
     with pytest.raises(ConfigError, match="missing request_token"):
-        extract_request_token_from_redirect_url("https://localhost/callback?status=success")
+        extract_request_token_from_redirect_url(
+            "https://localhost/callback?status=success"
+        )
 
 
 def test_establish_session_with_access_token_fetches_profile_and_balance() -> None:
@@ -125,7 +133,9 @@ def test_establish_session_with_access_token_fetches_profile_and_balance() -> No
     assert session.connected_at_utc.tzinfo is UTC
 
 
-def test_establish_session_exchanges_request_token_then_fetches_account_details() -> None:
+def test_establish_session_exchanges_request_token_then_fetches_account_details() -> (
+    None
+):
     calls: list[str] = []
     issued_access = "access" + "-123"
 
@@ -149,7 +159,11 @@ def test_establish_session_exchanges_request_token_then_fetches_account_details(
             assert values["checksum"] == [expected]
             return {"status": "success", "data": {"access_token": issued_access}}
         assert headers["Authorization"] == f"token kite-key:{issued_access}"
-        return _profile_payload() if url.endswith("/user/profile") else _margins_payload("1000.10")
+        return (
+            _profile_payload()
+            if url.endswith("/user/profile")
+            else _margins_payload("1000.10")
+        )
 
     connection = ZerodhaConnection(
         api_key="kite-key",
@@ -188,7 +202,11 @@ def test_establish_session_request_token_overrides_stored_access_token() -> None
             assert values["request_token"] == ["req-fresh"]
             return {"status": "success", "data": {"access_token": issued_access}}
         assert headers["Authorization"] == f"token kite-key:{issued_access}"
-        return _profile_payload() if url.endswith("/user/profile") else _margins_payload("321.00")
+        return (
+            _profile_payload()
+            if url.endswith("/user/profile")
+            else _margins_payload("321.00")
+        )
 
     connection = ZerodhaConnection(
         api_key="kite-key",

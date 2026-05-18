@@ -58,7 +58,8 @@ class TestSocialSentimentConfig:
     def test_weights_sum_not_one_raises_error(self) -> None:
         """Test that weights not summing to 1.0 raises ConfigError."""
         with pytest.raises(
-            ConfigError, match="engagement, follower, and recency weights must sum to 1.0"
+            ConfigError,
+            match="engagement, follower, and recency weights must sum to 1.0",
         ):
             SocialSentimentConfig(
                 engagement_weight=Decimal("0.5"),

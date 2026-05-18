@@ -377,7 +377,9 @@ class PipelineStageTimer:
         )
         return self.result
 
-    def mark_failure(self, error: str, metadata: dict[str, str] | None = None) -> StageResult:
+    def mark_failure(
+        self, error: str, metadata: dict[str, str] | None = None
+    ) -> StageResult:
         """Explicitly mark stage as failed with error message.
 
         Args:

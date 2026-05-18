@@ -25,7 +25,9 @@ class _FakeCheckpointCallback:
 
 
 def test_sharpe_drop_early_stop_triggers_on_large_degradation() -> None:
-    callback = SharpeDropEarlyStop(drop_threshold=Decimal("0.15"), window=5, min_history=10)
+    callback = SharpeDropEarlyStop(
+        drop_threshold=Decimal("0.15"), window=5, min_history=10
+    )
     history = [Decimal("1.0")] * 5 + [Decimal("0.7")] * 5
     assert callback.should_stop(history)
 
@@ -51,7 +53,9 @@ def test_create_training_callbacks_includes_checkpoint_callback(
     tmp_path: object,
 ) -> None:
     fake_module = SimpleNamespace(CheckpointCallback=_FakeCheckpointCallback)
-    monkeypatch.setattr("iatb.rl.callbacks.importlib.import_module", lambda _: fake_module)
+    monkeypatch.setattr(
+        "iatb.rl.callbacks.importlib.import_module", lambda _: fake_module
+    )
     callbacks = create_training_callbacks(
         checkpoint_dir=str(tmp_path),
         tensorboard_log_dir=str(tmp_path),

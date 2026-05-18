@@ -119,7 +119,11 @@ class TestEmailChannel:
             smtp_host="smtp.example.com",
             smtp_user="test@example.com",
             smtp_password="password",
-            to_emails=["email1@example.com", "email2@example.com", "email3@example.com"],
+            to_emails=[
+                "email1@example.com",
+                "email2@example.com",
+                "email3@example.com",
+            ],
         )
         assert channel.enabled
         assert channel.to_emails == [
@@ -446,24 +450,39 @@ class TestAlertRulesEngine:
     def test_check_position_limit_breach_condition(self) -> None:
         """Test position limit breach rule condition."""
         engine = AlertRulesEngine()
-        assert engine._check_position_limit_breach({"current_positions": 10, "limit": 10}) is True
-        assert engine._check_position_limit_breach({"current_positions": 11, "limit": 10}) is True
-        assert engine._check_position_limit_breach({"current_positions": 9, "limit": 10}) is False
+        assert (
+            engine._check_position_limit_breach({"current_positions": 10, "limit": 10})
+            is True
+        )
+        assert (
+            engine._check_position_limit_breach({"current_positions": 11, "limit": 10})
+            is True
+        )
+        assert (
+            engine._check_position_limit_breach({"current_positions": 9, "limit": 10})
+            is False
+        )
         assert engine._check_position_limit_breach({}) is False
 
     def test_check_daily_loss_threshold_condition(self) -> None:
         """Test daily loss threshold rule condition."""
         engine = AlertRulesEngine()
         assert (
-            engine._check_daily_loss_threshold({"daily_pnl": -5000, "loss_threshold": -5000})
+            engine._check_daily_loss_threshold(
+                {"daily_pnl": -5000, "loss_threshold": -5000}
+            )
             is True
         )
         assert (
-            engine._check_daily_loss_threshold({"daily_pnl": -6000, "loss_threshold": -5000})
+            engine._check_daily_loss_threshold(
+                {"daily_pnl": -6000, "loss_threshold": -5000}
+            )
             is True
         )
         assert (
-            engine._check_daily_loss_threshold({"daily_pnl": -4000, "loss_threshold": -5000})
+            engine._check_daily_loss_threshold(
+                {"daily_pnl": -4000, "loss_threshold": -5000}
+            )
             is False
         )
         assert engine._check_daily_loss_threshold({}) is False
@@ -472,13 +491,22 @@ class TestAlertRulesEngine:
         """Test data source failure rule condition."""
         engine = AlertRulesEngine()
         assert (
-            engine._check_data_source_failure({"failure_count": 3, "failure_threshold": 3}) is True
+            engine._check_data_source_failure(
+                {"failure_count": 3, "failure_threshold": 3}
+            )
+            is True
         )
         assert (
-            engine._check_data_source_failure({"failure_count": 5, "failure_threshold": 3}) is True
+            engine._check_data_source_failure(
+                {"failure_count": 5, "failure_threshold": 3}
+            )
+            is True
         )
         assert (
-            engine._check_data_source_failure({"failure_count": 2, "failure_threshold": 3}) is False
+            engine._check_data_source_failure(
+                {"failure_count": 2, "failure_threshold": 3}
+            )
+            is False
         )
         assert engine._check_data_source_failure({}) is False
 
@@ -815,7 +843,9 @@ class TestTelegramAlerter:
         )
 
         with patch.object(alerter, "send_alert", return_value=True) as mock_send:
-            result = alerter.send_error_alert("TestComponent", "Test error", "ValueError")
+            result = alerter.send_error_alert(
+                "TestComponent", "Test error", "ValueError"
+            )
             assert result is True
             mock_send.assert_called_once()
             call_args = mock_send.call_args
@@ -930,7 +960,9 @@ class TestTelegramAlerter:
         )
 
         with patch.object(alerter, "send_alert", return_value=True) as mock_send:
-            result = alerter.send_fallback_source_alert("Kite", "YFinance", "Connection timeout")
+            result = alerter.send_fallback_source_alert(
+                "Kite", "YFinance", "Connection timeout"
+            )
             assert result is True
             mock_send.assert_called_once()
             call_args = mock_send.call_args[0][0]
@@ -1137,11 +1169,15 @@ class TestMultiChannelAlertManager:
         manager.add_channel(channel)
 
         # First send should succeed
-        alert_id_1 = manager.send_alert("Test message", AlertLevel.INFO, rule_name="test_rule")
+        alert_id_1 = manager.send_alert(
+            "Test message", AlertLevel.INFO, rule_name="test_rule"
+        )
         assert alert_id_1 is not None
 
         # Second send within throttle window should be throttled
-        alert_id_2 = manager.send_alert("Test message", AlertLevel.INFO, rule_name="test_rule")
+        alert_id_2 = manager.send_alert(
+            "Test message", AlertLevel.INFO, rule_name="test_rule"
+        )
         assert alert_id_2 is None
 
     def test_send_alert_to_disabled_channel(self) -> None:

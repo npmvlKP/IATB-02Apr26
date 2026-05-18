@@ -16,7 +16,9 @@ torch.manual_seed(42)
 
 
 def test_aion_analyzer_accepts_mapping_output() -> None:
-    analyzer = AionAnalyzer(predict_fn=lambda text: {"label": "positive", "score": 0.88})
+    analyzer = AionAnalyzer(
+        predict_fn=lambda text: {"label": "positive", "score": 0.88}
+    )
     result = analyzer.analyze("RBI keeps rates steady; banks rally.")
     assert result.score == Decimal("0.88")
     assert result.label == "POSITIVE"
@@ -36,12 +38,16 @@ def test_aion_analyzer_rejects_unknown_output() -> None:
 
 
 def test_aion_analyzer_rejects_negative_confidence() -> None:
-    analyzer = AionAnalyzer(predict_fn=lambda text: {"label": "positive", "score": -0.1})
+    analyzer = AionAnalyzer(
+        predict_fn=lambda text: {"label": "positive", "score": -0.1}
+    )
     with pytest.raises(ConfigError, match="cannot be negative"):
         analyzer.analyze("Sensex opens higher.")
 
 
-def test_aion_predictor_missing_dependency_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_aion_predictor_missing_dependency_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "iatb.sentiment.helpers.importlib.import_module",
         lambda _: (_ for _ in ()).throw(ModuleNotFoundError),
@@ -63,7 +69,9 @@ def test_aion_analyzer_handles_neutral_string_prediction() -> None:
     assert result.label == "NEUTRAL"
 
 
-def test_aion_resolve_predict_fn_from_module_callable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_aion_resolve_predict_fn_from_module_callable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     module = SimpleNamespace(predict=lambda text: {"label": "positive", "score": 0.8})
     monkeypatch.setattr(
         "iatb.sentiment.helpers.importlib.import_module",
@@ -73,7 +81,9 @@ def test_aion_resolve_predict_fn_from_module_callable(monkeypatch: pytest.Monkey
     assert predict_fn("Rupee remains stable.") == {"label": "positive", "score": 0.8}
 
 
-def test_aion_resolve_predict_fn_from_model_instance(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_aion_resolve_predict_fn_from_model_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _Model:
         def analyze(self, text: str) -> dict[str, object]:
             _ = text
@@ -85,7 +95,10 @@ def test_aion_resolve_predict_fn_from_model_instance(monkeypatch: pytest.MonkeyP
         lambda _: module,
     )
     predict_fn = resolve_aion_predictor()
-    assert predict_fn("IT index weakens intraday.") == {"label": "bearish", "score": 0.7}
+    assert predict_fn("IT index weakens intraday.") == {
+        "label": "bearish",
+        "score": 0.7,
+    }
 
 
 def test_aion_resolve_predict_fn_without_interface_raises(

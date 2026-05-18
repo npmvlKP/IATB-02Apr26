@@ -78,7 +78,9 @@ class TestMarketTickEvent:
 
     def test_bid_ask_domain_validation(self) -> None:
         """Test bid/ask domain validation."""
-        with pytest.raises(ValidationError, match="bid_price cannot be greater than ask_price"):
+        with pytest.raises(
+            ValidationError, match="bid_price cannot be greater than ask_price"
+        ):
             MarketTickEvent(
                 symbol="RELIANCE",
                 bid_price=create_price("101.00"),
@@ -124,7 +126,9 @@ class TestOrderUpdateEvent:
 
     def test_filled_quantity_cannot_exceed_quantity(self) -> None:
         """Test fail-closed quantity consistency."""
-        with pytest.raises(ValidationError, match="filled_quantity cannot exceed quantity"):
+        with pytest.raises(
+            ValidationError, match="filled_quantity cannot exceed quantity"
+        ):
             OrderUpdateEvent(
                 order_id="ORD-001",
                 symbol="RELIANCE",

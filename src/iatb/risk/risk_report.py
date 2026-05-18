@@ -87,15 +87,23 @@ class ReportConfig:
             msg = "Max allowed drawdown must be positive"
             raise ConfigError(msg)
 
-        if self.confidence_level <= Decimal("0") or self.confidence_level >= Decimal("1"):
+        if self.confidence_level <= Decimal("0") or self.confidence_level >= Decimal(
+            "1"
+        ):
             msg = "Confidence level must be between 0 and 1"
             raise ConfigError(msg)
 
-        if self.notification_channel == NotificationChannel.EMAIL and not self.email_recipients:
+        if (
+            self.notification_channel == NotificationChannel.EMAIL
+            and not self.email_recipients
+        ):
             msg = "Email recipients must be specified when using email notifications"
             raise ConfigError(msg)
 
-        if self.notification_channel == NotificationChannel.TELEGRAM and not self.telegram_chat_id:
+        if (
+            self.notification_channel == NotificationChannel.TELEGRAM
+            and not self.telegram_chat_id
+        ):
             msg = "Telegram chat_id must be specified when using Telegram notifications"
             raise ConfigError(msg)
 
@@ -313,7 +321,9 @@ def create_daily_risk_metrics(
     Raises:
         ConfigError: If any validation fails.
     """
-    _validate_risk_metrics_inputs(date, net_liquidation_value, total_exposure, confidence_level)
+    _validate_risk_metrics_inputs(
+        date, net_liquidation_value, total_exposure, confidence_level
+    )
     risk_snapshot = build_risk_snapshot(
         returns=[daily_return, -var_95, -cvar_95],
         equity_curve=[net_liquidation_value - daily_pnl, net_liquidation_value],
@@ -346,15 +356,23 @@ def _validate_config(config: ReportConfig) -> None:
         msg = "Max allowed drawdown must be positive"
         raise ConfigError(msg)
 
-    if config.confidence_level <= Decimal("0") or config.confidence_level >= Decimal("1"):
+    if config.confidence_level <= Decimal("0") or config.confidence_level >= Decimal(
+        "1"
+    ):
         msg = "Confidence level must be between 0 and 1"
         raise ConfigError(msg)
 
-    if config.notification_channel == NotificationChannel.EMAIL and not config.email_recipients:
+    if (
+        config.notification_channel == NotificationChannel.EMAIL
+        and not config.email_recipients
+    ):
         msg = "Email recipients must be specified when using email notifications"
         raise ConfigError(msg)
 
-    if config.notification_channel == NotificationChannel.TELEGRAM and not config.telegram_chat_id:
+    if (
+        config.notification_channel == NotificationChannel.TELEGRAM
+        and not config.telegram_chat_id
+    ):
         msg = "Telegram chat_id must be specified when using Telegram notifications"
         raise ConfigError(msg)
 

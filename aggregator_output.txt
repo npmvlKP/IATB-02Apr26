@@ -1,0 +1,46 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: g:\IATB-02Apr26\IATB
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-0.23.8, cov-4.1.0, mock-3.15.1, xdist-3.8.0
+asyncio: mode=Mode.AUTO
+created: 24/24 workers
+24 workers [11 items]
+
+scheduling tests via LoadScopeScheduling
+
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_create_aggregator_with_defaults 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentGateResult::test_create_result 
+[gw1] [  9%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentGateResult::test_create_result 
+[gw0] [ 18%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_create_aggregator_with_defaults 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_text 
+[gw0] [ 27%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_text 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_tradable 
+[gw0] [ 36%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_tradable 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_no_volume 
+[gw0] [ 45%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_no_volume 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_news 
+[gw0] [ 54%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_news 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_social 
+[gw0] [ 63%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_social 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_full_ensemble 
+[gw0] [ 72%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_full_ensemble 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_full 
+[gw0] [ 81%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_full 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_invalid_threshold_raises_error 
+[gw0] [ 90%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_invalid_threshold_raises_error 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_threshold_above_one_raises_error 
+[gw0] [100%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_threshold_above_one_raises_error 
+
+============================== warnings summary ===============================
+C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: 24 warnings
+  C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: DeprecationWarning: pythonjsonlogger.jsonlogger has been moved to pythonjsonlogger.json
+    warnings.warn(
+
+src\iatb\data\__init__.py:17: 24 warnings
+  g:\IATB-02Apr26\IATB\src\iatb\data\__init__.py:17: DeprecationWarning: KiteTickerFeed is deprecated. Use KiteWebSocketProvider instead. This module will be removed in a future version.
+    from iatb.data.kite_ticker import KiteTickerFeed
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 11 passed, 48 warnings in 7.82s =======================

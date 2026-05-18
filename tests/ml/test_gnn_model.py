@@ -29,7 +29,9 @@ def test_gnn_model_fit_and_predict(monkeypatch: pytest.MonkeyPatch) -> None:
     assert prediction.confidence <= Decimal("1")
 
 
-def test_gnn_model_validates_inputs_and_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gnn_model_validates_inputs_and_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     model = GNNModel()
     with pytest.raises(ConfigError, match="trained before predict"):
         model.predict([Decimal("0.1")])

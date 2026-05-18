@@ -106,7 +106,9 @@ def test_order_throttle_across_multiple_seconds() -> None:
         assert throttle.current_count == 2
 
 
-def test_order_throttle_logs_warning_on_exceed(caplog: pytest.LogCaptureFixture) -> None:
+def test_order_throttle_logs_warning_on_exceed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Test OrderThrottle logs warning when OPS exceeded (lines 37-42)."""
     throttle = OrderThrottle(max_ops=2)
     now = datetime(2026, 4, 7, 8, 0, 0, tzinfo=UTC)

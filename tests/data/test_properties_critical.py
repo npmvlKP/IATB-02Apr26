@@ -44,7 +44,9 @@ class TestRateLimiterProperties:
     @settings(max_examples=5)
     def test_rate_limiter_respects_window(self, requests_per_second):
         """Property: Rate limiter respects requests_per_second parameter."""
-        limiter = RateLimiter(requests_per_second=float(requests_per_second), burst_capacity=10)
+        limiter = RateLimiter(
+            requests_per_second=float(requests_per_second), burst_capacity=10
+        )
 
         async def make_requests():
             for _ in range(requests_per_second):
@@ -86,8 +88,12 @@ class TestOHLCVProperties:
     """Property-based tests for OHLCV data properties."""
 
     @given(
-        st.floats(min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False),
-        st.floats(min_value=0.01, max_value=0.10, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False
+        ),
+        st.floats(
+            min_value=0.01, max_value=0.10, allow_nan=False, allow_infinity=False
+        ),
     )
     @settings(max_examples=20)
     def test_ohlc_high_low_relationship(self, base_price, variation_pct):
@@ -98,8 +104,12 @@ class TestOHLCVProperties:
         assert high >= low, f"High {high} < Low {low} for base {base_price}"
 
     @given(
-        st.floats(min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False),
-        st.floats(min_value=0.01, max_value=0.10, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False
+        ),
+        st.floats(
+            min_value=0.01, max_value=0.10, allow_nan=False, allow_infinity=False
+        ),
     )
     @settings(max_examples=20)
     def test_ohlc_open_close_within_range(self, base_price, variation_pct):
@@ -116,7 +126,9 @@ class TestOHLCVProperties:
         assert low <= close_price <= high, f"Close {close_price} not in [{low}, {high}]"
 
     @given(
-        st.floats(min_value=0.0, max_value=1000000000.0, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=0.0, max_value=1000000000.0, allow_nan=False, allow_infinity=False
+        ),
     )
     @settings(max_examples=20)
     def test_volume_is_non_negative(self, volume):
@@ -146,7 +158,9 @@ class TestPricePrecisionProperties:
     """Property-based tests for price precision and rounding."""
 
     @given(
-        st.floats(min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False
+        ),
         st.integers(min_value=0, max_value=8),
     )
     @settings(max_examples=20)
@@ -162,8 +176,12 @@ class TestPricePrecisionProperties:
         ), f"Decimal precision lost: {decimal_price} vs {reconstructed}"
 
     @given(
-        st.floats(min_value=0.01, max_value=0.99, allow_nan=False, allow_infinity=False),
-        st.floats(min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=0.01, max_value=0.99, allow_nan=False, allow_infinity=False
+        ),
+        st.floats(
+            min_value=1.0, max_value=100000.0, allow_nan=False, allow_infinity=False
+        ),
     )
     @settings(max_examples=20)
     def test_percentage_calculation_properties(self, pct, base):
@@ -280,4 +298,6 @@ class TestCacheProperties:
         assert (
             stats["misses"] == expected_misses
         ), f"Miss count mismatch: {stats['misses']} vs {expected_misses}"
-        assert stats["total_entries"] == 1, f"Total entries mismatch: {stats['total_entries']}"
+        assert (
+            stats["total_entries"] == 1
+        ), f"Total entries mismatch: {stats['total_entries']}"

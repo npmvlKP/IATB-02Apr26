@@ -52,7 +52,10 @@ class GNNModel(Predictor):
         score = self._predict_score(features)
         confidence = min(Decimal("1"), max(Decimal("0"), abs(score)))
         return PredictionResult(
-            symbol="ENSEMBLE", score=score, confidence=confidence, regime_label="SIDEWAYS"
+            symbol="ENSEMBLE",
+            score=score,
+            confidence=confidence,
+            regime_label="SIDEWAYS",
         )
 
     def _predict_score(self, features: list[Decimal]) -> Decimal:
@@ -60,7 +63,11 @@ class GNNModel(Predictor):
             msg = "features cannot be empty"
             raise ConfigError(msg)
         node_value = _mean(features)
-        return node_value + (self._graph_strength / Decimal("10")) - (self._bias / Decimal("100"))
+        return (
+            node_value
+            + (self._graph_strength / Decimal("10"))
+            - (self._bias / Decimal("100"))
+        )
 
 
 def _load_torch_geometric() -> object:

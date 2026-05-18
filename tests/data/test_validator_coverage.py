@@ -345,25 +345,33 @@ class TestErrorCases:
     def test_error_high_less_than_open(self) -> None:
         """Error: high < open should raise ValidationError."""
         invalid = _make_bar(open_price="105", high="99", low="98", close="100")
-        with pytest.raises(ValidationError, match="high price cannot be lower than open/close/low"):
+        with pytest.raises(
+            ValidationError, match="high price cannot be lower than open/close/low"
+        ):
             validate_ohlcv_bar(invalid)
 
     def test_error_high_less_than_close(self) -> None:
         """Error: high < close should raise ValidationError."""
         invalid = _make_bar(open_price="100", high="99", low="98", close="101")
-        with pytest.raises(ValidationError, match="high price cannot be lower than open/close/low"):
+        with pytest.raises(
+            ValidationError, match="high price cannot be lower than open/close/low"
+        ):
             validate_ohlcv_bar(invalid)
 
     def test_error_high_less_than_low(self) -> None:
         """Error: high < low should raise ValidationError."""
         invalid = _make_bar(open_price="100", high="99", low="101", close="100")
-        with pytest.raises(ValidationError, match="high price cannot be lower than open/close/low"):
+        with pytest.raises(
+            ValidationError, match="high price cannot be lower than open/close/low"
+        ):
             validate_ohlcv_bar(invalid)
 
     def test_error_high_less_than_open_and_close(self) -> None:
         """Error: high < open and high < close should raise ValidationError."""
         invalid = _make_bar(open_price="105", high="100", low="99", close="101")
-        with pytest.raises(ValidationError, match="high price cannot be lower than open/close/low"):
+        with pytest.raises(
+            ValidationError, match="high price cannot be lower than open/close/low"
+        ):
             validate_ohlcv_bar(invalid)
 
     def test_error_low_greater_than_open_and_close(self) -> None:
@@ -377,7 +385,9 @@ class TestErrorCases:
     def test_error_low_greater_than_high(self) -> None:
         """Error: low > high should raise ValidationError."""
         invalid = _make_bar(open_price="100", high="100", low="101", close="99")
-        with pytest.raises(ValidationError, match="high price cannot be lower than open/close/low"):
+        with pytest.raises(
+            ValidationError, match="high price cannot be lower than open/close/low"
+        ):
             validate_ohlcv_bar(invalid)
 
     # --- Series Consistency Tests ---

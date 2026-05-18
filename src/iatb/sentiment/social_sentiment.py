@@ -108,7 +108,9 @@ class SocialSentimentConfig:
         if self.min_engagement < 0:
             msg = "min_engagement cannot be negative"
             raise ConfigError(msg)
-        total_weight = self.engagement_weight + self.follower_weight + self.recency_weight
+        total_weight = (
+            self.engagement_weight + self.follower_weight + self.recency_weight
+        )
         if abs(total_weight - Decimal("1")) > Decimal("0.01"):
             msg = f"engagement, follower, and recency weights must sum to 1.0, got {total_weight}"
             raise ConfigError(msg)
@@ -247,7 +249,9 @@ class SocialSentimentAnalyzer:
         score = self._compute_sentiment_score(post.content)
         confidence = self._compute_confidence(post, score)
         label = sentiment_label_from_score(score)
-        excerpt = post.content[:150] + "..." if len(post.content) > 150 else post.content
+        excerpt = (
+            post.content[:150] + "..." if len(post.content) > 150 else post.content
+        )
         return SentimentScore(
             source=post.platform,
             score=score,
@@ -268,8 +272,12 @@ class SocialSentimentAnalyzer:
     def _compute_sentiment_score(self, text: str) -> Decimal:
         """Compute sentiment score from text using keyword analysis."""
         text_lower = text.lower()
-        positive_count = sum(1 for kw in self._config.positive_keywords if kw in text_lower)
-        negative_count = sum(1 for kw in self._config.negative_keywords if kw in text_lower)
+        positive_count = sum(
+            1 for kw in self._config.positive_keywords if kw in text_lower
+        )
+        negative_count = sum(
+            1 for kw in self._config.negative_keywords if kw in text_lower
+        )
         total = positive_count + negative_count
         if total == 0:
             return Decimal("0")
@@ -313,7 +321,9 @@ class SocialSentimentAnalyzer:
             return Decimal("0.3")
         if post.followers > max_followers:
             return Decimal("1.0")
-        return Decimal(post.followers - min_followers) / Decimal(max_followers - min_followers)
+        return Decimal(post.followers - min_followers) / Decimal(
+            max_followers - min_followers
+        )
 
     def _compute_recency_score(self, post: SocialPost) -> Decimal:
         """Compute normalized recency score."""
@@ -325,7 +335,9 @@ class SocialSentimentAnalyzer:
             Decimal("1") - (Decimal(age_hours) / Decimal(self._config.max_age_hours)),
         )
 
-    def _aggregate_sentiments(self, sentiments: list[SentimentScore]) -> tuple[Decimal, Decimal]:
+    def _aggregate_sentiments(
+        self, sentiments: list[SentimentScore]
+    ) -> tuple[Decimal, Decimal]:
         """Aggregate multiple sentiment scores."""
         if not sentiments:
             return Decimal("0"), Decimal("0")

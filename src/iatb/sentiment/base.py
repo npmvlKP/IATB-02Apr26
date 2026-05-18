@@ -47,7 +47,9 @@ class SentimentScore:
             msg = "label cannot be empty"
             raise ConfigError(msg)
         object.__setattr__(self, "score", _as_decimal(self.score, "score"))
-        object.__setattr__(self, "confidence", _as_decimal(self.confidence, "confidence"))
+        object.__setattr__(
+            self, "confidence", _as_decimal(self.confidence, "confidence")
+        )
         if self.score < Decimal("-1") or self.score > Decimal("1"):
             msg = "score must be between -1 and 1"
             raise ConfigError(msg)
@@ -65,5 +67,4 @@ class SentimentScore:
 class SentimentAnalyzer(Protocol):
     """Contract for sentiment analyzers."""
 
-    def analyze(self, text: str) -> SentimentScore:
-        ...
+    def analyze(self, text: str) -> SentimentScore: ...

@@ -2,7 +2,6 @@
 Tests for jugaad-data provider integration.
 """
 
-
 import random
 
 import numpy as np

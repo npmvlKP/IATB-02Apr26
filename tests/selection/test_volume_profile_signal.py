@@ -40,43 +40,64 @@ def _make_vp(
 class TestClassifyProfileShape:
     def test_bullish(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("110"), val=Decimal("80"), total_volume=Decimal("1000")
+            poc=Decimal("100"),
+            vah=Decimal("110"),
+            val=Decimal("80"),
+            total_volume=Decimal("1000"),
         )
         assert classify_profile_shape(vp) == ProfileShape.P_BULLISH
 
     def test_bearish(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("82"), vah=Decimal("100"), val=Decimal("80"), total_volume=Decimal("1000")
+            poc=Decimal("82"),
+            vah=Decimal("100"),
+            val=Decimal("80"),
+            total_volume=Decimal("1000"),
         )
         assert classify_profile_shape(vp) == ProfileShape.B_BEARISH
 
     def test_balanced(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("90"), vah=Decimal("100"), val=Decimal("80"), total_volume=Decimal("1000")
+            poc=Decimal("90"),
+            vah=Decimal("100"),
+            val=Decimal("80"),
+            total_volume=Decimal("1000"),
         )
         assert classify_profile_shape(vp) == ProfileShape.D_BALANCED
 
     def test_zero_range(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("100"), val=Decimal("100"), total_volume=Decimal("0")
+            poc=Decimal("100"),
+            vah=Decimal("100"),
+            val=Decimal("100"),
+            total_volume=Decimal("0"),
         )
         assert classify_profile_shape(vp) == ProfileShape.D_BALANCED
 
     def test_boundary_bullish(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("110"), val=Decimal("80"), total_volume=Decimal("1000")
+            poc=Decimal("100"),
+            vah=Decimal("110"),
+            val=Decimal("80"),
+            total_volume=Decimal("1000"),
         )
         assert classify_profile_shape(vp) == ProfileShape.P_BULLISH
 
     def test_boundary_bearish(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("86"), vah=Decimal("110"), val=Decimal("80"), total_volume=Decimal("1000")
+            poc=Decimal("86"),
+            vah=Decimal("110"),
+            val=Decimal("80"),
+            total_volume=Decimal("1000"),
         )
         assert classify_profile_shape(vp) == ProfileShape.B_BEARISH
 
     def test_exact_midpoint(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("95"), vah=Decimal("110"), val=Decimal("80"), total_volume=Decimal("1000")
+            poc=Decimal("95"),
+            vah=Decimal("110"),
+            val=Decimal("80"),
+            total_volume=Decimal("1000"),
         )
         assert classify_profile_shape(vp) == ProfileShape.D_BALANCED
 
@@ -94,13 +115,19 @@ class TestPocProximity:
 
     def test_zero_range_at_poc(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("100"), val=Decimal("100"), total_volume=Decimal("0")
+            poc=Decimal("100"),
+            vah=Decimal("100"),
+            val=Decimal("100"),
+            total_volume=Decimal("0"),
         )
         assert _poc_proximity(Decimal("100"), vp) == Decimal("1")
 
     def test_zero_range_not_at_poc(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("100"), val=Decimal("100"), total_volume=Decimal("0")
+            poc=Decimal("100"),
+            vah=Decimal("100"),
+            val=Decimal("100"),
+            total_volume=Decimal("0"),
         )
         assert _poc_proximity(Decimal("50"), vp) == Decimal("0")
 
@@ -113,14 +140,20 @@ class TestPocProximity:
 class TestVaWidthRatio:
     def test_narrow(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("101"), val=Decimal("99"), total_volume=Decimal("1000")
+            poc=Decimal("100"),
+            vah=Decimal("101"),
+            val=Decimal("99"),
+            total_volume=Decimal("1000"),
         )
         result = _va_width_ratio(Decimal("100"), vp)
         assert result > Decimal("0")
 
     def test_wide(self) -> None:
         vp = VolumeProfile(
-            poc=Decimal("100"), vah=Decimal("200"), val=Decimal("0"), total_volume=Decimal("1000")
+            poc=Decimal("100"),
+            vah=Decimal("200"),
+            val=Decimal("0"),
+            total_volume=Decimal("1000"),
         )
         result = _va_width_ratio(Decimal("100"), vp)
         assert result < Decimal("1")
@@ -169,7 +202,9 @@ class TestRegimeAdjustedPoc:
         assert _regime_adjusted_poc(Decimal("0.8"), MarketRegime.BEAR) < Decimal("0.8")
 
     def test_sideways(self) -> None:
-        assert _regime_adjusted_poc(Decimal("0.8"), MarketRegime.SIDEWAYS) == Decimal("0.8")
+        assert _regime_adjusted_poc(Decimal("0.8"), MarketRegime.SIDEWAYS) == Decimal(
+            "0.8"
+        )
 
     def test_clamped(self) -> None:
         result = _regime_adjusted_poc(Decimal("0.8"), MarketRegime.BULL)
@@ -178,29 +213,45 @@ class TestRegimeAdjustedPoc:
 
 class TestShapeScoreForIntent:
     def test_long_bullish_high(self) -> None:
-        long_score = _shape_score_for_intent(ProfileShape.P_BULLISH, DirectionalIntent.LONG)
+        long_score = _shape_score_for_intent(
+            ProfileShape.P_BULLISH, DirectionalIntent.LONG
+        )
         assert long_score == Decimal("0.80")
 
     def test_short_bullish_low(self) -> None:
-        short_score = _shape_score_for_intent(ProfileShape.P_BULLISH, DirectionalIntent.SHORT)
+        short_score = _shape_score_for_intent(
+            ProfileShape.P_BULLISH, DirectionalIntent.SHORT
+        )
         assert short_score == Decimal("0.20")
 
     def test_long_bearish_low(self) -> None:
-        long_score = _shape_score_for_intent(ProfileShape.B_BEARISH, DirectionalIntent.LONG)
+        long_score = _shape_score_for_intent(
+            ProfileShape.B_BEARISH, DirectionalIntent.LONG
+        )
         assert long_score == Decimal("0.20")
 
     def test_short_bearish_high(self) -> None:
-        short_score = _shape_score_for_intent(ProfileShape.B_BEARISH, DirectionalIntent.SHORT)
+        short_score = _shape_score_for_intent(
+            ProfileShape.B_BEARISH, DirectionalIntent.SHORT
+        )
         assert short_score == Decimal("0.80")
 
     def test_balanced_equal(self) -> None:
-        long_score = _shape_score_for_intent(ProfileShape.D_BALANCED, DirectionalIntent.LONG)
-        short_score = _shape_score_for_intent(ProfileShape.D_BALANCED, DirectionalIntent.SHORT)
+        long_score = _shape_score_for_intent(
+            ProfileShape.D_BALANCED, DirectionalIntent.LONG
+        )
+        short_score = _shape_score_for_intent(
+            ProfileShape.D_BALANCED, DirectionalIntent.SHORT
+        )
         assert long_score == short_score == Decimal("0.50")
 
     def test_neutral_uses_long(self) -> None:
-        neutral_score = _shape_score_for_intent(ProfileShape.P_BULLISH, DirectionalIntent.NEUTRAL)
-        long_score = _shape_score_for_intent(ProfileShape.P_BULLISH, DirectionalIntent.LONG)
+        neutral_score = _shape_score_for_intent(
+            ProfileShape.P_BULLISH, DirectionalIntent.NEUTRAL
+        )
+        long_score = _shape_score_for_intent(
+            ProfileShape.P_BULLISH, DirectionalIntent.LONG
+        )
         assert neutral_score == long_score
 
 
@@ -333,7 +384,9 @@ class TestComputeVolumeProfileSignal:
             instrument_symbol="TEST",
             timestamp_utc=NOW_UTC,
         )
-        result = compute_volume_profile_signal(inputs, NOW_UTC, regime=MarketRegime.BULL)
+        result = compute_volume_profile_signal(
+            inputs, NOW_UTC, regime=MarketRegime.BULL
+        )
         assert isinstance(result, VolumeProfileSignalOutput)
 
     def test_short_intent(self) -> None:
@@ -343,7 +396,9 @@ class TestComputeVolumeProfileSignal:
             instrument_symbol="TEST",
             timestamp_utc=NOW_UTC,
         )
-        result = compute_volume_profile_signal(inputs, NOW_UTC, intent=DirectionalIntent.SHORT)
+        result = compute_volume_profile_signal(
+            inputs, NOW_UTC, intent=DirectionalIntent.SHORT
+        )
         assert result.metadata["intent"] == "SHORT"
 
     def test_shape_preserved(self) -> None:

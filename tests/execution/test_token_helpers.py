@@ -36,19 +36,25 @@ class TestLoadEnvFile:
 
     def test_ignores_lines_without_equals(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
-        env_file.write_text("KEY1=value1\nINVALID_LINE\nKEY2=value2\n", encoding="utf-8")
+        env_file.write_text(
+            "KEY1=value1\nINVALID_LINE\nKEY2=value2\n", encoding="utf-8"
+        )
         result = load_env_file(env_file)
         assert result == {"KEY1": "value1", "KEY2": "value2"}
 
     def test_strips_quotes_from_values(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
-        env_file.write_text("KEY1=\"value1\"\nKEY2='value2'\nKEY3=value3\n", encoding="utf-8")
+        env_file.write_text(
+            "KEY1=\"value1\"\nKEY2='value2'\nKEY3=value3\n", encoding="utf-8"
+        )
         result = load_env_file(env_file)
         assert result == {"KEY1": "value1", "KEY2": "value2", "KEY3": "value3"}
 
     def test_strips_whitespace_from_keys_and_values(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
-        env_file.write_text("  KEY1  =  value1  \n  KEY2  =  value2  \n", encoding="utf-8")
+        env_file.write_text(
+            "  KEY1  =  value1  \n  KEY2  =  value2  \n", encoding="utf-8"
+        )
         result = load_env_file(env_file)
         assert result == {"KEY1": "value1", "KEY2": "value2"}
 

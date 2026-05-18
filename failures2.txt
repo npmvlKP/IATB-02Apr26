@@ -1,0 +1,214 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: g:\IATB-02Apr26\IATB
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-0.23.8, cov-4.1.0, mock-3.15.1, xdist-3.8.0
+asyncio: mode=Mode.AUTO
+created: 24/24 workers
+24 workers [95 items]
+
+scheduling tests via LoadScopeScheduling
+
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_single_article 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_create_scraper_with_defaults 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_create_aggregator_with_defaults 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_positive_score 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_positive_text 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_single_article 
+tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_default_config 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_create_score 
+tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_with_defaults 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_default_config 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentConfig::test_default_config 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_single_post 
+tests/sentiment/test_news_analyzer_coverage.py::TestMockNewsSource::test_fetch_articles 
+tests/sentiment/test_news_scraper_coverage.py::TestHeadlinesToArticles::test_convert_single_headline 
+tests/sentiment/test_social_sentiment_coverage.py::TestMockSocialSource::test_fetch_posts 
+tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_rfc2822_date 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsArticle::test_create_article 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsHeadline::test_create_headline 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentResult::test_create_result 
+tests/rl/test_callbacks_coverage.py::TestTensorBoardCallbackConfig::test_create_config 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialPost::test_create_post 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsSentimentResult::test_create_result 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentGateResult::test_create_result 
+[gw22] [  1%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsHeadline::test_create_headline 
+[gw0] [  2%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_create_score 
+[gw21] [  3%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentResult::test_create_result 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_empty_source_raises_error 
+[gw0] [  4%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_empty_source_raises_error 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_empty_label_raises_error 
+[gw0] [  5%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_empty_label_raises_error 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_out_of_range_raises_error 
+[gw0] [  6%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_out_of_range_raises_error 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_below_range_raises_error 
+[gw0] [  7%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_below_range_raises_error 
+[gw2] [  8%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_single_article 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_confidence_out_of_range_raises_error 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_multiple_articles 
+[gw0] [  9%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_confidence_out_of_range_raises_error 
+[gw4] [ 10%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_positive_score 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_negative_confidence_raises_error 
+[gw2] [ 11%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_multiple_articles 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_strongly_positive_score 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_very_recent_article 
+[gw0] [ 12%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_negative_confidence_raises_error 
+[gw5] [ 13%] PASSED tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_default_config 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_non_finite_score_raises_error 
+tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_custom_config 
+[gw4] [ 14%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_strongly_positive_score 
+[gw2] [ 15%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_very_recent_article 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_negative_score 
+[gw4] [ 16%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_negative_score 
+[gw0] [ 17%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_non_finite_score_raises_error 
+[gw5] [ 18%] PASSED tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_custom_config 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_old_articles_low_weight 
+[gw6] [ 20%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_create_scraper_with_defaults 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_with_metadata 
+tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_insufficient_history 
+[gw2] [ 21%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_old_articles_low_weight 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_create_scraper_custom_rate_limit 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_strongly_negative_score 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_empty_scores_raises_error 
+[gw4] [ 22%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_strongly_negative_score 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_neutral_score_positive 
+[gw6] [ 23%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_create_scraper_custom_rate_limit 
+[gw0] [ 24%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_with_metadata 
+tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_with_default_metadata 
+[gw2] [ 25%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_empty_scores_raises_error 
+[gw5] [ 26%] PASSED tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_insufficient_history 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_negative_rate_limit_raises_error 
+[gw8] [ 27%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_single_post 
+tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_no_drop 
+[gw4] [ 28%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_neutral_score_positive 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_neutral_score_negative 
+[gw4] [ 29%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_neutral_score_negative 
+[gw5] [ 30%] PASSED tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_no_drop 
+tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_with_drop 
+[gw5] [ 31%] PASSED tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_with_drop 
+[gw0] [ 32%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentScore::test_score_with_default_metadata 
+tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_zero_score 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_multiple_posts 
+[gw8] [ 33%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_multiple_posts 
+tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_negative_baseline 
+[gw5] [ 34%] PASSED tests/rl/test_callbacks_coverage.py::TestSharpeDropEarlyStop::test_should_stop_negative_baseline 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_empty_posts_returns_empty 
+[gw4] [ 35%] PASSED tests/sentiment/test_base_coverage.py::TestSentimentLabelFromScore::test_zero_score 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_non_utc_current_raises_error 
+[gw2] [ 36%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_non_utc_current_raises_error 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_non_utc_article_raises_error 
+[gw8] [ 37%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_empty_posts_returns_empty 
+[gw2] [ 38%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_non_utc_article_raises_error 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_future_article_zero_weight 
+[gw2] [ 40%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_future_article_zero_weight 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_to_sentiment_score 
+[gw6] [ 41%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_negative_rate_limit_raises_error 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_create_scraper_custom_feeds 
+[gw6] [ 42%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_create_scraper_custom_feeds 
+tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_negative_sentiment 
+[gw2] [ 43%] PASSED tests/sentiment/test_recency_weighting_coverage.py::TestRecencyWeightedScore::test_weighted_score_negative_sentiment 
+[gw8] [ 44%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_to_sentiment_score 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_batch 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_fetch_headlines_invalid_max_items_raises_error 
+[gw6] [ 45%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_fetch_headlines_invalid_max_items_raises_error 
+tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_default_rss_feeds_not_empty 
+[gw6] [ 46%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestNewsScraper::test_default_rss_feeds_not_empty 
+[gw8] [ 47%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentAnalyzer::test_analyze_batch 
+[gw17] [ 48%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentGateResult::test_create_result 
+[gw13] [ 49%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestHeadlinesToArticles::test_convert_single_headline 
+tests/sentiment/test_news_scraper_coverage.py::TestHeadlinesToArticles::test_convert_multiple_headlines 
+[gw13] [ 50%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestHeadlinesToArticles::test_convert_multiple_headlines 
+tests/sentiment/test_news_scraper_coverage.py::TestHeadlinesToArticles::test_headline_without_article_text_uses_title 
+[gw13] [ 51%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestHeadlinesToArticles::test_headline_without_article_text_uses_title 
+[gw12] [ 52%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentConfig::test_default_config 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentConfig::test_custom_config 
+[gw12] [ 53%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentConfig::test_custom_config 
+tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentConfig::test_weights_sum_to_one 
+[gw10] [ 54%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_default_config 
+[gw12] [ 55%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialSentimentConfig::test_weights_sum_to_one 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_custom_config 
+[gw10] [ 56%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_custom_config 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_invalid_relevance_raises_error 
+[gw10] [ 57%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_invalid_relevance_raises_error 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_negative_max_age_raises_error 
+[gw3] [ 58%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_positive_text 
+[gw10] [ 60%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzerConfig::test_negative_max_age_raises_error 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_negative_text 
+[gw18] [ 61%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsArticle::test_create_article 
+[gw16] [ 62%] PASSED tests/rl/test_callbacks_coverage.py::TestTensorBoardCallbackConfig::test_create_config 
+[gw19] [ 63%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsSentimentResult::test_create_result 
+[gw7] [ 64%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_single_article 
+[gw20] [ 65%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestSocialPost::test_create_post 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_multiple_articles 
+[gw11] [ 66%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_rfc2822_date 
+[gw14] [ 67%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestMockNewsSource::test_fetch_articles 
+tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_iso_date 
+[gw11] [ 68%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_iso_date 
+[gw15] [ 69%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestMockSocialSource::test_fetch_posts 
+tests/sentiment/test_social_sentiment_coverage.py::TestMockSocialSource::test_add_post 
+[gw7] [ 70%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_multiple_articles 
+tests/sentiment/test_news_analyzer_coverage.py::TestMockNewsSource::test_add_article 
+[gw15] [ 71%] PASSED tests/sentiment/test_social_sentiment_coverage.py::TestMockSocialSource::test_add_post 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_empty_articles_returns_empty 
+[gw7] [ 72%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_empty_articles_returns_empty 
+[gw1] [ 73%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_create_aggregator_with_defaults 
+tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_empty_date_returns_now 
+[gw11] [ 74%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_empty_date_returns_now 
+tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_invalid_date_returns_now 
+[gw11] [ 75%] PASSED tests/sentiment/test_news_scraper_coverage.py::TestParseRSSDate::test_parse_invalid_date_returns_now 
+[gw14] [ 76%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestMockNewsSource::test_add_article 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_with_config 
+[gw7] [ 77%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_with_config 
+tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_batch 
+[gw3] [ 78%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_negative_text 
+[gw7] [ 80%] PASSED tests/sentiment/test_news_analyzer_coverage.py::TestNewsAnalyzer::test_analyze_batch 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_text 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_neutral_text 
+[gw3] [ 81%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_neutral_text 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_empty_text_raises_error 
+[gw3] [ 82%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_empty_text_raises_error 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_whitespace_text_raises_error 
+[gw3] [ 83%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_analyze_whitespace_text_raises_error 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_score_clamped_to_range 
+[gw1] [ 84%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_text 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_tradable 
+[gw3] [ 85%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_score_clamped_to_range 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_confidence_in_range 
+[gw3] [ 86%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_confidence_in_range 
+tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_weight_attribute 
+[gw3] [ 87%] PASSED tests/sentiment/test_vader_analyzer_coverage.py::TestVaderAnalyzer::test_weight_attribute 
+[gw1] [ 88%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_tradable 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_no_volume 
+[gw1] [ 89%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_no_volume 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_news 
+[gw1] [ 90%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_news 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_social 
+[gw1] [ 91%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_social 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_full_ensemble 
+[gw1] [ 92%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_analyze_full_ensemble 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_full 
+[gw1] [ 93%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_evaluate_instrument_full 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_invalid_threshold_raises_error 
+[gw1] [ 94%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_invalid_threshold_raises_error 
+tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_threshold_above_one_raises_error 
+[gw1] [ 95%] PASSED tests/sentiment/test_aggregator_coverage.py::TestSentimentAggregator::test_threshold_above_one_raises_error 
+[gw9] [ 96%] PASSED tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_with_defaults 
+tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_with_custom_early_stop 
+[gw9] [ 97%] PASSED tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_with_custom_early_stop 
+tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_invalid_check_freq_raises_error 
+[gw9] [ 98%] PASSED tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_invalid_check_freq_raises_error 
+tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_negative_check_freq_raises_error 
+[gw9] [100%] PASSED tests/rl/test_callbacks_coverage.py::TestCreateTrainingCallbacks::test_create_callbacks_negative_check_freq_raises_error 
+
+============================== warnings summary ===============================
+C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: 24 warnings
+  C:\Users\npmvl-KP\AppData\Local\pypoetry\Cache\virtualenvs\iatb-enkvpHiN-py3.12\Lib\site-packages\pythonjsonlogger\jsonlogger.py:11: DeprecationWarning: pythonjsonlogger.jsonlogger has been moved to pythonjsonlogger.json
+    warnings.warn(
+
+src\iatb\data\__init__.py:17: 24 warnings
+  g:\IATB-02Apr26\IATB\src\iatb\data\__init__.py:17: DeprecationWarning: KiteTickerFeed is deprecated. Use KiteWebSocketProvider instead. This module will be removed in a future version.
+    from iatb.data.kite_ticker import KiteTickerFeed
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====================== 95 passed, 48 warnings in 11.05s =======================

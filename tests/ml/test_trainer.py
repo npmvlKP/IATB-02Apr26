@@ -61,7 +61,9 @@ def test_unified_trainer_fit_path_and_tracking(monkeypatch: pytest.MonkeyPatch) 
         start_run=lambda: _Run(),
         log_metric=lambda key, value: None,
     )
-    monkeypatch.setattr("iatb.ml.trainer.importlib.import_module", lambda _: fake_mlflow)
+    monkeypatch.setattr(
+        "iatb.ml.trainer.importlib.import_module", lambda _: fake_mlflow
+    )
     trainer = UnifiedTrainer(enable_tracking=True)
     result = trainer.train_and_evaluate(
         _FitModel(),
@@ -73,10 +75,14 @@ def test_unified_trainer_fit_path_and_tracking(monkeypatch: pytest.MonkeyPatch) 
     assert result.run_id == "run-123"
 
 
-def test_unified_trainer_validates_and_reports_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unified_trainer_validates_and_reports_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     trainer = UnifiedTrainer(enable_tracking=False)
     with pytest.raises(ConfigError, match="cannot be empty"):
-        trainer.train_and_evaluate(_FitModel(), [], [], [[Decimal("1")]], [Decimal("1")])
+        trainer.train_and_evaluate(
+            _FitModel(), [], [], [[Decimal("1")]], [Decimal("1")]
+        )
     with pytest.raises(ConfigError, match="equal length"):
         trainer.train_and_evaluate(
             _FitModel(),

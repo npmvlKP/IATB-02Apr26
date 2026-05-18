@@ -19,7 +19,9 @@ random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 
-_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "monitor_zerodha_connection.py"
+_SCRIPT_PATH = (
+    Path(__file__).resolve().parents[2] / "scripts" / "monitor_zerodha_connection.py"
+)
 _RELEVANT_ENV_VARS = (
     "ZERODHA_API_KEY",
     "ZERODHA_API_SECRET",
@@ -32,7 +34,9 @@ _RELEVANT_ENV_VARS = (
 
 
 def _load_script_module() -> object:
-    spec = importlib.util.spec_from_file_location("monitor_zerodha_connection_script", _SCRIPT_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "monitor_zerodha_connection_script", _SCRIPT_PATH
+    )
     if spec is None or spec.loader is None:
         msg = "Unable to load monitor_zerodha_connection.py"
         raise RuntimeError(msg)
@@ -279,7 +283,9 @@ def test_main_periodic_runs_max_checks_and_sleeps_between_checks(
             return _session("token-today")
 
     monkeypatch.setattr(module, "ZerodhaConnection", FakeConnection)
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(
+        module.time, "sleep", lambda seconds: sleep_calls.append(seconds)
+    )
     exit_code = module.main(
         [
             "--env-file",

@@ -153,7 +153,9 @@ class ClusterManager:
         if node_id not in self._nodes:
             msg = f"node not found: {node_id}"
             raise ConfigError(msg)
-        strategies_to_reassign = [s for s, n in self._strategy_assignments.items() if n == node_id]
+        strategies_to_reassign = [
+            s for s, n in self._strategy_assignments.items() if n == node_id
+        ]
         for strategy_id in strategies_to_reassign:
             del self._strategy_assignments[strategy_id]
         if self._leader_id == node_id:
@@ -213,7 +215,9 @@ class ClusterManager:
             max_strategies=max_strat,
         )
 
-    def _compute_effective_status(self, node: NodeInfo, now_utc: datetime) -> NodeStatus:
+    def _compute_effective_status(
+        self, node: NodeInfo, now_utc: datetime
+    ) -> NodeStatus:
         """Compute effective node status based on heartbeat freshness."""
         elapsed = (now_utc - node.last_heartbeat).total_seconds()
         timeout = self._config.heartbeat_timeout.total_seconds()

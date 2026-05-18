@@ -80,7 +80,9 @@ class TestGitSyncReportDataclass:
         assert report.remote == "origin"
 
     def test_frozen_immutable(self) -> None:
-        report = GitSyncReport(branch="dev", head_commit="def456", pushed=False, remote="upstream")
+        report = GitSyncReport(
+            branch="dev", head_commit="def456", pushed=False, remote="upstream"
+        )
         with pytest.raises(AttributeError):
             report.branch = "other"  # type: ignore[misc]
 
@@ -123,7 +125,9 @@ class TestRunGitleaksScan:
         with patch.object(git_service, "_run") as mock_run:
             mock_run.return_value = _make_result(returncode=0)
             git_service.run_gitleaks_scan()
-            mock_run.assert_called_once_with(("gitleaks", "detect", "--source", ".", "--no-banner"))
+            mock_run.assert_called_once_with(
+                ("gitleaks", "detect", "--source", ".", "--no-banner")
+            )
 
     def test_gitleaks_scan_failure(self, git_service: GitSyncService) -> None:
         with patch.object(git_service, "_run") as mock_run:
@@ -155,7 +159,9 @@ class TestCommitAndPushNothingToCommit:
                 _make_result(returncode=0, stdout="deadbeef\n"),  # head_commit
             ]
 
-            report = git_service.commit_and_push(commit_message="chore: sync", branch="main")
+            report = git_service.commit_and_push(
+                commit_message="chore: sync", branch="main"
+            )
             assert report.pushed is True
             assert report.head_commit == "deadbeef"
 
@@ -168,7 +174,9 @@ class TestCommitAndPushCommitFails:
             mock_run.side_effect = [
                 _make_result(returncode=0),  # gitleaks
                 _make_result(returncode=0),  # git add
-                _make_result(returncode=1, stderr="pre-commit hook failed"),  # git commit
+                _make_result(
+                    returncode=1, stderr="pre-commit hook failed"
+                ),  # git commit
             ]
 
             with pytest.raises(ConfigError, match="git commit failed"):
@@ -229,7 +237,9 @@ class TestCheckAuthEdgeCases:
     def test_malformed_remote_line_no_tab(self, git_service: GitSyncService) -> None:
         """Line has no tab separator → parts < 2 → (False, 'none')."""
         with patch.object(git_service, "_run") as mock_run:
-            mock_run.return_value = _make_result(returncode=0, stdout="just-a-url-no-tab\n")
+            mock_run.return_value = _make_result(
+                returncode=0, stdout="just-a-url-no-tab\n"
+            )
             authenticated, auth_type = git_service.check_auth()
             assert authenticated is False
             assert auth_type == "none"
@@ -542,6 +552,8 @@ class TestResolveConflictsTheirsFailure:
 
     def test_resolve_theirs_failure(self, git_service: GitSyncService) -> None:
         with patch.object(git_service, "_run") as mock_run:
-            mock_run.return_value = _make_result(returncode=1, stderr="checkout theirs failed")
+            mock_run.return_value = _make_result(
+                returncode=1, stderr="checkout theirs failed"
+            )
             with pytest.raises(ConfigError, match="git checkout --theirs failed"):
                 git_service.resolve_conflicts(ConflictResolutionStrategy.THEIRS)

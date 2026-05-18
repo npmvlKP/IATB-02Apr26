@@ -244,7 +244,9 @@ def test_risk_pipeline_step_4_paper_execution() -> None:
         trade_audit_logger=None,
     )
 
-    order = OrderRequest(Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"), price=Decimal("100"))
+    order = OrderRequest(
+        Exchange.NSE, "NIFTY", OrderSide.BUY, Decimal("10"), price=Decimal("100")
+    )
     result = pipeline.process_order(order, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
 
     assert result.allowed is True
@@ -483,7 +485,10 @@ def test_risk_pipeline_market_data_update() -> None:
     )
 
     # Verify data is stored
-    assert pipeline._last_prices == {"NIFTY": Decimal("100"), "BANKNIFTY": Decimal("200")}
+    assert pipeline._last_prices == {
+        "NIFTY": Decimal("100"),
+        "BANKNIFTY": Decimal("200"),
+    }
     assert pipeline._positions == {"NIFTY": Decimal("10")}
     assert pipeline._total_exposure == Decimal("1000")
 
@@ -522,11 +527,16 @@ def test_risk_pipeline_multiple_orders_sequential() -> None:
         trade_audit_logger=None,
     )
 
-    orders = [OrderRequest(Exchange.NSE, f"SYM{i}", OrderSide.BUY, Decimal("10")) for i in range(5)]
+    orders = [
+        OrderRequest(Exchange.NSE, f"SYM{i}", OrderSide.BUY, Decimal("10"))
+        for i in range(5)
+    ]
 
     results = []
     for i, order in enumerate(orders):
-        result = pipeline.process_order(order, datetime(2026, 1, 5, 10, 0, 0, i * 100, tzinfo=UTC))
+        result = pipeline.process_order(
+            order, datetime(2026, 1, 5, 10, 0, 0, i * 100, tzinfo=UTC)
+        )
         results.append(result)
 
     # All orders should be processed

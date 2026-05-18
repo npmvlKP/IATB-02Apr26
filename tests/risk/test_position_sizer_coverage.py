@@ -40,7 +40,9 @@ def test_lot_rounded_size_zero_lot_size() -> None:
 
 def test_freeze_limit_slices_single_slice() -> None:
     """Quantity <= freeze_limit returns single slice."""
-    assert freeze_limit_slices(Decimal("150"), Decimal("50"), Decimal("200")) == [Decimal("150")]
+    assert freeze_limit_slices(Decimal("150"), Decimal("50"), Decimal("200")) == [
+        Decimal("150")
+    ]
 
 
 def test_freeze_limit_slices_multiple_slices() -> None:
@@ -226,7 +228,9 @@ def test_kelly_fraction_custom_max() -> None:
     """kelly fraction with custom max_fraction."""
     # win_rate = 0.8, win_loss_ratio = 2.0, max_fraction = 0.3
     # kelly = 0.7 -> bounded to 0.3
-    assert kelly_fraction(Decimal("0.8"), Decimal("2.0"), Decimal("0.3")) == Decimal("0.3")
+    assert kelly_fraction(Decimal("0.8"), Decimal("2.0"), Decimal("0.3")) == Decimal(
+        "0.3"
+    )
 
 
 def test_kelly_fraction_invalid_win_rate() -> None:
@@ -365,7 +369,9 @@ def test_validate_inputs() -> None:
             )
         )
 
-    with pytest.raises(ConfigError, match="entry_price and stop_price must be positive"):
+    with pytest.raises(
+        ConfigError, match="entry_price and stop_price must be positive"
+    ):
         _validate_inputs(
             PositionSizingInput(
                 equity=Decimal("100000"),
@@ -376,7 +382,9 @@ def test_validate_inputs() -> None:
             )
         )
 
-    with pytest.raises(ConfigError, match="entry_price and stop_price must be positive"):
+    with pytest.raises(
+        ConfigError, match="entry_price and stop_price must be positive"
+    ):
         _validate_inputs(
             PositionSizingInput(
                 equity=Decimal("100000"),

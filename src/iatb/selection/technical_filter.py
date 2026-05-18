@@ -66,10 +66,14 @@ class TechnicalFilterConfig:
         if self.rsi_overbought > self.rsi_max:
             msg = "rsi_overbought must be <= rsi_max"
             raise ConfigError(msg)
-        if self.min_bollinger_position < Decimal("0") or self.min_bollinger_position > Decimal("1"):
+        if self.min_bollinger_position < Decimal(
+            "0"
+        ) or self.min_bollinger_position > Decimal("1"):
             msg = "min_bollinger_position must be in [0, 1]"
             raise ConfigError(msg)
-        if self.max_bollinger_position < Decimal("0") or self.max_bollinger_position > Decimal("1"):
+        if self.max_bollinger_position < Decimal(
+            "0"
+        ) or self.max_bollinger_position > Decimal("1"):
             msg = "max_bollinger_position must be in [0, 1]"
             raise ConfigError(msg)
         if self.min_bollinger_position > self.max_bollinger_position:
@@ -142,8 +146,18 @@ class TechnicalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate RSI metric if available."""
         if metrics.rsi is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
-                self._check_rsi, (metrics.rsi,), reasons, score, total_checks, passed_checks
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
+                self._check_rsi,
+                (metrics.rsi,),
+                reasons,
+                score,
+                total_checks,
+                passed_checks,
             )
         return score, total_checks, passed_checks
 
@@ -157,7 +171,12 @@ class TechnicalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate MACD metric if available."""
         if metrics.macd is not None and metrics.macd_signal is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_macd,
                 (metrics.macd, metrics.macd_signal),
                 reasons,
@@ -177,7 +196,12 @@ class TechnicalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate moving average crossover if available."""
         if metrics.ma_short is not None and metrics.ma_long is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_ma_cross,
                 (metrics.ma_short, metrics.ma_long),
                 reasons,
@@ -202,7 +226,12 @@ class TechnicalFilter:
             and metrics.bollinger_lower is not None
             and metrics.bollinger_middle is not None
         ):
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_bollinger,
                 (
                     metrics.price,
@@ -227,7 +256,12 @@ class TechnicalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate volume ratio if available."""
         if metrics.volume_avg is not None and metrics.volume_current is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_volume,
                 (metrics.volume_current, metrics.volume_avg),
                 reasons,
@@ -246,8 +280,16 @@ class TechnicalFilter:
         reasons: list[str],
     ) -> tuple[Decimal, int, int]:
         """Evaluate price momentum if available and configured."""
-        if metrics.price_momentum is not None and self._config.min_price_momentum is not None:
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+        if (
+            metrics.price_momentum is not None
+            and self._config.min_price_momentum is not None
+        ):
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_momentum,
                 (metrics.price_momentum,),
                 reasons,
@@ -271,7 +313,12 @@ class TechnicalFilter:
             and metrics.price is not None
             and self._config.max_atr_ratio is not None
         ):
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_atr,
                 (metrics.atr, metrics.price),
                 reasons,
@@ -291,7 +338,12 @@ class TechnicalFilter:
     ) -> tuple[Decimal, int, int]:
         """Evaluate trend alignment if configured."""
         if self._config.require_trend_alignment:
-            score, reasons, total_checks, passed_checks = self._evaluate_required_metric(
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_required_metric(
                 self._check_trend_alignment,
                 (metrics,),
                 reasons,
@@ -337,9 +389,13 @@ class TechnicalFilter:
         passed = passed_checks == total_checks
 
         if passed:
-            logger.debug("%s passed technical filter: score=%.2f", metrics.symbol, final_score)
+            logger.debug(
+                "%s passed technical filter: score=%.2f", metrics.symbol, final_score
+            )
         else:
-            logger.info("%s failed technical filter: %s", metrics.symbol, "; ".join(reasons))
+            logger.info(
+                "%s failed technical filter: %s", metrics.symbol, "; ".join(reasons)
+            )
 
         return FilterResult(
             symbol=metrics.symbol,
@@ -373,9 +429,13 @@ class TechnicalFilter:
         elif rsi >= self._config.rsi_overbought:
             score = Decimal("0.3")
         else:
-            mid = (self._config.rsi_oversold + self._config.rsi_overbought) / Decimal("2")
+            mid = (self._config.rsi_oversold + self._config.rsi_overbought) / Decimal(
+                "2"
+            )
             distance = abs(rsi - mid)
-            max_dist = (self._config.rsi_overbought - self._config.rsi_oversold) / Decimal("2")
+            max_dist = (
+                self._config.rsi_overbought - self._config.rsi_oversold
+            ) / Decimal("2")
             score = max(Decimal("0"), Decimal("1") - (distance / max_dist))
         return True, score, ""
 
@@ -390,7 +450,9 @@ class TechnicalFilter:
             score = min(Decimal("1"), histogram / Decimal("0.5") + Decimal("0.5"))
         return True, score, ""
 
-    def _check_ma_cross(self, ma_short: Decimal, ma_long: Decimal) -> tuple[bool, Decimal, str]:
+    def _check_ma_cross(
+        self, ma_short: Decimal, ma_long: Decimal
+    ) -> tuple[bool, Decimal, str]:
         """Check moving average cross."""
         if self._config.require_ma_bullish and ma_short < ma_long:
             return (
@@ -484,7 +546,9 @@ class TechnicalFilter:
         score = max(Decimal("0"), Decimal("1") - (atr_ratio / max_ratio))
         return True, score, ""
 
-    def _check_trend_alignment(self, metrics: TechnicalMetrics) -> tuple[bool, Decimal, str]:
+    def _check_trend_alignment(
+        self, metrics: TechnicalMetrics
+    ) -> tuple[bool, Decimal, str]:
         """Check trend alignment across indicators."""
         bullish_signals = 0
         total_signals = 0

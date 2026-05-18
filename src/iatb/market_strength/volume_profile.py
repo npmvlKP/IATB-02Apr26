@@ -35,7 +35,9 @@ def build_volume_profile(
         raise ConfigError(msg)
 
     volume_by_price = _aggregate_volume_by_price(prices, volumes)
-    sorted_by_volume = sorted(volume_by_price.items(), key=lambda item: item[1], reverse=True)
+    sorted_by_volume = sorted(
+        volume_by_price.items(), key=lambda item: item[1], reverse=True
+    )
     poc = sorted_by_volume[0][0]
     total_volume = sum(volume_by_price.values(), Decimal("0"))
     selected_prices = _build_value_area(sorted_by_volume, total_volume, value_area)

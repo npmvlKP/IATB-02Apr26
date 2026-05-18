@@ -59,7 +59,9 @@ def _assert_live_enabled() -> None:
         msg = "live execution blocked: set LIVE_TRADING_ENABLED=true to proceed"
         raise ConfigError(msg)
     if os.getenv(_OAUTH_2FA_GATE_ENV, "").strip().lower() != "true":
-        msg = "broker access blocked: set BROKER_OAUTH_2FA_VERIFIED=true after OAuth 2FA"
+        msg = (
+            "broker access blocked: set BROKER_OAUTH_2FA_VERIFIED=true after OAuth 2FA"
+        )
         raise ConfigError(msg)
 
 

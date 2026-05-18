@@ -17,7 +17,13 @@ torch.manual_seed(42)
 def test_feature_engine_builds_deterministic_scaled_vectors() -> None:
     engineer = FeatureEngineer(volatility_window=4)
     ohlcv = _sample_ohlcv()
-    sentiments = [Decimal("0.0"), Decimal("0.2"), Decimal("0.1"), Decimal("-0.1"), Decimal("0.3")]
+    sentiments = [
+        Decimal("0.0"),
+        Decimal("0.2"),
+        Decimal("0.1"),
+        Decimal("-0.1"),
+        Decimal("0.3"),
+    ]
     regimes = ["SIDEWAYS", "BULL", "BEAR", "UNKNOWN", "BULL"]
     stamps = _sample_stamps(len(ohlcv))
     one = engineer.build_features(ohlcv, sentiments, regimes, stamps)

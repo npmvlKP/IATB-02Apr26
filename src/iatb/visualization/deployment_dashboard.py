@@ -160,7 +160,9 @@ def get_dashboard_summary(
     system_healthy = cards.get("system", {}).get("healthy", False)
     database_healthy = cards.get("database", {}).get("healthy", False)
 
-    overall_healthy = engine_healthy and broker_healthy and system_healthy and database_healthy
+    overall_healthy = (
+        engine_healthy and broker_healthy and system_healthy and database_healthy
+    )
 
     return {
         "overall_status": "healthy" if overall_healthy else "degraded",

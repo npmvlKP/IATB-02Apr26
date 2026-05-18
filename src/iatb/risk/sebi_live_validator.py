@@ -52,7 +52,11 @@ class LiveValidationReport:
         """Calculate pass rate as Decimal percentage."""
         if self.total_checks == 0:
             return Decimal("0")
-        return Decimal(str(self.passed_checks)) / Decimal(str(self.total_checks)) * Decimal("100")
+        return (
+            Decimal(str(self.passed_checks))
+            / Decimal(str(self.total_checks))
+            * Decimal("100")
+        )
 
 
 @dataclass(frozen=True)
@@ -162,14 +166,20 @@ class SEBILiveValidationHarness:
                 rule_name="Order Rate Throttle",
                 severity=ValidationSeverity.PASS,
                 message="Order rate within limits",
-                details={"current_rate": str(recent_count), "max_rate": str(self._max_order_rate)},
+                details={
+                    "current_rate": str(recent_count),
+                    "max_rate": str(self._max_order_rate),
+                },
             )
         return ValidationResult(
             rule_id="SEBI-THR-001",
             rule_name="Order Rate Throttle",
             severity=ValidationSeverity.FAIL,
             message="Order rate exceeds SEBI limits",
-            details={"current_rate": str(recent_count), "max_rate": str(self._max_order_rate)},
+            details={
+                "current_rate": str(recent_count),
+                "max_rate": str(self._max_order_rate),
+            },
         )
 
     def validate_daily_order_limit(self, trading_date: date) -> ValidationResult:
@@ -212,7 +222,9 @@ class SEBILiveValidationHarness:
             details={"entries": str(audit_entry_count)},
         )
 
-    def validate_static_ip(self, source_ip: str, allowed_ips: tuple[str, ...]) -> ValidationResult:
+    def validate_static_ip(
+        self, source_ip: str, allowed_ips: tuple[str, ...]
+    ) -> ValidationResult:
         """Validate source IP is in SEBI-registered static IP list."""
         if not source_ip.strip():
             return ValidationResult(
@@ -259,7 +271,9 @@ class SEBILiveValidationHarness:
         _validate_utc(now_utc)
         self._order_timestamps.append(now_utc)
         trading_date = now_utc.date()
-        self._daily_order_count[trading_date] = self._daily_order_count.get(trading_date, 0) + 1
+        self._daily_order_count[trading_date] = (
+            self._daily_order_count.get(trading_date, 0) + 1
+        )
         cutoff = now_utc - timedelta(minutes=5)
         self._order_timestamps = [t for t in self._order_timestamps if t >= cutoff]
 

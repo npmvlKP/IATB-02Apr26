@@ -293,7 +293,9 @@ class StrategyRunner:
                 msg = f"Strategy {config.strategy_id} max_positions must be positive"
                 raise ValueError(msg)
             if config.max_position_value <= Decimal("0"):
-                msg = f"Strategy {config.strategy_id} max_position_value must be positive"
+                msg = (
+                    f"Strategy {config.strategy_id} max_position_value must be positive"
+                )
                 raise ValueError(msg)
 
     def _initialize_strategies(self) -> None:
@@ -405,7 +407,9 @@ class StrategyRunner:
                 price=order.price or latest_bar.close,
             )
             state.active_positions += 1
-            state.total_capital_used += order.quantity * (order.price or latest_bar.close)
+            state.total_capital_used += order.quantity * (
+                order.price or latest_bar.close
+            )
 
             _LOGGER.info(
                 "Order submitted: %s %s %s @ %s",
@@ -727,13 +731,16 @@ class StrategyRunner:
         _LOGGER.info("Running %d strategies in parallel", len(self._strategies))
 
         tasks = [
-            self.run_single_scan_cycle(strategy_id, timeframe) for strategy_id in self._strategies
+            self.run_single_scan_cycle(strategy_id, timeframe)
+            for strategy_id in self._strategies
         ]
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         result_dict: dict[str, StrategyScanResult] = {}
-        for strategy_id, raw_result in zip(self._strategies.keys(), raw_results, strict=True):
+        for strategy_id, raw_result in zip(
+            self._strategies.keys(), raw_results, strict=True
+        ):
             if isinstance(raw_result, Exception):
                 _LOGGER.exception(
                     "Strategy %s failed with exception",
@@ -804,7 +811,9 @@ class StrategyRunner:
             "available_capacity": self._provider_pool.available_capacity,
             "concurrent_requests": self._provider_pool.concurrent_requests,
             "total_strategies": len(self._strategies),
-            "active_strategies": len([s for s in self._strategies.values() if s is not None]),
+            "active_strategies": len(
+                [s for s in self._strategies.values() if s is not None]
+            ),
         }
 
     async def reset_strategy_state(self, strategy_id: str) -> None:

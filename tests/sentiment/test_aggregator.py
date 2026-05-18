@@ -31,7 +31,9 @@ class _StubAnalyzer:
 
 
 def test_aggregator_weighted_score_for_indian_headline() -> None:
-    headline = "Reliance and HDFC Bank lead Nifty gains after strong quarterly earnings."
+    headline = (
+        "Reliance and HDFC Bank lead Nifty gains after strong quarterly earnings."
+    )
     aggregator = SentimentAggregator(
         finbert=_StubAnalyzer("finbert", Decimal("0.90"), Decimal("0.90")),
         aion=_StubAnalyzer("aion", Decimal("0.80"), Decimal("0.80")),
@@ -51,7 +53,9 @@ def test_aggregator_enforces_very_strong_and_volume_gate() -> None:
         vader=_StubAnalyzer("vader", Decimal("0.85"), Decimal("0.85")),
         enable_graceful_fallback=False,
     )
-    result = aggregator.evaluate_instrument("NSE PSU stocks rally on capex push.", Decimal("1.7"))
+    result = aggregator.evaluate_instrument(
+        "NSE PSU stocks rally on capex push.", Decimal("1.7")
+    )
     assert result.very_strong
     assert result.volume_confirmed
     assert result.tradable
@@ -184,7 +188,9 @@ def test_aggregator_very_strong_negative_sentiment() -> None:
         vader=_StubAnalyzer("vader", Decimal("-0.85"), Decimal("0.85")),
         enable_graceful_fallback=False,
     )
-    result = aggregator.evaluate_instrument("Global recession fears deepen", Decimal("2.0"))
+    result = aggregator.evaluate_instrument(
+        "Global recession fears deepen", Decimal("2.0")
+    )
     assert result.very_strong
     assert result.volume_confirmed
     assert result.tradable

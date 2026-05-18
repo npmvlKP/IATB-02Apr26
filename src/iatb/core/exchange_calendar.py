@@ -80,7 +80,9 @@ class ExchangeCalendar:
         """Get regular session window for an exchange."""
         return self._regular_sessions.get(exchange)
 
-    def session_for(self, exchange: Exchange, trading_date: date) -> SessionWindow | None:
+    def session_for(
+        self, exchange: Exchange, trading_date: date
+    ) -> SessionWindow | None:
         """Resolve effective session for an exchange/date pair."""
         regular = self._regular_sessions.get(exchange)
         if regular is None:
@@ -112,7 +114,9 @@ class ExchangeCalendar:
                 return ExchangeStatus.UNKNOWN
             return state.status
 
-    def set_exchange_halted(self, exchange: Exchange, reason: str | None = None) -> None:
+    def set_exchange_halted(
+        self, exchange: Exchange, reason: str | None = None
+    ) -> None:
         """Mark an exchange as halted.
 
         Args:
@@ -213,7 +217,9 @@ class ExchangeCalendar:
 
         return True, "Within session boundaries"
 
-    def validate_trading_time(self, exchange: Exchange, check_time: datetime | None = None) -> None:
+    def validate_trading_time(
+        self, exchange: Exchange, check_time: datetime | None = None
+    ) -> None:
         """Validate that current time is safe for trading.
 
         Args:
@@ -284,7 +290,9 @@ def _parse_exchange_session_times(
         try:
             open_time = time.fromisoformat(open_str)
             close_time = time.fromisoformat(close_str)
-            sessions[exchange_enum] = SessionWindow(open_time=open_time, close_time=close_time)
+            sessions[exchange_enum] = SessionWindow(
+                open_time=open_time, close_time=close_time
+            )
             logger.debug(
                 "Loaded session times",
                 extra={
@@ -294,7 +302,10 @@ def _parse_exchange_session_times(
                 },
             )
         except ValueError as e:
-            msg = f"Invalid time format for {exchange_name}: " f"open={open_str}, close={close_str}"
+            msg = (
+                f"Invalid time format for {exchange_name}: "
+                f"open={open_str}, close={close_str}"
+            )
             raise ConfigError(msg) from e
 
     return sessions
@@ -521,10 +532,18 @@ def _default_holidays() -> dict[Exchange, set[date]]:
 def _default_special_sessions() -> dict[Exchange, dict[date, SessionWindow]]:
     muhurat_day = date(2026, 11, 8)
     return {
-        Exchange.NSE: {muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(19, 0))},
-        Exchange.BSE: {muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(19, 0))},
-        Exchange.MCX: {muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(21, 0))},
-        Exchange.CDS: {muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(19, 0))},
+        Exchange.NSE: {
+            muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(19, 0))
+        },
+        Exchange.BSE: {
+            muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(19, 0))
+        },
+        Exchange.MCX: {
+            muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(21, 0))
+        },
+        Exchange.CDS: {
+            muhurat_day: SessionWindow(open_time=time(18, 0), close_time=time(19, 0))
+        },
     }
 
 

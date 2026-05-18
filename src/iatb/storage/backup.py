@@ -181,7 +181,9 @@ class BackupManager:
             _LOGGER.info("Removed old backup: %s", entry.name)
         return removed
 
-    def _build_manifest(self, backup_id: str, now: datetime, backup_dir: Path) -> BackupManifest:
+    def _build_manifest(
+        self, backup_id: str, now: datetime, backup_dir: Path
+    ) -> BackupManifest:
         checksums: dict[str, str] = {}
         sqlite_files = self._backup_sqlite(backup_dir, checksums)
         duckdb_files = self._backup_duckdb(backup_dir, checksums)
@@ -197,7 +199,9 @@ class BackupManager:
             checksums=checksums,
         )
 
-    def _backup_sqlite(self, backup_dir: Path, checksums: dict[str, str]) -> list[dict[str, str]]:
+    def _backup_sqlite(
+        self, backup_dir: Path, checksums: dict[str, str]
+    ) -> list[dict[str, str]]:
         files: list[dict[str, str]] = []
         for src in self._config.sqlite_db_paths:
             if not src.exists():
@@ -221,7 +225,9 @@ class BackupManager:
         finally:
             src_conn.close()
 
-    def _backup_duckdb(self, backup_dir: Path, checksums: dict[str, str]) -> list[dict[str, str]]:
+    def _backup_duckdb(
+        self, backup_dir: Path, checksums: dict[str, str]
+    ) -> list[dict[str, str]]:
         files: list[dict[str, str]] = []
         for src in self._config.duckdb_db_paths:
             if not src.exists():
@@ -233,7 +239,9 @@ class BackupManager:
             files.append({"source": str(src), "dest": dest.name})
         return files
 
-    def _backup_configs(self, backup_dir: Path, checksums: dict[str, str]) -> list[dict[str, str]]:
+    def _backup_configs(
+        self, backup_dir: Path, checksums: dict[str, str]
+    ) -> list[dict[str, str]]:
         files: list[dict[str, str]] = []
         config_subdir = backup_dir / "configs"
         config_subdir.mkdir(exist_ok=True)
@@ -249,7 +257,9 @@ class BackupManager:
                 files.append({"source": str(toml_file), "dest": rel_key})
         return files
 
-    def _export_state(self, backup_dir: Path, checksums: dict[str, str]) -> dict[str, str] | None:
+    def _export_state(
+        self, backup_dir: Path, checksums: dict[str, str]
+    ) -> dict[str, str] | None:
         src = self._config.state_export_path
         if src is None or not src.exists():
             _LOGGER.info("State export path not configured or missing, skipping")
@@ -267,9 +277,7 @@ class BackupManager:
                 raise ConfigError(msg)
             actual_hash = _file_sha256(full_path)
             if actual_hash != expected_hash:
-                msg = (
-                    f"Checksum mismatch for {rel_path}: expected {expected_hash}, got {actual_hash}"
-                )
+                msg = f"Checksum mismatch for {rel_path}: expected {expected_hash}, got {actual_hash}"
                 raise ConfigError(msg)
 
     def _restore_sqlite(self, manifest: BackupManifest, backup_dir: Path) -> None:
@@ -378,7 +386,9 @@ def export_trading_state(
             for order_id, order_data in pending_orders.items()
         },
     }
-    output_path.write_text(json.dumps(state_data, indent=2, default=str), encoding="utf-8")
+    output_path.write_text(
+        json.dumps(state_data, indent=2, default=str), encoding="utf-8"
+    )
     _LOGGER.info("Trading state exported to %s", output_path)
     return output_path
 

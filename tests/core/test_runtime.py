@@ -11,7 +11,7 @@ import pytest
 
 @pytest.mark.asyncio()
 async def test_run_runtime_starts_and_stops_components(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Runtime should start and stop engine around stop event."""
     lifecycle: list[str] = []
@@ -124,7 +124,7 @@ async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio()
 async def test_run_runtime_handles_engine_start_error(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Runtime should handle errors during engine startup gracefully."""
 
@@ -148,7 +148,7 @@ async def test_run_runtime_handles_engine_start_error(
 
 @pytest.mark.asyncio()
 async def test_run_runtime_handles_engine_stop_error(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Runtime should handle errors during engine stop gracefully."""
 
@@ -176,7 +176,7 @@ async def test_run_runtime_handles_engine_stop_error(
 
 @pytest.mark.asyncio()
 async def test_main_handles_signal_handler_error(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """_main should propagate errors in signal handler registration."""
     called: list[str] = []

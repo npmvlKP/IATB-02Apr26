@@ -153,9 +153,12 @@ class EventPersistence:
             events = [
                 parsed
                 for f in sorted(topic_dir.glob("*.json"))
-                if (parsed := _parse_event_file(f, start_sequence, end_sequence)) is not None
+                if (parsed := _parse_event_file(f, start_sequence, end_sequence))
+                is not None
             ]
-            logger.info(f"Loaded {len(events)} events from persistence for topic: {topic}")
+            logger.info(
+                f"Loaded {len(events)} events from persistence for topic: {topic}"
+            )
             return events
         except Exception as exc:
             logger.error("Error loading events from persistence: %s", exc)
@@ -391,7 +394,9 @@ class EventPersistence:
         return MarketTickEvent(
             event_id=self._to_uuid(data["event_id"]),
             timestamp=self._to_timestamp(data["timestamp"]),
-            exchange=Exchange(data["exchange"]) if data.get("exchange") else Exchange.NSE,
+            exchange=Exchange(data["exchange"])
+            if data.get("exchange")
+            else Exchange.NSE,
             symbol=data.get("symbol", "UNKNOWN"),
             price=self._to_price(data["price"])
             if data.get("price") is not None
@@ -415,7 +420,9 @@ class EventPersistence:
             event_id=self._to_uuid(data["event_id"]),
             timestamp=self._to_timestamp(data["timestamp"]),
             order_id=data.get("order_id", "UNKNOWN_ORDER"),
-            exchange=Exchange(data["exchange"]) if data.get("exchange") else Exchange.NSE,
+            exchange=Exchange(data["exchange"])
+            if data.get("exchange")
+            else Exchange.NSE,
             symbol=data.get("symbol", "UNKNOWN"),
             side=OrderSide(data["side"]) if data.get("side") else OrderSide.BUY,
             order_type=OrderType(data["order_type"])
@@ -424,14 +431,18 @@ class EventPersistence:
             quantity=self._to_quantity(data["quantity"])
             if data.get("quantity") is not None
             else create_quantity("0.0"),
-            price=self._to_price(data["price"]) if data.get("price") is not None else None,
+            price=self._to_price(data["price"])
+            if data.get("price") is not None
+            else None,
             filled_quantity=self._to_quantity(data["filled_quantity"])
             if data.get("filled_quantity") is not None
             else create_quantity("0.0"),
             avg_price=self._to_price(data["avg_price"])
             if data.get("avg_price") is not None
             else None,
-            status=OrderStatus(data["status"]) if data.get("status") else OrderStatus.PENDING,
+            status=OrderStatus(data["status"])
+            if data.get("status")
+            else OrderStatus.PENDING,
         )
 
     def _deserialize_signal_event(self, data: dict[str, Any]) -> SignalEvent:
@@ -439,19 +450,25 @@ class EventPersistence:
             event_id=self._to_uuid(data["event_id"]),
             timestamp=self._to_timestamp(data["timestamp"]),
             strategy_id=data.get("strategy_id", "UNKNOWN_STRATEGY"),
-            exchange=Exchange(data["exchange"]) if data.get("exchange") else Exchange.NSE,
+            exchange=Exchange(data["exchange"])
+            if data.get("exchange")
+            else Exchange.NSE,
             symbol=data.get("symbol", "UNKNOWN"),
             side=OrderSide(data["side"]) if data.get("side") else OrderSide.BUY,
             quantity=self._to_quantity(data["quantity"])
             if data.get("quantity") is not None
             else create_quantity("0.0"),
-            price=self._to_price(data["price"]) if data.get("price") is not None else None,
+            price=self._to_price(data["price"])
+            if data.get("price") is not None
+            else None,
             confidence=self._to_decimal(data.get("confidence"))
             if data.get("confidence") is not None
             else Decimal("0.0"),
         )
 
-    def _deserialize_regime_change_event(self, data: dict[str, Any]) -> RegimeChangeEvent:
+    def _deserialize_regime_change_event(
+        self, data: dict[str, Any]
+    ) -> RegimeChangeEvent:
         return RegimeChangeEvent(
             event_id=self._to_uuid(data["event_id"]),
             timestamp=self._to_timestamp(data["timestamp"]),

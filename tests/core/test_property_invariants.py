@@ -71,14 +71,20 @@ def test_property_event_ordering_preserved(prices: list[Decimal]) -> None:
     subscriber_count=st.integers(min_value=1, max_value=4),
     event_count=st.integers(min_value=1, max_value=12),
 )
-def test_property_bus_delivery_to_all_subscribers(subscriber_count: int, event_count: int) -> None:
+def test_property_bus_delivery_to_all_subscribers(
+    subscriber_count: int, event_count: int
+) -> None:
     """Every subscriber receives every published event in order."""
 
     async def _run() -> None:
         bus = EventBus()
         await bus.start()
-        queues = [await bus.subscribe("signals.trading") for _ in range(subscriber_count)]
-        events = [_build_tick(index, Decimal(index + 1)) for index in range(event_count)]
+        queues = [
+            await bus.subscribe("signals.trading") for _ in range(subscriber_count)
+        ]
+        events = [
+            _build_tick(index, Decimal(index + 1)) for index in range(event_count)
+        ]
 
         for event in events:
             await bus.publish("signals.trading", event)
@@ -115,11 +121,15 @@ def test_property_clock_session_boundaries(
     minute_offset: int,
 ) -> None:
     """Session open/closed state remains consistent near boundaries."""
-    session_date = _next_session_date(exchange, date(2026, 1, 1) + timedelta(days=day_offset))
+    session_date = _next_session_date(
+        exchange, date(2026, 1, 1) + timedelta(days=day_offset)
+    )
     session = TradingSessions.calendar.session_for(exchange, session_date)
     assert session is not None
 
-    probe_ist = datetime.combine(session_date, session.open_time) + timedelta(minutes=minute_offset)
+    probe_ist = datetime.combine(session_date, session.open_time) + timedelta(
+        minutes=minute_offset
+    )
     probe_utc = Clock.ist_to_utc(probe_ist)
     assert probe_utc.tzinfo == UTC
 

@@ -84,7 +84,12 @@ class InstrumentResolver:
             )
             if instrument is not None:
                 path = f"{pref_type.value}(preferred) -> resolved"
-                logger.info("Resolved %s -> %s via %s", underlying, instrument.trading_symbol, path)
+                logger.info(
+                    "Resolved %s -> %s via %s",
+                    underlying,
+                    instrument.trading_symbol,
+                    path,
+                )
                 return ResolvedInstrument(
                     instrument=instrument,
                     underlying=underlying,
@@ -124,7 +129,9 @@ class InstrumentResolver:
 
     def _resolve_equity(self, underlying: str, exchange: Exchange) -> Instrument | None:
         try:
-            return self._master.get_instrument(underlying, exchange, InstrumentType.EQUITY)
+            return self._master.get_instrument(
+                underlying, exchange, InstrumentType.EQUITY
+            )
         except Exception:
             return None
 
@@ -132,11 +139,17 @@ class InstrumentResolver:
         self, underlying: str, exchange: Exchange, target_days: int
     ) -> Instrument | None:
         try:
-            expiry = self._master.get_nearest_expiry(underlying, exchange, InstrumentType.FUTURE)
-            min_expiry = datetime.now(UTC).date() + timedelta(days=max(0, target_days - 15))
+            expiry = self._master.get_nearest_expiry(
+                underlying, exchange, InstrumentType.FUTURE
+            )
+            min_expiry = datetime.now(UTC).date() + timedelta(
+                days=max(0, target_days - 15)
+            )
             if expiry < min_expiry:
                 return None
-            return self._master.get_instrument(underlying, exchange, InstrumentType.FUTURE)
+            return self._master.get_instrument(
+                underlying, exchange, InstrumentType.FUTURE
+            )
         except Exception:
             return None
 

@@ -23,7 +23,9 @@ class OptimizationResult:
 class RLParameterOptimizer:
     """Deterministic Optuna optimizer using TPESampler(seed=...)."""
 
-    def __init__(self, objective: ObjectiveFn, n_trials: int = 20, seed: int = 42) -> None:
+    def __init__(
+        self, objective: ObjectiveFn, n_trials: int = 20, seed: int = 42
+    ) -> None:
         if n_trials <= 0:
             msg = "n_trials must be positive"
             raise ConfigError(msg)
@@ -93,7 +95,9 @@ def _create_study(optuna: object, sampler: object) -> object:
     return create_study(direction="maximize", sampler=sampler)
 
 
-def _suggest_params(trial: object, search_space: dict[str, tuple[int, int]]) -> dict[str, int]:
+def _suggest_params(
+    trial: object, search_space: dict[str, tuple[int, int]]
+) -> dict[str, int]:
     suggest_int = getattr(trial, "suggest_int", None)
     if not callable(suggest_int):
         msg = "optuna trial does not provide suggest_int()"

@@ -46,7 +46,10 @@ def test_vectorized_default_evaluator_requires_vectorbt_dependency(
     with pytest.raises(ConfigError, match="vectorbt dependency"):
         backtester.run_sweep(
             close_prices=[Decimal("1"), Decimal("2")],
-            parameter_grid={"fast_window": [Decimal("5")], "slow_window": [Decimal("10")]},
+            parameter_grid={
+                "fast_window": [Decimal("5")],
+                "slow_window": [Decimal("10")],
+            },
         )
 
 

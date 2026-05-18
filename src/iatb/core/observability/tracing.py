@@ -43,14 +43,19 @@ def setup_tracing(
     provider = TracerProvider(resource=resource)
 
     # Add OTLP exporter if endpoint is configured
-    endpoint = otlp_endpoint or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317")
+    endpoint = otlp_endpoint or os.getenv(
+        "OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"
+    )
 
     if endpoint:
         otlp_exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
         provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
     # Add console exporter if enabled (useful for local development)
-    if enable_console_export or os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true":
+    if (
+        enable_console_export
+        or os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true"
+    ):
         console_exporter = ConsoleSpanExporter()
         provider.add_span_processor(BatchSpanProcessor(console_exporter))
 

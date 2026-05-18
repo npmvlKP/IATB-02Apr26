@@ -43,7 +43,9 @@ def test_strength_scorer_blocks_bearish_regime() -> None:
 def test_strength_scorer_blocks_high_volatility() -> None:
     scorer = StrengthScorer()
     inputs = _base_inputs()
-    inputs = StrengthInputs(**{**inputs.__dict__, "volatility_atr_pct": Decimal("0.081")})
+    inputs = StrengthInputs(
+        **{**inputs.__dict__, "volatility_atr_pct": Decimal("0.081")}
+    )
     assert not scorer.is_tradable(Exchange.NSE, inputs)
 
 
@@ -69,7 +71,9 @@ def test_strength_scorer_rejects_exchange_not_in_threshold_map(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scorer = StrengthScorer()
-    monkeypatch.delitem(strength_module._EXCHANGE_MIN_SCORE, Exchange.NSE, raising=False)
+    monkeypatch.delitem(
+        strength_module._EXCHANGE_MIN_SCORE, Exchange.NSE, raising=False
+    )
     with pytest.raises(ConfigError, match="Unsupported exchange"):
         scorer.score(Exchange.NSE, _base_inputs())
 

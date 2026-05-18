@@ -33,7 +33,9 @@ def test_kelly_fraction_and_volatility_adjusted_size_bounds() -> None:
     kelly = kelly_fraction(Decimal("0.55"), Decimal("1.5"))
     assert kelly > Decimal("0")
     assert kelly <= Decimal("0.5")
-    adjusted = volatility_adjusted_size(Decimal("100000"), Decimal("0.02"), Decimal("0.04"))
+    adjusted = volatility_adjusted_size(
+        Decimal("100000"), Decimal("0.02"), Decimal("0.04")
+    )
     assert adjusted == Decimal("1000")
 
 
@@ -126,7 +128,9 @@ def test_position_sizing_input_validations() -> None:
                 realized_volatility=Decimal("0.02"),
             )
         )
-    with pytest.raises(ConfigError, match="entry_price and stop_price must be positive"):
+    with pytest.raises(
+        ConfigError, match="entry_price and stop_price must be positive"
+    ):
         fixed_fractional_size(
             PositionSizingInput(
                 equity=Decimal("1000"),

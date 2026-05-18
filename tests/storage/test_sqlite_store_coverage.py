@@ -206,7 +206,9 @@ class TestRowToRecord:
             "strategy_id": "mom-1",
             "metadata_json": "[]",
         }
-        with pytest.raises(ConfigError, match="metadata_json must decode to dictionary"):
+        with pytest.raises(
+            ConfigError, match="metadata_json must decode to dictionary"
+        ):
             _row_to_record(row)
 
 
@@ -433,7 +435,9 @@ class TestSQLiteStoreInitialize:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         store.initialize()
         with store._connect() as conn:
-            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
             table_names = [t[0] for t in tables]
             assert "trade_audit_log" in table_names
 
@@ -441,7 +445,9 @@ class TestSQLiteStoreInitialize:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         store.initialize()
         with store._connect() as conn:
-            indexes = conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()
+            indexes = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            ).fetchall()
             index_names = [i[0] for i in indexes]
             assert "idx_trade_audit_timestamp" in index_names
             assert "idx_trade_audit_exchange" in index_names
@@ -453,7 +459,9 @@ class TestSQLiteStoreInitialize:
         store.initialize()
         store.initialize()
         with store._connect() as conn:
-            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
             assert len(tables) == 1
 
 
@@ -595,12 +603,16 @@ class TestSQLiteStoreListTradesByRange:
 class TestSQLiteStoreListTradesBySymbol:
     """Test SQLiteStore.list_trades_by_symbol method."""
 
-    def test_list_trades_by_symbol_with_empty_string_raises(self, tmp_path: Path) -> None:
+    def test_list_trades_by_symbol_with_empty_string_raises(
+        self, tmp_path: Path
+    ) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         with pytest.raises(ConfigError, match="symbol cannot be empty"):
             store.list_trades_by_symbol("")
 
-    def test_list_trades_by_symbol_with_whitespace_only_raises(self, tmp_path: Path) -> None:
+    def test_list_trades_by_symbol_with_whitespace_only_raises(
+        self, tmp_path: Path
+    ) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         with pytest.raises(ConfigError, match="symbol cannot be empty"):
             store.list_trades_by_symbol("  ")
@@ -608,16 +620,24 @@ class TestSQLiteStoreListTradesBySymbol:
     def test_list_trades_by_symbol_without_exchange(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
-        store.append_trade(_record("trade-1", base, exchange=Exchange.NSE, symbol="RELIANCE"))
-        store.append_trade(_record("trade-2", base, exchange=Exchange.BSE, symbol="RELIANCE"))
+        store.append_trade(
+            _record("trade-1", base, exchange=Exchange.NSE, symbol="RELIANCE")
+        )
+        store.append_trade(
+            _record("trade-2", base, exchange=Exchange.BSE, symbol="RELIANCE")
+        )
         trades = store.list_trades_by_symbol("RELIANCE")
         assert len(trades) == 2
 
     def test_list_trades_by_symbol_with_exchange(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
-        store.append_trade(_record("trade-1", base, exchange=Exchange.NSE, symbol="RELIANCE"))
-        store.append_trade(_record("trade-2", base, exchange=Exchange.BSE, symbol="RELIANCE"))
+        store.append_trade(
+            _record("trade-1", base, exchange=Exchange.NSE, symbol="RELIANCE")
+        )
+        store.append_trade(
+            _record("trade-2", base, exchange=Exchange.BSE, symbol="RELIANCE")
+        )
         trades = store.list_trades_by_symbol("RELIANCE", exchange=Exchange.NSE)
         assert len(trades) == 1
         assert trades[0].exchange == Exchange.NSE
@@ -626,7 +646,9 @@ class TestSQLiteStoreListTradesBySymbol:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
         store.append_trade(_record("trade-1", base, symbol="RELIANCE"))
-        store.append_trade(_record("trade-2", base + timedelta(minutes=1), symbol="RELIANCE"))
+        store.append_trade(
+            _record("trade-2", base + timedelta(minutes=1), symbol="RELIANCE")
+        )
         trades = store.list_trades_by_symbol("RELIANCE")
         assert trades[0].timestamp >= trades[1].timestamp
 
@@ -649,12 +671,16 @@ class TestSQLiteStoreListTradesBySymbol:
 class TestSQLiteStoreListTradesByStrategy:
     """Test SQLiteStore.list_trades_by_strategy method."""
 
-    def test_list_trades_by_strategy_with_empty_string_raises(self, tmp_path: Path) -> None:
+    def test_list_trades_by_strategy_with_empty_string_raises(
+        self, tmp_path: Path
+    ) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         with pytest.raises(ConfigError, match="strategy_id cannot be empty"):
             store.list_trades_by_strategy("")
 
-    def test_list_trades_by_strategy_with_whitespace_only_raises(self, tmp_path: Path) -> None:
+    def test_list_trades_by_strategy_with_whitespace_only_raises(
+        self, tmp_path: Path
+    ) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         with pytest.raises(ConfigError, match="strategy_id cannot be empty"):
             store.list_trades_by_strategy("  ")
@@ -673,7 +699,9 @@ class TestSQLiteStoreListTradesByStrategy:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
         store.append_trade(_record("trade-1", base, strategy_id="strat-a"))
-        store.append_trade(_record("trade-2", base + timedelta(minutes=1), strategy_id="strat-a"))
+        store.append_trade(
+            _record("trade-2", base + timedelta(minutes=1), strategy_id="strat-a")
+        )
         trades = store.list_trades_by_strategy("strat-a")
         assert trades[0].timestamp >= trades[1].timestamp
 
@@ -682,12 +710,16 @@ class TestSQLiteStoreListTradesByStrategy:
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
         for i in range(10):
             store.append_trade(
-                _record(f"trade-{i}", base + timedelta(minutes=i), strategy_id="strat-a")
+                _record(
+                    f"trade-{i}", base + timedelta(minutes=i), strategy_id="strat-a"
+                )
             )
         trades = store.list_trades_by_strategy("strat-a", limit=5)
         assert len(trades) == 5
 
-    def test_list_trades_by_strategy_with_zero_limit_raises(self, tmp_path: Path) -> None:
+    def test_list_trades_by_strategy_with_zero_limit_raises(
+        self, tmp_path: Path
+    ) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         with pytest.raises(ConfigError, match="limit must be positive"):
             store.list_trades_by_strategy("strat-a", limit=0)
@@ -711,7 +743,9 @@ class TestSQLiteStoreAppendTradesBatch:
     def test_append_trades_batch_multiple_records(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
-        records = [_record(f"trade-{i}", base + timedelta(minutes=i)) for i in range(10)]
+        records = [
+            _record(f"trade-{i}", base + timedelta(minutes=i)) for i in range(10)
+        ]
         store.append_trades_batch(records)
         for i in range(10):
             assert store.get_trade(f"trade-{i}") is not None
@@ -869,7 +903,9 @@ class TestSQLiteStoreQueryTrades:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         base = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
         store.append_trade(_record("trade-1", base, status=OrderStatus.FILLED))
-        store.append_trade(_record("trade-2", base, status=OrderStatus.PARTIALLY_FILLED))
+        store.append_trade(
+            _record("trade-2", base, status=OrderStatus.PARTIALLY_FILLED)
+        )
         trades = store.query_trades(status=OrderStatus.FILLED)
         assert len(trades) == 1
         assert trades[0].status == OrderStatus.FILLED
@@ -906,7 +942,9 @@ class TestSQLiteStorePurgeExpired:
         deleted = store.purge_expired(reference_time=reference)
         assert deleted == 1
 
-    def test_purge_expired_with_naive_reference_time_raises(self, tmp_path: Path) -> None:
+    def test_purge_expired_with_naive_reference_time_raises(
+        self, tmp_path: Path
+    ) -> None:
         store = SQLiteStore(tmp_path / "audit.sqlite3")
         with pytest.raises(ConfigError, match="reference_time must be timezone-aware"):
             store.purge_expired(reference_time=datetime(2026, 1, 1, 10, 0))  # noqa: DTZ001
@@ -915,7 +953,9 @@ class TestSQLiteStorePurgeExpired:
         from datetime import timezone
 
         store = SQLiteStore(tmp_path / "audit.sqlite3", retention_years=1)
-        base = datetime(2026, 1, 1, 10, 0, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        base = datetime(
+            2026, 1, 1, 10, 0, tzinfo=timezone(timedelta(hours=5, minutes=30))
+        )
         base_utc = base.astimezone(UTC)
         old_time = base_utc - timedelta(days=400)
         store.append_trade(_record("old-trade", old_time))

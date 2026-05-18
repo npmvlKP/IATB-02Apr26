@@ -64,7 +64,7 @@ def resolver_no_api(master: InstrumentMaster) -> SymbolTokenResolver:
 
 
 def _make_mock_kite_provider(
-    instruments_data: list[dict[str, Any]] | None = None
+    instruments_data: list[dict[str, Any]] | None = None,
 ) -> MagicMock:
     mock = MagicMock()
     mock_client = MagicMock()

@@ -37,7 +37,9 @@ class PredictionResult:
             msg = "regime_label cannot be empty"
             raise ConfigError(msg)
         object.__setattr__(self, "score", _as_decimal(self.score, "score"))
-        object.__setattr__(self, "confidence", _as_decimal(self.confidence, "confidence"))
+        object.__setattr__(
+            self, "confidence", _as_decimal(self.confidence, "confidence")
+        )
         if self.confidence < Decimal("0") or self.confidence > Decimal("1"):
             msg = "confidence must be between 0 and 1"
             raise ConfigError(msg)
@@ -47,5 +49,4 @@ class PredictionResult:
 
 @runtime_checkable
 class Predictor(Protocol):
-    def predict(self, features: list[Decimal]) -> PredictionResult:
-        ...
+    def predict(self, features: list[Decimal]) -> PredictionResult: ...

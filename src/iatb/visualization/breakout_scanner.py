@@ -29,7 +29,9 @@ class BreakoutCandidate:
         if not self.symbol.strip():
             msg = "symbol cannot be empty"
             raise ConfigError(msg)
-        if self.breakout_probability < Decimal("0") or self.breakout_probability > Decimal("1"):
+        if self.breakout_probability < Decimal(
+            "0"
+        ) or self.breakout_probability > Decimal("1"):
             msg = "breakout_probability must be between 0 and 1"
             raise ConfigError(msg)
         if self.distance_to_breakout_pct < Decimal("0"):
@@ -78,7 +80,9 @@ class InstrumentHealthMatrix:
         if not self.symbol.strip():
             msg = "symbol cannot be empty"
             raise ConfigError(msg)
-        if self.safe_exit_probability < Decimal("0") or self.safe_exit_probability > Decimal("1"):
+        if self.safe_exit_probability < Decimal(
+            "0"
+        ) or self.safe_exit_probability > Decimal("1"):
             msg = "safe_exit_probability must be between 0 and 1"
             raise ConfigError(msg)
         if self.timestamp_utc.tzinfo != UTC:
@@ -129,10 +133,14 @@ def evaluate_factor_health(
         raise ConfigError(msg)
     if score >= healthy_threshold:
         status = HealthStatus.HEALTHY
-        details = f"Score {float(score):.2f} >= {float(healthy_threshold):.2f} threshold"
+        details = (
+            f"Score {float(score):.2f} >= {float(healthy_threshold):.2f} threshold"
+        )
     elif score <= unhealthy_threshold:
         status = HealthStatus.NOT_HEALTHY
-        details = f"Score {float(score):.2f} <= {float(unhealthy_threshold):.2f} threshold"
+        details = (
+            f"Score {float(score):.2f} <= {float(unhealthy_threshold):.2f} threshold"
+        )
     else:
         status = HealthStatus.NEUTRAL
         details = f"Score {float(score):.2f} in neutral range"
@@ -186,12 +194,18 @@ def build_instrument_health_matrix(
         msg = "timestamp_utc must be UTC"
         raise ConfigError(msg)
 
-    sentiment_health = evaluate_factor_health("Sentiment", sentiment_score, sentiment_threshold)
+    sentiment_health = evaluate_factor_health(
+        "Sentiment", sentiment_score, sentiment_threshold
+    )
     market_strength_health = evaluate_factor_health(
         "Market Strength", market_strength_score, strength_threshold
     )
-    volume_health = evaluate_factor_health("Volume Analysis", volume_score, volume_threshold)
-    drl_health = evaluate_factor_health("DRL/Backtest", drl_backtest_score, drl_threshold)
+    volume_health = evaluate_factor_health(
+        "Volume Analysis", volume_score, volume_threshold
+    )
+    drl_health = evaluate_factor_health(
+        "DRL/Backtest", drl_backtest_score, drl_threshold
+    )
 
     overall = compute_overall_health(
         sentiment_health,

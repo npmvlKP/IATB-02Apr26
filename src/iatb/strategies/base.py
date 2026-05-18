@@ -36,14 +36,17 @@ class StrategyOrder:
 
 @runtime_checkable
 class Strategy(Protocol):
-    def on_tick(self, context: StrategyContext, tick: MarketTickEvent) -> SignalEvent | None:
-        ...
+    def on_tick(
+        self, context: StrategyContext, tick: MarketTickEvent
+    ) -> SignalEvent | None: ...
 
-    def on_bar(self, context: StrategyContext, tick: MarketTickEvent) -> SignalEvent | None:
-        ...
+    def on_bar(
+        self, context: StrategyContext, tick: MarketTickEvent
+    ) -> SignalEvent | None: ...
 
-    def on_signal(self, context: StrategyContext, signal: SignalEvent) -> StrategyOrder | None:
-        ...
+    def on_signal(
+        self, context: StrategyContext, signal: SignalEvent
+    ) -> StrategyOrder | None: ...
 
 
 class StrategyBase:
@@ -73,15 +76,21 @@ class StrategyBase:
             return False
         return True
 
-    def on_tick(self, context: StrategyContext, tick: MarketTickEvent) -> SignalEvent | None:
+    def on_tick(
+        self, context: StrategyContext, tick: MarketTickEvent
+    ) -> SignalEvent | None:
         _ = (context, tick)
         return None
 
-    def on_bar(self, context: StrategyContext, tick: MarketTickEvent) -> SignalEvent | None:
+    def on_bar(
+        self, context: StrategyContext, tick: MarketTickEvent
+    ) -> SignalEvent | None:
         _ = (context, tick)
         return None
 
-    def on_signal(self, context: StrategyContext, signal: SignalEvent) -> StrategyOrder | None:
+    def on_signal(
+        self, context: StrategyContext, signal: SignalEvent
+    ) -> StrategyOrder | None:
         if not self.can_emit_signal(context):
             return None
         if signal.exchange != context.exchange or signal.symbol != context.symbol:

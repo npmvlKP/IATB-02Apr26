@@ -35,7 +35,9 @@ class RankingConfig:
         if self.top_n <= 0:
             msg = "top_n must be positive"
             raise ConfigError(msg)
-        if self.correlation_limit < Decimal("0") or self.correlation_limit > Decimal("1"):
+        if self.correlation_limit < Decimal("0") or self.correlation_limit > Decimal(
+            "1"
+        ):
             msg = "correlation_limit must be in [0, 1]"
             raise ConfigError(msg)
 

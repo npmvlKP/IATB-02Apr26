@@ -47,10 +47,14 @@ class VectorizedBacktester:
             if score > best_score:
                 best_score = score
                 best_params = params
-        return VectorizedSweepResult(best_params=best_params, best_score=best_score, scores=scores)
+        return VectorizedSweepResult(
+            best_params=best_params, best_score=best_score, scores=scores
+        )
 
 
-def _default_evaluator(close_prices: list[Decimal], params: dict[str, Decimal]) -> Decimal:
+def _default_evaluator(
+    close_prices: list[Decimal], params: dict[str, Decimal]
+) -> Decimal:
     _load_vectorbt_module()
     start_price = close_prices[0]
     end_price = close_prices[-1]
@@ -62,7 +66,9 @@ def _default_evaluator(close_prices: list[Decimal], params: dict[str, Decimal]) 
     return trend_return - penalty
 
 
-def _iter_parameter_sets(parameter_grid: dict[str, list[Decimal]]) -> list[dict[str, Decimal]]:
+def _iter_parameter_sets(
+    parameter_grid: dict[str, list[Decimal]],
+) -> list[dict[str, Decimal]]:
     keys = list(parameter_grid.keys())
     values = [parameter_grid[key] for key in keys]
     sets: list[dict[str, Decimal]] = []

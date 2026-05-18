@@ -369,7 +369,12 @@ class DataProviderFactory:
             ConfigError: If any component creation fails.
         """
         # Create core components
-        token_manager, instrument_master, primary, fallback = self._create_core_components()
+        (
+            token_manager,
+            instrument_master,
+            primary,
+            fallback,
+        ) = self._create_core_components()
 
         # Create failover and resolver
         failover, token_resolver = self._create_failover_with_resolver(

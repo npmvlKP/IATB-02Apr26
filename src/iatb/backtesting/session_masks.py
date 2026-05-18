@@ -21,7 +21,9 @@ from iatb.core.exchange_calendar import ExchangeCalendar
 logger = logging.getLogger(__name__)
 
 # Asset types that require MIS enforcement
-MIS_REQUIRED_ASSETS: frozenset[str] = frozenset({"STOCKS", "OPTIONS", "FUTURES", "CURRENCY_FO"})
+MIS_REQUIRED_ASSETS: frozenset[str] = frozenset(
+    {"STOCKS", "OPTIONS", "FUTURES", "CURRENCY_FO"}
+)
 
 
 def is_in_session(timestamp_utc: datetime, exchange: Exchange) -> bool:
@@ -49,11 +51,15 @@ def is_mis_trading_allowed(
     TradingSessions._require_utc(timestamp_utc)
 
     if exchange not in MIS_SUPPORTED_EXCHANGES:
-        logger.debug("Exchange does not support MIS", extra={"exchange": exchange.value})
+        logger.debug(
+            "Exchange does not support MIS", extra={"exchange": exchange.value}
+        )
         return False
 
     if asset_type.upper() not in MIS_REQUIRED_ASSETS:
-        logger.debug("Asset type not in MIS-required set", extra={"asset_type": asset_type})
+        logger.debug(
+            "Asset type not in MIS-required set", extra={"asset_type": asset_type}
+        )
         return False
 
     return TradingSessions.is_mis_session_active(timestamp_utc, exchange)

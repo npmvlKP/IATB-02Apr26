@@ -41,7 +41,10 @@ class OpenAlgoExecutor(Executor):
         _validate_broker(self._broker)
         _LOGGER.info(
             "OpenAlgoExecutor initialized",
-            extra={"broker": self._broker, "timestamp_utc": datetime.now(UTC).isoformat()},
+            extra={
+                "broker": self._broker,
+                "timestamp_utc": datetime.now(UTC).isoformat(),
+            },
         )
 
     def execute_order(self, request: OrderRequest) -> ExecutionResult:
@@ -132,7 +135,9 @@ def _assert_live_enabled() -> None:
         msg = "live execution blocked: set LIVE_TRADING_ENABLED=true to proceed"
         raise ConfigError(msg)
     if os.getenv(_OAUTH_2FA_GATE_ENV, "").strip().lower() != "true":
-        msg = "broker access blocked: set BROKER_OAUTH_2FA_VERIFIED=true after OAuth 2FA"
+        msg = (
+            "broker access blocked: set BROKER_OAUTH_2FA_VERIFIED=true after OAuth 2FA"
+        )
         raise ConfigError(msg)
 
 
@@ -146,7 +151,9 @@ def _assert_zerodha_credentials(broker: str) -> None:
         msg = f"Zerodha API key missing: set {_ZERODHA_API_KEY_ENV} in environment"
         raise ConfigError(msg)
     if not api_secret:
-        msg = f"Zerodha API secret missing: set {_ZERODHA_API_SECRET_ENV} in environment"
+        msg = (
+            f"Zerodha API secret missing: set {_ZERODHA_API_SECRET_ENV} in environment"
+        )
         raise ConfigError(msg)
 
 

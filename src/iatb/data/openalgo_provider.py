@@ -40,7 +40,9 @@ class _PooledHTTPSession:
         self._pool: list[HTTPConnection] = []
         self._in_use: set[int] = set()
         if self._scheme == "https":
-            self._conn_cls: type[HTTPConnection] | type[HTTPSConnection] = HTTPSConnection
+            self._conn_cls: type[HTTPConnection] | type[HTTPSConnection] = (
+                HTTPSConnection
+            )
         else:
             self._conn_cls = HTTPConnection
 
@@ -171,7 +173,9 @@ class OpenAlgoProvider(DataProvider):
 
     def _get_session(self) -> _PooledHTTPSession:
         if self._session is None:
-            self._session = _PooledHTTPSession(self._base_url, pool_size=self._pool_size)
+            self._session = _PooledHTTPSession(
+                self._base_url, pool_size=self._pool_size
+            )
         return self._session
 
     async def get_ohlcv(
@@ -196,7 +200,9 @@ class OpenAlgoProvider(DataProvider):
             params["since"] = since.isoformat()
         payload = await self._request("/api/v1/market/ohlcv", params)
         records = [dict(item) for item in _extract_data_list(payload)]
-        return normalize_ohlcv_batch(records, symbol=symbol, exchange=exchange, source="openalgo")
+        return normalize_ohlcv_batch(
+            records, symbol=symbol, exchange=exchange, source="openalgo"
+        )
 
     async def get_ticker(self, *, symbol: str, exchange: Exchange) -> TickerSnapshot:
         payload = await self._request(
@@ -224,7 +230,9 @@ class OpenAlgoProvider(DataProvider):
         validate_ticker_snapshot(snapshot)
         return snapshot
 
-    async def _request(self, path: str, params: Mapping[str, str]) -> Mapping[str, object]:
+    async def _request(
+        self, path: str, params: Mapping[str, str]
+    ) -> Mapping[str, object]:
         url_path = self._build_path(path, params)
         full_url = f"{self._base_url}{url_path}"
         headers = {"Authorization": f"Bearer {self._api_key}"}

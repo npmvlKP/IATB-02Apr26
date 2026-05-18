@@ -228,9 +228,13 @@ class TestEnhancedLiveTradingMetrics:
         update_position_count(exchange="NSE", symbol="RELIANCE", count=100)
 
         # Record broker API calls
-        record_broker_api_call(endpoint="/orders/place", method="POST", status="success")
+        record_broker_api_call(
+            endpoint="/orders/place", method="POST", status="success"
+        )
         record_broker_api_call(endpoint="/positions", method="GET", status="success")
-        record_broker_api_call(endpoint="/orders/cancel", method="DELETE", status="error")
+        record_broker_api_call(
+            endpoint="/orders/cancel", method="DELETE", status="error"
+        )
 
         # Record risk checks
         record_risk_check_duration(check_type="position_limit", duration_seconds=0.05)
@@ -582,7 +586,9 @@ class TestMultiChannelAlertManager:
         manager = MultiChannelAlertManager(channels=[])
 
         alert_id = manager.send_alert("Test message")
-        result = manager.acknowledge(alert_id, acknowledged_by="user1", acknowledged_via="api")
+        result = manager.acknowledge(
+            alert_id, acknowledged_by="user1", acknowledged_via="api"
+        )
 
         assert result is True
         assert manager.ack_tracker.is_acknowledged(alert_id) is True
@@ -733,7 +739,9 @@ class TestAlertAcknowledgmentTracker:
 
         # Acknowledge one and set old time
         tracker.acknowledge("alert_1", "user1", "api")
-        tracker.acknowledgments["alert_1"].acknowledged_at = datetime.now(UTC) - timedelta(hours=25)
+        tracker.acknowledgments["alert_1"].acknowledged_at = datetime.now(
+            UTC
+        ) - timedelta(hours=25)
 
         cleaned = tracker.cleanup_old_alerts(max_age_hours=24)
         assert cleaned == 1
@@ -947,7 +955,9 @@ class TestObservabilityIntegration:
         )
         update_position_count(exchange="NSE", symbol="RELIANCE", count=100)
 
-        record_broker_api_call(endpoint="/orders/place", method="POST", status="success")
+        record_broker_api_call(
+            endpoint="/orders/place", method="POST", status="success"
+        )
         record_risk_check_duration(check_type="position_limit", duration_seconds=0.05)
 
         # Check position limit rule
@@ -977,4 +987,6 @@ class TestObservabilityIntegration:
         # Acknowledge alert
         if alert_ids:
             manager.acknowledge(alert_ids[0], "ops_team", "email")
-            assert manager.get_unacknowledged_alerts(rule_name="data_source_failure") == []
+            assert (
+                manager.get_unacknowledged_alerts(rule_name="data_source_failure") == []
+            )
