@@ -49,5 +49,4 @@ class PredictionResult:
 
 @runtime_checkable
 class Predictor(Protocol):
-    def predict(self, features: list[Decimal]) -> PredictionResult:
-        ...
+    def predict(self, features: list[Decimal]) -> PredictionResult: ...

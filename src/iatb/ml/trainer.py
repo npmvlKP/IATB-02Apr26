@@ -11,8 +11,7 @@ from iatb.core.exceptions import ConfigError
 
 
 class _TrainableModel(Protocol):
-    def predict(self, features: list[Decimal]) -> object:
-        ...
+    def predict(self, features: list[Decimal]) -> object: ...
 
 
 @dataclass(frozen=True)
