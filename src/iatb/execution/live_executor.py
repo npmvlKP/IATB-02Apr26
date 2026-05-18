@@ -41,7 +41,9 @@ _LOGGER = logging.getLogger(__name__)
 # Default configuration values
 DEFAULT_CONFIRMATION_TIMEOUT_SECONDS: int = 30
 # API boundary: timing parameter, not financial calculation
-DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS: float = (  # API boundary: timing, not financial
+DEFAULT_CONFIRMATION_POLL_INTERVAL_SECONDS: (
+    float
+) = (  # API boundary: timing, not financial
     0.5
 )
 DEFAULT_SLIPPAGE_TOLERANCE_BPS: Decimal = Decimal("20")  # 0.20%
