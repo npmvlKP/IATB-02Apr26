@@ -175,6 +175,103 @@ def compute_overall_health(
     return HealthStatus.NOT_HEALTHY
 
 
+def _evaluate_all_factors(
+    sentiment_score: Decimal,
+    market_strength_score: Decimal,
+    volume_score: Decimal,
+    drl_backtest_score: Decimal,
+    sentiment_threshold: Decimal,
+    strength_threshold: Decimal,
+    volume_threshold: Decimal,
+    drl_threshold: Decimal,
+) -> tuple[FactorHealth, FactorHealth, FactorHealth, FactorHealth]:
+    """Evaluate all factor health statuses.
+
+    Args:
+        sentiment_score: Sentiment analysis score.
+        market_strength_score: Market strength score.
+        volume_score: Volume analysis score.
+        drl_backtest_score: DRL backtest score.
+        sentiment_threshold: Sentiment health threshold.
+        strength_threshold: Market strength threshold.
+        volume_threshold: Volume threshold.
+        drl_threshold: DRL threshold.
+
+    Returns:
+        Tuple of (sentiment_health, market_strength_health, volume_health, drl_health).
+    """
+    sentiment_health = evaluate_factor_health(
+        "Sentiment", sentiment_score, sentiment_threshold
+    )
+    market_strength_health = evaluate_factor_health(
+        "Market Strength", market_strength_score, strength_threshold
+    )
+    volume_health = evaluate_factor_health(
+        "Volume Analysis", volume_score, volume_threshold
+    )
+    drl_health = evaluate_factor_health(
+        "DRL/Backtest", drl_backtest_score, drl_threshold
+    )
+    return sentiment_health, market_strength_health, volume_health, drl_health
+
+
+def _build_instrument_health_obj(
+    symbol: str,
+    sentiment_health: FactorHealth,
+    market_strength_health: FactorHealth,
+    volume_health: FactorHealth,
+    drl_health: FactorHealth,
+    safe_exit_probability: Decimal,
+    overall: HealthStatus,
+    ts: datetime,
+) -> InstrumentHealthMatrix:
+    """Build InstrumentHealthMatrix object.
+
+    Args:
+        symbol: Instrument symbol.
+        sentiment_health: Sentiment factor health.
+        market_strength_health: Market strength factor health.
+        volume_health: Volume analysis factor health.
+        drl_health: DRL backtest factor health.
+        safe_exit_probability: Safe exit probability.
+        overall: Overall health status.
+        ts: Timestamp UTC.
+
+    Returns:
+        InstrumentHealthMatrix object.
+    """
+    return InstrumentHealthMatrix(
+        symbol=symbol,
+        sentiment_health=sentiment_health,
+        market_strength_health=market_strength_health,
+        volume_analysis_health=volume_health,
+        drl_backtest_health=drl_health,
+        safe_exit_probability=safe_exit_probability,
+        overall_health=overall,
+        is_approved=overall == HealthStatus.HEALTHY,
+        timestamp_utc=ts,
+    )
+
+
+def _validate_timestamp(timestamp_utc: datetime | None) -> datetime:
+    """Validate and return UTC timestamp.
+
+    Args:
+        timestamp_utc: Optional UTC timestamp.
+
+    Returns:
+        Validated UTC datetime.
+
+    Raises:
+        ConfigError: If timestamp is not UTC.
+    """
+    ts = timestamp_utc or datetime.now(UTC)
+    if ts.tzinfo != UTC:
+        msg = "timestamp_utc must be UTC"
+        raise ConfigError(msg)
+    return ts
+
+
 def build_instrument_health_matrix(
     symbol: str,
     sentiment_score: Decimal,
@@ -189,22 +286,22 @@ def build_instrument_health_matrix(
     drl_threshold: Decimal = Decimal("0.6"),
 ) -> InstrumentHealthMatrix:
     """Build complete health matrix for an instrument."""
-    ts = timestamp_utc or datetime.now(UTC)
-    if ts.tzinfo != UTC:
-        msg = "timestamp_utc must be UTC"
-        raise ConfigError(msg)
+    ts = _validate_timestamp(timestamp_utc)
 
-    sentiment_health = evaluate_factor_health(
-        "Sentiment", sentiment_score, sentiment_threshold
-    )
-    market_strength_health = evaluate_factor_health(
-        "Market Strength", market_strength_score, strength_threshold
-    )
-    volume_health = evaluate_factor_health(
-        "Volume Analysis", volume_score, volume_threshold
-    )
-    drl_health = evaluate_factor_health(
-        "DRL/Backtest", drl_backtest_score, drl_threshold
+    (
+        sentiment_health,
+        market_strength_health,
+        volume_health,
+        drl_health,
+    ) = _evaluate_all_factors(
+        sentiment_score,
+        market_strength_score,
+        volume_score,
+        drl_backtest_score,
+        sentiment_threshold,
+        strength_threshold,
+        volume_threshold,
+        drl_threshold,
     )
 
     overall = compute_overall_health(
@@ -215,18 +312,15 @@ def build_instrument_health_matrix(
         safe_exit_probability,
     )
 
-    is_approved = overall == HealthStatus.HEALTHY
-
-    return InstrumentHealthMatrix(
-        symbol=symbol,
-        sentiment_health=sentiment_health,
-        market_strength_health=market_strength_health,
-        volume_analysis_health=volume_health,
-        drl_backtest_health=drl_health,
-        safe_exit_probability=safe_exit_probability,
-        overall_health=overall,
-        is_approved=is_approved,
-        timestamp_utc=ts,
+    return _build_instrument_health_obj(
+        symbol,
+        sentiment_health,
+        market_strength_health,
+        volume_health,
+        drl_health,
+        safe_exit_probability,
+        overall,
+        ts,
     )
 
 

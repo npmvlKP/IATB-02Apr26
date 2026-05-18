@@ -283,6 +283,48 @@ class ZerodhaTokenManager:
         """
         return self._generate_totp()
 
+    def _get_keyring_token(self) -> str | None:
+        """Retrieve fresh token from keyring.
+
+        Returns:
+            Token if fresh and available, None otherwise.
+        """
+        if self.is_token_fresh():
+            token = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TOKEN_KEY)
+            if token:
+                _LOGGER.debug("Retrieved fresh token from keyring")
+                return str(token)
+        return None
+
+    def _get_env_token(self) -> str | None:
+        """Retrieve token from environment variables.
+
+        Returns:
+            Token if available in environment, None otherwise.
+        """
+        env_token = os.getenv("ZERODHA_ACCESS_TOKEN") or os.getenv("KITE_ACCESS_TOKEN")
+        if env_token:
+            _LOGGER.debug("Retrieved token from environment variable")
+            return str(env_token)
+        return None
+
+    def _get_env_file_token(self) -> str | None:
+        """Retrieve token from .env file.
+
+        Returns:
+            Token if available in .env file, None otherwise.
+        """
+        env_path = self._resolve_env_path()
+        if env_path and env_path.exists():
+            env_values = self._load_env_file(env_path)
+            env_token = env_values.get("ZERODHA_ACCESS_TOKEN") or env_values.get(
+                "KITE_ACCESS_TOKEN"
+            )
+            if env_token:
+                _LOGGER.debug("Retrieved token from .env file")
+                return str(env_token)
+        return None
+
     def clear_token(self) -> None:
         """Clear stored token from keyring and .env file."""
         try:
@@ -320,31 +362,19 @@ class ZerodhaTokenManager:
             ValueError: If token exists but is expired and refresh_if_expired is False.
         """
         # Check keyring first
-        if self.is_token_fresh():
-            token = keyring.get_password(_KEYRING_SERVICE, _KEYRING_TOKEN_KEY)
-            if token:
-                _LOGGER.debug("Retrieved fresh token from keyring")
-                return str(token)
+        token = self._get_keyring_token()
+        if token:
+            return token
 
-        # Check environment variables (with alias support)
+        # Check environment and .env file if fallback enabled
         if use_env_fallback:
-            env_token = os.getenv("ZERODHA_ACCESS_TOKEN") or os.getenv(
-                "KITE_ACCESS_TOKEN"
-            )
-            if env_token:
-                _LOGGER.debug("Retrieved token from environment variable")
-                return str(env_token)
+            token = self._get_env_token()
+            if token:
+                return token
 
-            # Check .env file
-            env_path = self._resolve_env_path()
-            if env_path and env_path.exists():
-                env_values = self._load_env_file(env_path)
-                env_token = env_values.get("ZERODHA_ACCESS_TOKEN") or env_values.get(
-                    "KITE_ACCESS_TOKEN"
-                )
-                if env_token:
-                    _LOGGER.debug("Retrieved token from .env file")
-                    return str(env_token)
+            token = self._get_env_file_token()
+            if token:
+                return token
 
         return None
 

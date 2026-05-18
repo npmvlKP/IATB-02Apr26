@@ -301,6 +301,38 @@ class PositionLimitGuard:
             total_notional_limit=config.max_total_notional,
         )
 
+    def _perform_limit_checks(
+        self,
+        projected_qty: Decimal,
+        projected_notional: Decimal,
+        projected_total: Decimal,
+        config: PositionLimitConfig,
+        symbol: str,
+        exchange: ExchangeType,
+    ) -> None:
+        """Perform all position limit checks for an order.
+
+        Args:
+            projected_qty: Projected quantity after order.
+            projected_notional: Projected notional after order.
+            projected_total: Projected exchange total after order.
+            config: Position limit configuration.
+            symbol: Trading symbol.
+            exchange: Exchange type.
+
+        Raises:
+            ConfigError: If any limit would be breached.
+        """
+        self._check_quantity_limit(
+            projected_qty, config.max_quantity_per_symbol, symbol, exchange
+        )
+        self._check_notional_limit(
+            projected_notional, config.max_notional_per_symbol, symbol, exchange
+        )
+        self._check_exchange_total_limit(
+            projected_total, config.max_total_notional, exchange
+        )
+
     def validate_order(
         self,
         exchange: ExchangeType,
@@ -343,14 +375,8 @@ class PositionLimitGuard:
             "position_limit_guard_validate_order", 0.0
         )  # API boundary
 
-        self._check_quantity_limit(
-            projected_qty, config.max_quantity_per_symbol, symbol, exchange
-        )
-        self._check_notional_limit(
-            projected_notional, config.max_notional_per_symbol, symbol, exchange
-        )
-        self._check_exchange_total_limit(
-            projected_total, config.max_total_notional, exchange
+        self._perform_limit_checks(
+            projected_qty, projected_notional, projected_total, config, symbol, exchange
         )
 
         return self._build_position_state(

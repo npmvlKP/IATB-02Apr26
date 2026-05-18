@@ -1121,7 +1121,7 @@ def _handle_scan_result_or_early_return(
     )
 
 
-def _execute_full_scan_cycle(  # noqa: G10
+def _execute_full_scan_cycle(
     timestamp_utc: datetime,
     symbols: Sequence[str],
     sentiment_aggregator: SentimentAggregator | None,
@@ -1152,9 +1152,7 @@ def _execute_full_scan_cycle(  # noqa: G10
     Returns:
         ScanCycleResult with results, trades, PnL, errors.
     """
-    if _check_order_manager_and_return_early_if_needed(
-        order_manager, errors, timestamp_utc
-    ):
+    if order_manager is None:
         return _create_early_return_result(errors, timestamp_utc)
 
     scanner_result, trades_executed, total_pnl = _execute_scan_pipeline(

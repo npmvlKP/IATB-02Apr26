@@ -190,6 +190,49 @@ class FundamentalFilter:
         )
         return score, total_checks, passed_checks
 
+    def _evaluate_conditional_metric(
+        self,
+        condition: bool,
+        value: Decimal | None,
+        check_fn: Callable[
+            [Decimal],
+            tuple[bool, Decimal, str],
+        ],
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Evaluate a metric only if the condition is met.
+
+        Args:
+            condition: Whether to evaluate the metric.
+            value: Metric value to evaluate.
+            check_fn: Check function to use.
+            score: Current score.
+            total_checks: Current total check count.
+            passed_checks: Current passed check count.
+            reasons: List of failure reasons.
+
+        Returns:
+            Tuple of (score, total_checks, passed_checks).
+        """
+        if condition:
+            (
+                score,
+                reasons,
+                total_checks,
+                passed_checks,
+            ) = self._evaluate_optional_metric(
+                value,
+                check_fn,
+                reasons,
+                score,
+                [total_checks],
+                [passed_checks],
+            )
+        return score, total_checks, passed_checks
+
     def _evaluate_growth_metrics(
         self,
         metrics: FundamentalMetrics,
@@ -199,48 +242,33 @@ class FundamentalFilter:
         reasons: list[str],
     ) -> tuple[Decimal, int, int]:
         """Evaluate dividend, earnings, and revenue growth metrics."""
-        if self._config.min_dividend_yield is not None:
-            (
-                score,
-                reasons,
-                total_checks,
-                passed_checks,
-            ) = self._evaluate_optional_metric(
-                metrics.dividend_yield,
-                self._check_dividend_yield,
-                reasons,
-                score,
-                [total_checks],
-                [passed_checks],
-            )
-        if self._config.min_earnings_growth is not None:
-            (
-                score,
-                reasons,
-                total_checks,
-                passed_checks,
-            ) = self._evaluate_optional_metric(
-                metrics.earnings_growth,
-                self._check_earnings_growth,
-                reasons,
-                score,
-                [total_checks],
-                [passed_checks],
-            )
-        if self._config.min_revenue_growth is not None:
-            (
-                score,
-                reasons,
-                total_checks,
-                passed_checks,
-            ) = self._evaluate_optional_metric(
-                metrics.revenue_growth,
-                self._check_revenue_growth,
-                reasons,
-                score,
-                [total_checks],
-                [passed_checks],
-            )
+        score, total_checks, passed_checks = self._evaluate_conditional_metric(
+            self._config.min_dividend_yield is not None,
+            metrics.dividend_yield,
+            self._check_dividend_yield,
+            score,
+            total_checks,
+            passed_checks,
+            reasons,
+        )
+        score, total_checks, passed_checks = self._evaluate_conditional_metric(
+            self._config.min_earnings_growth is not None,
+            metrics.earnings_growth,
+            self._check_earnings_growth,
+            score,
+            total_checks,
+            passed_checks,
+            reasons,
+        )
+        score, total_checks, passed_checks = self._evaluate_conditional_metric(
+            self._config.min_revenue_growth is not None,
+            metrics.revenue_growth,
+            self._check_revenue_growth,
+            score,
+            total_checks,
+            passed_checks,
+            reasons,
+        )
         return score, total_checks, passed_checks
 
     def _evaluate_market_cap(

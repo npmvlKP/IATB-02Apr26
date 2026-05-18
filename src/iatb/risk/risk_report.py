@@ -53,6 +53,23 @@ class PositionData:
     exposure: Decimal
 
 
+@dataclass
+class RiskMetricsInputs:
+    """Input parameters for risk metrics creation."""
+
+    date: datetime
+    daily_pnl: Decimal
+    daily_return: Decimal
+    var_95: Decimal
+    cvar_95: Decimal
+    max_drawdown: Decimal
+    total_exposure: Decimal
+    net_liquidation_value: Decimal
+    positions: list[PositionData]
+    confidence_level: Decimal
+    max_allowed_drawdown: Decimal
+
+
 @dataclass(frozen=True)
 class DailyRiskMetrics:
     """Daily risk metrics for the report."""
@@ -290,6 +307,116 @@ def _validate_risk_metrics_inputs(
         raise ConfigError(msg)
 
 
+def _build_daily_risk_snapshot(
+    daily_return: Decimal,
+    var_95: Decimal,
+    cvar_95: Decimal,
+    net_liquidation_value: Decimal,
+    daily_pnl: Decimal,
+    max_allowed_drawdown: Decimal,
+) -> PortfolioRiskSnapshot:
+    """Build a risk snapshot for daily metrics.
+
+    Args:
+        daily_return: Daily return as decimal.
+        var_95: Value at Risk at 95% confidence.
+        cvar_95: Conditional VaR at 95% confidence.
+        net_liquidation_value: Net liquidation value.
+        daily_pnl: Daily profit/loss.
+        max_allowed_drawdown: Maximum allowed drawdown threshold.
+
+    Returns:
+        Portfolio risk snapshot.
+    """
+    return build_risk_snapshot(
+        returns=[daily_return, -var_95, -cvar_95],
+        equity_curve=[net_liquidation_value - daily_pnl, net_liquidation_value],
+        max_allowed_drawdown=max_allowed_drawdown,
+    )
+
+
+def _create_daily_risk_metrics_obj(
+    date: datetime,
+    daily_pnl: Decimal,
+    daily_return: Decimal,
+    var_95: Decimal,
+    cvar_95: Decimal,
+    max_drawdown: Decimal,
+    total_exposure: Decimal,
+    net_liquidation_value: Decimal,
+    positions: list[PositionData],
+    risk_snapshot: PortfolioRiskSnapshot,
+) -> DailyRiskMetrics:
+    """Create DailyRiskMetrics object with validated data.
+
+    Args:
+        date: Report date (UTC).
+        daily_pnl: Daily profit/loss.
+        daily_return: Daily return as decimal.
+        var_95: Value at Risk at 95% confidence.
+        cvar_95: Conditional VaR at 95% confidence.
+        max_drawdown: Maximum drawdown as decimal.
+        total_exposure: Total portfolio exposure.
+        net_liquidation_value: Net liquidation value.
+        positions: List of position data.
+        risk_snapshot: Portfolio risk snapshot.
+
+    Returns:
+        DailyRiskMetrics object.
+    """
+    return DailyRiskMetrics(
+        date=date,
+        daily_pnl=daily_pnl,
+        daily_return=daily_return,
+        var_95=var_95,
+        cvar_95=cvar_95,
+        max_drawdown=max_drawdown,
+        total_exposure=total_exposure,
+        net_liquidation_value=net_liquidation_value,
+        positions=positions,
+        risk_snapshot=risk_snapshot,
+    )
+
+
+def _create_validated_risk_metrics(
+    inputs: RiskMetricsInputs,
+) -> DailyRiskMetrics:
+    """Create validated risk metrics object.
+
+    Args:
+        inputs: Risk metrics input parameters.
+
+    Returns:
+        Validated DailyRiskMetrics object.
+    """
+    _validate_risk_metrics_inputs(
+        inputs.date,
+        inputs.net_liquidation_value,
+        inputs.total_exposure,
+        inputs.confidence_level,
+    )
+    risk_snapshot = _build_daily_risk_snapshot(
+        inputs.daily_return,
+        inputs.var_95,
+        inputs.cvar_95,
+        inputs.net_liquidation_value,
+        inputs.daily_pnl,
+        inputs.max_allowed_drawdown,
+    )
+    return _create_daily_risk_metrics_obj(
+        inputs.date,
+        inputs.daily_pnl,
+        inputs.daily_return,
+        inputs.var_95,
+        inputs.cvar_95,
+        inputs.max_drawdown,
+        inputs.total_exposure,
+        inputs.net_liquidation_value,
+        inputs.positions,
+        risk_snapshot,
+    )
+
+
 def create_daily_risk_metrics(
     date: datetime,
     daily_pnl: Decimal,
@@ -304,6 +431,7 @@ def create_daily_risk_metrics(
     max_allowed_drawdown: Decimal = Decimal("0.10"),
 ) -> DailyRiskMetrics:
     """Create daily risk metrics with validation.
+
     Args:
         date: Report date (UTC).
         daily_pnl: Daily profit/loss.
@@ -316,20 +444,14 @@ def create_daily_risk_metrics(
         positions: List of position data.
         confidence_level: Confidence level for VaR/CVaR.
         max_allowed_drawdown: Maximum allowed drawdown threshold.
+
     Returns:
         Validated DailyRiskMetrics object.
+
     Raises:
         ConfigError: If any validation fails.
     """
-    _validate_risk_metrics_inputs(
-        date, net_liquidation_value, total_exposure, confidence_level
-    )
-    risk_snapshot = build_risk_snapshot(
-        returns=[daily_return, -var_95, -cvar_95],
-        equity_curve=[net_liquidation_value - daily_pnl, net_liquidation_value],
-        max_allowed_drawdown=max_allowed_drawdown,
-    )
-    return DailyRiskMetrics(
+    inputs = RiskMetricsInputs(
         date=date,
         daily_pnl=daily_pnl,
         daily_return=daily_return,
@@ -339,8 +461,10 @@ def create_daily_risk_metrics(
         total_exposure=total_exposure,
         net_liquidation_value=net_liquidation_value,
         positions=positions,
-        risk_snapshot=risk_snapshot,
+        confidence_level=confidence_level,
+        max_allowed_drawdown=max_allowed_drawdown,
     )
+    return _create_validated_risk_metrics(inputs)
 
 
 def _validate_config(config: ReportConfig) -> None:

@@ -353,13 +353,26 @@ class TechnicalFilter:
             )
         return score, total_checks, passed_checks
 
-    def evaluate(self, metrics: TechnicalMetrics) -> FilterResult:
-        """Evaluate a single instrument based on technical criteria."""
-        reasons: list[str] = []
-        score = Decimal("0")
-        total_checks = 0
-        passed_checks = 0
+    def _run_all_evaluations(
+        self,
+        metrics: TechnicalMetrics,
+        score: Decimal,
+        total_checks: int,
+        passed_checks: int,
+        reasons: list[str],
+    ) -> tuple[Decimal, int, int]:
+        """Run all technical indicator evaluations.
 
+        Args:
+            metrics: Technical metrics to evaluate.
+            score: Current score.
+            total_checks: Current total check count.
+            passed_checks: Current passed check count.
+            reasons: List of failure reasons.
+
+        Returns:
+            Tuple of (final_score, total_checks, passed_checks).
+        """
         score, total_checks, passed_checks = self._evaluate_rsi(
             metrics, score, total_checks, passed_checks, reasons
         )
@@ -382,6 +395,18 @@ class TechnicalFilter:
             metrics, score, total_checks, passed_checks, reasons
         )
         score, total_checks, passed_checks = self._evaluate_trend_alignment(
+            metrics, score, total_checks, passed_checks, reasons
+        )
+        return score, total_checks, passed_checks
+
+    def evaluate(self, metrics: TechnicalMetrics) -> FilterResult:
+        """Evaluate a single instrument based on technical criteria."""
+        reasons: list[str] = []
+        score = Decimal("0")
+        total_checks = 0
+        passed_checks = 0
+
+        score, total_checks, passed_checks = self._run_all_evaluations(
             metrics, score, total_checks, passed_checks, reasons
         )
 
