@@ -148,3 +148,57 @@ def test_optimizer_rejects_bad_trial_and_best_params(
     )
     with pytest.raises(ConfigError, match="best_params missing int value"):
         optimizer.optimize({"window": (1, 2)})
+
+
+def test_optimizer_handles_non_numeric_best_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test optimizer rejects non-numeric best_value from study."""
+
+    class _BadValueStudy:
+        best_value = "not_a_number"
+        best_params = {"window": 5}
+
+        def optimize(self, objective: object, n_trials: int) -> None:
+            _ = n_trials
+            if not callable(objective):
+                raise AssertionError("objective must be callable")
+            objective(_FakeTrial())
+
+    optimizer = RLParameterOptimizer(objective=lambda params: Decimal("1"), n_trials=1)
+    bad_value_module = SimpleNamespace(
+        samplers=SimpleNamespace(TPESampler=_FakeSampler),
+        create_study=lambda direction, sampler: _BadValueStudy(),
+    )
+    monkeypatch.setattr(
+        "iatb.rl.optimizer.importlib.import_module", lambda _: bad_value_module
+    )
+    with pytest.raises(ConfigError, match="does not expose numeric best_value"):
+        optimizer.optimize({"window": (1, 2)})
+
+
+def test_optimizer_handles_missing_best_params_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test optimizer rejects non-dict best_params from study."""
+
+    class _BadParamsDictStudy:
+        best_value = 1.0
+        best_params = "not_a_dict"
+
+        def optimize(self, objective: object, n_trials: int) -> None:
+            _ = n_trials
+            if not callable(objective):
+                raise AssertionError("objective must be callable")
+            objective(_FakeTrial())
+
+    optimizer = RLParameterOptimizer(objective=lambda params: Decimal("1"), n_trials=1)
+    bad_params_dict_module = SimpleNamespace(
+        samplers=SimpleNamespace(TPESampler=_FakeSampler),
+        create_study=lambda direction, sampler: _BadParamsDictStudy(),
+    )
+    monkeypatch.setattr(
+        "iatb.rl.optimizer.importlib.import_module", lambda _: bad_params_dict_module
+    )
+    with pytest.raises(ConfigError, match="does not expose dict best_params"):
+        optimizer.optimize({"window": (1, 2)})

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from iatb.core.exceptions import ConfigError
 from iatb.rl.callbacks import (
     SharpeDropEarlyStop,
     TensorBoardCallbackConfig,
@@ -62,3 +63,52 @@ def test_create_training_callbacks_includes_checkpoint_callback(
         check_freq=10_000,
     )
     assert any(isinstance(item, _FakeCheckpointCallback) for item in callbacks)
+
+
+def test_sharpe_drop_early_stop_with_zero_baseline() -> None:
+    """Test that zero/negative baseline doesn't trigger early stop."""
+    stopper = SharpeDropEarlyStop(
+        drop_threshold=Decimal("0.2"), window=3, min_history=5
+    )
+    # All values <= 0 should not trigger
+    assert not stopper.should_stop([Decimal("0")] * 10)
+    assert not stopper.should_stop([Decimal("-1")] * 10)
+    assert not stopper.should_stop(
+        [Decimal("0.5"), Decimal("0"), Decimal("-0.5")] + [Decimal("1")] * 7
+    )
+
+
+def test_create_training_callbacks_with_non_callable_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: object,
+) -> None:
+    """Test callback creation when CheckpointCallback is not callable."""
+    fake_module = SimpleNamespace(CheckpointCallback="not_callable")
+    monkeypatch.setattr(
+        "iatb.rl.callbacks.importlib.import_module", lambda _: fake_module
+    )
+    callbacks = create_training_callbacks(
+        checkpoint_dir=str(tmp_path),
+        tensorboard_log_dir=str(tmp_path),
+        check_freq=5000,
+        early_stop=SharpeDropEarlyStop(),
+    )
+    assert len(callbacks) == 2  # early_stop + tensorboard (no checkpoint)
+
+
+def test_create_training_callbacks_rejects_invalid_check_freq(
+    tmp_path: object,
+) -> None:
+    """Test that check_freq must be positive."""
+    with pytest.raises(ConfigError, match="check_freq must be positive"):
+        create_training_callbacks(
+            checkpoint_dir=str(tmp_path),
+            tensorboard_log_dir=str(tmp_path),
+            check_freq=0,
+        )
+    with pytest.raises(ConfigError, match="check_freq must be positive"):
+        create_training_callbacks(
+            checkpoint_dir=str(tmp_path),
+            tensorboard_log_dir=str(tmp_path),
+            check_freq=-1,
+        )

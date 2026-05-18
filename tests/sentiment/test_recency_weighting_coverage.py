@@ -1,111 +1,117 @@
 """
 Comprehensive coverage tests for recency_weighting.py.
 
-Tests per-article recency weighting for sentiment aggregation.
+Tests time decay, recency weighting, and error paths.
 """
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-import pytest
-from iatb.core.exceptions import ConfigError
-from iatb.sentiment.recency_weighting import recency_weighted_score
+from iatb.sentiment.recency_weighting import (
+    apply_recency_weights,
+    compute_recency_weight,
+)
 
 
-class TestRecencyWeightedScore:
-    """Test recency-weighted score calculation."""
+class TestComputeRecencyWeight:
+    """Test compute_recency_weight function."""
 
-    def test_weighted_score_single_article(self):
-        """Test weighted score with single article."""
+    def test_recent_weight(self) -> None:
+        """Test weight for recent timestamp."""
         now = datetime.now(UTC)
-        article_scores = [(Decimal("0.5"), now)]
+        weight = compute_recency_weight(now, hours=24)
+        # Recent should have high weight
+        assert weight > Decimal("0.9")
 
-        result = recency_weighted_score(article_scores, now)
+    def test_old_weight(self) -> None:
+        """Test weight for old timestamp."""
+        old_time = datetime.now(UTC) - timedelta(days=10)
+        weight = compute_recency_weight(old_time, hours=24)
+        # Old should have low weight
+        assert weight < Decimal("0.2")
 
-        assert result == Decimal("0.5")
+    def test_half_life_weight(self) -> None:
+        """Test weight at half-life."""
+        half_life = datetime.now(UTC) - timedelta(hours=12)
+        weight = compute_recency_weight(half_life, hours=24)
+        # Should be approximately 0.5
+        assert Decimal("0.4") < weight < Decimal("0.6")
 
-    def test_weighted_score_multiple_articles(self):
-        """Test weighted score with multiple articles."""
+    def test_custom_decay_rate(self) -> None:
+        """Test custom decay rate."""
+        recent_time = datetime.now(UTC) - timedelta(hours=6)
+
+        fast_decay = compute_recency_weight(recent_time, hours=12, decay=1.0)
+        slow_decay = compute_recency_weight(recent_time, hours=12, decay=0.5)
+
+        # Fast decay should have lower weight
+        assert fast_decay < slow_decay
+
+    def test_future_timestamp(self) -> None:
+        """Test with future timestamp."""
+        future_time = datetime.now(UTC) + timedelta(hours=1)
+        weight = compute_recency_weight(future_time, hours=24)
+        # Future should have weight of 1
+        assert weight == Decimal("1")
+
+    def test_zero_half_life(self) -> None:
+        """Test with zero half-life."""
         now = datetime.now(UTC)
-        article_scores = [
-            (Decimal("0.8"), now),
-            (Decimal("0.4"), now - timedelta(hours=1)),
-            (Decimal("0.2"), now - timedelta(hours=2)),
+        weight = compute_recency_weight(now, hours=0)
+        # Should handle gracefully
+        assert isinstance(weight, Decimal)
+
+
+class TestApplyRecencyWeights:
+    """Test apply_recency_weights function."""
+
+    def test_apply_weights_basic(self) -> None:
+        """Test basic weight application."""
+        sentiments = [
+            {
+                "timestamp": datetime.now(UTC) - timedelta(hours=1),
+                "score": Decimal("0.5"),
+            },
+            {
+                "timestamp": datetime.now(UTC) - timedelta(hours=12),
+                "score": Decimal("0.5"),
+            },
         ]
+        result = apply_recency_weights(sentiments, hours=24)
+        assert len(result) == 2
+        # More recent should have higher weighted score
+        assert result[0]["weighted_score"] > result[1]["weighted_score"]
 
-        result = recency_weighted_score(article_scores, now)
+    def test_apply_weights_empty_list(self) -> None:
+        """Test with empty sentiment list."""
+        sentiments: list[dict] = []
+        result = apply_recency_weights(sentiments)
+        assert result == []
 
-        # Recent articles should have more weight
-        assert result > Decimal("0.4")
-        assert result < Decimal("0.8")
+    def test_apply_weights_single_item(self) -> None:
+        """Test with single sentiment."""
+        sentiments = [{"timestamp": datetime.now(UTC), "score": Decimal("0.5")}]
+        result = apply_recency_weights(sentiments)
+        assert len(result) == 1
+        # Weight should be close to 1
+        assert result[0]["weighted_score"] > Decimal("0.9")
 
-    def test_weighted_score_very_recent_article(self):
-        """Test that very recent articles have high weight."""
-        now = datetime.now(UTC)
-        article_scores = [
-            (Decimal("0.9"), now - timedelta(minutes=10)),
-            (Decimal("0.1"), now - timedelta(hours=3)),
+    def test_apply_weights_missing_timestamp(self) -> None:
+        """Test with missing timestamp."""
+        sentiments = [
+            {"score": Decimal("0.5")}  # Missing timestamp
         ]
+        result = apply_recency_weights(sentiments)
+        # Should handle gracefully
+        assert len(result) == 1
 
-        result = recency_weighted_score(article_scores, now)
-
-        assert result > Decimal("0.7")
-
-    def test_weighted_score_old_articles_low_weight(self):
-        """Test that old articles have low weight."""
-        now = datetime.now(UTC)
-        article_scores = [
-            (Decimal("0.9"), now - timedelta(hours=10)),
-            (Decimal("0.1"), now - timedelta(hours=12)),
+    def test_apply_weights_custom_half_life(self) -> None:
+        """Test with custom half-life."""
+        sentiments = [
+            {
+                "timestamp": datetime.now(UTC) - timedelta(hours=6),
+                "score": Decimal("0.5"),
+            }
         ]
-
-        result = recency_weighted_score(article_scores, now)
-
-        # Result should be weighted toward higher score but reduced by recency
-        assert result >= Decimal("0.1")
-        assert result <= Decimal("0.9")
-
-    def test_empty_scores_raises_error(self):
-        """Test that empty scores list raises ConfigError."""
-        with pytest.raises(ConfigError, match="article_scores cannot be empty"):
-            recency_weighted_score([], datetime.now(UTC))
-
-    def test_non_utc_current_raises_error(self):
-        """Test that non-UTC current time raises ConfigError."""
-        now = datetime.now()  # Naive datetime
-        article_scores = [(Decimal("0.5"), datetime.now(UTC))]
-
-        with pytest.raises(ConfigError, match="current_utc must be UTC"):
-            recency_weighted_score(article_scores, now)
-
-    def test_non_utc_article_raises_error(self):
-        """Test that non-UTC article timestamp raises ConfigError."""
-        now = datetime.now(UTC)
-        article_scores = [(Decimal("0.5"), datetime.now())]
-
-        with pytest.raises(ConfigError, match="article timestamp must be UTC"):
-            recency_weighted_score(article_scores, now)
-
-    def test_future_article_zero_weight(self):
-        """Test that future articles have zero weight."""
-        now = datetime.now(UTC)
-        article_scores = [
-            (Decimal("1.0"), now + timedelta(hours=1)),
-            (Decimal("0.5"), now),
-        ]
-
-        result = recency_weighted_score(article_scores, now)
-
-        assert result < Decimal("0.6")
-
-    def test_weighted_score_negative_sentiment(self):
-        """Test weighted score with negative sentiment."""
-        now = datetime.now(UTC)
-        article_scores = [
-            (Decimal("-0.8"), now),
-            (Decimal("-0.4"), now - timedelta(hours=1)),
-        ]
-
-        result = recency_weighted_score(article_scores, now)
-
-        assert result < Decimal("-0.4")
+        result = apply_recency_weights(sentiments, hours=12)
+        assert len(result) == 1

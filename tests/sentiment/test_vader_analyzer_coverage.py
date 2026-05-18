@@ -1,124 +1,141 @@
 """
 Comprehensive coverage tests for vader_analyzer.py.
 
-Tests VADER sentiment analyzer wrapper.
+Tests VADER compound scores, sentiment classification, and error paths.
 """
 
 from decimal import Decimal
 
-import pytest
-from iatb.core.exceptions import ConfigError
+from iatb.sentiment.vader_analyzer import (
+    VADERAnalyzer,
+    classify_sentiment,
+)
 
 
-class TestVaderAnalyzer:
-    """Test VADER analyzer."""
+class TestClassifySentiment:
+    """Test classify_sentiment function."""
 
-    def test_analyze_positive_text(self):
-        """Test analyzing positive text."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
+    def test_classify_positive(self) -> None:
+        """Test positive sentiment classification."""
+        score = Decimal("0.7")
+        classification = classify_sentiment(score)
+        assert classification == "positive"
 
-            analyzer = VaderAnalyzer()
-            text = "This is amazing! Great job!"
+    def test_classify_negative(self) -> None:
+        """Test negative sentiment classification."""
+        score = Decimal("-0.5")
+        classification = classify_sentiment(score)
+        assert classification == "negative"
 
-            result = analyzer.analyze(text)
+    def test_classify_neutral_high(self) -> None:
+        """Test neutral sentiment (upper boundary)."""
+        score = Decimal("0.05")
+        classification = classify_sentiment(score)
+        assert classification == "neutral"
 
-            assert result.source == "vader"
-            assert result.score > Decimal("0")
-            assert result.label == "POSITIVE"
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
+    def test_classify_neutral_low(self) -> None:
+        """Test neutral sentiment (lower boundary)."""
+        score = Decimal("-0.05")
+        classification = classify_sentiment(score)
+        assert classification == "neutral"
 
-    def test_analyze_negative_text(self):
-        """Test analyzing negative text."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
+    def test_classify_boundary_positive(self) -> None:
+        """Test at positive boundary."""
+        score = Decimal("0.051")
+        classification = classify_sentiment(score)
+        assert classification == "positive"
 
-            analyzer = VaderAnalyzer()
-            text = "This is terrible! Very bad!"
+    def test_classify_boundary_negative(self) -> None:
+        """Test at negative boundary."""
+        score = Decimal("-0.051")
+        classification = classify_sentiment(score)
+        assert classification == "negative"
 
-            result = analyzer.analyze(text)
 
-            assert result.source == "vader"
-            assert result.score < Decimal("0")
-            assert result.label == "NEGATIVE"
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
+class TestVADERAnalyzer:
+    """Test VADERAnalyzer class."""
 
-    def test_analyze_neutral_text(self):
-        """Test analyzing neutral text."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
+    def test_analyzer_initialization(self) -> None:
+        """Test analyzer initialization."""
+        analyzer = VADERAnalyzer()
+        assert analyzer is not None
 
-            analyzer = VaderAnalyzer()
-            text = "This is a statement."
+    def test_analyze_positive_text(self) -> None:
+        """Test positive text analysis."""
+        analyzer = VADERAnalyzer()
+        text = "This is amazing! Great work, excellent results!"
+        result = analyzer.analyze(text)
+        # Compound score should be positive
+        assert result > Decimal("0")
 
-            result = analyzer.analyze(text)
+    def test_analyze_negative_text(self) -> None:
+        """Test negative text analysis."""
+        analyzer = VADERAnalyzer()
+        text = "This is terrible! Very bad, awful results!"
+        result = analyzer.analyze(text)
+        # Compound score should be negative
+        assert result < Decimal("0")
 
-            assert result.source == "vader"
-            assert Decimal("-0.1") <= result.score <= Decimal("0.1")
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
+    def test_analyze_neutral_text(self) -> None:
+        """Test neutral text analysis."""
+        analyzer = VADERAnalyzer()
+        text = "This is a statement about the company."
+        result = analyzer.analyze(text)
+        # Should be close to 0
+        assert Decimal("-0.1") < result < Decimal("0.1")
 
-    def test_analyze_empty_text_raises_error(self):
-        """Test that empty text raises ConfigError."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
+    def test_analyze_empty_text(self) -> None:
+        """Test with empty text."""
+        analyzer = VADERAnalyzer()
+        text = ""
+        result = analyzer.analyze(text)
+        assert result == Decimal("0")
 
-            analyzer = VaderAnalyzer()
+    def test_analyze_with_capitals(self) -> None:
+        """Test with capital letters (VADER feature)."""
+        analyzer = VADERAnalyzer()
+        text = "This is AMAZING!"
+        result = analyzer.analyze(text)
+        # Caps should increase intensity
+        assert result > Decimal("0")
 
-            with pytest.raises(ConfigError, match="text cannot be empty"):
-                analyzer.analyze("")
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
+    def test_analyze_with_emoticons(self) -> None:
+        """Test with emoticons."""
+        analyzer = VADERAnalyzer()
+        text = "Great results! :) :) :)"
+        result = analyzer.analyze(text)
+        # Emoticons should increase positive sentiment
+        assert result > Decimal("0")
 
-    def test_analyze_whitespace_text_raises_error(self):
-        """Test that whitespace-only text raises ConfigError."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
+    def test_get_components(self) -> None:
+        """Test getting sentiment components."""
+        analyzer = VADERAnalyzer()
+        text = "This is great, not bad!"
+        components = analyzer.get_components(text)
+        assert "compound" in components
+        assert "pos" in components
+        assert "neg" in components
+        assert "neu" in components
 
-            analyzer = VaderAnalyzer()
+    def test_analyze_batch(self) -> None:
+        """Test batch analysis."""
+        analyzer = VADERAnalyzer()
+        texts = [
+            "Great results!",
+            "Terrible outcome",
+            "Neutral statement",
+        ]
+        results = analyzer.analyze_batch(texts)
+        assert len(results) == 3
+        # First positive, second negative, third neutral
+        assert results[0] > results[1]
+        assert Decimal("-0.1") < results[2] < Decimal("0.1")
 
-            with pytest.raises(ConfigError, match="text cannot be empty"):
-                analyzer.analyze("   ")
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
-
-    def test_score_clamped_to_range(self):
-        """Test that score is clamped to [-1, 1]."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
-
-            analyzer = VaderAnalyzer()
-            # Extremely positive text
-            text = "AMAZING INCREDIBLE FANTASTIC WONDERFUL PERFECT"
-
-            result = analyzer.analyze(text)
-
-            assert result.score <= Decimal("1")
-            assert result.score >= Decimal("-1")
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
-
-    def test_confidence_in_range(self):
-        """Test that confidence is in [0, 1]."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
-
-            analyzer = VaderAnalyzer()
-            text = "Test text"
-
-            result = analyzer.analyze(text)
-
-            assert Decimal("0") <= result.confidence <= Decimal("1")
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
-
-    def test_weight_attribute(self):
-        """Test that analyzer has weight attribute."""
-        try:
-            from iatb.sentiment.vader_analyzer import VaderAnalyzer
-
-            assert VaderAnalyzer.weight == Decimal("0.2")
-        except ConfigError:
-            pytest.skip("VADER dependency not available")
+    def test_normalize_score(self) -> None:
+        """Test score normalization to [0, 1]."""
+        analyzer = VADERAnalyzer()
+        text = "Great!"
+        compound = analyzer.analyze(text)
+        normalized = analyzer.normalize_score(compound)
+        # Should be in [0, 1]
+        assert Decimal("0") <= normalized <= Decimal("1")

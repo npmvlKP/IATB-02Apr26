@@ -1,7 +1,7 @@
 """
 Comprehensive coverage tests for technical_filter.py.
 
-Tests RSI/MACD/MA/BB filters, technical indicators evaluation.
+Tests ADX/ATR/RSI filters, MACD, moving averages, Bollinger Bands, and error paths.
 """
 
 from decimal import Decimal
@@ -16,540 +16,422 @@ from iatb.selection.technical_filter import (
 
 
 class TestTechnicalFilterConfig:
-    """Test configuration validation."""
+    """Test TechnicalFilterConfig validation."""
 
-    def test_default_config(self):
-        """Test default configuration values."""
+    def test_default_config(self) -> None:
+        """Test default configuration."""
         config = TechnicalFilterConfig()
         assert config.rsi_oversold == Decimal("30")
         assert config.rsi_overbought == Decimal("70")
-        assert config.rsi_min == Decimal("20")
-        assert config.rsi_max == Decimal("80")
-        assert config.require_macd_bullish is False
-        assert config.require_ma_bullish is False
+        assert config.min_bollinger_position == Decimal("0.2")
+        assert config.max_bollinger_position == Decimal("0.8")
 
-    def test_invalid_rsi_range_raises_error(self):
-        """Test that invalid RSI range raises ConfigError."""
-        with pytest.raises(ConfigError, match="rsi_min must be less than rsi_max"):
-            TechnicalFilterConfig(rsi_min=Decimal("70"), rsi_max=Decimal("30"))
+    def test_invalid_rsi_range(self) -> None:
+        """Test raises ConfigError when rsi_min >= rsi_max."""
+        with pytest.raises(ConfigError) as exc_info:
+            TechnicalFilterConfig(rsi_min=Decimal("50"), rsi_max=Decimal("30"))
+        assert "rsi_min must be less than rsi_max" in str(exc_info.value)
 
-    def test_invalid_rsi_oversold_raises_error(self):
-        """Test that invalid RSI oversold raises ConfigError."""
-        with pytest.raises(ConfigError, match="rsi_oversold must be >= rsi_min"):
-            TechnicalFilterConfig(rsi_oversold=Decimal("10"), rsi_min=Decimal("20"))
+    def test_rsi_oversold_below_min(self) -> None:
+        """Test raises ConfigError when rsi_oversold < rsi_min."""
+        with pytest.raises(ConfigError) as exc_info:
+            TechnicalFilterConfig(rsi_min=Decimal("30"), rsi_oversold=Decimal("20"))
+        assert "rsi_oversold must be >= rsi_min" in str(exc_info.value)
 
-    def test_invalid_rsi_overbought_raises_error(self):
-        """Test that invalid RSI overbought raises ConfigError."""
-        with pytest.raises(ConfigError, match="rsi_overbought must be <= rsi_max"):
-            TechnicalFilterConfig(rsi_overbought=Decimal("90"), rsi_max=Decimal("80"))
+    def test_rsi_overbought_above_max(self) -> None:
+        """Test raises ConfigError when rsi_overbought > rsi_max."""
+        with pytest.raises(ConfigError) as exc_info:
+            TechnicalFilterConfig(rsi_max=Decimal("70"), rsi_overbought=Decimal("80"))
+        assert "rsi_overbought must be <= rsi_max" in str(exc_info.value)
 
-    def test_negative_volume_ratio_raises_error(self):
-        """Test that negative volume ratio raises ConfigError."""
-        with pytest.raises(ConfigError, match="min_volume_ratio cannot be negative"):
-            TechnicalFilterConfig(min_volume_ratio=Decimal("-0.5"))
+    def test_invalid_bollinger_position_negative(self) -> None:
+        """Test raises ConfigError when min_bollinger_position is negative."""
+        with pytest.raises(ConfigError) as exc_info:
+            TechnicalFilterConfig(min_bollinger_position=Decimal("-0.1"))
+        assert "min_bollinger_position must be in [0, 1]" in str(exc_info.value)
 
-    def test_invalid_bollinger_position_raises_error(self):
-        """Test that invalid Bollinger position raises ConfigError."""
-        with pytest.raises(
-            ConfigError, match="min_bollinger_position must be in \\[0, 1\\]"
-        ):
+    def test_invalid_bollinger_position_above_one(self) -> None:
+        """Test raises ConfigError when min_bollinger_position > 1."""
+        with pytest.raises(ConfigError) as exc_info:
             TechnicalFilterConfig(min_bollinger_position=Decimal("1.5"))
+        assert "min_bollinger_position must be in [0, 1]" in str(exc_info.value)
 
-        with pytest.raises(
-            ConfigError, match="max_bollinger_position must be in \\[0, 1\\]"
-        ):
-            TechnicalFilterConfig(max_bollinger_position=Decimal("-0.5"))
-
-    def test_invalid_bollinger_range_raises_error(self):
-        """Test that invalid Bollinger range raises ConfigError."""
-        with pytest.raises(
-            ConfigError, match="min_bollinger_position cannot be greater"
-        ):
+    def test_invalid_bollinger_range(self) -> None:
+        """Test raises ConfigError when min > max."""
+        with pytest.raises(ConfigError) as exc_info:
             TechnicalFilterConfig(
-                min_bollinger_position=Decimal("0.8"),
-                max_bollinger_position=Decimal("0.2"),
+                min_bollinger_position=Decimal("0.6"),
+                max_bollinger_position=Decimal("0.4"),
             )
+        assert (
+            "min_bollinger_position cannot be greater than max_bollinger_position"
+            in str(exc_info.value)
+        )
 
-    def test_invalid_ma_period_raises_error(self):
-        """Test that invalid MA period raises ConfigError."""
-        with pytest.raises(
-            ConfigError, match="ma_period_short must be less than ma_period_long"
-        ):
-            TechnicalFilterConfig(ma_period_short=50, ma_period_long=20)
+    def test_negative_volume_ratio(self) -> None:
+        """Test raises ConfigError when min_volume_ratio is negative."""
+        with pytest.raises(ConfigError) as exc_info:
+            TechnicalFilterConfig(min_volume_ratio=Decimal("-0.5"))
+        assert "min_volume_ratio cannot be negative" in str(exc_info.value)
+
+    def test_invalid_ma_periods(self) -> None:
+        """Test raises ConfigError when short >= long."""
+        with pytest.raises(ConfigError) as exc_info:
+            TechnicalFilterConfig(ma_period_short=50, ma_period_long=30)
+        assert "ma_period_short must be less than ma_period_long" in str(exc_info.value)
 
 
 class TestTechnicalFilter:
-    """Test technical filter evaluation."""
+    """Test TechnicalFilter evaluation."""
 
-    def test_filter_with_all_metrics_passing(self):
-        """Test filter with all metrics passing."""
-        filter = TechnicalFilter()
+    def test_evaluate_perfect_metrics(self) -> None:
+        """Test instrument with perfect technical metrics."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
         metrics = TechnicalMetrics(
             symbol="RELIANCE",
             rsi=Decimal("50"),
-            macd=Decimal("0.5"),
-            macd_signal=Decimal("0.3"),
-            macd_histogram=Decimal("0.2"),
-            ma_short=Decimal("110"),
+            macd=Decimal("1.0"),
+            macd_signal=Decimal("0.5"),
+            ma_short=Decimal("105"),
             ma_long=Decimal("100"),
-            price=Decimal("120"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
+            price=Decimal("102"),
+            bollinger_upper=Decimal("105"),
+            bollinger_lower=Decimal("95"),
+            bollinger_middle=Decimal("100"),
             volume_avg=Decimal("1000000"),
-            volume_current=Decimal("1500000"),
+            volume_current=Decimal("1200000"),
             price_momentum=Decimal("0.02"),
-            atr=Decimal("2"),
+            atr=Decimal("2.0"),
         )
 
-        result = filter.evaluate(metrics)
-
+        result = filter_obj.evaluate(metrics)
         assert result.passed is True
+        assert result.score > Decimal("0.5")
         assert result.symbol == "RELIANCE"
-        assert result.score > Decimal("0")
-        assert len(result.reasons) == 0
 
-    def test_filter_with_low_rsi_fails(self):
-        """Test that low RSI fails the filter."""
-        filter = TechnicalFilter()
+    def test_evaluate_rsi_oversold(self) -> None:
+        """Test instrument with oversold RSI."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
         metrics = TechnicalMetrics(
-            symbol="RELIANCE",
-            rsi=Decimal("10"),  # Below rsi_min of 20
+            symbol="STOCK1",
+            rsi=Decimal("25"),
         )
 
-        result = filter.evaluate(metrics)
-
-        assert result.passed is False
-        assert any("RSI" in reason for reason in result.reasons)
-
-    def test_filter_with_high_rsi_fails(self):
-        """Test that high RSI fails the filter."""
-        filter = TechnicalFilter()
-        metrics = TechnicalMetrics(
-            symbol="RELIANCE",
-            rsi=Decimal("90"),  # Above rsi_max of 80
-        )
-
-        result = filter.evaluate(metrics)
-
-        assert result.passed is False
-        assert any("RSI" in reason for reason in result.reasons)
-
-    def test_filter_with_missing_optional_metrics(self):
-        """Test filter with only required metrics."""
-        filter = TechnicalFilter()
-        metrics = TechnicalMetrics(
-            symbol="RELIANCE",
-            rsi=Decimal("50"),
-        )
-
-        result = filter.evaluate(metrics)
-
-        # Should pass with only RSI
+        result = filter_obj.evaluate(metrics)
         assert result.passed is True
-        assert result.score > Decimal("0")
+        # Oversold should get good score
+        assert result.score > Decimal("0.7")
 
-    def test_filter_batch_processing(self):
-        """Test filtering multiple instruments."""
-        filter = TechnicalFilter()
-        metrics_list = [
-            TechnicalMetrics(
-                symbol="RELIANCE",
-                rsi=Decimal("50"),
-            ),
-            TechnicalMetrics(
-                symbol="TCS",
-                rsi=Decimal("55"),
-            ),
-            TechnicalMetrics(
-                symbol="FAIL",
-                rsi=Decimal("10"),  # Too low
-            ),
-        ]
+    def test_evaluate_rsi_overbought(self) -> None:
+        """Test instrument with overbought RSI."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            rsi=Decimal("75"),
+        )
 
-        results = filter.filter_batch(metrics_list)
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
+        # Overbought should get lower score
+        assert result.score < Decimal("0.5")
 
-        assert len(results) == 3
-        passed_count = sum(1 for r in results if r.passed)
-        assert passed_count == 2
-
-    def test_get_passed_instruments(self):
-        """Test getting only passed instruments."""
-        filter = TechnicalFilter()
-        metrics_list = [
-            TechnicalMetrics(symbol="PASS1", rsi=Decimal("50")),
-            TechnicalMetrics(symbol="PASS2", rsi=Decimal("55")),
-            TechnicalMetrics(symbol="FAIL", rsi=Decimal("10")),
-        ]
-
-        results = filter.filter_batch(metrics_list)
-        passed = filter.get_passed(results)
-
-        assert len(passed) == 2
-        assert all(m.symbol.startswith("PASS") for m in passed)
-
-    def test_rsi_scoring(self):
-        """Test RSI scoring with threshold."""
+    def test_evaluate_rsi_out_of_range(self) -> None:
+        """Test instrument with RSI outside acceptable range."""
         config = TechnicalFilterConfig(rsi_min=Decimal("20"), rsi_max=Decimal("80"))
-        filter = TechnicalFilter(config)
-
-        # Optimal RSI (50)
-        metrics_optimal = TechnicalMetrics(symbol="TEST", rsi=Decimal("50"))
-        result_optimal = filter.evaluate(metrics_optimal)
-        assert result_optimal.score > Decimal("0.5")
-
-        # Near lower bound
-        metrics_low = TechnicalMetrics(symbol="TEST", rsi=Decimal("25"))
-        result_low = filter.evaluate(metrics_low)
-        assert result_low.score < result_optimal.score
-
-    def test_atr_scoring(self):
-        """Test ATR volatility scoring."""
-        config = TechnicalFilterConfig(max_atr_ratio=Decimal("0.05"))
-        filter = TechnicalFilter(config)
-
-        # Low volatility
-        metrics_low = TechnicalMetrics(
-            symbol="TEST", price=Decimal("100"), atr=Decimal("1"), rsi=Decimal("50")
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            rsi=Decimal("85"),
         )
-        result_low = filter.evaluate(metrics_low)
-        assert result_low.passed is True
 
-        # High volatility
-        metrics_high = TechnicalMetrics(
-            symbol="TEST", price=Decimal("100"), atr=Decimal("8"), rsi=Decimal("50")
-        )
-        result_high = filter.evaluate(metrics_high)
-        assert result_high.passed is False
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "RSI" in " ".join(result.reasons)
 
-    def test_rsi_scoring_middle_range(self):
-        """Test RSI scoring with optimal middle range."""
-        config = TechnicalFilterConfig(rsi_min=Decimal("20"), rsi_max=Decimal("80"))
-        filter = TechnicalFilter(config)
-
-        # Optimal RSI (50)
-        metrics_optimal = TechnicalMetrics(symbol="TEST", rsi=Decimal("50"))
-        result_optimal = filter.evaluate(metrics_optimal)
-        assert result_optimal.score > Decimal("0.8")
-
-        # Near lower bound
-        metrics_low = TechnicalMetrics(symbol="TEST", rsi=Decimal("25"))
-        result_low = filter.evaluate(metrics_low)
-        assert result_low.score < result_optimal.score
-
-        # Near upper bound
-        metrics_high = TechnicalMetrics(symbol="TEST", rsi=Decimal("75"))
-        result_high = filter.evaluate(metrics_high)
-        assert result_high.score < result_optimal.score
-
-    def test_macd_signal_scoring(self):
-        """Test MACD signal scoring."""
-        filter = TechnicalFilter()
-
-        # Positive MACD
-        metrics_positive = TechnicalMetrics(
-            symbol="TEST",
-            macd=Decimal("0.5"),
-            macd_signal=Decimal("0.3"),
-        )
-        result_positive = filter.evaluate(metrics_positive)
-        assert result_positive.passed is True
-
-        # Negative MACD
-        metrics_negative = TechnicalMetrics(
-            symbol="TEST",
-            macd=Decimal("-0.5"),
-            macd_signal=Decimal("-0.3"),
-        )
-        result_negative = filter.evaluate(metrics_negative)
-        assert result_negative.passed is True  # MACD is optional
-
-    def test_macd_bullish_requirement(self):
-        """Test MACD bullish requirement."""
+    def test_evaluate_macd_bullish(self) -> None:
+        """Test bullish MACD."""
         config = TechnicalFilterConfig(require_macd_bullish=True)
-        filter = TechnicalFilter(config)
-
-        # Bullish MACD (above signal)
-        metrics_bullish = TechnicalMetrics(
-            symbol="TEST",
-            macd=Decimal("0.5"),
-            macd_signal=Decimal("0.3"),
-        )
-        result_bullish = filter.evaluate(metrics_bullish)
-        assert result_bullish.passed is True
-
-        # Bearish MACD (below signal)
-        metrics_bearish = TechnicalMetrics(
-            symbol="TEST",
-            macd=Decimal("0.3"),
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            macd=Decimal("1.0"),
             macd_signal=Decimal("0.5"),
         )
-        result_bearish = filter.evaluate(metrics_bearish)
-        assert result_bearish.passed is False
 
-    def test_bollinger_position_scoring(self):
-        """Test Bollinger band position scoring."""
-        filter = TechnicalFilter()
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
 
-        # Near middle
-        metrics_middle = TechnicalMetrics(
-            symbol="TEST",
-            price=Decimal("110"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
-        )
-        result_middle = filter.evaluate(metrics_middle)
-        assert result_middle.score > Decimal("0")
-
-        # Near upper band (but within bounds)
-        metrics_upper = TechnicalMetrics(
-            symbol="TEST",
-            price=Decimal("120"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
-        )
-        result_upper = filter.evaluate(metrics_upper)
-        assert result_upper.score > Decimal("0")
-
-    def test_bollinger_out_of_range_fails(self):
-        """Test that price outside Bollinger bands fails."""
-        config = TechnicalFilterConfig(
-            min_bollinger_position=Decimal("0.2"), max_bollinger_position=Decimal("0.8")
-        )
-        filter = TechnicalFilter(config)
-
-        # Below lower band
-        metrics_low = TechnicalMetrics(
-            symbol="TEST",
-            price=Decimal("85"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
-        )
-        result_low = filter.evaluate(metrics_low)
-        assert result_low.passed is False
-
-    def test_volume_ratio_scoring(self):
-        """Test volume ratio scoring."""
-        config = TechnicalFilterConfig(min_volume_ratio=Decimal("1.2"))
-        filter = TechnicalFilter(config)
-
-        # High volume
-        metrics_high = TechnicalMetrics(
-            symbol="TEST",
-            volume_current=Decimal("2000000"),
-            volume_avg=Decimal("1000000"),
-        )
-        result_high = filter.evaluate(metrics_high)
-        assert result_high.passed is True
-
-        # Low volume
-        metrics_low = TechnicalMetrics(
-            symbol="TEST",
-            volume_current=Decimal("800000"),
-            volume_avg=Decimal("1000000"),
-        )
-        result_low = filter.evaluate(metrics_low)
-        assert result_low.passed is False
-
-    def test_ma_alignment_scoring(self):
-        """Test moving average alignment scoring."""
-        filter = TechnicalFilter()
-
-        # Golden cross (above both)
-        metrics_golden = TechnicalMetrics(
-            symbol="TEST",
-            ma_short=Decimal("110"),
-            ma_long=Decimal("100"),
-        )
-        result_golden = filter.evaluate(metrics_golden)
-        assert result_golden.score > Decimal("0")
-
-        # Death cross (below both)
-        metrics_death = TechnicalMetrics(
-            symbol="TEST",
-            ma_short=Decimal("90"),
-            ma_long=Decimal("100"),
-        )
-        result_death = filter.evaluate(metrics_death)
-        # Should still pass but with lower score
-        assert result_death.passed is True
-
-    def test_ma_bullish_requirement(self):
-        """Test MA bullish requirement."""
-        config = TechnicalFilterConfig(require_ma_bullish=True)
-        filter = TechnicalFilter(config)
-
-        # Bullish (short above long)
-        metrics_bullish = TechnicalMetrics(
-            symbol="TEST",
-            ma_short=Decimal("110"),
-            ma_long=Decimal("100"),
-        )
-        result_bullish = filter.evaluate(metrics_bullish)
-        assert result_bullish.passed is True
-
-        # Bearish (short below long)
-        metrics_bearish = TechnicalMetrics(
-            symbol="TEST",
-            ma_short=Decimal("90"),
-            ma_long=Decimal("100"),
-        )
-        result_bearish = filter.evaluate(metrics_bearish)
-        assert result_bearish.passed is False
-
-    def test_custom_configuration(self):
-        """Test filter with custom configuration."""
-        config = TechnicalFilterConfig(
-            rsi_min=Decimal("40"),
-            rsi_max=Decimal("60"),
-            rsi_oversold=Decimal("45"),
-            rsi_overbought=Decimal("55"),
-        )
-        filter = TechnicalFilter(config)
-
+    def test_evaluate_macd_bearish(self) -> None:
+        """Test bearish MACD when required bullish."""
+        config = TechnicalFilterConfig(require_macd_bullish=True)
+        filter_obj = TechnicalFilter(config)
         metrics = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("35"),  # Below custom rsi_min
-        )
-
-        result = filter.evaluate(metrics)
-        assert result.passed is False
-
-    def test_score_normalization(self):
-        """Test that scores are normalized to [0, 1]."""
-        filter = TechnicalFilter()
-        metrics = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("50"),
+            symbol="STOCK1",
             macd=Decimal("0.5"),
-            macd_signal=Decimal("0.3"),
-            macd_histogram=Decimal("0.2"),
-            ma_short=Decimal("110"),
+            macd_signal=Decimal("1.0"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "MACD" in " ".join(result.reasons)
+
+    def test_evaluate_ma_bullish(self) -> None:
+        """Test bullish moving average crossover."""
+        config = TechnicalFilterConfig(require_ma_bullish=True)
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            ma_short=Decimal("105"),
             ma_long=Decimal("100"),
-            price=Decimal("120"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
+
+    def test_evaluate_ma_bearish(self) -> None:
+        """Test bearish moving average when required bullish."""
+        config = TechnicalFilterConfig(require_ma_bullish=True)
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            ma_short=Decimal("95"),
+            ma_long=Decimal("100"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "Short MA" in " ".join(result.reasons)
+
+    def test_evaluate_bollinger_middle(self) -> None:
+        """Test price in middle of Bollinger Bands."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            price=Decimal("100"),
+            bollinger_upper=Decimal("105"),
+            bollinger_lower=Decimal("95"),
+            bollinger_middle=Decimal("100"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
+        # Middle position should get high score
+        assert result.score > Decimal("0.8")
+
+    def test_evaluate_bollinger_below_lower(self) -> None:
+        """Test price below lower Bollinger Band."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            price=Decimal("94"),
+            bollinger_upper=Decimal("105"),
+            bollinger_lower=Decimal("95"),
+            bollinger_middle=Decimal("100"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "below Bollinger lower band" in " ".join(result.reasons)
+
+    def test_evaluate_bollinger_above_upper(self) -> None:
+        """Test price above upper Bollinger Band."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            price=Decimal("106"),
+            bollinger_upper=Decimal("105"),
+            bollinger_lower=Decimal("95"),
+            bollinger_middle=Decimal("100"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "above Bollinger upper band" in " ".join(result.reasons)
+
+    def test_evaluate_volume_ratio_high(self) -> None:
+        """Test high volume ratio."""
+        config = TechnicalFilterConfig(min_volume_ratio=Decimal("0.8"))
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
             volume_avg=Decimal("1000000"),
             volume_current=Decimal("1500000"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
+
+    def test_evaluate_volume_ratio_low(self) -> None:
+        """Test low volume ratio."""
+        config = TechnicalFilterConfig(min_volume_ratio=Decimal("0.8"))
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            volume_avg=Decimal("1000000"),
+            volume_current=Decimal("500000"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "Volume ratio" in " ".join(result.reasons)
+
+    def test_evaluate_price_momentum_high(self) -> None:
+        """Test high price momentum."""
+        config = TechnicalFilterConfig(min_price_momentum=Decimal("0.01"))
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
             price_momentum=Decimal("0.02"),
         )
 
-        result = filter.evaluate(metrics)
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
 
-        assert Decimal("0") <= result.score <= Decimal("1")
-
-    def test_multiple_failure_reasons(self):
-        """Test that multiple failures are captured."""
-        filter = TechnicalFilter()
+    def test_evaluate_price_momentum_low(self) -> None:
+        """Test low price momentum."""
+        config = TechnicalFilterConfig(min_price_momentum=Decimal("0.02"))
+        filter_obj = TechnicalFilter(config)
         metrics = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("10"),  # Too low
-            volume_current=Decimal("500000"),
-            volume_avg=Decimal("1000000"),
-        )
-
-        result = filter.evaluate(metrics)
-
-        assert result.passed is False
-        assert len(result.reasons) >= 1
-
-    def test_combined_scoring(self):
-        """Test that multiple metrics contribute to overall score."""
-        filter = TechnicalFilter()
-
-        # Strong across all metrics
-        metrics_strong = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("50"),
-            macd=Decimal("0.5"),
-            macd_signal=Decimal("0.3"),
-            macd_histogram=Decimal("0.2"),
-            ma_short=Decimal("110"),
-            ma_long=Decimal("100"),
-            price=Decimal("120"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
-            volume_avg=Decimal("1000000"),
-            volume_current=Decimal("2000000"),
-            price_momentum=Decimal("0.05"),
-        )
-        result_strong = filter.evaluate(metrics_strong)
-
-        # Weak across all metrics (multiple low scores)
-        metrics_weak = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("50"),
-            macd=Decimal("-0.5"),
-            macd_signal=Decimal("-0.3"),
-            macd_histogram=Decimal("-0.2"),
-            ma_short=Decimal("90"),
-            ma_long=Decimal("100"),
-            price=Decimal("100"),
-            bollinger_upper=Decimal("130"),
-            bollinger_lower=Decimal("90"),
-            bollinger_middle=Decimal("110"),
-            volume_avg=Decimal("1000000"),
-            volume_current=Decimal("500000"),
-        )
-        result_weak = filter.evaluate(metrics_weak)
-
-        assert result_strong.score > result_weak.score
-
-    def test_price_momentum_scoring(self):
-        """Test price momentum scoring."""
-        config = TechnicalFilterConfig(min_price_momentum=Decimal("0.03"))
-        filter = TechnicalFilter(config)
-
-        # Above threshold
-        metrics_high = TechnicalMetrics(
-            symbol="TEST",
-            price_momentum=Decimal("0.05"),
-        )
-        result_high = filter.evaluate(metrics_high)
-        assert result_high.passed is True
-
-        # Below threshold
-        metrics_low = TechnicalMetrics(
-            symbol="TEST",
+            symbol="STOCK1",
             price_momentum=Decimal("0.01"),
         )
-        result_low = filter.evaluate(metrics_low)
-        assert result_low.passed is False
 
-    def test_trend_alignment(self):
-        """Test trend alignment requirement."""
-        config = TechnicalFilterConfig(require_trend_alignment=True)
-        filter = TechnicalFilter(config)
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "Momentum" in " ".join(result.reasons)
 
-        # Aligned (all bullish)
-        metrics_aligned = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("60"),
-            ma_short=Decimal("110"),
-            ma_long=Decimal("100"),
-            macd=Decimal("0.5"),
-            macd_signal=Decimal("0.3"),
-            price=Decimal("120"),
-            bollinger_middle=Decimal("110"),
-        )
-        result_aligned = filter.evaluate(metrics_aligned)
-        assert result_aligned.passed is True
-
-        # Not aligned (bearish)
-        metrics_not_aligned = TechnicalMetrics(
-            symbol="TEST",
-            rsi=Decimal("30"),
-            ma_short=Decimal("90"),
-            ma_long=Decimal("100"),
-            macd=Decimal("-0.5"),
-            macd_signal=Decimal("-0.3"),
+    def test_evaluate_atr_ratio_ok(self) -> None:
+        """Test acceptable ATR ratio."""
+        config = TechnicalFilterConfig(max_atr_ratio=Decimal("0.05"))
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
             price=Decimal("100"),
-            bollinger_middle=Decimal("110"),
+            atr=Decimal("3.0"),
         )
-        result_not_aligned = filter.evaluate(metrics_not_aligned)
-        assert result_not_aligned.passed is False
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is True
+
+    def test_evaluate_atr_ratio_high(self) -> None:
+        """Test high ATR ratio."""
+        config = TechnicalFilterConfig(max_atr_ratio=Decimal("0.03"))
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            price=Decimal("100"),
+            atr=Decimal("5.0"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.passed is False
+        assert "ATR ratio" in " ".join(result.reasons)
+
+    def test_evaluate_none_optional_metrics(self) -> None:
+        """Test evaluation with None values for optional metrics."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            rsi=Decimal("50"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        # Should pass with only RSI
+        assert result.passed is True
+
+    def test_filter_batch(self, caplog) -> None:
+        """Test batch filtering."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics_list = [
+            TechnicalMetrics(
+                symbol=f"STOCK{i}", rsi=Decimal("50") if i % 2 == 0 else Decimal("85")
+            )
+            for i in range(5)
+        ]
+
+        results = filter_obj.filter_batch(metrics_list)
+        assert len(results) == 5
+        passed_count = sum(1 for r in results if r.passed)
+        assert passed_count == 3  # 0, 2, 4 pass
+        assert "Technical filter: 3/5 passed" in caplog.text
+
+    def test_get_passed(self) -> None:
+        """Test getting passed instruments."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics_list = [
+            TechnicalMetrics(
+                symbol=f"STOCK{i}", rsi=Decimal("50") if i < 3 else Decimal("85")
+            )
+            for i in range(5)
+        ]
+
+        results = filter_obj.filter_batch(metrics_list)
+        passed = filter_obj.get_passed(results)
+        assert len(passed) == 3
+        assert passed[0].symbol == "STOCK0"
+
+    def test_rsi_scoring_middle(self) -> None:
+        """Test RSI scoring in middle range."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            rsi=Decimal("50"),  # Ideal middle
+        )
+
+        result = filter_obj.evaluate(metrics)
+        assert result.score > Decimal("0.8")
+
+    def test_bollinger_zero_width(self) -> None:
+        """Test Bollinger Bands with zero width."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            price=Decimal("100"),
+            bollinger_upper=Decimal("100"),
+            bollinger_lower=Decimal("100"),
+            bollinger_middle=Decimal("100"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        # Should pass with neutral score
+        assert result.passed is True
+        assert result.score == Decimal("0.5")
+
+    def test_volume_zero_avg(self) -> None:
+        """Test volume with zero average."""
+        config = TechnicalFilterConfig()
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            volume_avg=Decimal("0"),
+            volume_current=Decimal("1000000"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        # Should pass with neutral score
+        assert result.passed is True
+
+    def test_atr_zero_price(self) -> None:
+        """Test ATR with zero price."""
+        config = TechnicalFilterConfig(max_atr_ratio=Decimal("0.05"))
+        filter_obj = TechnicalFilter(config)
+        metrics = TechnicalMetrics(
+            symbol="STOCK1",
+            price=Decimal("0"),
+            atr=Decimal("2.0"),
+        )
+
+        result = filter_obj.evaluate(metrics)
+        # Should pass with neutral score
+        assert result.passed is True

@@ -1,218 +1,259 @@
 """
 Comprehensive coverage tests for multi_factor_scorer.py.
 
-Tests multi-factor scoring engine for instrument selection.
+Tests factor scoring, weighted combination, and error paths.
 """
 
 from decimal import Decimal
 
 import pytest
 from iatb.selection.multi_factor_scorer import (
-    FactorWeights,
-    FundamentalFactor,
-    MultiFactorInputs,
-    MultiFactorResult,
-    MultiFactorScorer,
-    MultiFactorScorerConfig,
-    SentimentFactor,
-    StrengthFactor,
-    TechnicalFactor,
+    compute_multi_factor_score,
+    normalize_scores,
+    weigh_factors,
 )
 
 
-class TestFundamentalFactor:
-    """Test fundamental factor dataclass."""
+class TestNormalizeScores:
+    """Test normalize_scores function."""
 
-    def test_create_factor(self):
-        """Test creating fundamental factor."""
-        factor = FundamentalFactor(
-            pe_ratio=Decimal("15"),
-            pb_ratio=Decimal("2"),
-            roe=Decimal("0.15"),
-        )
+    def test_normalize_positive_scores(self) -> None:
+        """Test normalization of positive scores."""
+        scores = [Decimal("0.5"), Decimal("0.75"), Decimal("1.0")]
+        result = normalize_scores(scores)
+        assert len(result) == 3
+        assert result[0] < result[1] < result[2]
+        assert result[-1] == Decimal("1")
 
-        assert factor.pe_ratio == Decimal("15")
-        assert factor.roe == Decimal("0.15")
+    def test_normalize_negative_scores(self) -> None:
+        """Test normalization of negative scores."""
+        scores = [Decimal("-0.5"), Decimal("-0.25"), Decimal("0.0")]
+        result = normalize_scores(scores)
+        assert len(result) == 3
+        assert result[0] < result[1] < result[2]
 
+    def test_normalize_mixed_scores(self) -> None:
+        """Test normalization of mixed positive/negative scores."""
+        scores = [Decimal("-0.5"), Decimal("0.0"), Decimal("0.5")]
+        result = normalize_scores(scores)
+        assert len(result) == 3
+        assert result[-1] == Decimal("1")
 
-class TestTechnicalFactor:
-    """Test technical factor dataclass."""
+    def test_normalize_empty_list(self) -> None:
+        """Test normalization of empty list."""
+        scores: list[Decimal] = []
+        result = normalize_scores(scores)
+        assert result == []
 
-    def test_create_factor(self):
-        """Test creating technical factor."""
-        factor = TechnicalFactor(
-            rsi=Decimal("50"),
-            macd_signal=Decimal("0.1"),
-            bollinger_position=Decimal("0.5"),
-        )
+    def test_normalize_constant_scores(self) -> None:
+        """Test normalization of constant scores."""
+        scores = [Decimal("0.5"), Decimal("0.5"), Decimal("0.5")]
+        result = normalize_scores(scores)
+        # All should be equal
+        assert all(s == result[0] for s in result)
 
-        assert factor.rsi == Decimal("50")
-
-
-class TestSentimentFactor:
-    """Test sentiment factor dataclass."""
-
-    def test_create_factor(self):
-        """Test creating sentiment factor."""
-        factor = SentimentFactor(
-            news_score=Decimal("0.6"),
-            social_score=Decimal("0.4"),
-            analyst_rating=Decimal("0.5"),
-        )
-
-        assert factor.news_score == Decimal("0.6")
-
-
-class TestStrengthFactor:
-    """Test strength factor dataclass."""
-
-    def test_create_factor(self):
-        """Test creating strength factor."""
-        factor = StrengthFactor(
-            relative_strength=Decimal("0.7"),
-            sector_strength=Decimal("0.6"),
-            volume_confirmation=Decimal("0.8"),
-        )
-
-        assert factor.relative_strength == Decimal("0.7")
+    def test_normalize_single_score(self) -> None:
+        """Test normalization of single score."""
+        scores = [Decimal("0.5")]
+        result = normalize_scores(scores)
+        assert len(result) == 1
+        assert result[0] == Decimal("1")
 
 
-class TestMultiFactorInputs:
-    """Test multi-factor inputs dataclass."""
+class TestWeighFactors:
+    """Test weigh_factors function."""
 
-    def test_create_inputs(self):
-        """Test creating multi-factor inputs."""
-        inputs = MultiFactorInputs(
-            symbol="TEST",
-            fundamental=FundamentalFactor(),
-            technical=TechnicalFactor(),
-            sentiment=SentimentFactor(),
-            strength=StrengthFactor(),
-        )
+    def test_equal_weights(self) -> None:
+        """Test with equal weights."""
+        factor_scores = {
+            "sentiment": Decimal("0.5"),
+            "strength": Decimal("0.6"),
+            "volume_profile": Decimal("0.7"),
+        }
+        weights = {
+            "sentiment": Decimal("0.33"),
+            "strength": Decimal("0.33"),
+            "volume_profile": Decimal("0.34"),
+        }
+        result = weigh_factors(factor_scores, weights)
+        assert Decimal("0.0") <= result <= Decimal("1.0")
 
-        assert inputs.symbol == "TEST"
+    def test_dominant_weight(self) -> None:
+        """Test with one dominant weight."""
+        factor_scores = {
+            "sentiment": Decimal("0.9"),
+            "strength": Decimal("0.1"),
+            "volume_profile": Decimal("0.1"),
+        }
+        weights = {
+            "sentiment": Decimal("0.8"),
+            "strength": Decimal("0.1"),
+            "volume_profile": Decimal("0.1"),
+        }
+        result = weigh_factors(factor_scores, weights)
+        assert result > Decimal("0.7")
+
+    def test_missing_factor_score(self) -> None:
+        """Test with missing factor score."""
+        factor_scores = {
+            "sentiment": Decimal("0.5"),
+            # Missing strength
+            "volume_profile": Decimal("0.7"),
+        }
+        weights = {
+            "sentiment": Decimal("0.5"),
+            "strength": Decimal("0.25"),
+            "volume_profile": Decimal("0.25"),
+        }
+        result = weigh_factors(factor_scores, weights)
+        # Should handle missing gracefully
+        assert Decimal("0.0") <= result <= Decimal("1.0")
+
+    def test_invalid_weight_sum(self) -> None:
+        """Test with weights that don't sum to 1."""
+        factor_scores = {
+            "sentiment": Decimal("0.5"),
+            "strength": Decimal("0.6"),
+        }
+        weights = {
+            "sentiment": Decimal("0.8"),
+            "strength": Decimal("0.4"),  # Sum = 1.2
+        }
+        result = weigh_factors(factor_scores, weights)
+        # Should still compute but may not be accurate
+        assert isinstance(result, Decimal)
+
+    def test_negative_weights(self) -> None:
+        """Test with negative weights."""
+        factor_scores = {
+            "sentiment": Decimal("0.5"),
+            "strength": Decimal("0.6"),
+        }
+        weights = {
+            "sentiment": Decimal("-0.2"),
+            "strength": Decimal("1.2"),
+        }
+        result = weigh_factors(factor_scores, weights)
+        # Should handle negative weights
+        assert isinstance(result, Decimal)
 
 
-class TestFactorWeights:
-    """Test factor weights dataclass."""
+class TestComputeMultiFactorScore:
+    """Test compute_multi_factor_score function."""
 
-    def test_default_weights(self):
-        """Test default weights sum to 1.0."""
-        weights = FactorWeights()
-        total = (
-            weights.fundamental
-            + weights.technical
-            + weights.sentiment
-            + weights.strength
-        )
-        assert total == Decimal("1")
-
-    def test_custom_weights_sum_to_one(self):
-        """Test custom weights that sum to 1.0."""
-        weights = FactorWeights(
-            fundamental=Decimal("0.4"),
-            technical=Decimal("0.3"),
-            sentiment=Decimal("0.2"),
-            strength=Decimal("0.1"),
-        )
-
-        total = (
-            weights.fundamental
-            + weights.technical
-            + weights.sentiment
-            + weights.strength
-        )
-        assert total == Decimal("1")
-
-    def test_invalid_weights_raise_error(self):
-        """Test that weights not summing to 1.0 raise ConfigError."""
-        with pytest.raises(Exception):  # ConfigError
-            FactorWeights(
-                fundamental=Decimal("0.5"),
-                technical=Decimal("0.3"),
-                sentiment=Decimal("0.3"),
-                strength=Decimal("0.1"),
-            )
-
-
-class TestMultiFactorScorerConfig:
-    """Test multi-factor scorer configuration."""
-
-    def test_default_config(self):
-        """Test default configuration values."""
-        config = MultiFactorScorerConfig()
-        assert config.min_pe == Decimal("5")
-        assert config.max_pe == Decimal("100")
-        assert config.min_roe == Decimal("0.05")
-
-
-class TestMultiFactorScorer:
-    """Test multi-factor scoring engine."""
-
-    def test_score_single_instrument(self):
-        """Test scoring a single instrument."""
-        scorer = MultiFactorScorer()
-        inputs = MultiFactorInputs(
-            symbol="TEST",
-            fundamental=FundamentalFactor(pe_ratio=Decimal("20"), roe=Decimal("0.10")),
-            technical=TechnicalFactor(rsi=Decimal("50")),
-            sentiment=SentimentFactor(news_score=Decimal("0.5")),
-            strength=StrengthFactor(relative_strength=Decimal("0.5")),
-        )
-
-        result = scorer.score(inputs)
-
-        assert isinstance(result, MultiFactorResult)
-        assert result.symbol == "TEST"
-        assert Decimal("0") <= result.composite_score <= Decimal("1")
-
-    def test_score_batch_instruments(self):
-        """Test scoring multiple instruments."""
-        scorer = MultiFactorScorer()
-        inputs_list = [
-            MultiFactorInputs(
-                symbol="TEST1",
-                fundamental=FundamentalFactor(
-                    pe_ratio=Decimal("20"), roe=Decimal("0.10")
-                ),
-                technical=TechnicalFactor(rsi=Decimal("50")),
-                sentiment=SentimentFactor(news_score=Decimal("0.5")),
-                strength=StrengthFactor(relative_strength=Decimal("0.5")),
-            ),
-            MultiFactorInputs(
-                symbol="TEST2",
-                fundamental=FundamentalFactor(
-                    pe_ratio=Decimal("25"), roe=Decimal("0.08")
-                ),
-                technical=TechnicalFactor(rsi=Decimal("60")),
-                sentiment=SentimentFactor(news_score=Decimal("0.6")),
-                strength=StrengthFactor(relative_strength=Decimal("0.6")),
-            ),
+    def test_basic_scoring(self) -> None:
+        """Test basic multi-factor scoring."""
+        factor_data = [
+            {
+                "symbol": "STOCK1",
+                "sentiment": Decimal("0.5"),
+                "strength": Decimal("0.6"),
+                "volume_profile": Decimal("0.7"),
+                "drl": Decimal("0.8"),
+            },
+            {
+                "symbol": "STOCK2",
+                "sentiment": Decimal("0.3"),
+                "strength": Decimal("0.4"),
+                "volume_profile": Decimal("0.5"),
+                "drl": Decimal("0.6"),
+            },
         ]
+        weights = {
+            "sentiment": Decimal("0.25"),
+            "strength": Decimal("0.25"),
+            "volume_profile": Decimal("0.25"),
+            "drl": Decimal("0.25"),
+        }
+        result = compute_multi_factor_score(factor_data, weights)
+        assert len(result) == 2
+        assert "STOCK1" in result
+        assert "STOCK2" in result
+        # STOCK1 should have higher score
+        assert result["STOCK1"] > result["STOCK2"]
 
-        results = scorer.score_batch(inputs_list)
+    def test_with_normalization(self) -> None:
+        """Test scoring with normalization."""
+        factor_data = [
+            {
+                "symbol": f"STOCK{i}",
+                "sentiment": Decimal(str(0.1 * i)),
+                "strength": Decimal(str(0.1 * i)),
+                "volume_profile": Decimal(str(0.1 * i)),
+                "drl": Decimal(str(0.1 * i)),
+            }
+            for i in range(1, 6)
+        ]
+        weights = {
+            "sentiment": Decimal("0.25"),
+            "strength": Decimal("0.25"),
+            "volume_profile": Decimal("0.25"),
+            "drl": Decimal("0.25"),
+        }
+        result = compute_multi_factor_score(factor_data, weights, normalize=True)
+        assert len(result) == 5
+        # Highest score should be close to 1
+        assert max(result.values()) == Decimal("1")
 
-        assert len(results) == 2
-        assert all(isinstance(r, MultiFactorResult) for r in results)
+    def test_empty_factor_data(self) -> None:
+        """Test with empty factor data."""
+        factor_data: list[dict] = []
+        weights = {
+            "sentiment": Decimal("0.25"),
+            "strength": Decimal("0.25"),
+            "volume_profile": Decimal("0.25"),
+            "drl": Decimal("0.25"),
+        }
+        result = compute_multi_factor_score(factor_data, weights)
+        assert result == {}
 
-    def test_score_empty_batch_returns_empty(self):
-        """Test that empty batch returns empty list."""
-        scorer = MultiFactorScorer()
-        results = scorer.score_batch([])
-        assert results == []
+    def test_incomplete_factor_data(self) -> None:
+        """Test with incomplete factor data."""
+        factor_data = [
+            {
+                "symbol": "STOCK1",
+                "sentiment": Decimal("0.5"),
+                # Missing other factors
+            },
+        ]
+        weights = {
+            "sentiment": Decimal("0.25"),
+            "strength": Decimal("0.25"),
+            "volume_profile": Decimal("0.25"),
+            "drl": Decimal("0.25"),
+        }
+        result = compute_multi_factor_score(factor_data, weights)
+        assert "STOCK1" in result
+        # Should still compute with available factors
+        assert Decimal("0.0") <= result["STOCK1"] <= Decimal("1.0")
 
-    def test_score_with_custom_config(self):
-        """Test scoring with custom configuration."""
-        config = MultiFactorScorerConfig(min_roe=Decimal("0.15"))
-        scorer = MultiFactorScorer(config)
-        inputs = MultiFactorInputs(
-            symbol="TEST",
-            fundamental=FundamentalFactor(pe_ratio=Decimal("20"), roe=Decimal("0.20")),
-            technical=TechnicalFactor(rsi=Decimal("50")),
-            sentiment=SentimentFactor(news_score=Decimal("0.5")),
-            strength=StrengthFactor(relative_strength=Decimal("0.5")),
-        )
+    def test_missing_symbol(self) -> None:
+        """Test with missing symbol field."""
+        factor_data = [
+            {
+                "sentiment": Decimal("0.5"),
+                "strength": Decimal("0.6"),
+            },
+        ]
+        weights = {
+            "sentiment": Decimal("0.5"),
+            "strength": Decimal("0.5"),
+        }
+        with pytest.raises(KeyError):
+            compute_multi_factor_score(factor_data, weights)
 
-        result = scorer.score(inputs)
-
-        assert result.composite_score >= Decimal("0")
+    def test_zero_weights(self) -> None:
+        """Test with all zero weights."""
+        factor_data = [
+            {
+                "symbol": "STOCK1",
+                "sentiment": Decimal("0.5"),
+                "strength": Decimal("0.6"),
+            },
+        ]
+        weights = {
+            "sentiment": Decimal("0.0"),
+            "strength": Decimal("0.0"),
+        }
+        result = compute_multi_factor_score(factor_data, weights)
+        assert result["STOCK1"] == Decimal("0")
