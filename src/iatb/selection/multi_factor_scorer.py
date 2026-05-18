@@ -214,21 +214,18 @@ class MultiFactorScorer:
         score = Decimal("0")
         count = 0
         if factor.pe_ratio is not None:
-            pe_score = self._normalize_pe(factor.pe_ratio)
-            score += pe_score
+            score += self._normalize_pe(factor.pe_ratio)
             count += 1
         if factor.pb_ratio is not None:
-            pb_score = self._normalize_pb(factor.pb_ratio)
-            score += pb_score
+            score += self._normalize_pb(factor.pb_ratio)
             count += 1
         if factor.roe is not None:
-            roe_score = min(
+            score += min(
                 Decimal("1"), factor.roe / self._config.min_roe * Decimal("0.5")
             )
-            score += roe_score
             count += 1
         if factor.debt_to_equity is not None:
-            de_score = max(
+            score += max(
                 Decimal("0"),
                 Decimal("1")
                 - (
@@ -237,15 +234,12 @@ class MultiFactorScorer:
                     * Decimal("0.5")
                 ),
             )
-            score += de_score
             count += 1
         if factor.dividend_yield is not None:
-            div_score = min(Decimal("1"), factor.dividend_yield * Decimal("10"))
-            score += div_score
+            score += min(Decimal("1"), factor.dividend_yield * Decimal("10"))
             count += 1
         if factor.earnings_growth is not None:
-            growth_score = min(Decimal("1"), max(Decimal("0"), factor.earnings_growth))
-            score += growth_score
+            score += min(Decimal("1"), max(Decimal("0"), factor.earnings_growth))
             count += 1
         return score / max(count, 1)
 
