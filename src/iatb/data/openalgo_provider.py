@@ -40,9 +40,9 @@ class _PooledHTTPSession:
         self._pool: list[HTTPConnection] = []
         self._in_use: set[int] = set()
         if self._scheme == "https":
-            self._conn_cls: type[HTTPConnection] | type[HTTPSConnection] = (
-                HTTPSConnection
-            )
+            self._conn_cls: (
+                type[HTTPConnection] | type[HTTPSConnection]
+            ) = HTTPSConnection
         else:
             self._conn_cls = HTTPConnection
 

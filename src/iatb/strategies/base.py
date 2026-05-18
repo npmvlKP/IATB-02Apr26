@@ -38,15 +38,18 @@ class StrategyOrder:
 class Strategy(Protocol):
     def on_tick(
         self, context: StrategyContext, tick: MarketTickEvent
-    ) -> SignalEvent | None: ...
+    ) -> SignalEvent | None:
+        ...
 
     def on_bar(
         self, context: StrategyContext, tick: MarketTickEvent
-    ) -> SignalEvent | None: ...
+    ) -> SignalEvent | None:
+        ...
 
     def on_signal(
         self, context: StrategyContext, signal: SignalEvent
-    ) -> StrategyOrder | None: ...
+    ) -> StrategyOrder | None:
+        ...
 
 
 class StrategyBase:
