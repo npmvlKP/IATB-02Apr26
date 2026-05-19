@@ -597,7 +597,7 @@ class KiteProvider(DataProvider):
                 }
             )
 
-        return records  # type: ignore[unreachable]
+        return records
 
     @classmethod
     def from_env(

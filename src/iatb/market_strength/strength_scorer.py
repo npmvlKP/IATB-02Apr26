@@ -5,14 +5,51 @@ Memory optimization: Pre-computes and caches normalized indicator values
 to avoid re-processing in repeated score calculations.
 """
 
+import typing
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import lru_cache
-from typing import Final
+from typing import Final, Protocol
 
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
+
+
+class _CacheInfo(typing.NamedTuple):
+    """Named tuple for cache information."""
+
+    hits: int
+    misses: int
+    maxsize: int
+    currsize: int
+
+
+class _NormalizeCallable(Protocol):
+    """Protocol for normalize functions that support caching."""
+
+    def __call__(self, value: Decimal, *, cap: Decimal) -> Decimal:
+        ...
+
+    def cache_clear(self) -> None:
+        ...
+
+    def cache_info(self) -> _CacheInfo:
+        ...
+
+
+class _RegimeScoreCallable(Protocol):
+    """Protocol for regime score functions that support caching."""
+
+    def __call__(self, regime: MarketRegime) -> Decimal:
+        ...
+
+    def cache_clear(self) -> None:
+        ...
+
+    def cache_info(self) -> _CacheInfo:
+        ...
+
 
 _MAX_ACCEPTABLE_ATR_PCT: Final = Decimal("0.08")
 _EXCHANGE_MIN_SCORE: Final = {
@@ -45,6 +82,11 @@ class StrengthScorer:
     and reduce CPU usage in repeated calculations.
     """
 
+    # Type declarations for normalize methods
+    _normalize: _NormalizeCallable
+    _normalize_concave: _NormalizeCallable
+    _regime_score: _RegimeScoreCallable
+
     def __init__(self, cache_enabled: bool = True) -> None:
         """Initialize strength scorer with optional caching.
 
@@ -57,9 +99,9 @@ class StrengthScorer:
             self._normalize_concave = self._normalize_concave_cached  # type: ignore[assignment]
             self._regime_score = self._regime_score_cached  # type: ignore[assignment]
         else:
-            self._normalize = self._normalize_uncached  # type: ignore[assignment]
-            self._normalize_concave = self._normalize_concave_uncached  # type: ignore[assignment]
-            self._regime_score = self._regime_score_uncached  # type: ignore[assignment]
+            self._normalize = self._normalize_uncached_wrapper()
+            self._normalize_concave = self._normalize_concave_uncached_wrapper()
+            self._regime_score = self._regime_score_uncached_wrapper()
 
     def score(self, exchange: Exchange, inputs: StrengthInputs) -> Decimal:
         self._validate(exchange, inputs)
@@ -137,10 +179,26 @@ class StrengthScorer:
         normalized = value / cap if cap > Decimal("0") else Decimal("0")
         return max(Decimal("0"), min(Decimal("1"), normalized))
 
+    def _normalize_uncached_cache_clear(self) -> None:
+        """No-op cache_clear for uncached version."""
+        pass
+
+    def _normalize_uncached_cache_info(self) -> _CacheInfo:
+        """No-op cache_info for uncached version."""
+        return _CacheInfo(hits=0, misses=0, maxsize=0, currsize=0)
+
     def _normalize_concave_uncached(self, value: Decimal, *, cap: Decimal) -> Decimal:
         linear = value / cap if cap > Decimal("0") else Decimal("0")
         clamped = max(Decimal("0"), min(Decimal("1"), linear))
         return clamped.sqrt()
+
+    def _normalize_concave_uncached_cache_clear(self) -> None:
+        """No-op cache_clear for uncached version."""
+        pass
+
+    def _normalize_concave_uncached_cache_info(self) -> _CacheInfo:
+        """No-op cache_info for uncached version."""
+        return _CacheInfo(hits=0, misses=0, maxsize=0, currsize=0)
 
     def _regime_score_uncached(self, regime: MarketRegime) -> Decimal:
         if regime == MarketRegime.BULL:
@@ -148,6 +206,36 @@ class StrengthScorer:
         if regime == MarketRegime.SIDEWAYS:
             return Decimal("0.55")
         return Decimal("0.15")
+
+    def _regime_score_uncached_cache_clear(self) -> None:
+        """No-op cache_clear for uncached version."""
+        pass
+
+    def _regime_score_uncached_cache_info(self) -> _CacheInfo:
+        """No-op cache_info for uncached version."""
+        return _CacheInfo(hits=0, misses=0, maxsize=0, currsize=0)
+
+    # Wrapper classes for uncached versions to match Protocol
+    def _normalize_uncached_wrapper(self) -> _NormalizeCallable:
+        """Create wrapper for uncached normalize that matches Protocol."""
+        wrapper = self._normalize_uncached
+        wrapper.cache_clear = self._normalize_uncached_cache_clear  # type: ignore[attr-defined]
+        wrapper.cache_info = self._normalize_uncached_cache_info  # type: ignore[attr-defined]
+        return typing.cast(_NormalizeCallable, wrapper)
+
+    def _normalize_concave_uncached_wrapper(self) -> _NormalizeCallable:
+        """Create wrapper for uncached concave normalize that matches Protocol."""
+        wrapper = self._normalize_concave_uncached
+        wrapper.cache_clear = self._normalize_concave_uncached_cache_clear  # type: ignore[attr-defined]
+        wrapper.cache_info = self._normalize_concave_uncached_cache_info  # type: ignore[attr-defined]
+        return typing.cast(_NormalizeCallable, wrapper)
+
+    def _regime_score_uncached_wrapper(self) -> _RegimeScoreCallable:
+        """Create wrapper for uncached regime score that matches Protocol."""
+        wrapper = self._regime_score_uncached
+        wrapper.cache_clear = self._regime_score_uncached_cache_clear  # type: ignore[attr-defined]
+        wrapper.cache_info = self._regime_score_uncached_cache_info  # type: ignore[attr-defined]
+        return typing.cast(_RegimeScoreCallable, wrapper)
 
     @staticmethod
     def _volatility_penalty(volatility_atr_pct: Decimal) -> Decimal:

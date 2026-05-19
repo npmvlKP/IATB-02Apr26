@@ -6,73 +6,49 @@ import logging
 import logging.handlers
 import os
 import sys
+import typing
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
-
-from opentelemetry import trace
+from typing import Any
 
 from iatb.core.config import get_config
 
-if TYPE_CHECKING:
+try:
     from pythonjsonlogger import jsonlogger
 
+    _HAS_JSONLOGGER = True
+except ImportError:
+    # Fallback if pythonjsonlogger is not installed
+    _HAS_JSONLOGGER = False
 
-class JsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc,name-defined]
+
+class JsonFormatter(logging.Formatter):
     """Custom JSON formatter with UTC timestamps and additional context."""
 
     def __init__(self, fmt: str, *args: object, **kwargs: object) -> None:
         """Initialize JSON formatter."""
-        super().__init__(fmt, *args, **kwargs)  # type: ignore[misc]
-
-    def add_fields(
-        self,
-        log_record: dict[str, Any],
-        record: logging.LogRecord,
-        message_dict: dict[str, Any],
-    ) -> None:
-        """Add custom fields to log record.
-
-        Args:
-            log_record: The log record to modify.
-            record: The original log record.
-            message_dict: Additional message context.
-        """
-        super().add_fields(log_record, record, message_dict)
-
-        # Ensure UTC timestamp
-        if "timestamp" not in log_record:
-            log_record["timestamp"] = datetime.now(UTC).isoformat()
-
-        # Add standard fields
-        log_record["level"] = record.levelname
-        log_record["logger"] = record.name
-        log_record["thread"] = record.thread
-        log_record["process"] = record.process
-
-        # Add trace and span IDs from OpenTelemetry context
-        span = trace.get_current_span()
-        if span.is_recording():
-            ctx = span.get_span_context()
-            log_record["trace_id"] = format(ctx.trace_id, "032x")
-            log_record["span_id"] = format(ctx.span_id, "016x")
-
-        # Add service.name resource attribute
-        provider = trace.get_tracer_provider()
-        resource = getattr(provider, "resource", None)
-        if resource and "service.name" in resource.attributes:
-            log_record["service.name"] = resource.attributes["service.name"]
+        if _HAS_JSONLOGGER:
+            # Use cast to handle untyped JsonFormatter
+            self._formatter: logging.Formatter = typing.cast(
+                logging.Formatter,
+                jsonlogger.JsonFormatter(fmt, *args, **kwargs),  # type: ignore[no-untyped-call]
+            )
         else:
-            try:
-                config = get_config()
-                log_record["service.name"] = getattr(config, "service", {}).get(
-                    "name", "iatb"
-                )
-            except Exception:
-                log_record["service.name"] = "iatb"
+            self._formatter = logging.Formatter(fmt)
 
-        # Add exception info if present
-        if record.exc_info:
-            log_record["exception"] = self.formatException(record.exc_info)
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log record with JSON or standard format."""
+        # Add custom fields to the record
+        if _HAS_JSONLOGGER:
+            # Let the JSON formatter handle it
+            return self._formatter.format(record)
+        else:
+            # Standard format with timestamp
+            record.timestamp = datetime.now(UTC).isoformat()
+            return self._formatter.format(record)
+
+    def formatException(self, exc_info: Any) -> str:
+        """Format exception info."""
+        return self._formatter.formatException(exc_info)
 
 
 def _create_console_handler() -> logging.StreamHandler[Any]:

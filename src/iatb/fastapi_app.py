@@ -173,7 +173,7 @@ class OHLCVResponse(BaseModel):
     message: str | None = None
 
 
-@app.get("/health")
+@app.get("/health")  # type: ignore[untyped-decorator]
 def health_check() -> dict[str, Any]:
     """Health check endpoint (legacy, deprecated - use /health/live or /health/ready).
 
@@ -192,7 +192,7 @@ def health_check() -> dict[str, Any]:
         }
 
 
-@app.get("/health/live", response_model=LivenessResponse)
+@app.get("/health/live", response_model=LivenessResponse)  # type: ignore[untyped-decorator]
 def liveness_check() -> dict[str, Any]:
     """Liveness check endpoint.
 
@@ -210,7 +210,7 @@ def liveness_check() -> dict[str, Any]:
     }
 
 
-@app.get("/health/ready", response_model=ReadinessResponse)
+@app.get("/health/ready", response_model=ReadinessResponse)  # type: ignore[untyped-decorator]
 async def readiness_check() -> dict[str, Any]:
     """Readiness check endpoint.
 
@@ -260,7 +260,7 @@ async def readiness_check() -> dict[str, Any]:
     }
 
 
-@app.get("/broker/status", response_model=BrokerStatusResponse)
+@app.get("/broker/status", response_model=BrokerStatusResponse)  # type: ignore[untyped-decorator]
 def broker_status_endpoint() -> dict[str, Any]:
     """Get broker connection status and account details.
 
@@ -281,7 +281,7 @@ def broker_status_endpoint() -> dict[str, Any]:
         ) from exc
 
 
-@app.get("/charts/ohlcv/{ticker}", response_model=OHLCVResponse)
+@app.get("/charts/ohlcv/{ticker}", response_model=OHLCVResponse)  # type: ignore[untyped-decorator]
 def ohlcv_chart_endpoint(ticker: str, interval: str = "day") -> dict[str, Any]:
     """Return OHLCV data for a given ticker symbol.
 
@@ -358,7 +358,7 @@ class WatchlistResponse(BaseModel):
     message: str
 
 
-@app.get("/config/watchlist", response_model=WatchlistResponse)
+@app.get("/config/watchlist", response_model=WatchlistResponse)  # type: ignore[untyped-decorator]
 def get_watchlist_config() -> dict[str, Any]:
     """Get current watchlist configuration.
 
@@ -437,7 +437,7 @@ def _log_watchlist_update(config: WatchlistConfig) -> None:
     )
 
 
-@app.put("/config/watchlist", response_model=WatchlistResponse)
+@app.put("/config/watchlist", response_model=WatchlistResponse)  # type: ignore[untyped-decorator]
 def update_watchlist_config(request: WatchlistUpdateRequest) -> dict[str, Any]:
     """Update watchlist configuration.
 
@@ -480,7 +480,7 @@ def update_watchlist_config(request: WatchlistUpdateRequest) -> dict[str, Any]:
         ) from exc
 
 
-@app.get("/ml/status", response_model=MLStatusResponse)
+@app.get("/ml/status", response_model=MLStatusResponse)  # type: ignore[untyped-decorator]
 def ml_status_endpoint() -> dict[str, Any]:
     """Get ML model availability and health status.
 
@@ -527,7 +527,7 @@ def ml_status_endpoint() -> dict[str, Any]:
         ) from exc
 
 
-@app.get("/metrics")
+@app.get("/metrics")  # type: ignore[untyped-decorator]
 def metrics_endpoint() -> str:
     """Prometheus metrics endpoint.
 
@@ -540,7 +540,7 @@ def metrics_endpoint() -> str:
     return content
 
 
-@app.get("/events/stream")
+@app.get("/events/stream")  # type: ignore[untyped-decorator]
 async def events_stream() -> StreamingResponse:
     """Server-Sent Events endpoint for real-time dashboard updates.
 

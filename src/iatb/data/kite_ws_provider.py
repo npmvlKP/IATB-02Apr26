@@ -757,10 +757,7 @@ class KiteWebSocketProvider(DataProvider):
             try:
                 await asyncio.sleep(self._heartbeat_interval_seconds)
 
-                if self._should_stop:
-                    break  # type: ignore[unreachable]
-
-                now_utc = datetime.now(timezone.utc)  # type: ignore[unreachable]
+                now_utc = datetime.now(timezone.utc)
 
                 if self._last_heartbeat_utc is None:
                     self._last_heartbeat_utc = now_utc
@@ -783,7 +780,7 @@ class KiteWebSocketProvider(DataProvider):
                             self._connection_state = ConnectionState.DISCONNECTED
                             self._schedule_reconnect()
             except asyncio.CancelledError:
-                break  # type: ignore[unreachable]
+                break
             except Exception as exc:
                 _LOGGER.error(
                     "Heartbeat monitor error",
@@ -795,9 +792,6 @@ class KiteWebSocketProvider(DataProvider):
         while not self._should_stop:
             try:
                 await asyncio.sleep(_MEMORY_CHECK_INTERVAL)
-
-                if self._should_stop:
-                    break  # type: ignore[unreachable]
 
                 self._check_memory_usage()
             except asyncio.CancelledError:
