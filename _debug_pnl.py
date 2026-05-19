@@ -14,7 +14,10 @@ class _MockExecutor(Executor):
     def execute_order(self, request):
         self.order_count += 1
         return ExecutionResult(
-            f"ORDER-{self.order_count}", OrderStatus.FILLED, request.quantity, self.fill_price
+            f"ORDER-{self.order_count}",
+            OrderStatus.FILLED,
+            request.quantity,
+            self.fill_price,
         )
 
     def cancel_all(self):

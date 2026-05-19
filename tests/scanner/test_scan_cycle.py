@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pytest
 from iatb.core.enums import Exchange
 from iatb.market_strength.strength_scorer import StrengthScorer
 from iatb.scanner.scan_cycle import (

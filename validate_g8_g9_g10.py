@@ -20,7 +20,9 @@ def check_g8_no_naive_datetime(filepath: str) -> None:
             elif hasattr(node.func, "attr"):
                 if node.func.attr in ["now", "utcnow"]:
                     naive_dt_found = True
-                    print(f"G8 FAIL: Found naive datetime.{node.func.attr} at line {node.lineno}")
+                    print(
+                        f"G8 FAIL: Found naive datetime.{node.func.attr} at line {node.lineno}"
+                    )
                     break
 
     if not naive_dt_found:
@@ -35,7 +37,9 @@ def check_g9_no_print(filepath: str) -> None:
         tree = ast.parse(content)
 
     print_found = any(
-        isinstance(node, ast.Call) and hasattr(node.func, "id") and node.func.id == "print"
+        isinstance(node, ast.Call)
+        and hasattr(node.func, "id")
+        and node.func.id == "print"
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
     )

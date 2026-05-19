@@ -67,11 +67,15 @@ def check_float_in_file(file_path: Path) -> tuple[bool, list[str]]:
 
     for node in ast.walk(tree):
         is_float_type = isinstance(node, ast.Name) and node.id == "float"
-        is_float_literal = isinstance(node, ast.Constant) and isinstance(node.value, float)
+        is_float_literal = isinstance(node, ast.Constant) and isinstance(
+            node.value, float
+        )
 
         if is_float_type or is_float_literal:
             line_number = getattr(node, "lineno", 1)
-            line = lines[line_number - 1].strip() if 0 < line_number <= len(lines) else ""
+            line = (
+                lines[line_number - 1].strip() if 0 < line_number <= len(lines) else ""
+            )
 
             # Check if this is in a financial context
             if not is_financial_context(line, line_number, lines):
@@ -90,7 +94,9 @@ def check_float_in_file(file_path: Path) -> tuple[bool, list[str]]:
             for i in range(max(0, line_number - 6), line_number - 1):
                 if i >= 0 and i < len(lines):
                     prev_line = lines[i].strip()
-                    if "API boundary" in prev_line or ("API" in prev_line and "#" in prev_line):
+                    if "API boundary" in prev_line or (
+                        "API" in prev_line and "#" in prev_line
+                    ):
                         has_api_boundary_comment = True
                         break
 

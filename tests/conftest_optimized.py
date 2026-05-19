@@ -23,7 +23,7 @@ import torch
 from hypothesis import settings
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    pass
 
 # Fixed seed value for reproducibility across all tests
 DETERMINISTIC_SEED: int = 42

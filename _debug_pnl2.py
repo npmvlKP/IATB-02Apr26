@@ -4,12 +4,12 @@ sys.modules["telegram"] = type(sys)("telegram")
 sys.modules["telegram.error"] = type(sys)("telegram.error")
 sys.modules["telegram.error.TelegramError"] = Exception
 
-from decimal import Decimal
-from unittest.mock import MagicMock
+from decimal import Decimal  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
 
-from iatb.core.enums import Exchange, OrderSide, OrderStatus
-from iatb.execution.base import ExecutionResult, Executor, OrderRequest
-from iatb.execution.order_manager import OrderManager
+from iatb.core.enums import Exchange, OrderSide, OrderStatus  # noqa: E402
+from iatb.execution.base import ExecutionResult, Executor, OrderRequest  # noqa: E402
+from iatb.execution.order_manager import OrderManager  # noqa: E402
 
 
 class _MockExecutor(Executor):
@@ -20,7 +20,10 @@ class _MockExecutor(Executor):
     def execute_order(self, request):
         self.order_count += 1
         return ExecutionResult(
-            f"ORDER-{self.order_count}", OrderStatus.FILLED, request.quantity, self.fill_price
+            f"ORDER-{self.order_count}",
+            OrderStatus.FILLED,
+            request.quantity,
+            self.fill_price,
         )
 
     def cancel_all(self):
