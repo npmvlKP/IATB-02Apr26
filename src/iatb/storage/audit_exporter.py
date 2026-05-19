@@ -430,8 +430,8 @@ class AuditExporter:
     @staticmethod
     def _create_pdf_table(data: list[list[str]]) -> Any:
         """Create a styled reportlab Table from data."""
-        from reportlab.lib import colors  # type: ignore[import-untyped]
-        from reportlab.platypus import Table as RLTable  # type: ignore[import-untyped]
+        from reportlab.lib import colors
+        from reportlab.platypus import Table as RLTable
         from reportlab.platypus import TableStyle
 
         table = RLTable(data)
@@ -456,10 +456,8 @@ class AuditExporter:
         export_records: list[AuditExportRecord],
     ) -> list[Any]:
         """Create PDF elements (title, subtitle, table)."""
-        from reportlab.lib.styles import (  # type: ignore[import-untyped]
-            getSampleStyleSheet,
-        )
-        from reportlab.platypus import Paragraph  # type: ignore[import-untyped]
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph
 
         elements: list[Any] = []
         styles = getSampleStyleSheet()
@@ -488,10 +486,8 @@ class AuditExporter:
     ) -> None:
         """Write records to PDF file using reportlab."""
         try:
-            from reportlab.lib.pagesizes import letter  # type: ignore[import-untyped]
-            from reportlab.platypus import (
-                SimpleDocTemplate,  # type: ignore[import-untyped]
-            )
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate
 
             export_records = [
                 AuditExportRecord.from_trade_audit_record(

@@ -7,16 +7,22 @@ import logging.handlers
 import os
 import sys
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
-from pythonjsonlogger import jsonlogger
 
 from iatb.core.config import get_config
+
+if TYPE_CHECKING:
+    from pythonjsonlogger import jsonlogger
 
 
 class JsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc,name-defined]
     """Custom JSON formatter with UTC timestamps and additional context."""
+
+    def __init__(self, fmt: str, *args: object, **kwargs: object) -> None:
+        """Initialize JSON formatter."""
+        super().__init__(fmt, *args, **kwargs)  # type: ignore[misc]
 
     def add_fields(
         self,

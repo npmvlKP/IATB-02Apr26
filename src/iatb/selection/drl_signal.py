@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 from iatb.backtesting.monte_carlo import MonteCarloResult
 from iatb.backtesting.walk_forward import WalkForwardResult
 from iatb.core.exceptions import ConfigError
-from iatb.rl.agent import RLAgent
 from iatb.selection._util import clamp_01
 from iatb.selection.decay import temporal_decay
 
@@ -220,14 +219,20 @@ def _action_to_score(action: int) -> Decimal:
 
 
 def compute_drl_signal_from_agent(
-    agent: RLAgent,
+    agent: object,
     observation: list[Decimal],
     current_utc: datetime,
     conclusion: BacktestConclusion | None = None,
 ) -> DRLSignalOutput:
     """Compute DRL signal from RL agent prediction with fallback to backtest conclusion."""
-    if agent.has_model:
-        action, confidence = agent.predict_with_confidence(observation)
+    # Lazy import to avoid circular dependency with iatb.rl.agent
+    has_model = getattr(agent, "has_model", False)
+    if has_model:
+        predict_with_confidence = getattr(agent, "predict_with_confidence", None)
+        if not callable(predict_with_confidence):
+            msg = "agent must provide predict_with_confidence() method"
+            raise ConfigError(msg)
+        action, confidence = predict_with_confidence(observation)
         base_score = _action_to_score(action)
         # Combine base score with confidence:
         # high confidence -> base_score, low confidence -> neutral (0.5)

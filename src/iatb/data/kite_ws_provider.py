@@ -382,7 +382,7 @@ class KiteWebSocketProvider(DataProvider):
     @staticmethod
     def _default_ticker_factory(api_key: str, access_token: str) -> Any:
         try:
-            from kiteconnect import KiteTicker  # type: ignore
+            from kiteconnect import KiteTicker
 
             return KiteTicker(api_key, access_token)
         except ModuleNotFoundError as exc:
@@ -758,33 +758,32 @@ class KiteWebSocketProvider(DataProvider):
                 await asyncio.sleep(self._heartbeat_interval_seconds)
 
                 if self._should_stop:
-                    break
+                    break  # type: ignore[unreachable]
 
-                now_utc = datetime.now(timezone.utc)
+                now_utc = datetime.now(timezone.utc)  # type: ignore[unreachable]
 
                 if self._last_heartbeat_utc is None:
                     self._last_heartbeat_utc = now_utc
-                    continue
+                else:
+                    time_since_last_heartbeat = now_utc - self._last_heartbeat_utc
 
-                time_since_last_heartbeat = now_utc - self._last_heartbeat_utc
-
-                if (
-                    time_since_last_heartbeat.total_seconds()
-                    > self._heartbeat_timeout_seconds
-                ):
-                    _LOGGER.warning(
-                        "Heartbeat timeout detected",
-                        extra={
-                            "last_heartbeat": self._last_heartbeat_utc.isoformat(),
-                            "timeout": self._heartbeat_timeout_seconds,
-                        },
-                    )
-                    if self._is_connected:
-                        self._is_connected = False
-                        self._connection_state = ConnectionState.DISCONNECTED
-                        self._schedule_reconnect()
+                    if (
+                        time_since_last_heartbeat.total_seconds()
+                        > self._heartbeat_timeout_seconds
+                    ):
+                        _LOGGER.warning(
+                            "Heartbeat timeout detected",
+                            extra={
+                                "last_heartbeat": self._last_heartbeat_utc.isoformat(),
+                                "timeout": self._heartbeat_timeout_seconds,
+                            },
+                        )
+                        if self._is_connected:
+                            self._is_connected = False
+                            self._connection_state = ConnectionState.DISCONNECTED
+                            self._schedule_reconnect()
             except asyncio.CancelledError:
-                break
+                break  # type: ignore[unreachable]
             except Exception as exc:
                 _LOGGER.error(
                     "Heartbeat monitor error",
@@ -798,7 +797,7 @@ class KiteWebSocketProvider(DataProvider):
                 await asyncio.sleep(_MEMORY_CHECK_INTERVAL)
 
                 if self._should_stop:
-                    break
+                    break  # type: ignore[unreachable]
 
                 self._check_memory_usage()
             except asyncio.CancelledError:

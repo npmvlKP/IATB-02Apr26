@@ -401,7 +401,7 @@ class ZerodhaTokenManager:
             raise ValueError(msg)
 
         try:
-            import kiteconnect  # type: ignore[import-untyped]  # noqa: PLC0415
+            import kiteconnect  # noqa: PLC0415
         except ModuleNotFoundError as exc:
             msg = (
                 "kiteconnect module is required. Install with: pip install kiteconnect"

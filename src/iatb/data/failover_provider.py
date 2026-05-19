@@ -529,7 +529,7 @@ class FailoverProvider(DataProvider):
             method_name: Name of the method being called.
         """
         try:
-            import structlog  # type: ignore[import-not-found]
+            import structlog
 
             logger = structlog.get_logger()
             logger.warning(

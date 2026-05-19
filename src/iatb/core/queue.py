@@ -224,7 +224,7 @@ class RedisStreamBackend(EventBusBackend):
 
             try:
                 # Lazy import to avoid hard dependency
-                import redis.asyncio as redis
+                import redis.asyncio as redis  # type: ignore[import-untyped]
 
                 self._client = redis.Redis(
                     host=self._host,

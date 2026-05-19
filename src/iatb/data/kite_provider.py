@@ -567,7 +567,7 @@ class KiteProvider(DataProvider):
 
         for item in data:
             if not isinstance(item, dict):
-                continue
+                continue  # type: ignore[unreachable]
 
             # Parse timestamp
             raw_timestamp = item.get("date")
@@ -597,7 +597,7 @@ class KiteProvider(DataProvider):
                 }
             )
 
-        return records
+        return records  # type: ignore[unreachable]
 
     @classmethod
     def from_env(

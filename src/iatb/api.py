@@ -82,7 +82,7 @@ class IATBApi:
         Returns:
             KiteConnect client instance.
         """
-        from kiteconnect import KiteConnect  # type: ignore  # noqa: PLC0415
+        from kiteconnect import KiteConnect  # noqa: PLC0415
 
         if not self._token_manager:
             msg = "Token manager not configured"

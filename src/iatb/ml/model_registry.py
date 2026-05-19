@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class ModelRegistry:
             from transformers import AutoTokenizer
 
             # Test tokenizer loading
-            tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call] # nosec B615
+            tokenizer: Any = AutoTokenizer.from_pretrained(  # nosec B615  # type: ignore[no-untyped-call]
                 "distilbert-base-uncased"
             )
 
@@ -155,10 +156,10 @@ class ModelRegistry:
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
+            model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615  # type: ignore[no-untyped-call]
                 "ProsusAI/finbert"
             )
-            tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call] # nosec B615
+            tokenizer = AutoTokenizer.from_pretrained(  # nosec B615  # type: ignore[no-untyped-call]
                 "ProsusAI/finbert"
             )
 

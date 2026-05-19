@@ -4,14 +4,23 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-import torch
 from iatb.backtesting.event_driven import EventDrivenBacktester
 from iatb.core.exceptions import ConfigError
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
+
+# Try to import torch, but don't fail if DLL loading fails on Windows
+try:
+    import torch
+
+    torch.manual_seed(42)
+except OSError as e:
+    if "DLL" in str(e):
+        torch = None  # type: ignore[assignment]
+    else:
+        raise
 
 
 def test_event_driven_backtester_builds_equity_curve() -> None:

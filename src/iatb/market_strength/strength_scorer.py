@@ -53,13 +53,13 @@ class StrengthScorer:
         """
         self._cache_enabled = cache_enabled
         if cache_enabled:
-            self._normalize = self._normalize_cached
-            self._normalize_concave = self._normalize_concave_cached
-            self._regime_score = self._regime_score_cached
+            self._normalize = self._normalize_cached  # type: ignore[assignment]
+            self._normalize_concave = self._normalize_concave_cached  # type: ignore[assignment]
+            self._regime_score = self._regime_score_cached  # type: ignore[assignment]
         else:
-            self._normalize = self._normalize_uncached
-            self._normalize_concave = self._normalize_concave_uncached
-            self._regime_score = self._regime_score_uncached
+            self._normalize = self._normalize_uncached  # type: ignore[assignment]
+            self._normalize_concave = self._normalize_concave_uncached  # type: ignore[assignment]
+            self._regime_score = self._regime_score_uncached  # type: ignore[assignment]
 
     def score(self, exchange: Exchange, inputs: StrengthInputs) -> Decimal:
         self._validate(exchange, inputs)
@@ -133,19 +133,16 @@ class StrengthScorer:
         return Decimal("0.15")
 
     # Uncached versions (used when caching is disabled)
-    @staticmethod
-    def _normalize_uncached(value: Decimal, *, cap: Decimal) -> Decimal:
+    def _normalize_uncached(self, value: Decimal, *, cap: Decimal) -> Decimal:
         normalized = value / cap if cap > Decimal("0") else Decimal("0")
         return max(Decimal("0"), min(Decimal("1"), normalized))
 
-    @staticmethod
-    def _normalize_concave_uncached(value: Decimal, *, cap: Decimal) -> Decimal:
+    def _normalize_concave_uncached(self, value: Decimal, *, cap: Decimal) -> Decimal:
         linear = value / cap if cap > Decimal("0") else Decimal("0")
         clamped = max(Decimal("0"), min(Decimal("1"), linear))
         return clamped.sqrt()
 
-    @staticmethod
-    def _regime_score_uncached(regime: MarketRegime) -> Decimal:
+    def _regime_score_uncached(self, regime: MarketRegime) -> Decimal:
         if regime == MarketRegime.BULL:
             return Decimal("1.0")
         if regime == MarketRegime.SIDEWAYS:

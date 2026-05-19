@@ -465,7 +465,7 @@ class RetryConfig:
 
 
 async def retry_with_backoff(
-    func: Any,  # noqa: ANN401
+    func: Any,
     *,
     config: RetryConfig | None = None,
     circuit_breaker: CircuitBreaker | None = None,
@@ -506,7 +506,7 @@ async def retry_with_backoff(
         try:
             result = await func(**kwargs)
             await circuit_breaker.record_success()
-            return result
+            return result  # type: ignore[no-any-return]
         except Exception as e:
             if await _handle_error(e, circuit_breaker, config, attempt, logger):
                 continue
