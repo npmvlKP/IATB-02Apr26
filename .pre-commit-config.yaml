@@ -24,6 +24,7 @@ repos:
           - pydantic-settings>=2.0.0
           - types-requests
           - types-toml
+          - types-redis
           - pyotp
           - numpy
           - mlflow
