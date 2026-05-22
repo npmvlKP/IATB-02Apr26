@@ -204,7 +204,10 @@ def update_daily_pnl(pnl: Decimal) -> None:
     daily_pnl.set(float(pnl))  # noqa: G7 – API boundary conversion to float for Prometheus
 
 
-def record_scan_cycle(scanner_type: str, duration: float) -> None:
+def record_scan_cycle(
+    scanner_type: str,
+    duration: float,  # float: non-financial metric
+) -> None:
     """Record scan cycle duration.
 
     Args:
@@ -214,7 +217,10 @@ def record_scan_cycle(scanner_type: str, duration: float) -> None:
     scan_cycle_duration.labels(scanner_type=scanner_type).observe(duration)
 
 
-def record_model_inference(model_name: str, duration: float) -> None:
+def record_model_inference(
+    model_name: str,
+    duration: float,  # float: non-financial metric
+) -> None:
     """Record model inference duration.
 
     Args:
@@ -268,7 +274,7 @@ def record_order_latency(
     exchange: str,
     symbol: str,
     order_type: str,
-    latency_seconds: float,
+    latency_seconds: float,  # float: non-financial metric
 ) -> None:
     """Record order latency from signal to fill.
 
@@ -315,7 +321,10 @@ def record_broker_api_call(
     ).inc()
 
 
-def record_risk_check_duration(check_type: str, duration_seconds: float) -> None:
+def record_risk_check_duration(
+    check_type: str,
+    duration_seconds: float,  # float: non-financial metric
+) -> None:
     """Record risk check duration.
 
     Args:
@@ -363,7 +372,7 @@ def record_data_source_switch(
 def record_data_source_latency(
     provider_name: str,
     method_name: str,
-    latency_seconds: float,
+    latency_seconds: float,  # float: non-financial metric
 ) -> None:
     """Record data provider request latency.
 
@@ -467,7 +476,10 @@ def record_data_source_request(source: str, status: str) -> None:
     data_source_requests_total.labels(source=source, status=status).inc()
 
 
-def record_data_source_request_latency(source: str, latency_seconds: float) -> None:
+def record_data_source_request_latency(
+    source: str,
+    latency_seconds: float,  # float: non-financial metric
+) -> None:
     """Record data source request latency.
 
     Args:
@@ -489,7 +501,10 @@ def record_data_source_fallback(from_source: str, to_source: str) -> None:
     ).inc()
 
 
-def update_data_freshness(source: str, freshness_seconds: float) -> None:
+def update_data_freshness(
+    source: str,
+    freshness_seconds: float,  # float: non-financial metric
+) -> None:
     """Update data freshness for a source.
 
     Args:

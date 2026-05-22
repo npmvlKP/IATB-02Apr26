@@ -65,7 +65,7 @@ class ClockDriftDetector:
     def __init__(
         self,
         ntp_servers: list[str] | None = None,
-        drift_threshold_seconds: float = DEFAULT_DRIFT_THRESHOLD_SECONDS,
+        drift_threshold_seconds: float = DEFAULT_DRIFT_THRESHOLD_SECONDS,  # float: non-financial metric
         enable_auto_correction: bool = False,
     ) -> None:
         self._ntp_servers = ntp_servers or DEFAULT_NTP_SERVERS
@@ -144,7 +144,11 @@ class ClockDriftDetector:
                 raise ClockError(msg)
 
             unpacked = struct.unpack(ntp_packet_format, data[:48])
-            transmit_timestamp = unpacked[10] + float(unpacked[11]) / 2**32
+            transmit_timestamp = (
+                unpacked[10]
+                + float(unpacked[11])
+                / 2**32  # float: non-financial metric (NTP timestamp)
+            )
 
             return datetime.fromtimestamp(transmit_timestamp - ntp_delta, UTC)
         finally:

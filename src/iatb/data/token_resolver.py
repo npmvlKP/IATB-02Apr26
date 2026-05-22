@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -242,7 +242,7 @@ class SymbolTokenResolver:
             ConfigError: If refresh fails or symbol still not found.
         """
         # Check if we need to refresh (rate limit: once per minute per exchange)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         last_refresh = self._last_api_refresh.get(exchange)
         if last_refresh and (now - last_refresh) < timedelta(minutes=1):
             logger.debug("Skipping API refresh, recent fetch for %s", exchange.value)
@@ -301,7 +301,7 @@ class SymbolTokenResolver:
             )
 
             # Update last refresh timestamp
-            self._last_api_refresh[exchange] = datetime.now(timezone.utc)
+            self._last_api_refresh[exchange] = datetime.now(UTC)
 
         except Exception as exc:
             msg = f"Failed to refresh instruments from Kite API for {exchange.value}: {exc}"
@@ -322,7 +322,7 @@ class SymbolTokenResolver:
             Number of instruments loaded.
         """
         instruments = self._build_instruments_list(raw_instruments, exchange)
-        now_utc = datetime.now(timezone.utc).isoformat()
+        now_utc = datetime.now(UTC).isoformat()
         return self._load_instruments_to_cache(instruments, now_utc)
 
     def _build_instruments_list(

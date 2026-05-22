@@ -3,7 +3,7 @@ Normalized contracts for market data providers.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
@@ -20,7 +20,7 @@ from iatb.core.types import (
 
 def _utc_now_timestamp() -> Timestamp:
     """Create a strict timezone.utc timestamp for data-model defaults."""
-    return create_timestamp(datetime.now(timezone.utc))
+    return create_timestamp(datetime.now(UTC))
 
 
 @dataclass(frozen=True)

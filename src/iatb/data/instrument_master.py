@@ -12,7 +12,7 @@ from __future__ import annotations
 import csv
 import logging
 import sqlite3
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -148,7 +148,7 @@ class InstrumentMaster:
             msg = f"Instrument CSV not found: {csv_path}"
             raise ConfigError(msg)
         self._purge_stale()
-        now_utc = datetime.now(timezone.utc).isoformat()
+        now_utc = datetime.now(UTC).isoformat()
         loaded = 0
         with csv_path.open(encoding="utf-8") as fh, self._connect() as conn:
             reader = csv.DictReader(fh)
@@ -181,7 +181,7 @@ class InstrumentMaster:
         """Fetch instruments from a broker provider and cache."""
         instruments = await provider.fetch_instruments(exchange)
         self._purge_stale()
-        now_utc = datetime.now(timezone.utc).isoformat()
+        now_utc = datetime.now(UTC).isoformat()
         loaded = 0
         with self._connect() as conn:
             for inst in instruments:
@@ -258,7 +258,7 @@ class InstrumentMaster:
         self, underlying: str, exchange: Exchange, instrument_type: InstrumentType
     ) -> date:
         """Get the nearest future expiry for an underlying and instrument type."""
-        today_str = datetime.now(timezone.utc).date().isoformat()
+        today_str = datetime.now(UTC).date().isoformat()
         query = (
             "SELECT DISTINCT expiry FROM instruments "
             "WHERE name = ? AND exchange = ? AND instrument_type = ? "
@@ -275,7 +275,7 @@ class InstrumentMaster:
         return date.fromisoformat(str(row["expiry"]))
 
     def _purge_stale(self) -> None:
-        cutoff = (datetime.now(timezone.utc) - _CACHE_TTL).isoformat()
+        cutoff = (datetime.now(UTC) - _CACHE_TTL).isoformat()
         with self._connect() as conn:
             deleted = conn.execute(
                 "DELETE FROM instruments WHERE fetched_at_utc < ?", (cutoff,)

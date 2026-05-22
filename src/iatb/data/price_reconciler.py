@@ -21,7 +21,7 @@ Current Architecture (single-source truth):
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
@@ -223,7 +223,7 @@ class PriceReconciler:
         self, scanner_price: PriceDataPoint
     ) -> ReconciliationResult:
         """Check scanner price timestamp validity."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if scanner_price.data_type == "day":
             days_diff = (now - scanner_price.timestamp).days
@@ -261,7 +261,7 @@ class PriceReconciler:
         self, execution_price: PriceDataPoint
     ) -> ReconciliationResult:
         """Check execution price timestamp validity."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         exec_drift = abs((now - execution_price.timestamp).total_seconds())
 
         if exec_drift > self._config.max_timestamp_drift_seconds:

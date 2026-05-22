@@ -16,7 +16,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, cast
@@ -412,7 +412,7 @@ class KiteWebSocketProvider(DataProvider):
         self._is_connected = True
         self._is_running = True
         self._connection_state = ConnectionState.CONNECTED
-        self._stats.connected_at = datetime.now(timezone.utc)
+        self._stats.connected_at = datetime.now(UTC)
         _LOGGER.info(
             "WebSocket connected",
             extra={"api_key": self._api_key[:8] + "..."},
@@ -611,7 +611,7 @@ class KiteWebSocketProvider(DataProvider):
 
     def _on_ticks(self, ws: Any, ticks: list[dict[str, object]]) -> None:
         """Handle incoming ticks."""
-        self._last_heartbeat_utc = datetime.now(timezone.utc)
+        self._last_heartbeat_utc = datetime.now(UTC)
         self._stats.ticks_received += len(ticks)
         self._stats.last_tick_at = self._last_heartbeat_utc
 
@@ -639,7 +639,7 @@ class KiteWebSocketProvider(DataProvider):
 
     def _on_connect(self, ws: Any, response: dict[str, object]) -> None:
         """Handle connection event."""
-        self._last_heartbeat_utc = datetime.now(timezone.utc)
+        self._last_heartbeat_utc = datetime.now(UTC)
         self._stats.connected_at = self._last_heartbeat_utc
         _LOGGER.info("WebSocket connection established")
 
@@ -688,7 +688,7 @@ class KiteWebSocketProvider(DataProvider):
         self._connection_state = ConnectionState.RECONNECTING
         self._reconnect_attempt += 1
         self._stats.reconnect_attempts = self._reconnect_attempt
-        self._stats.last_reconnect_at = datetime.now(timezone.utc)
+        self._stats.last_reconnect_at = datetime.now(UTC)
 
         if self._reconnect_attempt > self._max_reconnect_attempts:
             _LOGGER.error(
@@ -743,8 +743,8 @@ class KiteWebSocketProvider(DataProvider):
         self._is_connected = True
         self._connection_state = ConnectionState.CONNECTED
         self._reconnect_attempt = 0
-        self._last_heartbeat_utc = datetime.now(timezone.utc)
-        self._stats.last_reconnect_at = datetime.now(timezone.utc)
+        self._last_heartbeat_utc = datetime.now(UTC)
+        self._stats.last_reconnect_at = datetime.now(UTC)
 
         _LOGGER.info(
             "WebSocket reconnected successfully",
@@ -757,7 +757,7 @@ class KiteWebSocketProvider(DataProvider):
             try:
                 await asyncio.sleep(self._heartbeat_interval_seconds)
 
-                now_utc = datetime.now(timezone.utc)
+                now_utc = datetime.now(UTC)
 
                 if self._last_heartbeat_utc is None:
                     self._last_heartbeat_utc = now_utc
@@ -814,7 +814,7 @@ class KiteWebSocketProvider(DataProvider):
             current_memory = 0
 
         self._stats.memory_usage_bytes = current_memory
-        self._stats.last_memory_check = datetime.now(timezone.utc)
+        self._stats.last_memory_check = datetime.now(UTC)
 
         if current_memory > self._stats.memory_peak_bytes:
             self._stats.memory_peak_bytes = current_memory
@@ -925,7 +925,7 @@ class KiteWebSocketProvider(DataProvider):
 
             volume = tick_data.get("volume_traded", 0)
 
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
             exchange_ts = tick_data.get("exchange_timestamp")
             if exchange_ts and isinstance(exchange_ts, datetime):
                 timestamp = (

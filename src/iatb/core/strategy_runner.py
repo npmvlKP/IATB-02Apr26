@@ -137,7 +137,7 @@ class StrategyScanResult:
     success: bool
     signals_generated: int
     orders_submitted: int
-    scan_duration_seconds: float
+    scan_duration_seconds: float  # float: non-financial metric
     errors: list[str]
     timestamp_utc: datetime
 
@@ -153,7 +153,7 @@ class SharedDataProviderPool:
         self,
         providers: dict[Exchange, DataProvider],
         *,
-        requests_per_second: float = 3.0,
+        requests_per_second: float = 3.0,  # float: non-financial metric
         burst_capacity: int = 10,
     ) -> None:
         """Initialize shared provider pool.

@@ -44,9 +44,9 @@ class VectorBTConfig:
 
     # Exchange and market settings
     exchange: Exchange = Exchange.NSE
-    segment: Literal["equity_delivery", "equity_intraday", "fo", "mcx"] = (
-        "equity_intraday"
-    )
+    segment: Literal[
+        "equity_delivery", "equity_intraday", "fo", "mcx"
+    ] = "equity_intraday"
     initial_capital: Decimal = Decimal("100000")
 
     # Trading parameters

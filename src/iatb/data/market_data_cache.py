@@ -10,7 +10,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class CacheEntry:
     def is_expired(self, ttl_seconds: int) -> bool:
         """Check if cache entry has expired."""
         expiry_time = self.cached_at + timedelta(seconds=ttl_seconds)
-        return datetime.now(timezone.utc) >= expiry_time
+        return datetime.now(UTC) >= expiry_time
 
 
 class MarketDataCache:
@@ -113,7 +113,7 @@ class MarketDataCache:
         cache_key = self._generate_cache_key(symbol, start_date, end_date)
         entry = CacheEntry(
             data=data,
-            cached_at=datetime.now(timezone.utc),
+            cached_at=datetime.now(UTC),
             cache_key=cache_key,
         )
 

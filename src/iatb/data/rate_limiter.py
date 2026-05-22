@@ -9,7 +9,7 @@ Also includes retry/backoff strategy with circuit breaker for API resilience.
 import asyncio
 import random
 from collections.abc import Awaitable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, TypeVar
 
@@ -56,11 +56,11 @@ class RateLimiter:
         self._burst_capacity = burst_capacity
 
         self._tokens = float(burst_capacity)
-        self._last_refill = datetime.now(timezone.utc)
+        self._last_refill = datetime.now(UTC)
         self._bucket_capacity = float(burst_capacity)
 
         self._minute_count = 0
-        self._minute_start = datetime.now(timezone.utc)
+        self._minute_start = datetime.now(UTC)
         self._minute_limit: int | None = None
 
         self._concurrent_count = 0
@@ -142,7 +142,7 @@ class RateLimiter:
 
     async def _refill_tokens(self) -> None:
         """Refill tokens based on elapsed time."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         elapsed = (now - self._last_refill).total_seconds()
 
         if elapsed > 0:
@@ -156,7 +156,7 @@ class RateLimiter:
         if self._minute_limit is None:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         elapsed_seconds = (now - self._minute_start).total_seconds()
 
         # Reset minute counter if minute has passed
@@ -170,7 +170,7 @@ class RateLimiter:
                 wait_time = 60.0 - elapsed_seconds
                 await asyncio.sleep(wait_time)
                 self._minute_count = 0
-                self._minute_start = datetime.now(timezone.utc)
+                self._minute_start = datetime.now(UTC)
 
         self._minute_count += 1
 
@@ -319,7 +319,7 @@ class CircuitBreaker:
                 # Check if reset timeout has passed
                 if self._last_failure_time is not None:
                     elapsed = (
-                        datetime.now(timezone.utc) - self._last_failure_time
+                        datetime.now(UTC) - self._last_failure_time
                     ).total_seconds()
                     if elapsed >= self._reset_timeout:
                         # Transition to HALF_OPEN to test recovery
@@ -354,7 +354,7 @@ class CircuitBreaker:
         """
         async with self._lock:
             self._failure_count += 1
-            self._last_failure_time = datetime.now(timezone.utc)
+            self._last_failure_time = datetime.now(UTC)
 
             if self._failure_count >= self._failure_threshold:
                 if self._state != CircuitState.OPEN:

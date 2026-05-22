@@ -15,7 +15,7 @@ Key endpoints wrapped:
 import asyncio
 import importlib
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -300,7 +300,7 @@ class KiteProvider(DataProvider):
         self, since: Timestamp | None, limit: int
     ) -> tuple[datetime, datetime]:
         """Calculate start and end dates for historical data fetch."""
-        end_date = datetime.now(timezone.utc)
+        end_date = datetime.now(UTC)
         if since is not None:
             start_date = datetime(
                 since.year, since.month, since.day, tzinfo=timezone.utc

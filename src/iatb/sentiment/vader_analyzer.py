@@ -16,7 +16,8 @@ from iatb.sentiment.base import (
 
 
 class VaderLike(Protocol):
-    def polarity_scores(self, text: str) -> object: ...
+    def polarity_scores(self, text: str) -> object:
+        ...
 
 
 VaderFactory = Callable[[], VaderLike]

@@ -6,7 +6,7 @@ import asyncio
 import importlib
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any, cast
 
 from iatb.core.enums import Exchange
@@ -168,7 +168,7 @@ class JugaadProvider(DataProvider):
 
     @staticmethod
     def _history_window(since: Timestamp | None, limit: int) -> tuple[date, date]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         end_date = now.date()
         if since is not None:
             return since.date(), end_date

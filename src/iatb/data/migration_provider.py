@@ -12,7 +12,7 @@ It allows gradual migration from jugaad to other DataProvider implementations wi
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
@@ -389,7 +389,7 @@ class MigrationProvider(DataProvider):
             exchange=exchange,
             default_source=default_source,
             fallback_source=fallback_source,
-            timestamp_utc=datetime.now(timezone.utc),
+            timestamp_utc=datetime.now(UTC),
             bars_count_match=False,
             price_diff_pct=Decimal("0"),
             volume_diff_pct=Decimal("0"),
@@ -410,7 +410,7 @@ class MigrationProvider(DataProvider):
             exchange=exchange,
             default_source=default_source,
             fallback_source=fallback_source,
-            timestamp_utc=datetime.now(timezone.utc),
+            timestamp_utc=datetime.now(UTC),
             bars_count_match=True,
             price_diff_pct=Decimal("0"),
             volume_diff_pct=Decimal("0"),
@@ -449,7 +449,7 @@ class MigrationProvider(DataProvider):
             exchange=exchange,
             default_source=default_source,
             fallback_source=fallback_source,
-            timestamp_utc=datetime.now(timezone.utc),
+            timestamp_utc=datetime.now(UTC),
             bars_count_match=True,
             price_diff_pct=price_diff_pct,
             volume_diff_pct=volume_diff_pct,
