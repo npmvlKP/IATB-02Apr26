@@ -123,6 +123,7 @@ def resolver_with_api(
     )
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestResolveTokenCacheHit:
     """Scenario 1: resolve_token with symbol found in InstrumentMaster cache."""
 
@@ -146,11 +147,11 @@ class TestResolveTokenCacheHit:
         assert token == 408065
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestResolveTokenCacheMissApiFallback:
     """Scenario 2: resolve_token with cache miss -> API fallback -> success."""
 
     @pytest.mark.asyncio()
-    @pytest.mark.xfail(reason="Flaky under parallel load - race condition")
     async def test_cache_miss_api_fallback(
         self, resolver_with_api: SymbolTokenResolver
     ) -> None:
@@ -160,6 +161,7 @@ class TestResolveTokenCacheMissApiFallback:
         assert mock_client.instruments.called
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestResolveMultipleTokensMixed:
     """Scenario 3: resolve_multiple_tokens with mix of cached and API-resolved symbols."""
 
@@ -186,6 +188,7 @@ class TestResolveMultipleTokensMixed:
         assert tokens["INFY"] == 779521
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestExtractInstrumentFromApi:
     """Scenario 4: _extract_instrument_from_api with valid dict."""
 
@@ -235,6 +238,7 @@ class TestExtractInstrumentFromApi:
         assert _extract_instrument_from_api(raw, Exchange.NSE) is None
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestParseInstrumentTokenEdge:
     """Scenario 5: _parse_instrument_token with int and str inputs (edge paths)."""
 
@@ -260,6 +264,7 @@ class TestParseInstrumentTokenEdge:
             _parse_instrument_token([1, 2], field_name="tok")
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeEmptySymbol:
     """Scenario 6: Empty symbol -> ConfigError."""
 
@@ -278,6 +283,7 @@ class TestEdgeEmptySymbol:
             await resolver_no_api.resolve_token("   ", Exchange.NSE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeUnsupportedExchange:
     """Scenario 7: Unsupported exchange -> ConfigError."""
 
@@ -300,6 +306,7 @@ class TestEdgeUnsupportedExchange:
             await resolver_no_api.resolve_token("ETH", Exchange.COINDCX)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeForceRefresh:
     """Scenario 8: force_refresh=True bypasses cache."""
 
@@ -327,6 +334,7 @@ class TestEdgeForceRefresh:
         assert mock_client.instruments.called
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeRateLimit:
     """Scenario 9: Rate-limit — second refresh within 1 minute still refreshes.
 
@@ -349,6 +357,7 @@ class TestEdgeRateLimit:
         assert second_ts >= first_ts
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeNoKiteProviderCacheMiss:
     """Scenario 10: kite_provider is None and cache miss -> ConfigError."""
 
@@ -362,11 +371,11 @@ class TestEdgeNoKiteProviderCacheMiss:
             await resolver_no_api.resolve_token("UNKNOWN", Exchange.NSE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgePartialFailuresMultiple:
     """Scenario 11: Partial failures in resolve_multiple_tokens."""
 
     @pytest.mark.asyncio()
-    @pytest.mark.xfail(reason="Flaky under parallel load - race condition")
     async def test_partial_failures_returns_partial_and_logs(
         self,
         resolver_with_api: SymbolTokenResolver,
@@ -400,6 +409,7 @@ class TestEdgePartialFailuresMultiple:
         assert "Partial resolution failures" in caplog.text
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeSafeDecimal:
     """Scenario 12: _safe_decimal with int, str, float, Decimal, invalid types."""
 
@@ -444,6 +454,7 @@ class TestEdgeSafeDecimal:
         assert result == Decimal("1")
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEdgeParseExpiry:
     """Scenario 13: _parse_expiry with datetime, ISO string, None, empty."""
 
@@ -486,6 +497,7 @@ class TestEdgeParseExpiry:
         assert result is None
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestErrorKiteApiNonList:
     """Scenario 14: Kite API returns non-list -> ConfigError."""
 
@@ -524,6 +536,7 @@ class TestErrorKiteApiNonList:
             await resolver._refresh_instruments_from_api(Exchange.NSE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestErrorKiteApiException:
     """Scenario 15: Kite API exception -> ConfigError."""
 
@@ -564,6 +577,7 @@ class TestErrorKiteApiException:
             await resolver._refresh_instruments_from_api(Exchange.NSE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestErrorSQLiteConnectionFailure:
     """Scenario 16: SQLite connection failure -> logged, returns 0."""
 
@@ -627,6 +641,7 @@ class TestErrorSQLiteConnectionFailure:
         assert loaded == 0
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestErrorAllSymbolsFail:
     """Scenario 17: All symbols fail -> ConfigError."""
 
@@ -649,6 +664,7 @@ class TestErrorAllSymbolsFail:
             await resolver.resolve_multiple_tokens(["FOO1", "FOO2"], Exchange.NSE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestBuildInstrumentsList:
     """Cover _build_instruments_list with various raw instrument shapes."""
 
@@ -765,6 +781,7 @@ class TestBuildInstrumentsList:
         assert result[0].segment == "EQ"
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestParseStrike:
     """Cover _parse_strike with various edge inputs."""
 
@@ -793,6 +810,7 @@ class TestParseStrike:
         assert resolver_no_api._parse_strike("abc") is None
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestGetInsertSql:
     """Cover _get_insert_sql returns valid SQL."""
 
@@ -802,6 +820,7 @@ class TestGetInsertSql:
         assert "instruments" in sql
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestInsertInstrumentsBatch:
     """Cover _insert_instruments_batch with valid and error paths."""
 
@@ -855,6 +874,7 @@ class TestInsertInstrumentsBatch:
         assert loaded == 0
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestProcessAndLoadInstruments:
     """Cover _process_and_load_instruments async method."""
 
@@ -887,6 +907,7 @@ class TestProcessAndLoadInstruments:
         assert loaded == 0
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestRefreshAndResolve:
     """Cover _refresh_and_resolve including rate-limit branch."""
 
@@ -920,6 +941,7 @@ class TestRefreshAndResolve:
         assert token == 408065
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestEnsureSupportedExchangeAdditional:
     """Additional coverage for _ensure_supported_exchange."""
 
@@ -932,6 +954,7 @@ class TestEnsureSupportedExchangeAdditional:
             _ensure_supported_exchange(Exchange.BINANCE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestMapInstrumentTypeAdditional:
     """Additional coverage for _map_instrument_type edge cases."""
 
@@ -955,6 +978,7 @@ class TestMapInstrumentTypeAdditional:
         assert result == InstrumentType.FUTURE
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestResolveMultipleTokensEmptyAndUnsupported:
     """Additional coverage for resolve_multiple_tokens edge cases."""
 
@@ -996,6 +1020,7 @@ class TestResolveMultipleTokensEmptyAndUnsupported:
         assert mock_client.instruments.called
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestResolveMultipleTokensWithApiFallback:
     """Cover resolve_multiple_tokens where API resolves cache-miss symbols."""
 
@@ -1010,6 +1035,7 @@ class TestResolveMultipleTokensWithApiFallback:
         assert tokens["RELIANCE"] == 408065
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestInstrumentMasterGetInstrumentNotFound:
     """Cover InstrumentMaster.get_instrument raising ConfigError on miss."""
 
@@ -1018,6 +1044,7 @@ class TestInstrumentMasterGetInstrumentNotFound:
             master.get_instrument("NONEXISTENT", Exchange.NSE)
 
 
+@pytest.mark.xdist_group("token_resolver")
 class TestExtractInstrumentWithNoneValues:
     """Cover _extract_instrument_from_api with None-valued fields."""
 

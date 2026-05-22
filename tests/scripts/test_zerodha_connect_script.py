@@ -9,13 +9,11 @@ from typing import Any
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.execution.zerodha_connection import ZerodhaSession
 
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "zerodha_connect.py"
 _RELEVANT_ENV_VARS = (

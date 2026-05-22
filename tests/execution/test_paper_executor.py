@@ -4,7 +4,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange, MarketType, OrderSide, OrderStatus
 from iatb.execution.base import OrderRequest
 from iatb.execution.paper_executor import (
@@ -16,8 +15,6 @@ from iatb.execution.paper_executor import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
-
 
 # ---------------------------------------------------------------------------
 # Existing tests (backward compatible)

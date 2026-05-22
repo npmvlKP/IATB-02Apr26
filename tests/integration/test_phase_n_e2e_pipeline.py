@@ -331,6 +331,7 @@ class TestE2EScannerToSelection:
         assert contexts[0].side == OrderSide.BUY
 
 
+@pytest.mark.xdist_group("e2e_pipeline")
 class TestE2ERiskToExecution:
     """E2E test: Risk gates → Execution pipeline."""
 

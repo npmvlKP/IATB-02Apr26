@@ -10,7 +10,6 @@ from uuid import UUID
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
 from iatb.core.events import (
     MarketTickEvent,
@@ -24,7 +23,6 @@ from iatb.core.types import create_price, create_quantity
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 class TestMarketTickEvent:

@@ -246,6 +246,7 @@ def _create_simulated_order_manager(
     )
 
 
+@pytest.mark.xdist_group("live_simulation")
 class TestSimulatedBrokerFills:
     """Test simulated broker produces realistic fills."""
 
@@ -314,6 +315,7 @@ class TestSimulatedBrokerFills:
         assert broker.total_notional > Decimal("0")
 
 
+@pytest.mark.xdist_group("live_simulation")
 class TestLiveSimulationPipeline:
     """Test full pipeline with live-like simulated data."""
 
@@ -420,6 +422,7 @@ class TestLiveSimulationPipeline:
         assert provider.tick_count == 1
 
 
+@pytest.mark.xdist_group("live_simulation")
 class TestSimulatedRiskScenarios:
     """Test risk scenarios in simulated environment."""
 

@@ -992,7 +992,7 @@ class TestDuckDBStoreQueryParquet:
         store = DuckDBStore(tmp_path / "test.duckdb")
         # DuckDB raises duckdb.InvalidInputException for IO errors in modern versions
         duckdb = pytest.importorskip("duckdb")
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(duckdb.IOException):
             store.query_parquet("/nonexistent/*.parquet")
 
 

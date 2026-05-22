@@ -29,11 +29,9 @@ class _CCXTExchangeClient(Protocol):
         timeframe: str,
         since: int | None = None,
         limit: int | None = None,
-    ) -> object:
-        ...
+    ) -> object: ...
 
-    def fetch_ticker(self, symbol: str) -> object:
-        ...
+    def fetch_ticker(self, symbol: str) -> object: ...
 
 
 def _exchange_id(exchange: Exchange) -> str:

@@ -10,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_quantity, create_timestamp
@@ -20,7 +19,6 @@ from iatb.storage.duckdb_store import DuckDBStore
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def _bar(minute_offset: int) -> OHLCVBar:

@@ -17,6 +17,7 @@ from iatb.sentiment.news_analyzer import (
 )
 
 
+@pytest.mark.xdist_group("news_analyzer")
 class TestNewsAnalyzerConfig:
     """Test NewsAnalyzerConfig."""
 
@@ -80,6 +81,7 @@ class TestNewsAnalyzerConfig:
         assert config.max_age_hours == 0
 
 
+@pytest.mark.xdist_group("news_analyzer")
 class TestNewsArticle:
     """Test NewsArticle dataclass."""
 
@@ -113,6 +115,7 @@ class TestNewsArticle:
         assert article.relevance_score == Decimal("0.9")
 
 
+@pytest.mark.xdist_group("news_analyzer")
 class TestNewsAnalyzer:
     """Test NewsAnalyzer class."""
 
@@ -371,6 +374,7 @@ class TestNewsAnalyzer:
             assert result.sentiment_label == "NEGATIVE"
 
 
+@pytest.mark.xdist_group("news_analyzer")
 class TestNewsAnalyzeBatch:
     """Test analyze_batch method."""
 
@@ -411,6 +415,7 @@ class TestNewsAnalyzeBatch:
         assert len(results) == 0
 
 
+@pytest.mark.xdist_group("news_analyzer")
 class TestMockNewsSource:
     """Test MockNewsSource."""
 

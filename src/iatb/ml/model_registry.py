@@ -100,10 +100,9 @@ class ModelRegistry:
             from transformers import AutoTokenizer
 
             # Test tokenizer loading with cast for untyped function
-            tokenizer = typing.cast(
-                Any,
-                AutoTokenizer.from_pretrained("distilbert-base-uncased"),  # type: ignore[no-untyped-call,unused-ignore]
-            )  # nosec B615
+            # fmt: off
+            tokenizer = typing.cast(Any, AutoTokenizer.from_pretrained("distilbert-base-uncased"))  # type: ignore[no-untyped-call]  # nosec B615
+            # fmt: on
 
             if tokenizer is None:
                 _LOGGER.error("Transformers tokenizer loading failed")
@@ -158,14 +157,10 @@ class ModelRegistry:
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            model = typing.cast(
-                Any,
-                AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert"),  # type: ignore[no-untyped-call,unused-ignore]
-            )  # nosec B615
-            tokenizer = typing.cast(
-                Any,
-                AutoTokenizer.from_pretrained("ProsusAI/finbert"),  # type: ignore[no-untyped-call,unused-ignore]
-            )  # nosec B615
+            # fmt: off
+            model = typing.cast(Any, AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert"))  # nosec B615
+            tokenizer = typing.cast(Any, AutoTokenizer.from_pretrained("ProsusAI/finbert"))  # type: ignore[no-untyped-call]  # nosec B615
+            # fmt: on
 
             if model is None or tokenizer is None:
                 return False, "FinBERT model or tokenizer is None", True

@@ -764,6 +764,7 @@ class TestRateLimiterIntegration:
     """Rate limiter integration with KiteProvider."""
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("kite_rate_limiter")
     async def test_acquire_release_cycle(self) -> None:
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
         provider = _make_provider(rate_limiter=limiter)
@@ -774,6 +775,7 @@ class TestRateLimiterIntegration:
         assert isinstance(bars, list)
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("kite_rate_limiter")
     async def test_burst_capacity_respected(self) -> None:
         limiter = RateLimiter(requests_per_second=3.0, burst_capacity=2)
         provider = _make_provider(rate_limiter=limiter)
@@ -859,6 +861,7 @@ class TestCircuitBreakerInteraction:
     """Circuit breaker integration with KiteProvider."""
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("kite_circuit_breaker")
     async def test_circuit_breaker_opens_after_failures(self) -> None:
         cb = CircuitBreaker(failure_threshold=2, reset_timeout=60.0)
 
@@ -878,6 +881,7 @@ class TestCircuitBreakerInteraction:
         assert cb.state.value == "open"
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("kite_circuit_breaker")
     async def test_circuit_open_blocks_request(self) -> None:
         cb = CircuitBreaker(failure_threshold=1, reset_timeout=60.0)
 
@@ -1096,6 +1100,7 @@ class TestRetryWithBackoffIntegration:
     """Integration tests for _retry_with_backoff with rate limiter."""
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("kite_retry_backoff")
     async def test_rate_limiter_acquire_release_called(self) -> None:
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
         provider = _make_provider(rate_limiter=limiter)
@@ -1107,6 +1112,7 @@ class TestRetryWithBackoffIntegration:
         assert result == "done"
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("kite_retry_backoff")
     async def test_rate_limiter_released_on_error(self) -> None:
         limiter = RateLimiter(requests_per_second=10.0, burst_capacity=5)
         provider = _make_provider(

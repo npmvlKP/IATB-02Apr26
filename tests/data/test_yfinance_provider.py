@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_timestamp
@@ -16,7 +15,6 @@ from iatb.data.yfinance_provider import YFinanceProvider
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 class _FakeHistory:

@@ -75,6 +75,7 @@ def _keyring_side_effect(token: str, timestamp: str) -> MagicMock:
     return MagicMock(side_effect=[token, timestamp])
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestIsTokenFreshBefore6AMIST:
     """Scenario 1: is_token_fresh() with token created before 6 AM IST -> True."""
 
@@ -89,6 +90,7 @@ class TestIsTokenFreshBefore6AMIST:
             assert tm.is_token_fresh() is True
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestIsTokenFreshAfter6AMIST:
     """Scenario 2: is_token_fresh() with token created after 6 AM IST -> expired next day."""
 
@@ -125,6 +127,7 @@ class TestIsTokenFreshAfter6AMIST:
                 assert tm.is_token_fresh() is False
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestIsTokenValidForPreMarket:
     """Scenario 3: is_token_valid_for_pre_market() at various IST times."""
 
@@ -167,6 +170,7 @@ class TestIsTokenValidForPreMarket:
             assert tm.is_token_valid_for_pre_market() is False
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestShouldRefreshToken:
     """Scenario 4: should_refresh_token() with buffer_minutes."""
 
@@ -207,6 +211,7 @@ class TestShouldRefreshToken:
             assert tm.should_refresh_token() is True
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestAutoRefreshToken:
     """Scenario 5: auto_refresh_token() with TOTP secret."""
 
@@ -245,6 +250,7 @@ class TestAutoRefreshToken:
                     tm.auto_refresh_token()
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestExchangeRequestToken:
     """Scenario 6: exchange_request_token() -> access token."""
 
@@ -270,6 +276,7 @@ class TestExchangeRequestToken:
             mgr.exchange_request_token("req")
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestStoreAccessToken:
     """Scenario 7: store_access_token() -> keyring + .env persistence."""
 
@@ -285,6 +292,7 @@ class TestStoreAccessToken:
         assert "2026-04-12T10:30:00" in calls[1][0][2]
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestGetAccessTokenFallbackChain:
     """Scenario 8: get_access_token() with keyring -> env -> .env fallback."""
 
@@ -335,6 +343,7 @@ class TestGetAccessTokenFallbackChain:
                     assert tm_no_totp.get_access_token() is None
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestGetKiteClient:
     """Scenario 9: get_kite_client() -> KiteConnect instance."""
 
@@ -367,6 +376,7 @@ class TestGetKiteClient:
                 tm.get_kite_client(access_token="tok")
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestPersistSessionTokens:
     """Scenario 10: persist_session_tokens() -> both keyring and .env."""
 
@@ -399,6 +409,7 @@ class TestPersistSessionTokens:
             assert result is None
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestEdge6AMISTBoundary:
     """Scenario 11: Edge - Token at 6 AM IST boundary."""
 
@@ -429,6 +440,7 @@ class TestEdge6AMISTBoundary:
                 assert tm.is_token_fresh() is True
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestEdge9AMISTPreMarketBoundary:
     """Scenario 12: Edge - Token at 9 AM IST pre-market boundary."""
 
@@ -461,6 +473,7 @@ class TestEdge9AMISTPreMarketBoundary:
                 assert tm.is_token_valid_for_pre_market() is False
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestEdgeEmptyEnvFile:
     """Scenario 13: Edge - Empty .env file."""
 
@@ -487,6 +500,7 @@ class TestEdgeEmptyEnvFile:
                     assert tm_no_totp.get_access_token() is None
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestEdgeEnvExampleResolves:
     """Scenario 14: Edge - .env.example resolves to .env path."""
 
@@ -511,6 +525,7 @@ class TestEdgeEnvExampleResolves:
         assert mgr.token_store_path == env_file
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestErrorNoTokenInKeyring:
     """Scenario 15: Error - No token in keyring -> is_token_fresh returns False."""
 
@@ -523,6 +538,7 @@ class TestErrorNoTokenInKeyring:
             assert tm.is_token_fresh() is False
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestErrorTOTPSecretNotConfigured:
     """Scenario 16: Error - TOTP secret not configured -> auto_refresh fails."""
 
@@ -542,6 +558,7 @@ class TestErrorTOTPSecretNotConfigured:
             tm_no_totp.get_totp()
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestErrorAPIMissingAccessToken:
     """Scenario 17: Error - API response missing access_token -> ValueError."""
 
@@ -576,6 +593,7 @@ class TestErrorAPIMissingAccessToken:
             mgr.exchange_request_token("req")
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestErrorKeyringPasswordDeleteError:
     """Scenario 18: Error - keyring PasswordDeleteError during clear_token()."""
 
@@ -606,6 +624,7 @@ class TestErrorKeyringPasswordDeleteError:
         assert "OTHER_KEY" in content
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestErrorOSErrorReadingEnv:
     """Scenario 19: Error - OSError reading .env -> handled."""
 
@@ -633,6 +652,7 @@ class TestErrorOSErrorReadingEnv:
             tm._clear_env_token(Path(real_path))
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestAutoRefreshExceptionPropagation:
     """Scenario 20: auto_refresh_token() exception propagation."""
 
@@ -650,6 +670,7 @@ class TestAutoRefreshExceptionPropagation:
                         tm.auto_refresh_token()
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestResolveSavedRequestToken:
     """Additional: resolve_saved_request_token env file path."""
 
@@ -692,6 +713,7 @@ class TestResolveSavedRequestToken:
             assert mgr.resolve_saved_request_token() is None
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestResolveSavedAccessToken:
     """Additional: resolve_saved_access_token env file valid."""
 
@@ -735,6 +757,7 @@ class TestResolveSavedAccessToken:
             assert mgr.resolve_saved_access_token() == "kite_acc"
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestPersistEnvUpdates:
     """Additional: _persist_env_updates updates existing keys."""
 
@@ -754,6 +777,7 @@ class TestPersistEnvUpdates:
         assert "NEW_KEY=val" in content
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestIsTodayMethod:
     """Additional: _is_today edge cases."""
 
@@ -782,6 +806,7 @@ class TestIsTodayMethod:
         assert mgr._is_today("  2026-04-16  ") is True
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestDefaultHTTPPost:
     """Additional: _default_http_post non-HTTPS rejected."""
 
@@ -796,6 +821,7 @@ class TestDefaultHTTPPost:
             )
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestGetLoginURL:
     """Additional: get_login_url correctness."""
 
@@ -805,6 +831,7 @@ class TestGetLoginURL:
         assert "api_key=test_api_key" in url
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestInitWithEnvValues:
     """Additional: Initialization with env_values parameter."""
 
@@ -840,6 +867,7 @@ class TestInitWithEnvValues:
         assert mgr._today_utc == date(2026, 1, 1)
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestClearEnvTokenPreservesComments:
     """Additional: _clear_env_token preserves comments and other keys."""
 
@@ -861,6 +889,7 @@ class TestClearEnvTokenPreservesComments:
         assert "ZERODHA_ACCESS_TOKEN" not in content
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestGetAccessTokenNoEnvFallback:
     """Additional: get_access_token with use_env_fallback=False skips env."""
 
@@ -872,6 +901,7 @@ class TestGetAccessTokenNoEnvFallback:
                 assert tm_no_totp.get_access_token(use_env_fallback=False) is None
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestPreMarketUTC:
     """Additional: _get_pre_market_utc helper function."""
 
@@ -888,6 +918,7 @@ class TestPreMarketUTC:
         assert result == expected
 
 
+@pytest.mark.xdist_group("broker_token")
 class TestLoadEnvFileParsing:
     """Additional: _load_env_file parsing edge cases."""
 

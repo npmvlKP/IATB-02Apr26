@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 
 with warnings.catch_warnings():
@@ -17,7 +16,6 @@ from iatb.core.observability.alerting import AlertLevel
 
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_telegram_alert_dispatcher_rate_limit_with_injected_sender() -> None:

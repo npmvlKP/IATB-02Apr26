@@ -118,7 +118,7 @@ class TestValidateWithPriceReconciliation:
         # Create naive datetime (intentionally for this test)
         naive_ts = datetime(2026, 4, 19, 12, 0, 0, tzinfo=None)  # noqa: DTZ001
 
-        with pytest.raises(ConfigError, match="timestamp must be UTC-aware"):
+        with pytest.raises(ConfigError, match="timestamp must be timezone.utc-aware"):
             validate_with_price_reconciliation(
                 scanner_price=Decimal("1000.00"),
                 execution_price=Decimal("1010.00"),

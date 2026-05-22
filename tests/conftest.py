@@ -4,6 +4,8 @@ Pytest configuration with deterministic random seeds for reproducibility.
 
 from __future__ import annotations
 
+import os
+import platform
 import random
 import sys as _sys
 from collections.abc import Generator
@@ -14,6 +16,12 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+if _sys.platform == "win32":
+    try:
+        import duckdb  # noqa: F401 — pre-import to share DLL across xdist forks
+    except OSError:
+        pass
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -32,6 +40,12 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
         np.random.seed(DETERMINISTIC_SEED)
     except ImportError:
         pass
+    try:
+        import torch
+
+        torch.manual_seed(DETERMINISTIC_SEED)
+    except (ImportError, OSError):
+        pass
     return
 
 
@@ -40,13 +54,13 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def tmp_storage_dir(tmp_path: Path) -> Path:
     """Provide a temporary directory for DuckDB/SQLite/Parquet/file tests."""
     return tmp_path
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_kite_client() -> MagicMock:
     """Pre-configured mock of KiteConnect with historical_data/quote stubs."""
     client = MagicMock()
@@ -55,7 +69,7 @@ def mock_kite_client() -> MagicMock:
     return client
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_event_bus() -> MagicMock:
     """Pre-configured mock EventBus with subscribe/publish stubs."""
     bus = MagicMock()
@@ -64,7 +78,7 @@ def mock_event_bus() -> MagicMock:
     return bus
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_redis_client() -> MagicMock:
     """Pre-configured mock of redis.asyncio.Redis."""
     redis = MagicMock()
@@ -74,7 +88,7 @@ def mock_redis_client() -> MagicMock:
     return redis
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None, None]:
     """Pre-configured mock of streamlit module with all UI methods."""
     st = ModuleType("streamlit")
@@ -104,72 +118,55 @@ def mock_streamlit(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None
         "warning",
         "error",
         "info",
-        "divider",
     ):
         setattr(st, name, MagicMock())
     monkeypatch.setitem(_sys.modules, "streamlit", st)
     return st
 
 
-@pytest.fixture()
-def sample_ohlcv_bars() -> list[dict[str, object]]:
-    """Fixture providing valid OHLCVBar dicts for reuse."""
-    return [
-        {
-            "timestamp": datetime(2024, 1, 1, 9, 30, tzinfo=UTC),
-            "open": Decimal("100.00"),
-            "high": Decimal("101.00"),
-            "low": Decimal("99.00"),
-            "close": Decimal("100.50"),
-            "volume": Decimal("5000"),
-        }
-        for _ in range(5)
-    ]
+@pytest.fixture
+def sample_ohlcv_bars() -> list:
+    """Fixture providing valid OHLCVBar objects for reuse."""
+    from iatb.core.enums import Exchange
+    from iatb.core.types import create_price, create_quantity, create_timestamp
+    from iatb.data.base import OHLCVBar
 
-
-@pytest.fixture()
-def sample_kite_historical_data() -> list[dict[str, object]]:
-    """Fixture providing raw Kite API historical_data response dicts."""
     return [
-        {
-            "date": datetime(2024, 1, i + 1, 9, 15, tzinfo=UTC),
-            "open": 100.0 + i,
-            "high": 105.0 + i,
-            "low": 98.0 + i,
-            "close": 103.0 + i,
-            "volume": 1_000_000 + i * 50_000,
-        }
+        OHLCVBar(
+            timestamp=create_timestamp(datetime(2024, 1, 1, 9, 30 + i, tzinfo=UTC)),
+            exchange=Exchange.NSE,
+            symbol="BANKNIFTY",
+            open=create_price("100.00"),
+            high=create_price("101.00"),
+            low=create_price("99.00"),
+            close=create_price("100.50"),
+            volume=create_quantity("5000"),
+            source="unit-test",
+        )
         for i in range(5)
     ]
 
 
-@pytest.fixture()
-def sample_kite_quote_data() -> dict[str, dict[str, object]]:
-    """Fixture providing raw Kite API quote response dict."""
-    return {
-        "NSE:RELIANCE": {
-            "last_price": Decimal("2450.50"),
-            "bid": Decimal("2450.00"),
-            "ask": Decimal("2451.00"),
-            "volume": 1_500_000,
-        }
-    }
-
-
-@pytest.fixture()
-def sample_ticker_snapshot() -> dict:
+@pytest.fixture
+def sample_ticker_snapshot() -> object:
     """Fixture providing valid TickerSnapshot."""
-    return {
-        "ticker": "AAPL",
-        "last_price": Decimal("150.00"),
-        "bid": Decimal("149.95"),
-        "ask": Decimal("150.05"),
-        "volume": 1_000_000,
-        "timestamp": datetime.now(UTC),
-    }
+    from iatb.core.enums import Exchange
+    from iatb.core.types import create_price, create_quantity, create_timestamp
+    from iatb.data.base import TickerSnapshot
+
+    return TickerSnapshot(
+        timestamp=create_timestamp(datetime.now(UTC)),
+        exchange=Exchange.NSE,
+        symbol="AAPL",
+        bid=create_price("149.95"),
+        ask=create_price("150.05"),
+        last=create_price("150.00"),
+        volume_24h=create_quantity("1000000"),
+        source="unit-test",
+    )
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_market_tick_event() -> dict:
     """Fixture providing valid MarketTickEvent."""
     return {
@@ -179,7 +176,7 @@ def sample_market_tick_event() -> dict:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_order_update_event() -> dict:
     """Fixture providing valid OrderUpdateEvent."""
     return {
@@ -200,7 +197,7 @@ def _event_stub(event_type_name: str, **attrs: object) -> object:
     return instance
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_signal_event() -> object:
     """Fixture providing valid SignalEvent."""
     from iatb.core.enums import Exchange, OrderSide
@@ -218,7 +215,7 @@ def sample_signal_event() -> object:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_scan_update_event() -> object:
     """Fixture providing valid ScanUpdateEvent."""
     return _event_stub(
@@ -232,7 +229,7 @@ def sample_scan_update_event() -> object:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_pnl_update_event() -> object:
     """Fixture providing valid PnLUpdateEvent."""
     return _event_stub(
@@ -248,7 +245,7 @@ def sample_pnl_update_event() -> object:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_regime_change_event() -> object:
     """Fixture providing valid RegimeChangeEvent."""
     return _event_stub(
@@ -261,21 +258,40 @@ def sample_regime_change_event() -> object:
     )
 
 
-@pytest.fixture()
-def sample_strength_inputs() -> dict[str, object]:
-    """Fixture providing valid StrengthInputs kwargs for reuse."""
-    from iatb.market_strength.regime_detector import MarketRegime
+@pytest.fixture
+def freeze_time() -> Generator[None, None, None]:
+    """Freeze time for retention/cleanup tests."""
+    from freezegun import freeze_time as _freeze_time
 
-    return {
-        "breadth_ratio": Decimal("1.0"),
-        "regime": MarketRegime.SIDEWAYS,
-        "adx": Decimal("20"),
-        "volume_ratio": Decimal("1.0"),
-        "volatility_atr_pct": Decimal("0.03"),
+    with _freeze_time(datetime(2026, 5, 11, tzinfo=UTC)):
+        yield
+
+
+@pytest.fixture
+def mock_pyarrow_compression(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Mock pyarrow.parquet with compression support."""
+    import pyarrow as pa
+
+    mock_parquet = MagicMock()
+    mock_table = MagicMock()
+    mock_parquet.read_table.return_value = mock_table
+    mock_table.to_pydict.return_value = {
+        "exchange": ["NSE"],
+        "symbol": ["BANKNIFTY"],
+        "timestamp_utc": ["2026-01-01T09:15:00+00:00"],
+        "open_price": ["100.00"],
+        "high_price": ["101.00"],
+        "low_price": ["99.00"],
+        "close_price": ["100.50"],
+        "volume": ["1500"],
+        "source": ["unit-test"],
     }
+    monkeypatch.setattr(pa, "parquet", mock_parquet)
+    return mock_parquet
 
 
-@pytest.fixture()
-def utc_now() -> datetime:
-    """Fixture providing deterministic UTC datetime for tests."""
-    return datetime(2024, 6, 15, 10, 0, 0, tzinfo=UTC)
+def pytest_xdist_auto_num_workers(config: object) -> int:
+    """Limit xdist workers on Windows to avoid DuckDB DLL exhaustion."""
+    if platform.system() == "Windows":
+        return 6
+    return os.cpu_count() or 4

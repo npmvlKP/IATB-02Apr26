@@ -13,6 +13,13 @@ from typing import Any
 from iatb.core.config import get_config
 
 try:
+    from opentelemetry import trace
+
+    _HAS_OTEL = True
+except ImportError:
+    _HAS_OTEL = False
+
+try:
     from pythonjsonlogger import jsonlogger
 
     _HAS_JSONLOGGER = True
@@ -35,15 +42,58 @@ class JsonFormatter(logging.Formatter):
         else:
             self._formatter = logging.Formatter(fmt)
 
-    def format(self, record: logging.LogRecord) -> str:
+    def add_fields(
+        self,
+        log_record: dict[str, Any],
+        record: logging.LogRecord,
+        message_dict: dict[str, Any],
+    ) -> None:
+        """Add structured fields to the log record dict.
+
+        Args:
+            log_record: Dict to populate with structured fields.
+            record: The original LogRecord.
+            message_dict: Additional message fields.
+        """
+        log_record["timestamp"] = datetime.now(UTC).isoformat()
+        log_record["level"] = record.levelname
+        log_record["logger"] = record.name
+        log_record["thread"] = record.thread
+        log_record["process"] = record.process
+        log_record.update(message_dict)
+        if hasattr(record, "trace_id"):
+            log_record["trace_id"] = record.trace_id
+        if hasattr(record, "span_id"):
+            log_record["span_id"] = record.span_id
+        if hasattr(record, "service_name"):
+            log_record["service.name"] = record.service_name
+        if record.exc_info and record.exc_info[0] is not None:
+            log_record["exception"] = self.formatException(record.exc_info)
+
+    def format(self, record: logging.LogRecord) -> str:  # noqa: C901
         """Format log record with JSON or standard format."""
-        # Add custom fields to the record
+        record.timestamp = datetime.now(UTC).isoformat()
+        if _HAS_OTEL:
+            span = trace.get_current_span()
+            span_context = span.get_span_context()
+        else:
+            span_context = None
+        if span_context is not None and span_context.is_valid:
+            record.trace_id = format(span_context.trace_id, "032x")
+            record.span_id = format(span_context.span_id, "016x")
+        try:
+            config = get_config()
+            svc = getattr(config, "service", None)
+            if isinstance(svc, dict):
+                service_name = svc.get("name", "iatb")
+            else:
+                service_name = getattr(svc, "name", "iatb")
+            record.service_name = service_name
+        except Exception:
+            record.service_name = "iatb"
         if _HAS_JSONLOGGER:
-            # Let the JSON formatter handle it
             return self._formatter.format(record)
         else:
-            # Standard format with timestamp
-            record.timestamp = datetime.now(UTC).isoformat()
             return self._formatter.format(record)
 
     def formatException(self, exc_info: Any) -> str:

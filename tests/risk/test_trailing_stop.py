@@ -7,7 +7,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from hypothesis import given
 from hypothesis import strategies as st
 from iatb.core.enums import OrderSide
@@ -29,7 +28,6 @@ from tests.conftest_optimized import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def _state(

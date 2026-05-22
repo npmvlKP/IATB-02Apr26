@@ -28,27 +28,21 @@ class _CacheInfo(typing.NamedTuple):
 class _NormalizeCallable(Protocol):
     """Protocol for normalize functions that support caching."""
 
-    def __call__(self, value: Decimal, *, cap: Decimal) -> Decimal:
-        ...
+    def __call__(self, value: Decimal, *, cap: Decimal) -> Decimal: ...
 
-    def cache_clear(self) -> None:
-        ...
+    def cache_clear(self) -> None: ...
 
-    def cache_info(self) -> _CacheInfo:
-        ...
+    def cache_info(self) -> _CacheInfo: ...
 
 
 class _RegimeScoreCallable(Protocol):
     """Protocol for regime score functions that support caching."""
 
-    def __call__(self, regime: MarketRegime) -> Decimal:
-        ...
+    def __call__(self, regime: MarketRegime) -> Decimal: ...
 
-    def cache_clear(self) -> None:
-        ...
+    def cache_clear(self) -> None: ...
 
-    def cache_info(self) -> _CacheInfo:
-        ...
+    def cache_info(self) -> _CacheInfo: ...
 
 
 _MAX_ACCEPTABLE_ATR_PCT: Final = Decimal("0.08")
@@ -219,22 +213,22 @@ class StrengthScorer:
     def _normalize_uncached_wrapper(self) -> _NormalizeCallable:
         """Create wrapper for uncached normalize that matches Protocol."""
         wrapper = self._normalize_uncached
-        wrapper.cache_clear = self._normalize_uncached_cache_clear  # type: ignore[attr-defined]
-        wrapper.cache_info = self._normalize_uncached_cache_info  # type: ignore[attr-defined]
+        wrapper.__func__.cache_clear = self._normalize_uncached_cache_clear  # type: ignore[attr-defined]
+        wrapper.__func__.cache_info = self._normalize_uncached_cache_info  # type: ignore[attr-defined]
         return typing.cast(_NormalizeCallable, wrapper)
 
     def _normalize_concave_uncached_wrapper(self) -> _NormalizeCallable:
         """Create wrapper for uncached concave normalize that matches Protocol."""
         wrapper = self._normalize_concave_uncached
-        wrapper.cache_clear = self._normalize_concave_uncached_cache_clear  # type: ignore[attr-defined]
-        wrapper.cache_info = self._normalize_concave_uncached_cache_info  # type: ignore[attr-defined]
+        wrapper.__func__.cache_clear = self._normalize_concave_uncached_cache_clear  # type: ignore[attr-defined]
+        wrapper.__func__.cache_info = self._normalize_concave_uncached_cache_info  # type: ignore[attr-defined]
         return typing.cast(_NormalizeCallable, wrapper)
 
     def _regime_score_uncached_wrapper(self) -> _RegimeScoreCallable:
         """Create wrapper for uncached regime score that matches Protocol."""
         wrapper = self._regime_score_uncached
-        wrapper.cache_clear = self._regime_score_uncached_cache_clear  # type: ignore[attr-defined]
-        wrapper.cache_info = self._regime_score_uncached_cache_info  # type: ignore[attr-defined]
+        wrapper.__func__.cache_clear = self._regime_score_uncached_cache_clear  # type: ignore[attr-defined]
+        wrapper.__func__.cache_info = self._regime_score_uncached_cache_info  # type: ignore[attr-defined]
         return typing.cast(_RegimeScoreCallable, wrapper)
 
     @staticmethod

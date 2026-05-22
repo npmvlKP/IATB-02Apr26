@@ -19,7 +19,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-import torch
 from hypothesis import settings
 
 if TYPE_CHECKING:
@@ -69,12 +68,14 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
         pass
 
     try:
+        import torch
+
         torch.manual_seed(DETERMINISTIC_SEED)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(DETERMINISTIC_SEED)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
-    except ImportError:
+    except (ImportError, OSError):
         pass
 
     return

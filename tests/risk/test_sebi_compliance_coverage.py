@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.risk.sebi_compliance import (
     SEBIComplianceConfig,
@@ -19,7 +18,6 @@ from iatb.risk.sebi_compliance import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_sebi_compliance_constructor_empty_algo_id(tmp_path: Path) -> None:

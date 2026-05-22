@@ -41,7 +41,7 @@ def _parse_timestamp(raw_value: object) -> Timestamp:
 
 
 def _allowed_compression(code: str) -> str:
-    # https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetWriter.html  # noqa: E501
+    # https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetWriter.html # noqa: E501
     allowed: set[str] = {"NONE", "SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "ZLIB"}
     if code not in allowed:
         raise ConfigError(

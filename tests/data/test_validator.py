@@ -9,7 +9,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ValidationError
 from iatb.core.types import create_price, create_quantity, create_timestamp
@@ -23,7 +22,6 @@ from iatb.data.validator import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 _BASE_TIMESTAMP = datetime(2026, 1, 2, 9, 15, tzinfo=UTC)
 

@@ -212,6 +212,7 @@ def _create_stress_order_manager(
 class TestStress50Symbols:
     """Stress test: 50+ symbols scanned."""
 
+    @pytest.mark.xdist_group("serial")
     def test_scan_50_symbols_with_custom_data(self) -> None:
         symbols = _generate_symbols(55)
         custom_data = _generate_market_data(symbols)
@@ -233,6 +234,7 @@ class TestStress50Symbols:
         assert elapsed < 30.0
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("serial")
     async def test_data_provider_50_symbols(self) -> None:
         symbols = _generate_symbols(55)
         provider = BulkDataProvider(len(symbols))
@@ -250,6 +252,7 @@ class TestStress50Symbols:
         assert provider.call_count == 55
         assert elapsed < 30.0
 
+    @pytest.mark.xdist_group("serial")
     def test_selection_50_candidates(self) -> None:
         from iatb.selection.ranking import RankingConfig, rank_and_select
 
@@ -268,6 +271,7 @@ class TestStress50Symbols:
 class TestStress100ConcurrentOrders:
     """Stress test: 100+ concurrent order submissions."""
 
+    @pytest.mark.xdist_group("serial")
     def test_100_sequential_orders(self, tmp_path: Path) -> None:
         executor = HighThroughputExecutor()
         om = _create_stress_order_manager(
@@ -298,6 +302,7 @@ class TestStress100ConcurrentOrders:
         trades = audit.query_daily_trades(today)
         assert len(trades) == 100
 
+    @pytest.mark.xdist_group("serial")
     def test_100_orders_timing(self, tmp_path: Path) -> None:
         executor = HighThroughputExecutor()
         om = _create_stress_order_manager(
@@ -326,6 +331,7 @@ class TestStress100ConcurrentOrders:
         assert executor.total_orders == 100
         assert elapsed < 30.0
 
+    @pytest.mark.xdist_group("serial")
     def test_paper_executor_100_orders(self) -> None:
         executor = PaperExecutor(slippage_bps=Decimal("2"))
         om = OrderManager(
@@ -350,6 +356,7 @@ class TestStress100ConcurrentOrders:
 class TestStressAuditThroughput:
     """Stress test: High-throughput audit logging."""
 
+    @pytest.mark.xdist_group("serial")
     def test_audit_100_trades_persistence(self, tmp_path: Path) -> None:
         db_path = tmp_path / "stress_audit.sqlite"
         audit = TradeAuditLogger(db_path)
@@ -372,6 +379,7 @@ class TestStressAuditThroughput:
         trades = audit.query_daily_trades(today)
         assert len(trades) == 100
 
+    @pytest.mark.xdist_group("serial")
     def test_audit_persistence_timing(self, tmp_path: Path) -> None:
         db_path = tmp_path / "stress_audit_timing.sqlite"
         audit = TradeAuditLogger(db_path)
@@ -399,6 +407,7 @@ class TestStressCombinedPipeline:
     """Stress test: Combined pipeline under load."""
 
     @pytest.mark.asyncio()
+    @pytest.mark.xdist_group("serial")
     async def test_full_pipeline_50_symbols_100_orders(self, tmp_path: Path) -> None:
         symbols = _generate_symbols(55)
         custom_data = _generate_market_data(symbols)

@@ -1,164 +1,162 @@
 """
 Comprehensive coverage tests for selector_validator.py.
 
-Tests pre-selection validation, input validation, and error paths.
+Tests walk-forward validation of composite selector, input validation, and error paths.
 """
 
 from decimal import Decimal
 
 import pytest
-from iatb.core.enums import Exchange
+from iatb.core.exceptions import ConfigError
 from iatb.selection.selector_validator import (
-    validate_instrument_list,
-    validate_ranking_inputs,
-    validate_selection_config,
+    SelectorValidationResult,
+    _safe_mean,
+    _validate_inputs,
+    validate_selector,
 )
 
 
-class TestValidateInstrumentList:
-    """Test validate_instrument_list function."""
-
-    def test_valid_instrument_list(self) -> None:
-        """Test with valid instrument list."""
-        instruments = [
-            {"symbol": "RELIANCE", "exchange": Exchange.NSE},
-            {"symbol": "TCS", "exchange": Exchange.NSE},
-        ]
-        result = validate_instrument_list(instruments)
-        assert result is True
-
-    def test_empty_instrument_list(self) -> None:
-        """Test with empty instrument list."""
-        instruments: list[dict] = []
-        result = validate_instrument_list(instruments)
-        assert result is True  # Empty is valid
-
-    def test_duplicate_symbols(self) -> None:
-        """Test with duplicate symbols."""
-        instruments = [
-            {"symbol": "RELIANCE", "exchange": Exchange.NSE},
-            {"symbol": "RELIANCE", "exchange": Exchange.NSE},
-        ]
-        with pytest.raises(ValueError) as exc_info:
-            validate_instrument_list(instruments)
-        assert "duplicate" in str(exc_info.value).lower()
-
-    def test_missing_symbol(self) -> None:
-        """Test with missing symbol field."""
-        instruments = [{"exchange": Exchange.NSE}]
-        with pytest.raises(ValueError) as exc_info:
-            validate_instrument_list(instruments)
-        assert "symbol" in str(exc_info.value).lower()
-
-    def test_missing_exchange(self) -> None:
-        """Test with missing exchange field."""
-        instruments = [{"symbol": "RELIANCE"}]
-        with pytest.raises(ValueError) as exc_info:
-            validate_instrument_list(instruments)
-        assert "exchange" in str(exc_info.value).lower()
-
-
-class TestValidateRankingInputs:
-    """Test validate_ranking_inputs function."""
+class TestValidateInputs:
+    """Test _validate_inputs function."""
 
     def test_valid_inputs(self) -> None:
-        """Test with valid ranking inputs."""
-        inputs = {
-            "sentiment": Decimal("0.5"),
-            "strength": Decimal("0.6"),
-            "volume_profile": Decimal("0.7"),
-            "drl": Decimal("0.8"),
-        }
-        result = validate_ranking_inputs(inputs)
-        assert result is True
+        """Test with valid inputs."""
+        scores = [Decimal("0.5"), Decimal("0.6"), Decimal("0.7")] * 4
+        returns = [Decimal("0.05"), Decimal("0.06"), Decimal("0.07")] * 4
+        _validate_inputs(scores, returns, 3)
 
-    def test_missing_required_score(self) -> None:
-        """Test with missing required score."""
-        inputs = {
-            "sentiment": Decimal("0.5"),
-            "strength": Decimal("0.6"),
-            # Missing volume_profile and drl
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_ranking_inputs(inputs)
-        assert "required" in str(exc_info.value).lower()
+    def test_mismatched_lengths(self) -> None:
+        """Test raises ConfigError when scores and returns lengths differ."""
+        scores = [Decimal("0.5"), Decimal("0.6")]
+        returns = [Decimal("0.05")]
+        with pytest.raises(ConfigError) as exc_info:
+            _validate_inputs(scores, returns, 2)
+        assert "equal length" in str(exc_info.value)
 
-    def test_invalid_score_range_high(self) -> None:
-        """Test with score above 1.0."""
-        inputs = {
-            "sentiment": Decimal("1.5"),
-            "strength": Decimal("0.6"),
-            "volume_profile": Decimal("0.7"),
-            "drl": Decimal("0.8"),
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_ranking_inputs(inputs)
-        assert "range" in str(exc_info.value).lower()
+    def test_n_folds_too_small(self) -> None:
+        """Test raises ConfigError when n_folds < 2."""
+        scores = [Decimal("0.5")] * 10
+        returns = [Decimal("0.05")] * 10
+        with pytest.raises(ConfigError) as exc_info:
+            _validate_inputs(scores, returns, 1)
+        assert "n_folds must be >= 2" in str(exc_info.value)
 
-    def test_invalid_score_range_negative(self) -> None:
-        """Test with negative score."""
-        inputs = {
-            "sentiment": Decimal("-0.1"),
-            "strength": Decimal("0.6"),
-            "volume_profile": Decimal("0.7"),
-            "drl": Decimal("0.8"),
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_ranking_inputs(inputs)
-        assert "negative" in str(exc_info.value).lower()
-
-    def test_non_decimal_score(self) -> None:
-        """Test with non-Decimal score."""
-        inputs = {
-            "sentiment": "0.5",  # String instead of Decimal
-            "strength": Decimal("0.6"),
-            "volume_profile": Decimal("0.7"),
-            "drl": Decimal("0.8"),
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_ranking_inputs(inputs)
-        assert "decimal" in str(exc_info.value).lower()
+    def test_insufficient_observations(self) -> None:
+        """Test raises ConfigError when not enough observations for folds."""
+        scores = [Decimal("0.5")] * 5
+        returns = [Decimal("0.05")] * 5
+        with pytest.raises(ConfigError) as exc_info:
+            _validate_inputs(scores, returns, 5)
+        assert "observations" in str(exc_info.value)
 
 
-class TestValidateSelectionConfig:
-    """Test validate_selection_config function."""
+class TestValidateSelector:
+    """Test validate_selector function."""
 
-    def test_valid_config(self) -> None:
-        """Test with valid selection config."""
-        config = {
-            "max_candidates": 10,
-            "min_confidence": Decimal("0.5"),
-            "regime": "SIDEWAYS",
-        }
-        result = validate_selection_config(config)
-        assert result is True
+    def test_stable_selector(self) -> None:
+        """Test with stable IC across folds."""
+        scores = [
+            Decimal("0.8"),
+            Decimal("0.7"),
+            Decimal("0.9"),
+            Decimal("0.8"),
+            Decimal("0.85"),
+        ] * 3
+        returns = [
+            Decimal("0.05"),
+            Decimal("0.04"),
+            Decimal("0.06"),
+            Decimal("0.05"),
+            Decimal("0.05"),
+        ] * 3
+        result = validate_selector(scores, returns, n_folds=2)
+        assert isinstance(result, SelectorValidationResult)
+        assert result.folds == len(result.fold_ics)
+        assert result.mean_ic >= Decimal("0")
 
-    def test_invalid_max_candidates_negative(self) -> None:
-        """Test with negative max_candidates."""
-        config = {
-            "max_candidates": -5,
-            "min_confidence": Decimal("0.5"),
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_selection_config(config)
-        assert "positive" in str(exc_info.value).lower()
+    def test_unstable_selector(self) -> None:
+        """Test detection of unstable IC."""
+        scores = [
+            Decimal("0.1"),
+            Decimal("0.9"),
+            Decimal("0.2"),
+            Decimal("0.8"),
+            Decimal("0.3"),
+        ] * 3
+        returns = [
+            Decimal("-0.05"),
+            Decimal("0.1"),
+            Decimal("-0.04"),
+            Decimal("0.09"),
+            Decimal("-0.03"),
+        ] * 3
+        result = validate_selector(scores, returns, n_folds=2)
+        assert isinstance(result, SelectorValidationResult)
 
-    def test_invalid_min_confidence(self) -> None:
-        """Test with min_confidence above 1.0."""
-        config = {
-            "max_candidates": 10,
-            "min_confidence": Decimal("1.5"),
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_selection_config(config)
-        assert "range" in str(exc_info.value).lower()
+    def test_empty_input(self) -> None:
+        """Test with empty input raises error."""
+        with pytest.raises(ConfigError):
+            validate_selector([], [], n_folds=2)
 
-    def test_missing_required_field(self) -> None:
-        """Test with missing required field."""
-        config = {
-            "max_candidates": 10,
-            # Missing min_confidence
-        }
-        with pytest.raises(ValueError) as exc_info:
-            validate_selection_config(config)
-        assert "required" in str(exc_info.value).lower()
+    def test_single_fold(self) -> None:
+        """Test raises error for single fold."""
+        scores = [Decimal("0.5")] * 10
+        returns = [Decimal("0.05")] * 10
+        with pytest.raises(ConfigError):
+            validate_selector(scores, returns, n_folds=1)
+
+
+class TestSafeMean:
+    """Test _safe_mean function."""
+
+    def test_mean_of_decimals(self) -> None:
+        """Test mean calculation for decimals."""
+        values = [Decimal("1"), Decimal("2"), Decimal("3")]
+        result = _safe_mean(values)
+        assert result == Decimal("2")
+
+    def test_empty_list(self) -> None:
+        """Test mean of empty list."""
+        values: list[Decimal] = []
+        result = _safe_mean(values)
+        assert result == Decimal("0")
+
+    def test_single_value(self) -> None:
+        """Test mean of single value."""
+        values = [Decimal("5")]
+        result = _safe_mean(values)
+        assert result == Decimal("5")
+
+    def test_negative_values(self) -> None:
+        """Test mean with negative values."""
+        values = [Decimal("-1"), Decimal("-2"), Decimal("-3")]
+        result = _safe_mean(values)
+        assert result == Decimal("-2")
+
+
+class TestSelectorValidationResult:
+    """Test SelectorValidationResult dataclass."""
+
+    def test_result_creation(self) -> None:
+        """Test creating a result object."""
+        result = SelectorValidationResult(
+            fold_ics=[Decimal("0.05"), Decimal("0.06")],
+            mean_ic=Decimal("0.055"),
+            stable=True,
+            folds=2,
+        )
+        assert result.fold_ics == [Decimal("0.05"), Decimal("0.06")]
+        assert result.mean_ic == Decimal("0.055")
+        assert result.stable is True
+        assert result.folds == 2
+
+    def test_unstable_result(self) -> None:
+        """Test unstable result."""
+        result = SelectorValidationResult(
+            fold_ics=[Decimal("0.01"), Decimal("0.02")],
+            mean_ic=Decimal("0.015"),
+            stable=False,
+            folds=2,
+        )
+        assert result.stable is False
+        assert result.mean_ic < Decimal("0.03")

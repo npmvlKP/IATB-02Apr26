@@ -7,7 +7,6 @@ algorithmic trading system.
 
 from iatb.core.clock import Clock, ClockDriftDetector, TradingSessions
 from iatb.core.config import Config
-from iatb.core.engine import Engine
 from iatb.core.enums import (
     Exchange,
     MarketType,
@@ -91,3 +90,12 @@ __all__ = [
     # Deprecated
     "HealthServer",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazy loading to avoid circular imports."""
+    if name == "Engine":
+        from iatb.core.engine import Engine as _Engine
+
+        return _Engine
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

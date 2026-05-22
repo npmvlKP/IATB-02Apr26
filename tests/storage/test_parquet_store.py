@@ -9,7 +9,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_price, create_quantity, create_timestamp
@@ -23,7 +22,6 @@ from iatb.storage.parquet_store import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 # --------------------------------------------------------------------------- #
@@ -110,6 +108,9 @@ class _FakeParquet:
 # --------------------------------------------------------------------------- #
 # Test helpers
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.xdist_group("parquet_store")
 class TestTimestampParsing:
     def test_parse_iso_string(self) -> None:
         ts = _parse_timestamp("2026-01-15T10:00:00+00:00")
@@ -138,6 +139,7 @@ class TestTimestampParsing:
             _parse_timestamp(123)  # type: ignore[arg-type]
 
 
+@pytest.mark.xdist_group("parquet_store")
 class TestAllowedCompression:
     def test_valid_codes(self) -> None:
         for code in ("NONE", "SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD", "ZLIB"):
@@ -151,6 +153,9 @@ class TestAllowedCompression:
 # --------------------------------------------------------------------------- #
 # Core ParquetStore tests
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.xdist_group("parquet_store")
 class TestParquetStore:
     """Test parquet archival behavior using fake pyarrow module."""
 
@@ -329,6 +334,9 @@ class TestParquetStore:
 # --------------------------------------------------------------------------- #
 # Range query edge-case tests
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.xdist_group("parquet_store")
 class TestReadBarsRangeEdges:
     """Edge-case coverage for read_bars_range."""
 
@@ -434,6 +442,9 @@ class TestReadBarsRangeEdges:
 # --------------------------------------------------------------------------- #
 # Cleanup / retention tests
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.xdist_group("parquet_store")
 class TestCleanupRetention:
     def _make_store(self, tmp_path: Path, days: int) -> tuple[ParquetStore, datetime]:
         store = ParquetStore(tmp_path / "archive")
@@ -480,6 +491,9 @@ class TestCleanupRetention:
 # --------------------------------------------------------------------------- #
 # Compression configuration tests
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.xdist_group("parquet_store")
 class TestCompressionConfig:
     def test_compression_none(self, tmp_path: Path) -> None:
         store = ParquetStore(tmp_path / "archive", compression="NONE")

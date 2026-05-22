@@ -3,7 +3,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.breadth import (
     _ema,
@@ -15,7 +14,6 @@ from iatb.market_strength.breadth import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_advance_decline_ratio_happy_path() -> None:

@@ -9,7 +9,6 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import numpy as np
-import torch
 from hypothesis import given
 from hypothesis import strategies as st
 from iatb.core.clock import Clock, TradingSessions
@@ -26,7 +25,6 @@ from tests.conftest_optimized import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 SESSION_EXCHANGES = (Exchange.NSE, Exchange.BSE, Exchange.MCX, Exchange.CDS)
 PRICE_STRATEGY = st.decimals(

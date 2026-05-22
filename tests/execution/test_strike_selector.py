@@ -6,7 +6,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange, OrderSide
 from iatb.core.exceptions import ConfigError
 from iatb.data.instrument import Instrument, InstrumentType
@@ -21,7 +20,6 @@ from iatb.execution.strike_selector import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def _ce(strike: str, lot: str = "75") -> Instrument:

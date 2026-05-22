@@ -9,14 +9,12 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.config import Config, confirm_live_mode
 from iatb.core.exceptions import ConfigError
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 class TestTomlConfigLoading:

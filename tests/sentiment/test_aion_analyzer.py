@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.sentiment.aion_analyzer import AionAnalyzer
 from iatb.sentiment.helpers import resolve_aion_predictor
@@ -12,7 +11,6 @@ from iatb.sentiment.helpers import resolve_aion_predictor
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_aion_analyzer_accepts_mapping_output() -> None:

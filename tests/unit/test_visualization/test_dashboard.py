@@ -13,7 +13,6 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.scanner.instrument_scanner import (
@@ -51,7 +50,6 @@ from iatb.visualization.dashboard import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 # =============================================================================
 # Fixtures

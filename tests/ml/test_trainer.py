@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.ml.base import PredictionResult
 from iatb.ml.trainer import UnifiedTrainer
@@ -12,7 +11,6 @@ from iatb.ml.trainer import UnifiedTrainer
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 class _TrainModel:

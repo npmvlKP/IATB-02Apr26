@@ -6,13 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
-import torch
 from iatb.broker.token_manager import ZerodhaTokenManager, _load_env_file
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_resolve_saved_access_token_reuses_same_day_value(tmp_path: Path) -> None:

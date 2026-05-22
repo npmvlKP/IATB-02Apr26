@@ -5,7 +5,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.selection.sector_strength import (
     apply_sector_adjustment,
@@ -15,7 +14,6 @@ from iatb.selection.sector_strength import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_sector_relative_score_basic() -> None:

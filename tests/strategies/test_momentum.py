@@ -2,7 +2,6 @@ import random
 from decimal import Decimal
 
 import numpy as np
-import torch
 from iatb.core.enums import Exchange, OrderSide
 from iatb.market_strength.regime_detector import MarketRegime
 from iatb.market_strength.strength_scorer import StrengthInputs
@@ -12,7 +11,6 @@ from iatb.strategies.momentum import MomentumInputs, MomentumStrategy
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def _context(*, regime: MarketRegime = MarketRegime.BULL) -> StrategyContext:

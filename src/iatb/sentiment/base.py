@@ -67,5 +67,4 @@ class SentimentScore:
 class SentimentAnalyzer(Protocol):
     """Contract for sentiment analyzers."""
 
-    def analyze(self, text: str) -> SentimentScore:
-        ...
+    def analyze(self, text: str) -> SentimentScore: ...

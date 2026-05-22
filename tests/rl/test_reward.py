@@ -3,7 +3,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.exceptions import ConfigError
 from iatb.rl.reward import (
     _DEFAULT_POSITIVE_EXIT_THRESHOLD,
@@ -18,7 +17,6 @@ from iatb.rl.reward import (
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 class TestPnlReward:

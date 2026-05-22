@@ -29,6 +29,7 @@ from iatb.selection.weight_optimizer import (
 )
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestValidateInputs:
     """Test _validate_inputs function."""
 
@@ -85,6 +86,7 @@ class TestValidateInputs:
         assert "n_trials must be positive" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestLoadOptuna:
     """Test _load_optuna function."""
 
@@ -107,6 +109,7 @@ class TestLoadOptuna:
             assert "optuna dependency required" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestBuildSampler:
     """Test _build_sampler function."""
 
@@ -139,6 +142,7 @@ class TestBuildSampler:
         assert "optuna.samplers.TPESampler unavailable" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestCreateStudy:
     """Test _create_study function."""
 
@@ -165,6 +169,7 @@ class TestCreateStudy:
         assert "optuna.create_study unavailable" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestRunStudy:
     """Test _run_study function."""
 
@@ -186,6 +191,7 @@ class TestRunStudy:
         assert "study.optimize unavailable" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestSuggestWeights:
     """Test _suggest_weights function."""
 
@@ -210,6 +216,7 @@ class TestSuggestWeights:
         assert "trial does not provide suggest_int()" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestExtractBestWeights:
     """Test _extract_best_weights function."""
 
@@ -248,6 +255,7 @@ class TestExtractBestWeights:
         assert "study.best_params unavailable" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestBestValue:
     """Test _best_value function."""
 
@@ -286,6 +294,7 @@ class TestBestValue:
         assert "study.best_value unavailable" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestWeightsToDict:
     """Test _weights_to_dict function."""
 
@@ -307,6 +316,7 @@ class TestWeightsToDict:
         }
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestComputeComposites:
     """Test _compute_composites function."""
 
@@ -359,23 +369,35 @@ class TestComputeComposites:
         assert result[0] == Decimal("1")  # Clamped to 1
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestLogOptimizationResult:
     """Test _log_optimization_result function."""
 
     def test_log_optimization_result_improved(self, caplog) -> None:
         """Test logging for improved result."""
-        _log_optimization_result(MarketRegime.SIDEWAYS, Decimal("0.05"), True)
+        import logging
+
+        logger = logging.getLogger("iatb.selection.weight_optimizer")
+        logger.setLevel(logging.INFO)
+        with caplog.at_level(logging.INFO, logger="iatb.selection.weight_optimizer"):
+            _log_optimization_result(MarketRegime.SIDEWAYS, Decimal("0.05"), True)
         assert "Weight optimization for SIDEWAYS: IC=0.0500 (improved)" in caplog.text
 
     def test_log_optimization_result_below_threshold(self, caplog) -> None:
         """Test logging for result below threshold."""
-        _log_optimization_result(MarketRegime.SIDEWAYS, Decimal("0.02"), False)
+        import logging
+
+        logger = logging.getLogger("iatb.selection.weight_optimizer")
+        logger.setLevel(logging.INFO)
+        with caplog.at_level(logging.INFO, logger="iatb.selection.weight_optimizer"):
+            _log_optimization_result(MarketRegime.SIDEWAYS, Decimal("0.02"), False)
         assert (
             "Weight optimization for SIDEWAYS: IC=0.0200 (below threshold)"
             in caplog.text
         )
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestOptimizeWeightsForRegime:
     """Test optimize_weights_for_regime function."""
 
@@ -491,6 +513,7 @@ class TestOptimizeWeightsForRegime:
             optimize_weights_for_regime(MarketRegime.SIDEWAYS, history, returns)
 
 
+@pytest.mark.xdist_group("weight_optimizer")
 class TestOptimizeAllRegimes:
     """Test optimize_all_regimes function."""
 

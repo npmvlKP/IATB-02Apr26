@@ -24,6 +24,7 @@ from iatb.risk.position_limit_guard import (
 )
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestPositionLimitConfig:
     """Test PositionLimitConfig validation."""
 
@@ -117,6 +118,7 @@ class TestPositionLimitConfig:
             )
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestPositionLimitGuardInit:
     """Test PositionLimitGuard initialization."""
 
@@ -166,6 +168,7 @@ class TestPositionLimitGuardInit:
         assert guard.get_limit_config(ExchangeType.CDS) is not None
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestValidateOrder:
     """Test order validation against position limits."""
 
@@ -330,6 +333,7 @@ class TestValidateOrder:
             )
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestUpdatePosition:
     """Test position updates after order fills."""
 
@@ -422,6 +426,7 @@ class TestUpdatePosition:
             )
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestPositionState:
     """Test position state queries."""
 
@@ -472,6 +477,7 @@ class TestPositionState:
         assert summary["position_count"] == Decimal("1")
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestMonitoring:
     """Test background monitoring and alerting."""
 
@@ -502,6 +508,7 @@ class TestMonitoring:
             guard._validate_monitoring_interval(interval_seconds=0)
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestReset:
     """Test guard reset functionality."""
 
@@ -539,6 +546,7 @@ class TestReset:
             guard.reset(now_naive)
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestCreateDefaultLimits:
     """Test default limit creation."""
 
@@ -561,6 +569,7 @@ class TestCreateDefaultLimits:
             assert limit.max_total_notional > Decimal("0")
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestPrecisionHandling:
     """Test Decimal precision in calculations."""
 
@@ -618,6 +627,7 @@ class TestPrecisionHandling:
             )
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
@@ -704,6 +714,7 @@ class TestEdgeCases:
             )
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestAlerting:
     """Test position limit alerting functionality."""
 
@@ -890,6 +901,7 @@ class TestAlerting:
         assert now_utc.isoformat() in call_args.kwargs["message"]
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestMonitoringWithAlerts:
     """Test background monitoring with alerting enabled."""
 
@@ -968,10 +980,10 @@ class TestMonitoringWithAlerts:
         assert task.done()
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestGetSymbolConfig:
     """Test _get_symbol_config method."""
 
-    @pytest.mark.xfail(reason="Flaky under parallel load - race condition")
     def test_get_symbol_config_for_existing_position(self) -> None:
         """Test getting config for existing position."""
         limits = create_default_limits()
@@ -999,6 +1011,7 @@ class TestGetSymbolConfig:
         assert config is None
 
 
+@pytest.mark.xdist_group("position_limit_guard")
 class TestGetPositionCountForExchange:
     """Test _get_position_count_for_exchange method."""
 

@@ -14,6 +14,11 @@ from iatb.market_strength.strength_scorer import StrengthInputs, StrengthScorer
 class TestStrengthScorerCaching:
     """Test pre-computation caching in strength scorer."""
 
+    def setup_method(self) -> None:
+        StrengthScorer._normalize_cached.cache_clear()  # type: ignore[attr-defined]
+        StrengthScorer._normalize_concave_cached.cache_clear()  # type: ignore[attr-defined]
+        StrengthScorer._regime_score_cached.cache_clear()  # type: ignore[attr-defined]
+
     def test_scorer_with_cache_enabled(self) -> None:
         """Test scorer initialization with cache enabled."""
         scorer = StrengthScorer(cache_enabled=True)

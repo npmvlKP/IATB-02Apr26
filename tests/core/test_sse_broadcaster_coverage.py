@@ -97,6 +97,7 @@ async def _stop_broadcaster(b: SSEBroadcaster) -> None:
     b._forwarding_tasks.clear()
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestStartStopLifecycle:
     @pytest.mark.asyncio()
     async def test_start_sets_running_flag(self) -> None:
@@ -177,6 +178,7 @@ class TestStartStopLifecycle:
         assert b._subscribers == []
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestSubscribeUnsubscribe:
     @pytest.mark.asyncio()
     async def test_subscribe_yields_connection_event(self) -> None:
@@ -222,6 +224,7 @@ class TestSubscribeUnsubscribe:
             await _stop_broadcaster(b)
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestEventForwarding:
     @pytest.mark.asyncio()
     async def test_scan_event_forwarded_to_subscriber(self) -> None:
@@ -272,6 +275,7 @@ class TestEventForwarding:
             await _stop_broadcaster(b)
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestDeadSubscriberRemoval:
     @pytest.mark.asyncio()
     async def test_full_queue_removed_as_dead_subscriber(self) -> None:
@@ -285,16 +289,23 @@ class TestDeadSubscriberRemoval:
             scan_queue = bus._scan_queue
             scan_evt = _make_scan_event()
             await scan_queue.put(scan_evt)
-            await asyncio.sleep(0.3)
+            for _ in range(20):
+                await asyncio.sleep(0.05)
+                async with b._lock:
+                    if full_q not in b._subscribers:
+                        break
             async with b._lock:
                 assert full_q not in b._subscribers
         finally:
             await _stop_broadcaster(b)
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestKeepalive:
     @pytest.mark.asyncio()
-    @pytest.mark.xfail(reason="Flaky under parallel load - race condition")
+    @pytest.mark.xfail(
+        reason="Inherent race condition in keepalive timeout - not fixable for xdist"
+    )
     async def test_subscribe_emits_keepalive_on_timeout(self) -> None:
         bus = _make_mock_event_bus()
         b = SSEBroadcaster()
@@ -317,6 +328,7 @@ class TestKeepalive:
         assert ": keepalive\n\n".startswith(":")
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestGenericEventFallback:
     def test_generic_event_with_timestamp(self) -> None:
         b = SSEBroadcaster()
@@ -345,6 +357,7 @@ class TestGenericEventFallback:
         assert data["event_type"] == "dict_topic"
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestEventToSSEConversion:
     def test_scan_update_event_all_fields(self) -> None:
         b = SSEBroadcaster()
@@ -430,6 +443,7 @@ class TestEventToSSEConversion:
         assert data["cumulative_pnl"] == "99999.99"
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestFormatSSE:
     def test_format_sse_basic(self) -> None:
         b = SSEBroadcaster()
@@ -454,6 +468,7 @@ class TestFormatSSE:
         assert result.endswith("\n\n")
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestSingletonGetBroadcaster:
     @pytest.mark.asyncio()
     async def test_get_broadcaster_returns_singleton(self) -> None:
@@ -523,6 +538,7 @@ class TestSingletonGetBroadcaster:
             mod._broadcaster_lock = original_lock
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestForwardEventsErrorPaths:
     @pytest.mark.asyncio()
     async def test_forward_events_handles_generic_exception(self) -> None:
@@ -536,7 +552,11 @@ class TestForwardEventsErrorPaths:
             scan_queue = bus._scan_queue
             scan_evt = _make_scan_event()
             await scan_queue.put(scan_evt)
-            await asyncio.sleep(0.3)
+            for _ in range(20):
+                await asyncio.sleep(0.05)
+                async with b._lock:
+                    if bad_q not in b._subscribers:
+                        break
             async with b._lock:
                 assert bad_q not in b._subscribers
         finally:
@@ -568,6 +588,7 @@ class TestForwardEventsErrorPaths:
         b._running = False
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestSubscribeExitCleansUp:
     @pytest.mark.asyncio()
     async def test_subscribe_removes_queue_on_aclose(self) -> None:
@@ -617,6 +638,7 @@ class TestSubscribeExitCleansUp:
             await _stop_broadcaster(b)
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestStopQueueCloseFailure:
     @pytest.mark.asyncio()
     async def test_stop_handles_full_queue_on_close(self) -> None:
@@ -630,6 +652,7 @@ class TestStopQueueCloseFailure:
         assert b._subscribers == []
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestInitialBroadcasterState:
     def test_initial_state_all_fields(self) -> None:
         b = SSEBroadcaster()
@@ -644,6 +667,7 @@ class TestInitialBroadcasterState:
         assert isinstance(b._lock, asyncio.Lock)
 
 
+@pytest.mark.xdist_group("sse_broadcaster")
 class TestMultipleSubscribers:
     @pytest.mark.asyncio()
     async def test_event_broadcast_to_multiple_subscribers(self) -> None:

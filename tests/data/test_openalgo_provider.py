@@ -15,13 +15,6 @@ from iatb.data.openalgo_provider import OpenAlgoProvider
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-try:
-    import torch
-
-    torch.manual_seed(42)
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
 
 
 def _http_get_factory(responses: dict[str, dict[str, object]]) -> Any:

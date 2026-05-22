@@ -8,12 +8,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def _result(

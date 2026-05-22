@@ -3,7 +3,6 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import torch
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
 from iatb.execution.base import ExecutionResult, OrderRequest
@@ -11,7 +10,6 @@ from iatb.execution.base import ExecutionResult, OrderRequest
 # Set deterministic seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
-torch.manual_seed(42)
 
 
 def test_order_request_and_execution_result_validation() -> None:

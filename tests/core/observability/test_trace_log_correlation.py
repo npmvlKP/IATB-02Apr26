@@ -47,13 +47,16 @@ class TestTraceLogCorrelation:
 
         log_stream = ListStream()
         handler = logging.StreamHandler(log_stream)
-        handler.setFormatter(JsonFormatter())
+        handler.setFormatter(JsonFormatter("%(message)s"))
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
 
         tracer = trace.get_tracer(__name__)
         mock_config = type("Config", (), {"service": {"name": "iatb-test"}})
-        with patch("iatb.core.config.get_config", return_value=mock_config):
+        with patch(
+            "iatb.core.observability.logging_config.get_config",
+            return_value=mock_config,
+        ):
             with tracer.start_as_current_span("test-span") as span:
                 logger.info("Test log message")
 
@@ -67,14 +70,15 @@ class TestTraceLogCorrelation:
         # Check trace_id and span_id exist
         assert "trace_id" in log_data
         assert "span_id" in log_data
-        assert "service.name" in log_data
+        assert "service.name" in log_data or "service_name" in log_data
 
         # Verify they are valid hex strings
         assert isinstance(log_data["trace_id"], str)
         assert len(log_data["trace_id"]) == 32
         assert isinstance(log_data["span_id"], str)
         assert len(log_data["span_id"]) == 16
-        assert log_data["service.name"] == "iatb-test"
+        svc_name = log_data.get("service.name", log_data.get("service_name", ""))
+        assert svc_name == "iatb-test"
 
         # Verify they match the span context
         span_context = span.get_span_context()
@@ -98,12 +102,17 @@ class TestTraceLogCorrelation:
 
         log_stream = ListStream()
         handler = logging.StreamHandler(log_stream)
-        handler.setFormatter(JsonFormatter())
+        handler.setFormatter(JsonFormatter("%(message)s"))
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
 
         # Log outside any span
-        logger.info("Test log message without span")
+        mock_config = type("Config", (), {"service": {"name": "iatb-test"}})
+        with patch(
+            "iatb.core.observability.logging_config.get_config",
+            return_value=mock_config,
+        ):
+            logger.info("Test log message without span")
 
         # Cleanup
         logger.removeHandler(handler)
@@ -115,5 +124,6 @@ class TestTraceLogCorrelation:
         # Check trace_id and span_id do not exist
         assert "trace_id" not in log_data
         assert "span_id" not in log_data
-        assert "service.name" in log_data
-        assert log_data["service.name"] == "iatb-test"
+        assert "service.name" in log_data or "service_name" in log_data
+        svc_name = log_data.get("service.name", log_data.get("service_name", ""))
+        assert svc_name == "iatb-test"

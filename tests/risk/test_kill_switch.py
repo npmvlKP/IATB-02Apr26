@@ -136,6 +136,7 @@ class TestCheckOrderAllowed:
         assert kill_switch.check_order_allowed() is True
 
 
+@pytest.mark.xdist_group("kill_switch")
 class TestStateProperty:
     def test_state_returns_current_state(self, kill_switch):
         now = datetime(2026, 1, 5, 10, 0, tzinfo=UTC)
@@ -148,6 +149,7 @@ class TestStateProperty:
         )
 
 
+@pytest.mark.xdist_group("kill_switch")
 class TestDefaultEngageCallback:
     def test_default_callback_sends_alert(self, mock_executor):
         from unittest.mock import patch

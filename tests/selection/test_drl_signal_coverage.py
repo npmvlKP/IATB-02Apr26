@@ -4,40 +4,27 @@ Comprehensive coverage tests for drl_signal.py.
 Tests DRL signal computation, model inference, and error paths.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
+from iatb.backtesting.event_driven import EventDrivenResult
+from iatb.backtesting.monte_carlo import MonteCarloResult
+from iatb.backtesting.walk_forward import WalkForwardResult
+from iatb.core.exceptions import ConfigError
 from iatb.selection.drl_signal import (
+    BacktestConclusion,
+    DRLSignalOutput,
+    _derive_confidence,
+    _drawdown_factor,
+    _graduated_overfit_penalty,
+    _sigmoid_normalize,
+    _validate_conclusion,
+    build_conclusion,
     compute_drl_signal,
-    load_drl_model,
+    compute_drl_signal_from_agent,
 )
-
-
-class TestLoadDrlModel:
-    """Test load_drl_model function."""
-
-    @patch("importlib.import_module")
-    def test_load_model_success(self, mock_import) -> None:
-        """Test successful model loading."""
-        mock_module = MagicMock()
-        mock_import.return_value = mock_module
-
-        result = load_drl_model("test_model")
-        assert result is not None
-        mock_import.assert_called_once()
-
-    @patch("importlib.import_module")
-    def test_load_model_not_found(self, mock_import) -> None:
-        """Test model not found."""
-        mock_import.side_effect = ModuleNotFoundError("torch")
-
-        with pytest.raises(ImportError) as exc_info:
-            load_drl_model("test_model")
-        assert (
-            "model" in str(exc_info.value).lower()
-            or "torch" in str(exc_info.value).lower()
-        )
 
 
 class TestComputeDrlSignal:
@@ -45,143 +32,288 @@ class TestComputeDrlSignal:
 
     def test_basic_signal_computation(self) -> None:
         """Test basic DRL signal computation."""
-        features = {
-            "price_momentum": Decimal("0.05"),
-            "volume_trend": Decimal("0.02"),
-            "volatility": Decimal("0.03"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
+        conclusion = BacktestConclusion(
+            instrument_symbol="RELIANCE",
+            out_of_sample_sharpe=Decimal("1.5"),
+            max_drawdown_pct=Decimal("0.15"),
+            win_rate=Decimal("0.6"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.2"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        current_utc = datetime.now(UTC)
+        result = compute_drl_signal(conclusion, current_utc)
+        assert isinstance(result, DRLSignalOutput)
+        assert Decimal("0") <= result.score <= Decimal("1")
+        assert Decimal("0") <= result.confidence <= Decimal("1")
 
-        result = compute_drl_signal(features, weights)
-        assert Decimal("0.0") <= result <= Decimal("1.0")
+    def test_poor_performance(self) -> None:
+        """Test with poor performance metrics."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TCS",
+            out_of_sample_sharpe=Decimal("-0.5"),
+            max_drawdown_pct=Decimal("0.30"),
+            win_rate=Decimal("0.3"),
+            total_trades=50,
+            monte_carlo_robust=False,
+            walk_forward_overfit_detected=True,
+            mean_overfit_ratio=Decimal("5.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        current_utc = datetime.now(UTC)
+        result = compute_drl_signal(conclusion, current_utc)
+        assert isinstance(result, DRLSignalOutput)
+        assert result.score < Decimal("0.5")
+        assert result.robust is False
 
-    def test_high_confidence_signal(self) -> None:
-        """Test high confidence signal."""
-        features = {
-            "price_momentum": Decimal("0.9"),
-            "volume_trend": Decimal("0.8"),
-            "volatility": Decimal("0.7"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
+    def test_old_timestamp(self) -> None:
+        """Test with old timestamp (temporal decay)."""
+        from datetime import timedelta
 
-        result = compute_drl_signal(features, weights)
-        assert result > Decimal("0.7")
+        old_timestamp = datetime.now(UTC) - timedelta(days=30)
+        conclusion = BacktestConclusion(
+            instrument_symbol="INFY",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.10"),
+            win_rate=Decimal("0.55"),
+            total_trades=80,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.1"),
+            timestamp_utc=old_timestamp,
+        )
+        current_utc = datetime.now(UTC)
+        result = compute_drl_signal(conclusion, current_utc)
+        assert isinstance(result, DRLSignalOutput)
 
-    def test_low_confidence_signal(self) -> None:
-        """Test low confidence signal."""
-        features = {
-            "price_momentum": Decimal("0.1"),
-            "volume_trend": Decimal("0.1"),
-            "volatility": Decimal("0.1"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
 
-        result = compute_drl_signal(features, weights)
-        assert result < Decimal("0.3")
+class TestBuildConclusion:
+    """Test build_conclusion function."""
 
-    def test_missing_feature(self) -> None:
-        """Test with missing feature."""
-        features = {
-            "price_momentum": Decimal("0.5"),
-            # Missing volume_trend
-            "volatility": Decimal("0.3"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
+    def test_build_from_results(self) -> None:
+        """Test building conclusion from backtest results."""
+        walk_forward = MagicMock(spec=WalkForwardResult)
+        walk_forward.out_of_sample_sharpe = Decimal("1.2")
+        walk_forward.max_drawdown_pct = Decimal("0.15")
+        walk_forward.win_rate = Decimal("0.6")
+        walk_forward.total_trades = 100
+        walk_forward.overfit_ratio = Decimal("1.5")
+        walk_forward.folds = [MagicMock()]
+        walk_forward.folds[0].out_sample_sharpe = Decimal("1.2")
+        walk_forward.overfitting_detected = False
 
-        result = compute_drl_signal(features, weights)
-        # Should handle missing gracefully
-        assert Decimal("0.0") <= result <= Decimal("1.0")
+        monte_carlo = MagicMock(spec=MonteCarloResult)
+        monte_carlo.robust = True
+        monte_carlo.success_rate = Decimal("0.8")
 
-    def test_empty_features(self) -> None:
-        """Test with empty features."""
-        features: dict[str, Decimal] = {}
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
+        event_driven = MagicMock(spec=EventDrivenResult)
+        event_driven.sharpe_ratio = Decimal("1.1")
+        event_driven.total_pnl = Decimal("500")
+        event_driven.trades = 50
+        event_driven.equity_curve = [Decimal("100"), Decimal("110"), Decimal("105")]
 
-        result = compute_drl_signal(features, weights)
-        assert result == Decimal("0")
+        timestamp = datetime.now(UTC)
+        conclusion = build_conclusion(
+            symbol="RELIANCE",
+            walk_forward=walk_forward,
+            monte_carlo=monte_carlo,
+            event_driven=event_driven,
+            timestamp_utc=timestamp,
+        )
+        assert isinstance(conclusion, BacktestConclusion)
+        assert conclusion.instrument_symbol == "RELIANCE"
 
-    def test_invalid_feature_range_high(self) -> None:
-        """Test with feature above 1.0."""
-        features = {
-            "price_momentum": Decimal("1.5"),
-            "volume_trend": Decimal("0.2"),
-            "volatility": Decimal("0.3"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
 
-        result = compute_drl_signal(features, weights)
-        # Should handle gracefully, might clamp or compute
-        assert isinstance(result, Decimal)
+class TestGraduatedOverfitPenalty:
+    """Test _graduated_overfit_penalty function."""
 
-    def test_invalid_feature_range_negative(self) -> None:
-        """Test with negative feature."""
-        features = {
-            "price_momentum": Decimal("-0.5"),
-            "volume_trend": Decimal("0.2"),
-            "volatility": Decimal("0.3"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.3"),
-            "volatility": Decimal("0.2"),
-        }
+    def test_no_overfit(self) -> None:
+        """Test with no overfit detected."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=50,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        penalty = _graduated_overfit_penalty(conclusion)
+        assert penalty == Decimal("0")
 
-        result = compute_drl_signal(features, weights)
-        # Should handle gracefully
-        assert isinstance(result, Decimal)
+    def test_mild_overfit(self) -> None:
+        """Test with mild overfit."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=50,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=True,
+            mean_overfit_ratio=Decimal("2.1"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        penalty = _graduated_overfit_penalty(conclusion)
+        assert penalty < Decimal("0")
+        assert penalty > Decimal("-0.5")
 
-    def test_zero_weights(self) -> None:
-        """Test with all zero weights."""
-        features = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.2"),
-            "volatility": Decimal("0.3"),
-        }
-        weights = {
-            "price_momentum": Decimal("0.0"),
-            "volume_trend": Decimal("0.0"),
-            "volatility": Decimal("0.0"),
-        }
 
-        result = compute_drl_signal(features, weights)
-        assert result == Decimal("0")
+class TestDrawdownFactor:
+    """Test _drawdown_factor function."""
 
-    def test_with_model_inference(self) -> None:
-        """Test with actual model inference (mocked)."""
-        features = {
-            "price_momentum": Decimal("0.5"),
-            "volume_trend": Decimal("0.2"),
-            "volatility": Decimal("0.3"),
-        }
+    def test_low_drawdown(self) -> None:
+        """Test with low drawdown."""
+        factor = _drawdown_factor(Decimal("0.05"))
+        assert factor > Decimal("0.5")
 
-        mock_model = MagicMock()
-        mock_model.predict.return_value = 0.75
+    def test_high_drawdown(self) -> None:
+        """Test with high drawdown."""
+        factor = _drawdown_factor(Decimal("0.25"))
+        assert factor < Decimal("1.0")
 
-        with patch("iatb.selection.drl_signal.load_drl_model", return_value=mock_model):
-            result = compute_drl_signal(features, model="test_model")
-            assert result == Decimal("0.75")
-            mock_model.predict.assert_called_once()
+    def test_extreme_drawdown(self) -> None:
+        """Test with extreme drawdown."""
+        factor = _drawdown_factor(Decimal("0.50"))
+        assert factor < Decimal("1.0")
+        assert factor > Decimal("0")
+
+
+class TestSigmoidNormalize:
+    """Test _sigmoid_normalize function."""
+
+    def test_positive_sharpe(self) -> None:
+        """Test with positive Sharpe ratio."""
+        result = _sigmoid_normalize(Decimal("1.5"))
+        assert Decimal("0") <= result <= Decimal("1")
+
+    def test_negative_sharpe(self) -> None:
+        """Test with negative Sharpe ratio."""
+        result = _sigmoid_normalize(Decimal("-1.5"))
+        assert Decimal("0") <= result <= Decimal("1")
+
+    def test_zero_sharpe(self) -> None:
+        """Test with zero Sharpe ratio."""
+        result = _sigmoid_normalize(Decimal("0"))
+        assert result == Decimal("0.5")
+
+
+class TestDeriveConfidence:
+    """Test _derive_confidence function."""
+
+    def test_high_confidence(self) -> None:
+        """Test with high confidence factors."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=100,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        confidence = _derive_confidence(conclusion, Decimal("1.0"))
+        assert confidence > Decimal("0.5")
+
+    def test_low_confidence(self) -> None:
+        """Test with low confidence factors."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=10,
+            monte_carlo_robust=False,
+            walk_forward_overfit_detected=True,
+            mean_overfit_ratio=Decimal("3.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        confidence = _derive_confidence(conclusion, Decimal("1.0"))
+        assert confidence < Decimal("0.5")
+
+
+class TestValidateConclusion:
+    """Test _validate_conclusion function."""
+
+    def test_valid_conclusion(self) -> None:
+        """Test with valid conclusion."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="RELIANCE",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=50,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        _validate_conclusion(conclusion, datetime.now(UTC))
+
+    def test_invalid_symbol(self) -> None:
+        """Test with empty symbol raises error."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="  ",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=50,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        with pytest.raises(ConfigError):
+            _validate_conclusion(conclusion, datetime.now(UTC))
+
+    def test_negative_trades(self) -> None:
+        """Test with negative total_trades raises error."""
+        conclusion = BacktestConclusion(
+            instrument_symbol="RELIANCE",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=-1,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        with pytest.raises(ConfigError):
+            _validate_conclusion(conclusion, datetime.now(UTC))
+
+
+class TestComputeDrlSignalFromAgent:
+    """Test compute_drl_signal_from_agent function."""
+
+    def test_agent_computation(self) -> None:
+        """Test DRL signal from agent prediction."""
+        from unittest.mock import MagicMock
+
+        agent = MagicMock()
+        agent.has_model = True
+        agent.predict_with_confidence = MagicMock(return_value=(1, Decimal("0.8")))
+        observation = [Decimal("0.1"), Decimal("0.2"), Decimal("0.3")]
+        current_utc = datetime.now(UTC)
+        conclusion = BacktestConclusion(
+            instrument_symbol="TEST",
+            out_of_sample_sharpe=Decimal("1.0"),
+            max_drawdown_pct=Decimal("0.1"),
+            win_rate=Decimal("0.5"),
+            total_trades=50,
+            monte_carlo_robust=True,
+            walk_forward_overfit_detected=False,
+            mean_overfit_ratio=Decimal("1.0"),
+            timestamp_utc=datetime.now(UTC),
+        )
+        result = compute_drl_signal_from_agent(
+            agent, observation, current_utc, conclusion
+        )
+        assert isinstance(result, DRLSignalOutput)
+        assert Decimal("0") <= result.score <= Decimal("1")

@@ -40,6 +40,7 @@ def mock_engine_dependencies():
     }
 
 
+@pytest.mark.xdist_group("engine_pipeline")
 class TestEngineWiring:
     """Test engine wiring with dynamic dependencies."""
 
@@ -102,6 +103,7 @@ class TestEngineWiring:
         assert engine.order_manager is mock_order_manager
 
 
+@pytest.mark.xdist_group("engine_pipeline")
 class TestDynamicSymbolLoading:
     """Test dynamic symbol loading from configuration."""
 
@@ -191,6 +193,7 @@ class TestDynamicSymbolLoading:
             assert call_args[1]["symbols"] == ["RELIANCE", "HDFCBANK"]
 
 
+@pytest.mark.xdist_group("engine_pipeline")
 class TestStrengthScorerIntegration:
     """Test strength scorer integration in engine pipeline."""
 
@@ -300,6 +303,7 @@ class TestStrengthScorerIntegration:
             engine.select_instruments(signals, regime)
 
 
+@pytest.mark.xdist_group("engine_pipeline")
 class TestDeprecatedFileRemoval:
     """Test deprecated file removal handling in pipeline."""
 
@@ -346,6 +350,7 @@ class TestDeprecatedFileRemoval:
         assert "deprecated" not in source.lower()
 
 
+@pytest.mark.xdist_group("engine_pipeline")
 class TestEnginePipelineIntegration:
     """Integration tests for complete engine pipeline."""
 
@@ -474,6 +479,7 @@ class TestEnginePipelineIntegration:
             mock_run.assert_called_once()
 
 
+@pytest.mark.xdist_group("engine_pipeline")
 class TestEngineEdgeCases:
     """Test edge cases in engine pipeline."""
 

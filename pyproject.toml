@@ -24,15 +24,17 @@ pyyaml = "^6.0.1"
 redis = {extras = ["hiredis"], version = "^5.0.1"}
 scipy = "^1.12.0"
 numpy = "^1.26.4"
-duckdb = "^0.10.0"
+duckdb = "^1.2.0"
 httpx = "^0.28.1"
 keyring = "^25.0.0"
+pyotp = "^2.9"
 opentelemetry-api = "^1.41.1"
 prometheus-client = "^0.25.0"
 prometheus-fastapi-instrumentator = "^7.1.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.41.1"
 fastapi = "^0.136.1"
 optuna = "^4.8.0"
+mlflow = "^2.10.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.9.0"
@@ -81,7 +83,7 @@ exclude_lines = [
 ## Pytest
 
 [tool.pytest.ini_options]
-addopts = "-n auto --dist loadscope"
+addopts = "-n auto --dist loadgroup"
 asyncio_mode = "auto"
 pythonpath = ["src", "tests"]
 markers = [

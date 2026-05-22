@@ -17,6 +17,7 @@ from iatb.sentiment.social_sentiment import (
 )
 
 
+@pytest.mark.xdist_group("social_sentiment")
 class TestSocialSentimentConfig:
     """Test SocialSentimentConfig."""
 
@@ -84,6 +85,7 @@ class TestSocialSentimentConfig:
             )
 
 
+@pytest.mark.xdist_group("social_sentiment")
 class TestSocialPost:
     """Test SocialPost dataclass."""
 
@@ -121,6 +123,7 @@ class TestSocialPost:
         assert post.symbols == ["RELIANCE", "RELIANCE.NS"]
 
 
+@pytest.mark.xdist_group("social_sentiment")
 class TestSocialSentimentAnalyzer:
     """Test SocialSentimentAnalyzer class."""
 
@@ -480,6 +483,7 @@ class TestSocialSentimentAnalyzer:
             assert result.sentiment_label == "NEGATIVE"
 
 
+@pytest.mark.xdist_group("social_sentiment")
 class TestSocialAnalyzeBatch:
     """Test analyze_batch method."""
 
@@ -528,9 +532,11 @@ class TestSocialAnalyzeBatch:
         assert len(results) == 0
 
 
+@pytest.mark.xdist_group("social_sentiment")
 class TestAnalyzeToSentimentScore:
     """Test analyze_to_sentiment_score method."""
 
+    @pytest.mark.xdist_group("social_sentiment")
     def test_analyze_to_sentiment_score(self) -> None:
         """Test converting to SentimentScore."""
         analyzer = SocialSentimentAnalyzer()
@@ -553,6 +559,7 @@ class TestAnalyzeToSentimentScore:
         assert result is not None
 
 
+@pytest.mark.xdist_group("social_sentiment")
 class TestMockSocialSource:
     """Test MockSocialSource."""
 
