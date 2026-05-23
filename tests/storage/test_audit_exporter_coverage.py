@@ -25,6 +25,7 @@ from iatb.storage.audit_exporter import (
     AuditExportRecord,
     ExportConfig,
     ExportFormat,
+    ExportResult,
 )
 from iatb.storage.sqlite_store import SQLiteStore, TradeAuditRecord
 
@@ -459,3 +460,142 @@ class TestRetentionPolicyExceptionHandling:
     def test_no_files_no_error(self, exporter_coverage: AuditExporter) -> None:
         removed = exporter_coverage.apply_retention_policy()
         assert removed == 0
+
+
+class TestBuildCsvRow:
+    """Cover _build_csv_row (lines 292-309)."""
+
+    def test_with_metadata_included(self, exporter_coverage: AuditExporter) -> None:
+        rec = AuditExportRecord(
+            trade_id="T001",
+            timestamp="2025-05-01T10:00:00+00:00",
+            exchange="NSE",
+            symbol="SYM0",
+            side="BUY",
+            quantity="100",
+            price="2500.50",
+            status="FILLED",
+            strategy_id="ST_A",
+            metadata={"sig": "0.5"},
+        )
+        row = AuditExporter._build_csv_row(rec, include_metadata=True)
+        assert row["trade_id"] == "T001"
+        assert "metadata" in row
+
+    def test_without_metadata_flag(self, exporter_coverage: AuditExporter) -> None:
+        rec = AuditExportRecord(
+            trade_id="T002",
+            timestamp="2025-05-01T10:00:00+00:00",
+            exchange="NSE",
+            symbol="SYM0",
+            side="BUY",
+            quantity="100",
+            price="2500.50",
+            status="FILLED",
+            strategy_id="ST_A",
+            metadata={"sig": "0.5"},
+        )
+        row = AuditExporter._build_csv_row(rec, include_metadata=False)
+        assert row["trade_id"] == "T002"
+        assert "metadata" not in row
+
+    def test_metadata_none_with_include(self, exporter_coverage: AuditExporter) -> None:
+        rec = AuditExportRecord(
+            trade_id="T003",
+            timestamp="2025-05-01T10:00:00+00:00",
+            exchange="NSE",
+            symbol="SYM0",
+            side="BUY",
+            quantity="100",
+            price="2500.50",
+            status="FILLED",
+            strategy_id="ST_A",
+            metadata=None,
+        )
+        row = AuditExporter._build_csv_row(rec, include_metadata=True)
+        assert row["trade_id"] == "T003"
+        assert "metadata" not in row
+
+
+class TestFetchRecordsTimezone:
+    """Cover _fetch_records with timezone-aware start/end (lines 267-277)."""
+
+    def test_fetch_with_timezone_aware_start(
+        self, exporter_coverage: AuditExporter
+    ) -> None:
+        from datetime import UTC as _UTC
+
+        start = datetime(2025, 5, 1, 9, 0, 0, tzinfo=_UTC)
+        records = exporter_coverage._fetch_records(start_time=start)
+        assert all(r.timestamp >= start for r in records)
+
+    def test_fetch_with_timezone_aware_end(
+        self, exporter_coverage: AuditExporter
+    ) -> None:
+        from datetime import UTC as _UTC
+
+        end = datetime(2025, 5, 1, 12, 0, 0, tzinfo=_UTC)
+        records = exporter_coverage._fetch_records(end_time=end)
+        assert all(r.timestamp <= end for r in records)
+
+    def test_fetch_with_both_bounds(self, exporter_coverage: AuditExporter) -> None:
+        from datetime import UTC as _UTC
+
+        start = datetime(2025, 5, 1, 9, 0, 0, tzinfo=_UTC)
+        end = datetime(2025, 5, 1, 12, 0, 0, tzinfo=_UTC)
+        records = exporter_coverage._fetch_records(start_time=start, end_time=end)
+        assert all(start <= r.timestamp <= end for r in records)
+
+
+class TestExportResultPostInit:
+    """Cover ExportResult.__post_init__ (lines 69-75)."""
+
+    def test_success_without_file_path_raises(self) -> None:
+        from iatb.core.exceptions import ConfigError
+
+        with pytest.raises(ConfigError, match="file_path required"):
+            ExportResult(
+                success=True,
+                file_path=None,
+                records_exported=10,
+                format=ExportFormat.CSV,
+                timestamp=create_timestamp(datetime.now(UTC)),
+            )
+
+    def test_failure_without_error_message_raises(self) -> None:
+        from iatb.core.exceptions import ConfigError
+
+        with pytest.raises(ConfigError, match="error_message required"):
+            ExportResult(
+                success=False,
+                file_path=None,
+                records_exported=0,
+                format=ExportFormat.CSV,
+                timestamp=create_timestamp(datetime.now(UTC)),
+                error_message=None,
+            )
+
+
+class TestExportPdfImportError:
+    """Cover _write_pdf ImportError path (lines 504-509)."""
+
+    def test_pdf_import_error_raises_config_error(
+        self,
+        tmp_path: Path,
+        store_coverage: SQLiteStore,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        config = ExportConfig(output_dir=tmp_path / "exports")
+        exporter = AuditExporter(store=store_coverage, config=config)
+
+        reportlab_keys = [k for k in list(_sys.modules) if k.startswith("reportlab")]
+        for key in reportlab_keys:
+            monkeypatch.delitem(_sys.modules, key, raising=False)
+
+        from iatb.core.exceptions import ConfigError
+
+        file_path = tmp_path / "exports" / "fail.pdf"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with pytest.raises(ConfigError, match="reportlab library not installed"):
+            exporter._write_pdf(file_path, [])

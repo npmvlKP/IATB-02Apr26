@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 from freezegun import freeze_time
 from iatb.core.enums import Exchange, OrderSide, OrderStatus
+from iatb.core.exceptions import ConfigError
 from iatb.core.types import (
     create_price,
     create_quantity,
@@ -872,3 +873,195 @@ class TestAuditExportSchedulerCoverage:
         # Verify dataclass is frozen by checking values are correct
         assert config.frequency == ScheduleFrequency.DAILY
         assert config.time == time(hour=10, minute=30)
+
+
+class TestScheduleConfigValidation:
+    """Cover __post_init__ validation for ScheduleConfig (lines 47-48, 50-51)."""
+
+    def test_invalid_day_of_week_low(self) -> None:
+        with pytest.raises(ConfigError, match="day_of_week must be between 0 and 6"):
+            ScheduleConfig(frequency=ScheduleFrequency.WEEKLY, day_of_week=-1)
+
+    def test_invalid_day_of_week_high(self) -> None:
+        with pytest.raises(ConfigError, match="day_of_week must be between 0 and 6"):
+            ScheduleConfig(frequency=ScheduleFrequency.WEEKLY, day_of_week=7)
+
+    def test_invalid_day_of_month_low(self) -> None:
+        with pytest.raises(ConfigError, match="day_of_month must be between 1 and 31"):
+            ScheduleConfig(frequency=ScheduleFrequency.MONTHLY, day_of_month=0)
+
+    def test_invalid_day_of_month_high(self) -> None:
+        with pytest.raises(ConfigError, match="day_of_month must be between 1 and 31"):
+            ScheduleConfig(frequency=ScheduleFrequency.MONTHLY, day_of_month=32)
+
+
+class TestIsDueDisabled:
+    """Cover is_due when schedule disabled (line 86)."""
+
+    def test_is_due_returns_false_when_disabled(self, mock_exporter: MagicMock) -> None:
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.DAILY,
+            time=time(hour=10, minute=30),
+            enabled=False,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+        )
+        assert scheduler.is_due() is False
+
+
+class TestExecuteSkippedPaths:
+    """Cover execute() disabled and not-due paths (lines 120-126, 129-135)."""
+
+    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
+    def test_execute_when_disabled(self, mock_exporter: MagicMock) -> None:
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.DAILY,
+            time=time(hour=10, minute=30),
+            enabled=False,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+        )
+        execution = scheduler.execute()
+        assert execution.status == ScheduleStatus.SKIPPED
+        assert execution.error_message == "Schedule is disabled"
+
+    @freeze_time("2025-04-25 08:00:00", tz_offset=0)
+    def test_execute_when_not_due(self, mock_exporter: MagicMock) -> None:
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.DAILY,
+            time=time(hour=10, minute=30),
+            enabled=True,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+        )
+        execution = scheduler.execute()
+        assert execution.status == ScheduleStatus.SKIPPED
+        assert execution.error_message == "Export not due at this time"
+
+
+class TestIsDueBranches:
+    """Cover _is_daily_due with same-day execution, _is_weekly_due wrong weekday, etc."""
+
+    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
+    def test_daily_due_with_same_day_last_execution(
+        self, mock_exporter: MagicMock, temp_dir: Path
+    ) -> None:
+        state_file = temp_dir / "state" / "schedule.json"
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.DAILY,
+            time=time(hour=10, minute=30),
+            enabled=True,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+            state_file=state_file,
+        )
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_data = {
+            "schedule_id": "daily_20250425_103000",
+            "status": ScheduleStatus.SUCCESS.value,
+            "timestamp": datetime(2025, 4, 25, 10, 30, 0, tzinfo=UTC).isoformat(),
+            "records_exported": 10,
+            "file_path": str(temp_dir / "exports" / "test.csv"),
+            "error_message": None,
+        }
+        with state_file.open("w", encoding="utf-8") as f:
+            json.dump(state_data, f)
+        assert scheduler.is_due() is False
+
+    @freeze_time("2025-04-21 10:30:01", tz_offset=0)
+    def test_weekly_due_wrong_weekday(self, mock_exporter: MagicMock) -> None:
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.WEEKLY,
+            day_of_week=4,
+            time=time(hour=10, minute=30),
+            enabled=True,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+        )
+        reference_time = datetime(2025, 4, 21, 10, 30, 1, tzinfo=UTC)
+        assert scheduler.is_due(reference_time=reference_time) is False
+
+    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
+    def test_weekly_due_with_recent_last_execution(
+        self, mock_exporter: MagicMock, temp_dir: Path
+    ) -> None:
+        state_file = temp_dir / "state" / "schedule.json"
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.WEEKLY,
+            day_of_week=4,
+            time=time(hour=10, minute=30),
+            enabled=True,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+            state_file=state_file,
+        )
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        recent_execution = datetime(2025, 4, 21, 10, 30, 0, tzinfo=UTC)
+        state_data = {
+            "schedule_id": "weekly_20250421_103000",
+            "status": ScheduleStatus.SUCCESS.value,
+            "timestamp": recent_execution.isoformat(),
+            "records_exported": 10,
+            "file_path": str(temp_dir / "exports" / "test.csv"),
+            "error_message": None,
+        }
+        with state_file.open("w", encoding="utf-8") as f:
+            json.dump(state_data, f)
+        assert scheduler.is_due() is False
+
+    @freeze_time("2025-04-20 10:30:01", tz_offset=0)
+    def test_monthly_due_wrong_day(self, mock_exporter: MagicMock) -> None:
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.MONTHLY,
+            day_of_month=1,
+            time=time(hour=10, minute=30),
+            enabled=True,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+        )
+        reference_time = datetime(2025, 4, 20, 10, 30, 1, tzinfo=UTC)
+        assert scheduler.is_due(reference_time=reference_time) is False
+
+    @freeze_time("2025-04-01 10:30:01", tz_offset=0)
+    def test_monthly_due_with_recent_last_execution(
+        self, mock_exporter: MagicMock, temp_dir: Path
+    ) -> None:
+        state_file = temp_dir / "state" / "schedule.json"
+        config = ScheduleConfig(
+            frequency=ScheduleFrequency.MONTHLY,
+            day_of_month=1,
+            time=time(hour=10, minute=30),
+            enabled=True,
+        )
+        scheduler = AuditExportScheduler(
+            exporter=mock_exporter,
+            schedule_config=config,
+            state_file=state_file,
+        )
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        same_month_execution = datetime(2025, 4, 1, 10, 30, 0, tzinfo=UTC)
+        state_data = {
+            "schedule_id": "monthly_20250401_103000",
+            "status": ScheduleStatus.SUCCESS.value,
+            "timestamp": same_month_execution.isoformat(),
+            "records_exported": 10,
+            "file_path": str(temp_dir / "exports" / "test.csv"),
+            "error_message": None,
+        }
+        with state_file.open("w", encoding="utf-8") as f:
+            json.dump(state_data, f)
+        assert scheduler.is_due() is False

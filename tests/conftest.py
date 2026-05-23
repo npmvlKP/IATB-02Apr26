@@ -8,6 +8,7 @@ import os
 import platform
 import random
 import sys as _sys
+import tempfile
 from collections.abc import Generator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -40,12 +41,13 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
         np.random.seed(DETERMINISTIC_SEED)
     except ImportError:
         pass
-    try:
-        import torch
+    if _sys.modules.get("torch") is not None:
+        try:
+            import torch
 
-        torch.manual_seed(DETERMINISTIC_SEED)
-    except (ImportError, OSError):
-        pass
+            torch.manual_seed(DETERMINISTIC_SEED)
+        except (OSError, RuntimeError):
+            pass
     return
 
 
@@ -295,3 +297,22 @@ def pytest_xdist_auto_num_workers(config: object) -> int:
     if platform.system() == "Windows":
         return 6
     return os.cpu_count() or 4
+
+
+if platform.system() == "Windows":
+    _SHORT_TMP = os.path.abspath(
+        os.path.join(os.environ.get("SYSTEMDRIVE", "C:"), os.sep, "t")
+    )
+
+    if not os.path.isdir(_SHORT_TMP):
+        try:
+            os.makedirs(_SHORT_TMP, exist_ok=True)
+        except OSError:
+            _SHORT_TMP = tempfile.gettempdir()
+
+    def pytest_configure(config: pytest.Config) -> None:
+        """Override basetemp on Windows with a short path to prevent MAX_PATH issues."""
+        from pathlib import Path
+
+        short_basetemp = Path(_SHORT_TMP) / "pt"
+        config.option.basetemp = str(short_basetemp)

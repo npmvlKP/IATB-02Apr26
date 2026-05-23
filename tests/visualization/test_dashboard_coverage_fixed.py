@@ -30,6 +30,8 @@ from iatb.visualization.dashboard import (
     ALL_TABS,
     REQUIRED_MARKET_TABS,
     _build_approval_chart,
+    _load_plotly_go,
+    _load_streamlit,
     build_dashboard_payload,
     build_scanner_payload,
     convert_candidates_to_health_matrix,
@@ -429,5 +431,149 @@ def test_render_dashboard_logging(caplog):
         with pytest.raises(ConfigError):
             render_dashboard({})
 
-        # Verify no panic-level logs for expected errors
         assert not any(record.levelno >= logging.CRITICAL for record in caplog.records)
+
+
+class TestLoadStreamlitMissing:
+    """Cover _load_streamlit when module not found (lines 389-394)."""
+
+    @patch("iatb.visualization.dashboard.importlib.import_module")
+    def test_load_streamlit_missing_raises_config_error(
+        self, mock_import: MagicMock
+    ) -> None:
+        mock_import.side_effect = ModuleNotFoundError("No streamlit")
+        with pytest.raises(ConfigError, match="streamlit dependency is required"):
+            _load_streamlit()
+
+
+class TestLoadPlotlyGoMissing:
+    """Cover _load_plotly_go when module not found (lines 397-402)."""
+
+    @patch("iatb.visualization.dashboard.importlib.import_module")
+    def test_load_plotly_go_missing_raises_config_error(
+        self, mock_import: MagicMock
+    ) -> None:
+        mock_import.side_effect = ModuleNotFoundError("No plotly")
+        with pytest.raises(ConfigError, match="plotly dependency is required"):
+            _load_plotly_go()
+
+
+class TestRenderScannerMetricsEdgeCases:
+    """Cover _render_scanner_metrics edge cases (lines 243-271)."""
+
+    def test_metrics_with_zero_total_scanned(self, mock_streamlit: MagicMock) -> None:
+        from iatb.visualization.dashboard import _render_scanner_metrics
+
+        result = ScannerHealthResult(
+            instruments=[],
+            approved_count=0,
+            total_scanned=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_streamlit.metric = MagicMock()
+        mock_streamlit.columns = MagicMock(
+            return_value=[MagicMock(metric=MagicMock()) for _ in range(3)]
+        )
+        _render_scanner_metrics(mock_streamlit, result)
+        mock_streamlit.columns.assert_called_once_with(3)
+
+    def test_metrics_with_non_callable_columns(self, mock_streamlit: MagicMock) -> None:
+        from iatb.visualization.dashboard import _render_scanner_metrics
+
+        result = ScannerHealthResult(
+            instruments=[],
+            approved_count=0,
+            total_scanned=100,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_streamlit.columns = None
+        _render_scanner_metrics(mock_streamlit, result)
+
+    def test_metrics_with_non_callable_metric(self, mock_streamlit: MagicMock) -> None:
+        from iatb.visualization.dashboard import _render_scanner_metrics
+
+        result = ScannerHealthResult(
+            instruments=[],
+            approved_count=0,
+            total_scanned=100,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_streamlit.metric = None
+        mock_streamlit.columns = MagicMock(
+            return_value=[MagicMock(metric=MagicMock()) for _ in range(3)]
+        )
+        _render_scanner_metrics(mock_streamlit, result)
+
+
+class TestRenderScannerContentEdgeCases:
+    """Cover _render_scanner_content edge cases (lines 274-305)."""
+
+    def test_scanner_content_with_non_callable_divider(
+        self, mock_streamlit: MagicMock
+    ) -> None:
+        from iatb.visualization.dashboard import _render_scanner_content
+
+        result = ScannerHealthResult(
+            instruments=[],
+            approved_count=0,
+            total_scanned=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_streamlit.divider = None
+        mock_streamlit.subheader = MagicMock()
+        go = MagicMock()
+        table_sym, chart_sym = _render_scanner_content(mock_streamlit, go, result, None)
+        assert table_sym == []
+        assert chart_sym == []
+
+    def test_scanner_content_with_non_callable_subheader(
+        self, mock_streamlit: MagicMock
+    ) -> None:
+        from iatb.visualization.dashboard import _render_scanner_content
+
+        result = ScannerHealthResult(
+            instruments=[],
+            approved_count=0,
+            total_scanned=0,
+            scan_timestamp_utc=datetime.now(UTC),
+        )
+        mock_streamlit.subheader = None
+        mock_streamlit.divider = MagicMock()
+        go = MagicMock()
+        table_sym, chart_sym = _render_scanner_content(mock_streamlit, go, result, None)
+        assert table_sym == []
+
+
+class TestRenderInstrumentScannerTabHeader:
+    """Cover render_instrument_scanner_tab header branch (lines 328-330)."""
+
+    def test_scanner_tab_with_non_callable_header(
+        self, mock_streamlit: MagicMock
+    ) -> None:
+        mock_streamlit.header = None
+        mock_streamlit.info = MagicMock()
+        result = render_instrument_scanner_tab(None, None, mock_streamlit, MagicMock())
+        assert result["total_count"] == 0
+
+
+class TestBuildSummaryChartEdgeCase:
+    """Cover _build_summary_chart low exit probability branch (line 218)."""
+
+    def test_summary_chart_low_exit_prob(self) -> None:
+        from iatb.visualization.dashboard import _build_summary_chart
+
+        inst = build_instrument_health_matrix(
+            symbol="LOWPROB",
+            sentiment_score=Decimal("0.8"),
+            market_strength_score=Decimal("0.7"),
+            volume_score=Decimal("0.7"),
+            drl_backtest_score=Decimal("0.7"),
+            safe_exit_probability=Decimal("0.3"),
+        )
+        go = MagicMock()
+        go.Figure.return_value = MagicMock()
+        go.Bar.return_value = MagicMock()
+        fig = _build_summary_chart(go, inst)
+        assert fig is not None
+        bar_call_kwargs = go.Bar.call_args[1]
+        assert "red" in bar_call_kwargs["marker_color"]

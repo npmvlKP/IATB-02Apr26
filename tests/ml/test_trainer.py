@@ -105,3 +105,65 @@ def test_unified_trainer_validates_and_reports_errors(
             [[Decimal("1")]],
             [Decimal("0.1")],
         )
+
+
+class TestExtractScoreBranches:
+    """Cover _extract_score (lines 95-102)."""
+
+    def test_extract_score_decimal_input(self) -> None:
+        from iatb.ml.trainer import _extract_score
+
+        assert _extract_score(Decimal("0.5")) == Decimal("0.5")
+
+    def test_extract_score_object_with_score_attr(self) -> None:
+        from iatb.ml.trainer import _extract_score
+
+        obj = SimpleNamespace(score=Decimal("0.8"))
+        assert _extract_score(obj) == Decimal("0.8")
+
+    def test_extract_score_invalid_raises(self) -> None:
+        from iatb.ml.trainer import _extract_score
+
+        with pytest.raises(ConfigError, match="predict.*result must be"):
+            _extract_score("invalid")
+
+
+class TestLogMlflowIncompleteApi:
+    """Cover _log_mlflow incomplete API (lines 122-123, 129-131)."""
+
+    def test_mlflow_incomplete_api_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from iatb.ml.trainer import _log_mlflow
+
+        fake_mlflow = SimpleNamespace(set_experiment=None, start_run=None)
+        monkeypatch.setattr(
+            "iatb.ml.trainer.importlib.import_module", lambda _: fake_mlflow
+        )
+        with pytest.raises(ConfigError, match="mlflow API is incomplete"):
+            _log_mlflow("test", Decimal("0.1"), Decimal("0.2"), True)
+
+    def test_mlflow_missing_run_id_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from iatb.ml.trainer import _log_mlflow
+
+        class _RunNoId:
+            info = SimpleNamespace()
+
+        fake_mlflow = SimpleNamespace(
+            set_experiment=lambda name: None,
+            start_run=lambda: _RunNoId(),
+            log_metric=lambda key, value: None,
+        )
+        monkeypatch.setattr(
+            "iatb.ml.trainer.importlib.import_module", lambda _: fake_mlflow
+        )
+        with pytest.raises(ConfigError, match="mlflow run_id is unavailable"):
+            _log_mlflow("test", Decimal("0.1"), Decimal("0.2"), True)
+
+    def test_mlflow_disabled_returns_tracking_disabled(self) -> None:
+        from iatb.ml.trainer import _log_mlflow
+
+        result = _log_mlflow("test", Decimal("0.1"), Decimal("0.2"), False)
+        assert result == "tracking-disabled"
