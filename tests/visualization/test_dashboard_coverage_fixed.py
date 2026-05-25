@@ -16,7 +16,6 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from freezegun import freeze_time
 from iatb.core.enums import Exchange
 from iatb.core.exceptions import ConfigError
 from iatb.market_strength.regime_detector import MarketRegime
@@ -133,7 +132,6 @@ def test_render_health_matrix_table_empty(instruments, mock_streamlit):
         assert len(rendered_symbols) == 1
 
 
-@freeze_time("2024-01-01")
 def test_render_health_matrix_table_rows(mock_streamlit):
     """Health matrix builds accurate row data per instrument."""
     inst = build_instrument_health_matrix(
@@ -274,7 +272,6 @@ def test_render_instrument_scanner_tab_no_result(mock_load_st, _mock_load_go):
     )
 
 
-@freeze_time("2024-01-01")
 def test_render_instrument_scanner_tab_metrics(mock_streamlit):
     """Scanner tab renders metrics, health matrix, and charts."""
     st = mock_streamlit
