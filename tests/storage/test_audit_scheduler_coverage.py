@@ -4,6 +4,9 @@ Comprehensive coverage tests for AuditExportScheduler.
 This file augments the existing test_audit_scheduler.py to achieve 100% coverage
 by testing all execution paths including successful exports, failed exports,
 and exception handling.
+
+Avoids freezegun to prevent DLL initialization errors with pytest-xdist on Windows.
+Uses schedule time configuration and reference_time parameters for time control.
 """
 
 import json
@@ -12,7 +15,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from freezegun import freeze_time
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import create_timestamp
 from iatb.storage.audit_exporter import (
@@ -26,6 +28,9 @@ from iatb.storage.audit_scheduler import (
     ScheduleExecution,
     ScheduleStatus,
 )
+
+_DUE_TIME = time(hour=0, minute=0)  # Always due (midnight already passed)
+_NOT_DUE_TIME = time(hour=23, minute=59)  # Not due during daytime hours
 
 
 @pytest.fixture()
@@ -43,10 +48,26 @@ def mock_exporter() -> MagicMock:
     return exporter
 
 
+def _make_result(
+    success: bool = True,
+    file_path: Path | None = None,
+    records: int = 10,
+    error_message: str | None = None,
+) -> ExportResult:
+    """Helper to create ExportResult with UTC timestamp."""
+    return ExportResult(
+        success=success,
+        file_path=file_path,
+        records_exported=records,
+        format=ExportFormat.CSV,
+        timestamp=create_timestamp(datetime.now(UTC)),
+        error_message=error_message,
+    )
+
+
 class TestAuditExportSchedulerCoverage:
     """Comprehensive coverage tests for AuditExportScheduler."""
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_successful_export(
         self,
         mock_exporter: MagicMock,
@@ -56,7 +77,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -65,28 +86,20 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Mock successful export result
         export_file = temp_dir / "exports" / "test_audit.csv"
-        mock_result = ExportResult(
-            success=True,
+        mock_exporter.export.return_value = _make_result(
             file_path=export_file,
-            records_exported=10,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
+            records=10,
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute
         execution = scheduler.execute()
 
-        # Verify
         assert execution.status == ScheduleStatus.SUCCESS
         assert execution.records_exported == 10
         assert execution.file_path == export_file
         assert execution.error_message is None
         mock_exporter.export.assert_called_once()
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_failed_export(
         self,
         mock_exporter: MagicMock,
@@ -96,7 +109,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -105,28 +118,19 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Mock failed export result
-        mock_result = ExportResult(
+        mock_exporter.export.return_value = _make_result(
             success=False,
-            file_path=None,
-            records_exported=0,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
             error_message="Export failed: disk full",
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute
         execution = scheduler.execute()
 
-        # Verify
         assert execution.status == ScheduleStatus.FAILED
         assert execution.records_exported == 0
         assert execution.file_path is None
         assert execution.error_message == "Export failed: disk full"
         mock_exporter.export.assert_called_once()
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_exception_during_export(
         self,
         mock_exporter: MagicMock,
@@ -136,7 +140,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -145,20 +149,16 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Mock exporter to raise exception
         mock_exporter.export.side_effect = RuntimeError("Database connection lost")
 
-        # Execute
         execution = scheduler.execute()
 
-        # Verify
         assert execution.status == ScheduleStatus.FAILED
         assert execution.records_exported == 0
         assert execution.file_path is None
         assert execution.error_message == "Database connection lost"
         mock_exporter.export.assert_called_once()
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_saves_state_on_success(
         self,
         mock_exporter: MagicMock,
@@ -168,7 +168,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -177,21 +177,14 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Mock successful export result
         export_file = temp_dir / "exports" / "test_audit.csv"
-        mock_result = ExportResult(
-            success=True,
+        mock_exporter.export.return_value = _make_result(
             file_path=export_file,
-            records_exported=10,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
+            records=10,
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute
         scheduler.execute()
 
-        # Verify state file was saved
         assert state_file.exists()
         with state_file.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -201,7 +194,6 @@ class TestAuditExportSchedulerCoverage:
         assert data["file_path"] == str(export_file)
         assert data["error_message"] is None
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_saves_state_on_failure(
         self,
         mock_exporter: MagicMock,
@@ -211,7 +203,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -220,21 +212,13 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Mock failed export result
-        mock_result = ExportResult(
+        mock_exporter.export.return_value = _make_result(
             success=False,
-            file_path=None,
-            records_exported=0,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
             error_message="Export failed",
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute
         scheduler.execute()
 
-        # Verify state file was saved
         assert state_file.exists()
         with state_file.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -244,7 +228,6 @@ class TestAuditExportSchedulerCoverage:
         assert data["file_path"] is None
         assert data["error_message"] == "Export failed"
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_saves_state_on_exception(
         self,
         mock_exporter: MagicMock,
@@ -254,7 +237,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -263,13 +246,10 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Mock exporter to raise exception
         mock_exporter.export.side_effect = ValueError("Invalid data")
 
-        # Execute
         scheduler.execute()
 
-        # Verify state file was saved
         assert state_file.exists()
         with state_file.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -279,85 +259,70 @@ class TestAuditExportSchedulerCoverage:
         assert data["file_path"] is None
         assert data["error_message"] == "Invalid data"
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_with_weekly_schedule_success(
         self,
         mock_exporter: MagicMock,
         temp_dir: Path,
     ) -> None:
-        """Test execute() with weekly schedule and successful export."""
-        state_file = temp_dir / "state" / "schedule.json"
+        """Test execute() with weekly schedule on the correct weekday."""
+        now = datetime.now(UTC)
         config = ScheduleConfig(
             frequency=ScheduleFrequency.WEEKLY,
-            day_of_week=4,  # Friday
-            time=time(hour=10, minute=30),
+            day_of_week=now.weekday(),
+            time=_DUE_TIME,
             enabled=True,
         )
+        state_file = temp_dir / "state" / "schedule.json"
         scheduler = AuditExportScheduler(
             exporter=mock_exporter,
             schedule_config=config,
             state_file=state_file,
         )
 
-        # Mock successful export result
         export_file = temp_dir / "exports" / "test_audit.csv"
-        mock_result = ExportResult(
-            success=True,
+        mock_exporter.export.return_value = _make_result(
             file_path=export_file,
-            records_exported=25,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
+            records=25,
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute
         execution = scheduler.execute()
 
-        # Verify
         assert execution.status == ScheduleStatus.SUCCESS
         assert execution.records_exported == 25
         assert execution.schedule_id.startswith("weekly_")
 
-    @freeze_time("2025-05-01 10:30:01", tz_offset=0)
     def test_execute_with_monthly_schedule_success(
         self,
         mock_exporter: MagicMock,
         temp_dir: Path,
     ) -> None:
-        """Test execute() with monthly schedule and successful export."""
-        state_file = temp_dir / "state" / "schedule.json"
+        """Test execute() with monthly schedule on the correct day of month."""
+        now = datetime.now(UTC)
         config = ScheduleConfig(
             frequency=ScheduleFrequency.MONTHLY,
-            day_of_month=1,
-            time=time(hour=10, minute=30),
+            day_of_month=now.day,
+            time=_DUE_TIME,
             enabled=True,
         )
+        state_file = temp_dir / "state" / "schedule.json"
         scheduler = AuditExportScheduler(
             exporter=mock_exporter,
             schedule_config=config,
             state_file=state_file,
         )
 
-        # Mock successful export result
         export_file = temp_dir / "exports" / "test_audit.csv"
-        mock_result = ExportResult(
-            success=True,
+        mock_exporter.export.return_value = _make_result(
             file_path=export_file,
-            records_exported=100,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
+            records=100,
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute
         execution = scheduler.execute()
 
-        # Verify
         assert execution.status == ScheduleStatus.SUCCESS
         assert execution.records_exported == 100
         assert execution.schedule_id.startswith("monthly_")
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_without_state_file(
         self,
         mock_exporter: MagicMock,
@@ -366,7 +331,7 @@ class TestAuditExportSchedulerCoverage:
         """Test execute() without state file (state_file=None)."""
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -375,21 +340,14 @@ class TestAuditExportSchedulerCoverage:
             state_file=None,
         )
 
-        # Mock successful export result
         export_file = temp_dir / "test.csv"
-        mock_result = ExportResult(
-            success=True,
+        mock_exporter.export.return_value = _make_result(
             file_path=export_file,
-            records_exported=5,
-            format=ExportFormat.CSV,
-            timestamp=create_timestamp(datetime.now(UTC)),
+            records=5,
         )
-        mock_exporter.export.return_value = mock_result
 
-        # Execute should not raise error even without state file
         execution = scheduler.execute()
 
-        # Verify execution succeeded
         assert execution.status == ScheduleStatus.SUCCESS
         assert execution.records_exported == 5
 
@@ -402,7 +360,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -411,7 +369,6 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Create a valid state file
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_data = {
             "schedule_id": "daily_20250425_103000",
@@ -424,10 +381,8 @@ class TestAuditExportSchedulerCoverage:
         with state_file.open("w", encoding="utf-8") as f:
             json.dump(state_data, f)
 
-        # Retrieve last execution
         last_execution = scheduler.get_last_execution()
 
-        # Verify
         assert last_execution is not None
         assert last_execution.schedule_id == "daily_20250425_103000"
         assert last_execution.status == ScheduleStatus.SUCCESS
@@ -442,7 +397,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -451,7 +406,6 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Create state file without file_path
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_data = {
             "schedule_id": "daily_20250425_103000",
@@ -464,10 +418,8 @@ class TestAuditExportSchedulerCoverage:
         with state_file.open("w", encoding="utf-8") as f:
             json.dump(state_data, f)
 
-        # Retrieve last execution
         last_execution = scheduler.get_last_execution()
 
-        # Verify
         assert last_execution is not None
         assert last_execution.status == ScheduleStatus.FAILED
         assert last_execution.file_path is None
@@ -482,7 +434,7 @@ class TestAuditExportSchedulerCoverage:
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -491,14 +443,11 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Create invalid state file
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_file.write_text("invalid json content")
 
-        # Should return None instead of raising error
         last_execution = scheduler.get_last_execution()
 
-        # Verify
         assert last_execution is None
 
     def test_get_last_execution_without_state_file(
@@ -508,7 +457,7 @@ class TestAuditExportSchedulerCoverage:
         """Test get_last_execution() when state_file is None."""
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -517,10 +466,8 @@ class TestAuditExportSchedulerCoverage:
             state_file=None,
         )
 
-        # Should return None
         last_execution = scheduler.get_last_execution()
 
-        # Verify
         assert last_execution is None
 
     def test_create_execution_with_all_fields(
@@ -544,7 +491,6 @@ class TestAuditExportSchedulerCoverage:
             error_message=None,
         )
 
-        # Verify all fields
         assert execution.status == ScheduleStatus.SUCCESS
         assert execution.timestamp == timestamp
         assert execution.records_exported == 15
@@ -572,7 +518,6 @@ class TestAuditExportSchedulerCoverage:
             error_message="Export failed: permission denied",
         )
 
-        # Verify error fields
         assert execution.status == ScheduleStatus.FAILED
         assert execution.records_exported == 0
         assert execution.file_path is None
@@ -592,7 +537,6 @@ class TestAuditExportSchedulerCoverage:
         timestamp = datetime(2025, 4, 25, 10, 30, 45, tzinfo=UTC)
         schedule_id = scheduler._generate_schedule_id(timestamp)
 
-        # Verify format
         assert schedule_id == "weekly_20250425_103045"
 
     def test_generate_schedule_id_without_timestamp(
@@ -608,9 +552,7 @@ class TestAuditExportSchedulerCoverage:
 
         schedule_id = scheduler._generate_schedule_id()
 
-        # Verify format
         assert schedule_id.startswith("monthly_")
-        # Should contain current date
         current_date = datetime.now(UTC).strftime("%Y%m%d")
         assert current_date in schedule_id
 
@@ -627,7 +569,6 @@ class TestAuditExportSchedulerCoverage:
             state_file=None,
         )
 
-        # Create execution
         execution = ScheduleExecution(
             schedule_id="daily_20250425_103000",
             status=ScheduleStatus.SUCCESS,
@@ -636,10 +577,8 @@ class TestAuditExportSchedulerCoverage:
             file_path=temp_dir / "test.csv",
         )
 
-        # Should not raise error
         scheduler._save_execution(execution)
 
-        # Verify no file was created
         assert not (temp_dir / "state" / "schedule.json").exists()
 
     def test_save_execution_creates_directory(
@@ -656,7 +595,6 @@ class TestAuditExportSchedulerCoverage:
             state_file=state_file,
         )
 
-        # Create execution
         execution = ScheduleExecution(
             schedule_id="daily_20250425_103000",
             status=ScheduleStatus.SUCCESS,
@@ -665,10 +603,8 @@ class TestAuditExportSchedulerCoverage:
             file_path=temp_dir / "test.csv",
         )
 
-        # Save execution
         scheduler._save_execution(execution)
 
-        # Verify directory was created and file exists
         assert state_file.exists()
         assert state_file.parent.exists()
 
@@ -687,13 +623,11 @@ class TestAuditExportSchedulerCoverage:
             schedule_config=config,
         )
 
-        # Test with reference time after scheduled time
-        reference_time = datetime(2025, 4, 25, 10, 30, 1, tzinfo=UTC)
-        assert scheduler.is_due(reference_time=reference_time) is True
+        reference_due = datetime(2025, 4, 25, 10, 30, 1, tzinfo=UTC)
+        assert scheduler.is_due(reference_time=reference_due) is True
 
-        # Test with reference time before scheduled time
-        reference_time = datetime(2025, 4, 25, 10, 29, 59, tzinfo=UTC)
-        assert scheduler.is_due(reference_time=reference_time) is False
+        reference_not_due = datetime(2025, 4, 25, 10, 29, 59, tzinfo=UTC)
+        assert scheduler.is_due(reference_time=reference_not_due) is False
 
     def test_is_due_without_reference_time(
         self,
@@ -702,7 +636,7 @@ class TestAuditExportSchedulerCoverage:
         """Test is_due() without reference_time (uses current time)."""
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=23, minute=59),
+            time=_NOT_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -710,59 +644,45 @@ class TestAuditExportSchedulerCoverage:
             schedule_config=config,
         )
 
-        # Should use current time
         result = scheduler.is_due()
-        # We can't assert exact value since it depends on current time
-        # Just verify it returns a boolean
         assert isinstance(result, bool)
 
-    def test_schedule_config_boundary_values(
-        self,
-    ) -> None:
+    def test_schedule_config_boundary_values(self) -> None:
         """Test ScheduleConfig with boundary values."""
-        # Test minimum valid day_of_week
         config = ScheduleConfig(
             frequency=ScheduleFrequency.WEEKLY,
-            day_of_week=0,  # Monday
+            day_of_week=0,
         )
         assert config.day_of_week == 0
 
-        # Test maximum valid day_of_week
         config = ScheduleConfig(
             frequency=ScheduleFrequency.WEEKLY,
-            day_of_week=6,  # Sunday
+            day_of_week=6,
         )
         assert config.day_of_week == 6
 
-        # Test minimum valid day_of_month
         config = ScheduleConfig(
             frequency=ScheduleFrequency.MONTHLY,
             day_of_month=1,
         )
         assert config.day_of_month == 1
 
-        # Test maximum valid day_of_month
         config = ScheduleConfig(
             frequency=ScheduleFrequency.MONTHLY,
             day_of_month=31,
         )
         assert config.day_of_month == 31
 
-    def test_schedule_config_default_values(
-        self,
-    ) -> None:
+    def test_schedule_config_default_values(self) -> None:
         """Test ScheduleConfig default values."""
         config = ScheduleConfig(frequency=ScheduleFrequency.DAILY)
 
-        # Verify defaults
         assert config.time == time(hour=23, minute=59)
-        assert config.day_of_week == 4  # Friday
+        assert config.day_of_week == 4
         assert config.day_of_month == 1
         assert config.enabled is True
 
-    def test_schedule_status_enum_values(
-        self,
-    ) -> None:
+    def test_schedule_status_enum_values(self) -> None:
         """Test ScheduleStatus enum values."""
         assert ScheduleStatus.PENDING.value == "pending"
         assert ScheduleStatus.RUNNING.value == "running"
@@ -770,9 +690,7 @@ class TestAuditExportSchedulerCoverage:
         assert ScheduleStatus.FAILED.value == "failed"
         assert ScheduleStatus.SKIPPED.value == "skipped"
 
-    def test_schedule_frequency_enum_values(
-        self,
-    ) -> None:
+    def test_schedule_frequency_enum_values(self) -> None:
         """Test ScheduleFrequency enum values."""
         assert ScheduleFrequency.DAILY.value == "daily"
         assert ScheduleFrequency.WEEKLY.value == "weekly"
@@ -790,27 +708,20 @@ class TestAuditExportSchedulerCoverage:
             records_exported=10,
             file_path=temp_dir / "test.csv",
         )
-
-        # Verify dataclass is frozen by checking fields attribute
-        # frozendataclass sets fields frozen=True
         assert execution.records_exported == 10
 
-    def test_schedule_config_frozen_dataclass(
-        self,
-    ) -> None:
+    def test_schedule_config_frozen_dataclass(self) -> None:
         """Test that ScheduleConfig is frozen (immutable)."""
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
             time=time(hour=10, minute=30),
         )
-
-        # Verify dataclass is frozen by checking values are correct
         assert config.frequency == ScheduleFrequency.DAILY
         assert config.time == time(hour=10, minute=30)
 
 
 class TestScheduleConfigValidation:
-    """Cover __post_init__ validation for ScheduleConfig (lines 47-48, 50-51)."""
+    """Cover __post_init__ validation for ScheduleConfig."""
 
     def test_invalid_day_of_week_low(self) -> None:
         with pytest.raises(ConfigError, match="day_of_week must be between 0 and 6"):
@@ -830,12 +741,12 @@ class TestScheduleConfigValidation:
 
 
 class TestIsDueDisabled:
-    """Cover is_due when schedule disabled (line 86)."""
+    """Cover is_due when schedule disabled."""
 
     def test_is_due_returns_false_when_disabled(self, mock_exporter: MagicMock) -> None:
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=False,
         )
         scheduler = AuditExportScheduler(
@@ -846,13 +757,12 @@ class TestIsDueDisabled:
 
 
 class TestExecuteSkippedPaths:
-    """Cover execute() disabled and not-due paths (lines 120-126, 129-135)."""
+    """Cover execute() disabled and not-due paths."""
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_execute_when_disabled(self, mock_exporter: MagicMock) -> None:
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=False,
         )
         scheduler = AuditExportScheduler(
@@ -863,11 +773,10 @@ class TestExecuteSkippedPaths:
         assert execution.status == ScheduleStatus.SKIPPED
         assert execution.error_message == "Schedule is disabled"
 
-    @freeze_time("2025-04-25 08:00:00", tz_offset=0)
     def test_execute_when_not_due(self, mock_exporter: MagicMock) -> None:
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_NOT_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -882,14 +791,16 @@ class TestExecuteSkippedPaths:
 class TestIsDueBranches:
     """Cover _is_daily_due with same-day execution, _is_weekly_due wrong weekday, etc."""
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_daily_due_with_same_day_last_execution(
-        self, mock_exporter: MagicMock, temp_dir: Path
+        self,
+        mock_exporter: MagicMock,
+        temp_dir: Path,
     ) -> None:
+        """Daily schedule not due when already executed today."""
         state_file = temp_dir / "state" / "schedule.json"
         config = ScheduleConfig(
             frequency=ScheduleFrequency.DAILY,
-            time=time(hour=10, minute=30),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -898,10 +809,11 @@ class TestIsDueBranches:
             state_file=state_file,
         )
         state_file.parent.mkdir(parents=True, exist_ok=True)
+        now = datetime.now(UTC)
         state_data = {
             "schedule_id": "daily_20250425_103000",
             "status": ScheduleStatus.SUCCESS.value,
-            "timestamp": datetime(2025, 4, 25, 10, 30, 0, tzinfo=UTC).isoformat(),
+            "timestamp": now.isoformat(),
             "records_exported": 10,
             "file_path": str(temp_dir / "exports" / "test.csv"),
             "error_message": None,
@@ -910,30 +822,34 @@ class TestIsDueBranches:
             json.dump(state_data, f)
         assert scheduler.is_due() is False
 
-    @freeze_time("2025-04-21 10:30:01", tz_offset=0)
     def test_weekly_due_wrong_weekday(self, mock_exporter: MagicMock) -> None:
+        """Weekly schedule not due on wrong weekday."""
+        now = datetime.now(UTC)
+        wrong_weekday = (now.weekday() + 1) % 7
         config = ScheduleConfig(
             frequency=ScheduleFrequency.WEEKLY,
-            day_of_week=4,
-            time=time(hour=10, minute=30),
+            day_of_week=wrong_weekday,
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
             exporter=mock_exporter,
             schedule_config=config,
         )
-        reference_time = datetime(2025, 4, 21, 10, 30, 1, tzinfo=UTC)
-        assert scheduler.is_due(reference_time=reference_time) is False
+        assert scheduler.is_due(reference_time=now) is False
 
-    @freeze_time("2025-04-25 10:30:01", tz_offset=0)
     def test_weekly_due_with_recent_last_execution(
-        self, mock_exporter: MagicMock, temp_dir: Path
+        self,
+        mock_exporter: MagicMock,
+        temp_dir: Path,
     ) -> None:
+        """Weekly schedule not due when executed within 7 days."""
         state_file = temp_dir / "state" / "schedule.json"
+        now = datetime.now(UTC)
         config = ScheduleConfig(
             frequency=ScheduleFrequency.WEEKLY,
-            day_of_week=4,
-            time=time(hour=10, minute=30),
+            day_of_week=now.weekday(),
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -942,11 +858,11 @@ class TestIsDueBranches:
             state_file=state_file,
         )
         state_file.parent.mkdir(parents=True, exist_ok=True)
-        recent_execution = datetime(2025, 4, 21, 10, 30, 0, tzinfo=UTC)
+        recent = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=UTC)
         state_data = {
             "schedule_id": "weekly_20250421_103000",
             "status": ScheduleStatus.SUCCESS.value,
-            "timestamp": recent_execution.isoformat(),
+            "timestamp": recent.isoformat(),
             "records_exported": 10,
             "file_path": str(temp_dir / "exports" / "test.csv"),
             "error_message": None,
@@ -955,30 +871,34 @@ class TestIsDueBranches:
             json.dump(state_data, f)
         assert scheduler.is_due() is False
 
-    @freeze_time("2025-04-20 10:30:01", tz_offset=0)
     def test_monthly_due_wrong_day(self, mock_exporter: MagicMock) -> None:
+        """Monthly schedule not due on wrong day of month."""
+        now = datetime.now(UTC)
+        wrong_day = now.day + 1 if now.day < 28 else 1
         config = ScheduleConfig(
             frequency=ScheduleFrequency.MONTHLY,
-            day_of_month=1,
-            time=time(hour=10, minute=30),
+            day_of_month=wrong_day,
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
             exporter=mock_exporter,
             schedule_config=config,
         )
-        reference_time = datetime(2025, 4, 20, 10, 30, 1, tzinfo=UTC)
-        assert scheduler.is_due(reference_time=reference_time) is False
+        assert scheduler.is_due(reference_time=now) is False
 
-    @freeze_time("2025-04-01 10:30:01", tz_offset=0)
     def test_monthly_due_with_recent_last_execution(
-        self, mock_exporter: MagicMock, temp_dir: Path
+        self,
+        mock_exporter: MagicMock,
+        temp_dir: Path,
     ) -> None:
+        """Monthly schedule not due when already executed this month."""
         state_file = temp_dir / "state" / "schedule.json"
+        now = datetime.now(UTC)
         config = ScheduleConfig(
             frequency=ScheduleFrequency.MONTHLY,
-            day_of_month=1,
-            time=time(hour=10, minute=30),
+            day_of_month=now.day,
+            time=_DUE_TIME,
             enabled=True,
         )
         scheduler = AuditExportScheduler(
@@ -987,11 +907,11 @@ class TestIsDueBranches:
             state_file=state_file,
         )
         state_file.parent.mkdir(parents=True, exist_ok=True)
-        same_month_execution = datetime(2025, 4, 1, 10, 30, 0, tzinfo=UTC)
+        recent = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=UTC)
         state_data = {
             "schedule_id": "monthly_20250401_103000",
             "status": ScheduleStatus.SUCCESS.value,
-            "timestamp": same_month_execution.isoformat(),
+            "timestamp": recent.isoformat(),
             "records_exported": 10,
             "file_path": str(temp_dir / "exports" / "test.csv"),
             "error_message": None,
