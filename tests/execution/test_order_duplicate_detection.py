@@ -258,7 +258,9 @@ class TestOrderStatePersistence:
 
         import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             state_path = Path(tmpdir) / "state.json"
             manager.save_state(state_path)
 
@@ -294,7 +296,9 @@ class TestOrderStatePersistence:
 
         import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             state_path = Path(tmpdir) / "state.json"
             manager.save_state(state_path)
 
@@ -319,7 +323,9 @@ class TestOrderStatePersistence:
 
         import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             state_path = Path(tmpdir) / "nonexistent.json"
 
             manager.load_state(state_path)
@@ -336,7 +342,9 @@ class TestOrderStatePersistence:
 
         import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             state_path = Path(tmpdir) / "invalid.json"
             state_path.write_text("invalid json")
 
@@ -355,7 +363,9 @@ class TestOrderStatePersistence:
 
         import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             state_path = Path(tmpdir) / "state.json"
             manager._state_persistence_path = state_path
 

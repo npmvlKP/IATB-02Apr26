@@ -37,7 +37,7 @@ np.random.seed(42)
 @pytest.fixture()
 def temp_output_dir() -> TemporaryDirectory:
     """Create temporary directory for report output."""
-    return TemporaryDirectory()
+    return TemporaryDirectory(ignore_cleanup_errors=True)  # type: ignore[call-arg]
 
 
 @pytest.fixture()
@@ -430,7 +430,7 @@ class TestRiskReportGenerator:
         sample_metrics: DailyRiskMetrics,
     ) -> None:
         """Test that generator creates output directory if it doesn't exist."""
-        with TemporaryDirectory() as temp_dir:
+        with TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:  # type: ignore[call-arg]
             nested_dir = Path(temp_dir) / "reports" / "daily"
             config = ReportConfig(output_dir=nested_dir)
             generator = RiskReportGenerator(config)

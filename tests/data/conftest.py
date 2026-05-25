@@ -7,8 +7,12 @@ Provides reusable fixtures for:
 - Sample OHLCV data
 - Sample ticker data
 - Test provider instances
+
+Also assigns all data tests to a single xdist group on Windows
+to prevent SQLite/DuckDB handle leaks across workers.
 """
 
+import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
@@ -19,6 +23,21 @@ from iatb.core.types import create_timestamp
 from iatb.data.base import OHLCVBar, TickerSnapshot
 from iatb.data.ccxt_provider import CCXTProvider
 from iatb.data.kite_provider import KiteProvider
+
+if sys.platform == "win32":
+    try:
+        import duckdb  # noqa: F401 — pre-import to share DLL across xdist forks
+    except OSError:
+        pass
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Assign all data tests to a single xdist group on Windows."""
+    if sys.platform == "win32":
+        for item in items:
+            item.add_marker(pytest.mark.xdist_group("data"))
 
 
 @pytest.fixture()

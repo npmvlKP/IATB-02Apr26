@@ -1,4 +1,35 @@
 {
   "$schema": "https://app.kilo.ai/config.json",
-  "snapshot": false
+  "snapshot": false,
+  "provider": {
+    "nvidia-nim": {
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "models": {
+        "glm-5.1": {
+          "limit": {
+            "context": 8192,
+            "output": 1024
+          },
+          "parameters": {
+            "stream": true,
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "max_tokens": 1024
+          }
+        }
+      }
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "threshold_percent": 55
+  },
+  "cache": {
+    "enabled": true
+  },
+  "agent": {
+    "parallelTasks": false,
+    "subAgents": false,
+    "autoModelSwitching": false
+  }
 }

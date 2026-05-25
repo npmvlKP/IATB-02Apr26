@@ -86,6 +86,8 @@ exclude_lines = [
 addopts = "-n auto --dist loadgroup"
 asyncio_mode = "auto"
 pythonpath = ["src", "tests"]
+tmp_path_retention_count = "0"
+tmp_path_retention_policy = "none"
 markers = [
     "slow: marks tests as slow",
     "integration: marks integration tests",

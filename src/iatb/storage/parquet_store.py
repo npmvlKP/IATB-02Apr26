@@ -237,12 +237,16 @@ class ParquetStore:
     # Retention
     # ------------------------------------------------------------------ #
 
+    @staticmethod
+    def _get_utc_now() -> datetime:
+        return datetime.now(UTC)
+
     def cleanup_older_than(self, *, days: int) -> list[Path]:
         """Delete parquet files whose newest bar is older than *days* from now."""
         if days < 0:
             raise ConfigError("days must be non-negative")
 
-        cutoff = datetime.now(UTC) - timedelta(days=days)
+        cutoff = self._get_utc_now() - timedelta(days=days)
         deleted: list[Path] = []
 
         for file_path in self._root_dir.rglob("*.parquet"):

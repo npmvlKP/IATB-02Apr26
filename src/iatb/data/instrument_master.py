@@ -67,18 +67,40 @@ class InstrumentMaster:
     def __init__(self, cache_dir: Path) -> None:
         self._db_path = cache_dir / "instruments.sqlite"
         cache_dir.mkdir(parents=True, exist_ok=True)
+        self._closed = False
         self._initialize_db()
 
+    def close(self) -> None:
+        """Mark the master as closed. Subsequent queries will raise."""
+        self._closed = True
+
+    def __enter__(self) -> InstrumentMaster:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        self.close()
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            msg = "InstrumentMaster is closed"
+            raise RuntimeError(msg)
+
     def _connect(self) -> sqlite3.Connection:
+        self._ensure_open()
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=5000;")
         return conn
 
     def _initialize_db(self) -> None:
         with self._connect() as conn:
-            # Enable auto-vacuum to reclaim space after deletions
-            conn.execute("PRAGMA auto_vacuum = FULL;")
             conn.execute("PRAGMA page_size = 4096;")
+            conn.execute("PRAGMA auto_vacuum = FULL;")
             conn.execute(_CREATE_TABLE_SQL)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_inst_exchange "
@@ -88,6 +110,9 @@ class InstrumentMaster:
                 "CREATE INDEX IF NOT EXISTS idx_inst_name "
                 "ON instruments (name, exchange)"
             )
+            conn.commit()
+        with self._connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.commit()
 
     def _get_db_size_mb(self) -> Decimal:

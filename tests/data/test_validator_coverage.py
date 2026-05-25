@@ -163,16 +163,24 @@ class TestEdgeCases:
         bar = _make_bar(open_price="100", high="100", low="100", close="100")
         validate_ohlcv_bar(bar)
 
-    @freezegun.freeze_time("2026-01-02 09:17:00", tz_offset=0)
     def test_edge_timestamp_at_exactly_now_plus_2min_boundary(self) -> None:
-        """Edge: timestamp at exactly now+2min boundary (should pass)."""
-        now = datetime.now(UTC)
-        boundary_timestamp = now + timedelta(minutes=2)
+        """Edge: timestamp at exactly now+2min boundary (should pass).
+
+        Uses monkeypatch to stub datetime.now(UTC) instead of freezegun,
+        avoiding WinError 1114 DLL race under xdist on Windows.
+        """
+        frozen_now = datetime(2026, 1, 2, 9, 17, 0, tzinfo=UTC)
+        boundary_timestamp = frozen_now + timedelta(minutes=2)
         bar = replace(
             _make_bar(offset_minutes=0),
             timestamp=create_timestamp(boundary_timestamp),
         )
-        validate_ohlcv_bar(bar)
+        import unittest.mock
+
+        with unittest.mock.patch("iatb.data.validator.datetime") as mock_dt:
+            mock_dt.now.return_value = frozen_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+            validate_ohlcv_bar(bar)
 
     def test_edge_bid_equals_ask(self) -> None:
         """Edge: bid=ask (zero spread) should pass."""

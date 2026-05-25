@@ -22,7 +22,9 @@ class TestTomlConfigLoading:
 
     def test_toml_config_loaded_from_file(self) -> None:
         """Test that TOML configuration is loaded from file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             toml_path = Path(tmpdir) / "settings.toml"
             toml_content = """
 [data]
@@ -77,7 +79,9 @@ storage_backup_path = "backups"
 
     def test_toml_config_invalid_toml_uses_defaults(self) -> None:
         """Test that invalid TOML file uses default values."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             toml_path = Path(tmpdir) / "settings.toml"
             toml_path.write_text("invalid toml content [[")
 
@@ -90,7 +94,9 @@ storage_backup_path = "backups"
 
     def test_env_overrides_toml_config(self) -> None:
         """Test that environment variables override TOML configuration."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             toml_path = Path(tmpdir) / "settings.toml"
             toml_content = """
 [data]
@@ -115,7 +121,9 @@ observability_enabled = false
 
     def test_dotenv_overrides_toml_config(self) -> None:
         """Test that .env file overrides TOML configuration."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             toml_path = Path(tmpdir) / "settings.toml"
             toml_content = """
 [data]
@@ -142,7 +150,9 @@ OBSERVABILITY_ENABLED=true
 
     def test_toml_config_partial_sections(self) -> None:
         """Test that partial TOML sections use defaults for missing values."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             toml_path = Path(tmpdir) / "settings.toml"
             toml_content = """
 [data]
@@ -236,7 +246,9 @@ data_provider_default = "jugaad"
 
     def test_directories_created(self) -> None:
         """Test that required directories are created."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(  # type: ignore[call-arg]
+            ignore_cleanup_errors=True
+        ) as tmpdir:
             data_dir = Path(tmpdir) / "data"
             log_dir = Path(tmpdir) / "logs"
             cache_dir = Path(tmpdir) / "cache"

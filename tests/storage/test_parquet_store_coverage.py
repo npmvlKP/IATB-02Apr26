@@ -568,11 +568,10 @@ class TestRetentionPolicy:
         assert deleted == []
 
     def test_cleanup_older_than_deletes_old_files(
-        self, parquet_store: ParquetStore, freeze_time: pytest.FixtureRequest
+        self, parquet_store: ParquetStore
     ) -> None:
         """Test cleanup_older_than deletes files older than specified days."""
         pytest.importorskip("pyarrow")
-        from freezegun import freeze_time as _freeze_time
 
         old_bar = OHLCVBar(
             timestamp=create_timestamp(datetime(2020, 1, 15, 10, 0, tzinfo=UTC)),
@@ -593,19 +592,23 @@ class TestRetentionPolicy:
             bars=[old_bar],
         )
 
-        # Freeze time to 2026-05-11
-        with _freeze_time("2026-05-11"):
+        frozen_now = datetime(2026, 5, 11, tzinfo=UTC)
+        from unittest.mock import patch
+
+        with patch.object(
+            ParquetStore,
+            "_get_utc_now",
+            return_value=frozen_now,
+        ):
             deleted = parquet_store.cleanup_older_than(days=1)
-            assert len(deleted) == 1
-            # Verify file was actually deleted
-            assert not deleted[0].exists()
+        assert len(deleted) == 1
+        assert not deleted[0].exists()
 
     def test_cleanup_older_than_skips_recent_files(
-        self, parquet_store: ParquetStore, freeze_time: pytest.FixtureRequest
+        self, parquet_store: ParquetStore
     ) -> None:
         """Test cleanup_older_than skips files newer than specified days."""
         pytest.importorskip("pyarrow")
-        from freezegun import freeze_time as _freeze_time
 
         recent_bar = OHLCVBar(
             timestamp=create_timestamp(datetime(2026, 5, 10, 10, 0, tzinfo=UTC)),
@@ -626,17 +629,22 @@ class TestRetentionPolicy:
             bars=[recent_bar],
         )
 
-        # Freeze time to 2026-05-11
-        with _freeze_time("2026-05-11"):
+        frozen_now = datetime(2026, 5, 11, tzinfo=UTC)
+        from unittest.mock import patch
+
+        with patch.object(
+            ParquetStore,
+            "_get_utc_now",
+            return_value=frozen_now,
+        ):
             deleted = parquet_store.cleanup_older_than(days=1)
-            assert len(deleted) == 0
+        assert len(deleted) == 0
 
     def test_cleanup_zero_days_deletes_all_but_today(
-        self, parquet_store: ParquetStore, freeze_time: pytest.FixtureRequest
+        self, parquet_store: ParquetStore
     ) -> None:
         """Test cleanup with zero days deletes all files."""
         pytest.importorskip("pyarrow")
-        from freezegun import freeze_time as _freeze_time
 
         old_bar = OHLCVBar(
             timestamp=create_timestamp(datetime(2026, 5, 10, 10, 0, tzinfo=UTC)),
@@ -657,10 +665,16 @@ class TestRetentionPolicy:
             bars=[old_bar],
         )
 
-        # Freeze time to 2026-05-11
-        with _freeze_time("2026-05-11"):
+        frozen_now = datetime(2026, 5, 11, tzinfo=UTC)
+        from unittest.mock import patch
+
+        with patch.object(
+            ParquetStore,
+            "_get_utc_now",
+            return_value=frozen_now,
+        ):
             deleted = parquet_store.cleanup_older_than(days=0)
-            assert len(deleted) == 1
+        assert len(deleted) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -891,11 +905,9 @@ class TestLogging:
         self,
         parquet_store: ParquetStore,
         caplog: pytest.LogCaptureFixture,
-        freeze_time: pytest.FixtureRequest,
     ) -> None:
         """Test cleanup_older_than logs deleted files."""
         pytest.importorskip("pyarrow")
-        from freezegun import freeze_time as _freeze_time
 
         caplog.set_level(logging.INFO)
 
@@ -918,7 +930,14 @@ class TestLogging:
             bars=[old_bar],
         )
 
-        with _freeze_time("2026-05-11"):
+        frozen_now = datetime(2026, 5, 11, tzinfo=UTC)
+        from unittest.mock import patch
+
+        with patch.object(
+            ParquetStore,
+            "_get_utc_now",
+            return_value=frozen_now,
+        ):
             parquet_store.cleanup_older_than(days=1)
 
         assert "Deleted archived file (age > 1 days)" in caplog.text

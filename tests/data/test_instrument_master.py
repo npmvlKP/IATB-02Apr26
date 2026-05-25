@@ -178,6 +178,26 @@ class TestLoadFromCSV:
         assert loaded == 0
 
 
+class TestCloseAndContextManager:
+    def test_close_prevents_queries(self, master: InstrumentMaster) -> None:
+        _insert(master, _equity())
+        master.close()
+        with pytest.raises(RuntimeError, match="InstrumentMaster is closed"):
+            master.get_instrument("RELIANCE", Exchange.NSE)
+
+    def test_context_manager_closes(self, tmp_path: Path) -> None:
+        with InstrumentMaster(cache_dir=tmp_path) as im:
+            _insert(im, _equity())
+            inst = im.get_instrument("RELIANCE", Exchange.NSE)
+            assert inst.trading_symbol == "RELIANCE"
+        with pytest.raises(RuntimeError, match="InstrumentMaster is closed"):
+            im.get_instrument("RELIANCE", Exchange.NSE)
+
+    def test_close_is_idempotent(self, master: InstrumentMaster) -> None:
+        master.close()
+        master.close()
+
+
 class TestPurgeStale:
     @pytest.mark.xfail(reason="Flaky under parallel load - race condition")
     def test_stale_entries_purged(self, master: InstrumentMaster) -> None:

@@ -295,7 +295,7 @@ def mock_pyarrow_compression(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 def pytest_xdist_auto_num_workers(config: object) -> int:
     """Limit xdist workers on Windows to avoid DuckDB DLL exhaustion."""
     if platform.system() == "Windows":
-        return 6
+        return 4
     return os.cpu_count() or 4
 
 
@@ -310,9 +310,106 @@ if platform.system() == "Windows":
         except OSError:
             _SHORT_TMP = tempfile.gettempdir()
 
+    def _win_rm_rf_ignore_errors(path: object) -> None:
+        """Windows-safe rm_rf that ignores PermissionError and FileNotFoundError.
+
+        Replaces _pytest.pathlib.rm_rf on Windows to prevent xdist worker
+        temp-dir cleanup failures when SQLite/DuckDB/.env file handles
+        are still held by concurrent worker processes.
+        """
+        import shutil as _shutil
+        from pathlib import Path as _Path
+
+        p = _Path(str(path))
+        try:
+            _shutil.rmtree(str(p), ignore_errors=True)
+        except OSError:
+            pass
+
+    def _win_safe_getbasetemp(original_getbasetemp: object) -> object:
+        """Wrap getbasetemp to use exist_ok=True mkdir on Windows."""
+
+        def wrapper(self: object) -> object:
+            if getattr(self, "_basetemp", None) is not None:
+                return self._basetemp
+            given = getattr(self, "_given_basetemp", None)
+            if given is not None and given.exists():
+                given.mkdir(mode=0o700, exist_ok=True)
+                self._basetemp = given.resolve()
+                return self._basetemp
+            return original_getbasetemp(self)
+
+        return wrapper
+
+    @pytest.hookimpl(tryfirst=True)
     def pytest_configure(config: pytest.Config) -> None:
-        """Override basetemp on Windows with a short path to prevent MAX_PATH issues."""
+        """Override basetemp on Windows with a short path to prevent MAX_PATH issues.
+
+        Uses per-worker basetemp subdirectories to prevent cross-worker
+        SQLite/DuckDB file handle conflicts during temp directory cleanup.
+
+        Also monkey-patches _pytest.pathlib.rm_rf and TempPathFactory.getbasetemp
+        to ignore cleanup errors on Windows so that locked .env / SQLite files
+        do not cause setup failures.
+        """
         from pathlib import Path
 
-        short_basetemp = Path(_SHORT_TMP) / "pt"
-        config.option.basetemp = str(short_basetemp)
+        import _pytest.cacheprovider as _cp
+        import _pytest.pathlib as _pp
+        import _pytest.tmpdir as _td
+
+        _td.rm_rf = _win_rm_rf_ignore_errors
+        _pp.rm_rf = _win_rm_rf_ignore_errors
+        _cp.rm_rf = _win_rm_rf_ignore_errors
+
+        _td.TempPathFactory.getbasetemp = _win_safe_getbasetemp(
+            _td.TempPathFactory.getbasetemp
+        )
+
+        base = Path(_SHORT_TMP) / "pt"
+        base.mkdir(parents=True, exist_ok=True)
+
+        workerinput = getattr(config, "workerinput", None)
+        if workerinput and isinstance(workerinput, dict):
+            worker_id = workerinput.get("id", "gw0")
+            worker_basetemp = base / f"w_{worker_id}"
+            worker_basetemp.mkdir(parents=True, exist_ok=True)
+            config.option.basetemp = str(worker_basetemp)
+        else:
+            config.option.basetemp = str(base)
+
+else:
+
+    def pytest_configure(config: pytest.Config) -> None:
+        """No-op pytest_configure on non-Windows platforms."""
+        pass
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Clean up per-worker basetemp directories on Windows after session.
+
+    Suppresses WinError 32 / WinError 2 errors during temp dir cleanup
+    that occur when SQLite/DuckDB file handles are still held by
+    xdist worker processes during teardown.
+    """
+    if platform.system() != "Windows":
+        return
+    import shutil
+
+    basetemp = getattr(session.config, "option", None)
+    if basetemp is None:
+        return
+    btmp = getattr(basetemp, "basetemp", None)
+    if btmp is None:
+        return
+    from pathlib import Path
+
+    base = Path(btmp)
+    if not base.exists():
+        return
+    for child in sorted(base.iterdir()):
+        if child.is_dir():
+            try:
+                shutil.rmtree(str(child), ignore_errors=True)
+            except OSError:
+                pass
