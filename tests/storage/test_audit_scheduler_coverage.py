@@ -7,23 +7,15 @@ and exception handling.
 """
 
 import json
-from collections.abc import Generator
 from datetime import UTC, datetime, time
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from freezegun import freeze_time
-from iatb.core.enums import Exchange, OrderSide, OrderStatus
 from iatb.core.exceptions import ConfigError
-from iatb.core.types import (
-    create_price,
-    create_quantity,
-    create_timestamp,
-)
+from iatb.core.types import create_timestamp
 from iatb.storage.audit_exporter import (
-    AuditExporter,
-    ExportConfig,
     ExportFormat,
     ExportResult,
     ScheduleFrequency,
@@ -34,7 +26,6 @@ from iatb.storage.audit_scheduler import (
     ScheduleExecution,
     ScheduleStatus,
 )
-from iatb.storage.sqlite_store import SQLiteStore, TradeAuditRecord
 
 
 @pytest.fixture()
@@ -44,68 +35,11 @@ def temp_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def sample_records() -> list[TradeAuditRecord]:
-    """Create sample trade audit records for testing."""
-    base_time = datetime(2025, 4, 25, 10, 30, 0, tzinfo=UTC)
-    return [
-        TradeAuditRecord(
-            trade_id="TRADE001",
-            timestamp=create_timestamp(base_time),
-            exchange=Exchange.NSE,
-            symbol="RELIANCE",
-            side=OrderSide.BUY,
-            quantity=create_quantity("100"),
-            price=create_price("2500.50"),
-            status=OrderStatus.FILLED,
-            strategy_id="STRAT_A",
-            metadata={"signal_strength": "0.85"},
-        ),
-    ]
-
-
-@pytest.fixture()
-def empty_db_path(temp_dir: Path) -> Path:
-    """Create empty SQLite database for testing."""
-    return temp_dir / "test_trades.sqlite"
-
-
-@pytest.fixture()
-def store(
-    empty_db_path: Path,
-    sample_records: list[TradeAuditRecord],
-) -> Generator[SQLiteStore, None, None]:
-    """Create SQLite store with sample records."""
-    store = SQLiteStore(db_path=empty_db_path, retention_years=7)
-    store.initialize()
-    for record in sample_records:
-        store.append_trade(record)
-    yield store
-    try:
-        if hasattr(store, "_conn") and store._conn:
-            store._conn.close()
-    except Exception as e:
-        # Ignore cleanup errors on Windows - connection may already be closed
-        _ = e  # Explicitly ignore
-
-
-@pytest.fixture()
-def export_config(temp_dir: Path) -> ExportConfig:
-    """Create export configuration for testing."""
-    return ExportConfig(
-        output_dir=temp_dir / "exports",
-        retention_days=30,
-        format=ExportFormat.CSV,
-        include_metadata=True,
-        filename_prefix="test_audit",
-    )
-
-
-@pytest.fixture()
-def mock_exporter(store: SQLiteStore, export_config: ExportConfig) -> MagicMock:
-    """Create mock AuditExporter for testing."""
-    exporter = MagicMock(spec=AuditExporter)
-    exporter.store = store
-    exporter.config = export_config
+def mock_exporter() -> MagicMock:
+    """Create pure mock AuditExporter — no real SQLite needed."""
+    exporter = MagicMock()
+    exporter.store = MagicMock()
+    exporter.config = MagicMock()
     return exporter
 
 

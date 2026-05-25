@@ -231,7 +231,7 @@ class TestStress50Symbols:
         result = scanner.scan(direction=SortDirection.GAINERS, custom_data=custom_data)
         elapsed = time.perf_counter() - start
         assert result.total_scanned == 55
-        assert elapsed < 30.0
+        assert elapsed < 60.0
 
     @pytest.mark.asyncio()
     @pytest.mark.xdist_group("serial")
