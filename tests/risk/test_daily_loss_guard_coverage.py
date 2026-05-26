@@ -358,3 +358,26 @@ class TestDailyLossGuard:
             now_utc=_now(),
         )
         guard.record_trade(Decimal("-100"), _now())
+
+    def test_persist_state_exception_caught(self, tmp_path: Path) -> None:
+        ks = _make_kill_switch()
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.02"),
+            starting_nav=Decimal("100000"),
+            kill_switch=ks,
+            state_db_path=tmp_path / "readonly" / "dl.db",
+            now_utc=_now(),
+        )
+        guard._state_store = MagicMock()
+        guard._state_store.save.side_effect = RuntimeError("DB locked")
+        guard._persist_state(_now())
+
+    def test_persist_state_no_store(self) -> None:
+        ks = _make_kill_switch()
+        guard = DailyLossGuard(
+            max_daily_loss_pct=Decimal("0.02"),
+            starting_nav=Decimal("100000"),
+            kill_switch=ks,
+        )
+        guard._state_store = None
+        guard._persist_state(_now())

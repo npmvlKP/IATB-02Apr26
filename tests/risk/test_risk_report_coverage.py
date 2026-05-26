@@ -148,10 +148,36 @@ class TestValidateConfig:
         _validate_config(cfg)
 
     def test_zero_drawdown_raises(self, tmp_path: Path) -> None:
+        cfg = ReportConfig(output_dir=tmp_path)
+        object.__setattr__(cfg, "max_allowed_drawdown", Decimal("0"))
         with pytest.raises(ConfigError, match="positive"):
-            _validate_config(
-                ReportConfig(output_dir=tmp_path, max_allowed_drawdown=Decimal("0"))
-            )
+            _validate_config(cfg)
+
+    def test_zero_confidence_raises(self, tmp_path: Path) -> None:
+        cfg = ReportConfig(output_dir=tmp_path)
+        object.__setattr__(cfg, "confidence_level", Decimal("0"))
+        with pytest.raises(ConfigError, match="between 0 and 1"):
+            _validate_config(cfg)
+
+    def test_one_confidence_raises(self, tmp_path: Path) -> None:
+        cfg = ReportConfig(output_dir=tmp_path)
+        object.__setattr__(cfg, "confidence_level", Decimal("1"))
+        with pytest.raises(ConfigError, match="between 0 and 1"):
+            _validate_config(cfg)
+
+    def test_email_without_recipients_raises(self, tmp_path: Path) -> None:
+        cfg = ReportConfig(output_dir=tmp_path)
+        object.__setattr__(cfg, "notification_channel", NotificationChannel.EMAIL)
+        object.__setattr__(cfg, "email_recipients", [])
+        with pytest.raises(ConfigError, match="Email recipients"):
+            _validate_config(cfg)
+
+    def test_telegram_without_chat_id_raises(self, tmp_path: Path) -> None:
+        cfg = ReportConfig(output_dir=tmp_path)
+        object.__setattr__(cfg, "notification_channel", NotificationChannel.TELEGRAM)
+        object.__setattr__(cfg, "telegram_chat_id", None)
+        with pytest.raises(ConfigError, match="Telegram chat_id"):
+            _validate_config(cfg)
 
 
 class TestValidateMetrics:

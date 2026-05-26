@@ -154,3 +154,9 @@ class TestDefaultEngageCallback:
     def test_default_callback_handles_alerter_error(self) -> None:
         ks = KillSwitch(_make_executor())
         ks.engage("test reason", _NOW)
+
+    def test_engage_with_explicit_callback(self) -> None:
+        callback = MagicMock()
+        ks = KillSwitch(_make_executor(), on_engage=callback)
+        ks.engage("explicit test", _NOW)
+        callback.assert_called_once_with("explicit test", _NOW)

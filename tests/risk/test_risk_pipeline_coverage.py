@@ -457,3 +457,21 @@ class TestCreateDummyKillSwitch:
         ks = _create_dummy_kill_switch()
         assert ks is not None
         assert not ks.is_engaged
+
+    def test_dummy_executor_cancel_all(self) -> None:
+        ks = _create_dummy_kill_switch()
+        state = ks.engage("test", _NOW)
+        assert state.engaged is True
+
+    def test_dummy_executor_execute_order(self) -> None:
+        ks = _create_dummy_kill_switch()
+        executor = ks._executor
+        order = _make_order()
+        result = executor.execute_order(order)
+        assert result.order_id == "DUMMY"
+        assert result.status == OrderStatus.FILLED
+
+    def test_dummy_executor_close_order(self) -> None:
+        ks = _create_dummy_kill_switch()
+        executor = ks._executor
+        assert executor.close_order("any-id") is False

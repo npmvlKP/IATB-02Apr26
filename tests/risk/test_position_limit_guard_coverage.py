@@ -349,6 +349,95 @@ class TestPositionLimitGuard:
         guard = PositionLimitGuard([_nse_config()])
         await guard.stop_monitoring()
 
+    def test_check_alert_zero_qty_skipped(self) -> None:
+        config = PositionLimitConfig(
+            exchange=ExchangeType.NSE_FO,
+            max_quantity_per_symbol=Decimal("100"),
+            max_notional_per_symbol=Decimal("1000"),
+            max_total_notional=Decimal("5000000"),
+            alert_threshold_pct=Decimal("0.8"),
+        )
+        guard = PositionLimitGuard([config])
+        guard._positions["RELIANCE"] = (Decimal("0"), Decimal("0"))
+        guard._symbol_exchange["RELIANCE"] = ExchangeType.NSE_FO
+        guard._check_alert_thresholds(_now())
+
+    def test_check_alert_no_config_skipped(self) -> None:
+        config = PositionLimitConfig(
+            exchange=ExchangeType.NSE_FO,
+            max_quantity_per_symbol=Decimal("100"),
+            max_notional_per_symbol=Decimal("1000"),
+            max_total_notional=Decimal("5000000"),
+            alert_threshold_pct=Decimal("0.8"),
+        )
+        guard = PositionLimitGuard([config])
+        guard._positions["UNKNOWN"] = (Decimal("10"), Decimal("1000"))
+        guard._symbol_exchange["UNKNOWN"] = ExchangeType.BSE_EQ
+        guard._check_alert_thresholds(_now())
+
+    def test_get_symbol_config_exchange_not_in_limits(self) -> None:
+        config = PositionLimitConfig(
+            exchange=ExchangeType.NSE_FO,
+            max_quantity_per_symbol=Decimal("100"),
+            max_notional_per_symbol=Decimal("1000"),
+            max_total_notional=Decimal("5000000"),
+            alert_threshold_pct=Decimal("0.8"),
+        )
+        guard = PositionLimitGuard([config])
+        guard._positions["SYM"] = (Decimal("10"), Decimal("1000"))
+        guard._symbol_exchange["SYM"] = ExchangeType.MCX
+        result = guard._get_symbol_config("SYM")
+        assert result is None
+
+    def test_get_symbol_config_empty_limits(self) -> None:
+        guard = PositionLimitGuard([_nse_config()])
+        guard._limits.clear()
+        guard._positions["SYM"] = (Decimal("10"), Decimal("1000"))
+        result = guard._get_symbol_config("SYM")
+        assert result is None
+
+    def test_get_symbol_config_no_exchange_fallback(self) -> None:
+        config = PositionLimitConfig(
+            exchange=ExchangeType.NSE_FO,
+            max_quantity_per_symbol=Decimal("100"),
+            max_notional_per_symbol=Decimal("1000"),
+            max_total_notional=Decimal("5000000"),
+            alert_threshold_pct=Decimal("0.8"),
+        )
+        guard = PositionLimitGuard([config])
+        guard._positions["SYM"] = (Decimal("10"), Decimal("1000"))
+        guard._symbol_exchange.pop("SYM", None)
+        result = guard._get_symbol_config("SYM")
+        assert result == config
+
+    def test_get_position_state_no_config_returns_none(self) -> None:
+        config = PositionLimitConfig(
+            exchange=ExchangeType.NSE_FO,
+            max_quantity_per_symbol=Decimal("100"),
+            max_notional_per_symbol=Decimal("1000"),
+            max_total_notional=Decimal("5000000"),
+            alert_threshold_pct=Decimal("0.8"),
+        )
+        guard = PositionLimitGuard([config])
+        guard._positions["SYM"] = (Decimal("10"), Decimal("1000"))
+        guard._symbol_exchange["SYM"] = ExchangeType.MCX
+        result = guard.get_position_state("SYM")
+        assert result is None
+
+    def test_position_count_zero_qty_not_counted(self) -> None:
+        config = PositionLimitConfig(
+            exchange=ExchangeType.NSE_FO,
+            max_quantity_per_symbol=Decimal("100"),
+            max_notional_per_symbol=Decimal("1000"),
+            max_total_notional=Decimal("5000000"),
+            alert_threshold_pct=Decimal("0.8"),
+        )
+        guard = PositionLimitGuard([config])
+        guard._positions["RELIANCE"] = (Decimal("0"), Decimal("0"))
+        guard._symbol_exchange["RELIANCE"] = ExchangeType.NSE_FO
+        count = guard._get_position_count_for_exchange(ExchangeType.NSE_FO)
+        assert count == 0
+
 
 class TestPositionState:
     def test_fields(self) -> None:

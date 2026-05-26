@@ -411,3 +411,16 @@ class TestFixedFractionTrailingStop:
     def test_implements_protocol(self) -> None:
         strategy = FixedFractionTrailingStop()
         assert isinstance(strategy, TrailingStopStrategy)
+
+
+class TestTrailingStopStrategyProtocol:
+    def test_protocol_is_runtime_checkable(self) -> None:
+        strategy = ATRTrailingStop(Decimal("3"))
+        assert isinstance(strategy, TrailingStopStrategy)
+
+    def test_protocol_instance_check(self) -> None:
+        strategy = FixedFractionTrailingStop(Decimal("0.05"))
+        assert isinstance(strategy, TrailingStopStrategy)
+
+    def test_non_implementing_class_not_instance(self) -> None:
+        assert not isinstance(object(), TrailingStopStrategy)

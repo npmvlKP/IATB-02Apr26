@@ -84,6 +84,14 @@ class TestVolumeAdjustmentFactor:
         factor = _volume_adjustment_factor(Decimal("0"))
         assert factor <= Decimal("1.0")
 
+    def test_exception_in_ln_returns_zero(self) -> None:
+        factor = _volume_adjustment_factor(Decimal("1e999999999"))
+        assert factor == Decimal("1.0")
+
+    def test_factor_at_max_boundary(self) -> None:
+        factor = _volume_adjustment_factor(Decimal("1e-100"))
+        assert Decimal("0.5") <= factor <= Decimal("1.0")
+
 
 class TestComputeSlippageBps:
     def test_override_bps(self) -> None:
