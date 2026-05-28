@@ -279,7 +279,8 @@ class TestEventPersistenceReplayEvents:
         async def callback(event: Any) -> None:
             received.append(event)
 
-        count = await persistence.replay_events("market", callback)
+        with patch("iatb.core.event_persistence.logger"):
+            count = await persistence.replay_events("market", callback)
 
         assert count == 1
         assert len(received) == 1

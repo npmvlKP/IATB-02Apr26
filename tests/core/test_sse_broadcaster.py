@@ -86,7 +86,7 @@ class TestBroadcasterInit:
         b = SSEBroadcaster()
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(b.stop())
+        asyncio.run(b.stop())
         assert b._running is False
 
 
