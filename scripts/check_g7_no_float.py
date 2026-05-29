@@ -20,8 +20,10 @@ FINANCIAL_PATHS = [
     "src/iatb/core",
 ]
 
-API_BOUNDARY_FUNCTIONS: frozenset[str] = frozenset()
-# No API boundary float exemptions needed; Prometheus accepts Decimal natively
+API_BOUNDARY_FUNCTIONS: frozenset[str] = frozenset(
+    ["_decimal_to_prometheus_gauge_value"]
+    # API boundary: Prometheus Gauge.set() requires float
+)
 
 ALLOWED_LINE_PATTERNS = [
     re.compile(r"#\s*noqa:\s*G7"),

@@ -105,6 +105,23 @@ app_info = Info(
 )
 
 
+def _decimal_to_prometheus_gauge_value(value: Decimal) -> float:
+    """Convert Decimal to float at Prometheus API boundary.
+
+    Prometheus client Gauge.set() only accepts float.
+    This wrapper documents the intentional Decimal→float conversion
+    that occurs at the observability boundary, keeping Decimal in
+    all financial logic upstream.
+
+    Args:
+        value: Decimal value to convert.
+
+    Returns:
+        Float representation for Prometheus consumption.
+    """
+    return float(value)  # noqa: G7 – API boundary: Prometheus Gauge.set() requires float
+
+
 def initialize_metrics(app_version: str = "0.1.0") -> None:
     """Initialize application info metrics.
 
@@ -173,7 +190,9 @@ def record_trade(
     trade_counter.labels(exchange=exchange, side=side, status=status).inc()
 
     if pnl is not None and ticker is not None:
-        trade_pnl.labels(exchange=exchange, ticker=ticker).set(pnl)
+        trade_pnl.labels(exchange=exchange, ticker=ticker).set(
+            _decimal_to_prometheus_gauge_value(pnl)  # noqa: G7 – API boundary
+        )
 
 
 def update_open_positions(exchange: str, count: int) -> None:
@@ -192,7 +211,9 @@ def update_portfolio_value(value: Decimal) -> None:
     Args:
         value: Current portfolio value.
     """
-    portfolio_value.set(value)
+    portfolio_value.set(
+        _decimal_to_prometheus_gauge_value(value)  # noqa: G7 – API boundary
+    )
 
 
 def update_daily_pnl(pnl: Decimal) -> None:
@@ -201,7 +222,9 @@ def update_daily_pnl(pnl: Decimal) -> None:
     Args:
         pnl: Daily profit/loss amount.
     """
-    daily_pnl.set(pnl)
+    daily_pnl.set(
+        _decimal_to_prometheus_gauge_value(pnl)  # noqa: G7 – API boundary
+    )
 
 
 def record_scan_cycle(
