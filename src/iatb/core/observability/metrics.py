@@ -18,6 +18,18 @@ from prometheus_client import (
 )
 from prometheus_fastapi_instrumentator import Instrumentator
 
+
+def _decimal_to_prometheus_gauge_value(value: Decimal) -> float:
+    """Convert Decimal to float for Prometheus Gauge.set() API boundary.
+
+    Prometheus client library Gauge.set() only accepts float/int.
+    This is an API boundary conversion — the input remains Decimal
+    throughout the application; float is only used at the Prometheus
+    API boundary for metric export.
+    """
+    return float(value)  # API boundary: Prometheus Gauge.set() requires float
+
+
 # Business metrics
 trade_counter = Counter(
     "iatb_trades_total",
@@ -173,7 +185,9 @@ def record_trade(
     trade_counter.labels(exchange=exchange, side=side, status=status).inc()
 
     if pnl is not None and ticker is not None:
-        trade_pnl.labels(exchange=exchange, ticker=ticker).set(float(pnl))  # noqa: G7 – API boundary: Prometheus Gauge accepts float
+        trade_pnl.labels(exchange=exchange, ticker=ticker).set(
+            _decimal_to_prometheus_gauge_value(pnl)
+        )
 
 
 def update_open_positions(exchange: str, count: int) -> None:
@@ -192,7 +206,7 @@ def update_portfolio_value(value: Decimal) -> None:
     Args:
         value: Current portfolio value.
     """
-    portfolio_value.set(float(value))  # noqa: G7 – API boundary: Prometheus Gauge accepts float
+    portfolio_value.set(_decimal_to_prometheus_gauge_value(value))
 
 
 def update_daily_pnl(pnl: Decimal) -> None:
@@ -201,12 +215,12 @@ def update_daily_pnl(pnl: Decimal) -> None:
     Args:
         pnl: Daily profit/loss amount.
     """
-    daily_pnl.set(float(pnl))  # noqa: G7 – API boundary: Prometheus Gauge accepts float
+    daily_pnl.set(_decimal_to_prometheus_gauge_value(pnl))
 
 
 def record_scan_cycle(
     scanner_type: str,
-    duration: float,  # float: non-financial metric
+    duration: float,
 ) -> None:
     """Record scan cycle duration.
 
@@ -219,7 +233,7 @@ def record_scan_cycle(
 
 def record_model_inference(
     model_name: str,
-    duration: float,  # float: non-financial metric
+    duration: float,
 ) -> None:
     """Record model inference duration.
 
@@ -274,7 +288,7 @@ def record_order_latency(
     exchange: str,
     symbol: str,
     order_type: str,
-    latency_seconds: float,  # float: non-financial metric
+    latency_seconds: float,
 ) -> None:
     """Record order latency from signal to fill.
 
@@ -323,7 +337,7 @@ def record_broker_api_call(
 
 def record_risk_check_duration(
     check_type: str,
-    duration_seconds: float,  # float: non-financial metric
+    duration_seconds: float,
 ) -> None:
     """Record risk check duration.
 
@@ -372,7 +386,7 @@ def record_data_source_switch(
 def record_data_source_latency(
     provider_name: str,
     method_name: str,
-    latency_seconds: float,  # float: non-financial metric
+    latency_seconds: float,
 ) -> None:
     """Record data provider request latency.
 
@@ -478,7 +492,7 @@ def record_data_source_request(source: str, status: str) -> None:
 
 def record_data_source_request_latency(
     source: str,
-    latency_seconds: float,  # float: non-financial metric
+    latency_seconds: float,
 ) -> None:
     """Record data source request latency.
 
@@ -503,7 +517,7 @@ def record_data_source_fallback(from_source: str, to_source: str) -> None:
 
 def update_data_freshness(
     source: str,
-    freshness_seconds: float,  # float: non-financial metric
+    freshness_seconds: float,
 ) -> None:
     """Update data freshness for a source.
 
