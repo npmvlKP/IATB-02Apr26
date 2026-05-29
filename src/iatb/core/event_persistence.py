@@ -98,7 +98,7 @@ class EventPersistence:
         """
         try:
             self._sequence_counter += 1
-            ts_ms = int(create_timestamp(datetime.now(UTC)).timestamp() * 1000)
+            ts_ms = int(create_timestamp(datetime.now(tz=UTC)).timestamp() * 1000)
             event_id = f"{topic}_{self._sequence_counter}_{ts_ms}"
 
             # Serialize event
@@ -108,7 +108,7 @@ class EventPersistence:
             persisted = PersistedEvent(
                 event_id=event_id,
                 topic=topic,
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(tz=UTC).isoformat(),
                 event_data=event_data,
                 sequence=self._sequence_counter,
             )

@@ -192,7 +192,7 @@ class PipelineRun:
     ) -> None:
         self._pipeline_id = pipeline_id
         self._monitor = monitor
-        self._started_at_utc = datetime.now(UTC)
+        self._started_at_utc = datetime.now(tz=UTC)
         self._stage_results: list[StageResult] = []
         self._completed_stages: list[PipelineStage] = []
         self._current_stage: PipelineStage | None = None
@@ -234,7 +234,7 @@ class PipelineRun:
             stage=stage,
             success=success,
             duration_ms=duration_ms,
-            timestamp_utc=datetime.now(UTC),
+            timestamp_utc=datetime.now(tz=UTC),
             error=error,
             metadata=metadata or {},
         )
@@ -324,7 +324,7 @@ class PipelineStageTimer:
         self.result: StageResult | None = None
 
     def __enter__(self) -> PipelineStageTimer:
-        self._start_time = datetime.now(UTC)
+        self._start_time = datetime.now(tz=UTC)
         return self
 
     def __exit__(
@@ -339,7 +339,7 @@ class PipelineStageTimer:
         if self.result is not None:
             return False
 
-        end_time = datetime.now(UTC)
+        end_time = datetime.now(tz=UTC)
         duration_ms = int((end_time - self._start_time).total_seconds() * 1000)
         success = exc_type is None
         error = str(exc_val) if exc_val else None
@@ -366,7 +366,7 @@ class PipelineStageTimer:
             msg = "Timer not started"
             raise ConfigError(msg)
 
-        end_time = datetime.now(UTC)
+        end_time = datetime.now(tz=UTC)
         duration_ms = int((end_time - self._start_time).total_seconds() * 1000)
 
         self.result = self._run.record_stage(
@@ -393,7 +393,7 @@ class PipelineStageTimer:
             msg = "Timer not started"
             raise ConfigError(msg)
 
-        end_time = datetime.now(UTC)
+        end_time = datetime.now(tz=UTC)
         duration_ms = int((end_time - self._start_time).total_seconds() * 1000)
 
         self.result = self._run.record_stage(

@@ -55,7 +55,7 @@ class JsonFormatter(logging.Formatter):
             record: The original LogRecord.
             message_dict: Additional message fields.
         """
-        log_record["timestamp"] = datetime.now(UTC).isoformat()
+        log_record["timestamp"] = datetime.now(tz=UTC).isoformat()
         log_record["level"] = record.levelname
         log_record["logger"] = record.name
         log_record["thread"] = record.thread
@@ -72,7 +72,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:  # noqa: C901
         """Format log record with JSON or standard format."""
-        record.timestamp = datetime.now(UTC).isoformat()
+        record.timestamp = datetime.now(tz=UTC).isoformat()
         if _HAS_OTEL:
             span = trace.get_current_span()
             span_context = span.get_span_context()

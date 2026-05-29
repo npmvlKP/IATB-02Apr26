@@ -24,6 +24,11 @@ from iatb.core.observability.logging_config import get_logger
 _LOGGER = get_logger(__name__)
 
 
+def _utc_now() -> datetime:
+    """Return current UTC-aware datetime. Centralized for testability."""
+    return datetime.now(tz=UTC)
+
+
 class AlertLevel(StrEnum):
     """Standardized alert severity levels."""
 
@@ -52,7 +57,7 @@ class Alert:
 
     message: str
     level: str = AlertLevel.INFO
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = field(default_factory=lambda: _utc_now())
     context: dict[str, Any] = field(default_factory=dict)
     rule_name: str | None = None
     alert_id: str | None = None
@@ -186,7 +191,7 @@ class TelegramAlerter(AlertChannel):
             return False
 
         try:
-            now_utc = datetime.now(UTC)
+            now_utc = _utc_now()
             self._sent_timestamps = _keep_recent(self._sent_timestamps, now_utc)
             if len(self._sent_timestamps) >= self._max_per_minute:
                 _LOGGER.warning(
@@ -224,7 +229,7 @@ class TelegramAlerter(AlertChannel):
             True if alert was sent successfully, False otherwise.
         """
         if timestamp is None:
-            timestamp = datetime.now(UTC)
+            timestamp = _utc_now()
 
         message = f"""
 *Trade Executed*
@@ -532,7 +537,7 @@ Manual disengagement required to resume trading.
 
         formatted = f"""
 *{level_emoji} Alert*
-*Time:* {datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")}
+*Time:* {_utc_now().strftime("%Y-%m-%d %H:%M:%S UTC")}
 
 {message}
 """
@@ -946,7 +951,7 @@ class AlertThrottler:
             return True
 
         last_sent = self._last_sent[rule_name]
-        elapsed = (datetime.now(UTC) - last_sent).total_seconds()
+        elapsed = (_utc_now() - last_sent).total_seconds()
 
         if elapsed >= self.min_interval_seconds:
             return True
@@ -964,7 +969,7 @@ class AlertThrottler:
         Args:
             rule_name: Name of the alert rule.
         """
-        self._last_sent[rule_name] = datetime.now(UTC)
+        self._last_sent[rule_name] = _utc_now()
 
     def reset(self, rule_name: str | None = None) -> None:
         """Reset throttling for a rule or all rules.
@@ -1040,7 +1045,7 @@ class AlertAcknowledgmentTracker:
         ack = self.acknowledgments[alert_id]
         ack.acknowledged = True
         ack.acknowledged_by = acknowledged_by
-        ack.acknowledged_at = datetime.now(UTC)
+        ack.acknowledged_at = _utc_now()
         ack.acknowledged_via = acknowledged_via
 
         _LOGGER.info(
@@ -1096,7 +1101,7 @@ class AlertAcknowledgmentTracker:
         Returns:
             Number of alerts cleaned up.
         """
-        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        cutoff = _utc_now() - timedelta(hours=max_age_hours)
         to_remove = []
 
         for alert_id, ack in self.acknowledgments.items():
@@ -1173,7 +1178,7 @@ class MultiChannelAlertManager:
             return None
 
         self._alert_counter += 1
-        alert_id = f"alert_{self._alert_counter}_{int(datetime.now(UTC).timestamp())}"
+        alert_id = f"alert_{self._alert_counter}_{int(_utc_now().timestamp())}"
 
         alert = Alert(
             message=message,

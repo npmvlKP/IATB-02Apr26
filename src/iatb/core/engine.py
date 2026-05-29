@@ -264,7 +264,7 @@ class Engine:
             raise EngineError(msg)
         from datetime import UTC, datetime
 
-        self._kill_switch.engage(reason, datetime.now(UTC))
+        self._kill_switch.engage(reason, datetime.now(tz=UTC))
 
     def disengage_kill_switch(self) -> None:
         """Disengage kill switch from engine level."""
@@ -273,7 +273,7 @@ class Engine:
             raise EngineError(msg)
         from datetime import UTC, datetime
 
-        self._kill_switch.disengage(datetime.now(UTC))
+        self._kill_switch.disengage(datetime.now(tz=UTC))
 
     @property
     def kill_switch(self) -> KillSwitch | None:

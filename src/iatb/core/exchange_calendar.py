@@ -137,8 +137,8 @@ class ExchangeCalendar:
                 raise ExchangeHaltError(msg)
 
             state.status = ExchangeStatus.HALTED
-            state.halted_at = datetime.now(UTC)
-            state.last_checked = datetime.now(UTC)
+            state.halted_at = datetime.now(tz=UTC)
+            state.last_checked = datetime.now(tz=UTC)
             state.halt_reason = reason
             logger.warning(
                 "Exchange halted",
@@ -163,7 +163,7 @@ class ExchangeCalendar:
 
             state.status = ExchangeStatus.NORMAL
             state.halted_at = None
-            state.last_checked = datetime.now(UTC)
+            state.last_checked = datetime.now(tz=UTC)
             state.halt_reason = None
             logger.info(
                 "Exchange恢复正常",
@@ -194,7 +194,7 @@ class ExchangeCalendar:
             Tuple of (is_within_session, status_message).
         """
         if check_time is None:
-            check_time = datetime.now(UTC)
+            check_time = datetime.now(tz=UTC)
 
         check_time_ist = check_time.astimezone(IST_TIMEZONE).replace(tzinfo=None)
         trading_date = check_time_ist.date()

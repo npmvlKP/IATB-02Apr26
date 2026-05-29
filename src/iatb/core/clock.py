@@ -78,7 +78,7 @@ class ClockDriftDetector:
 
     def _get_local_time(self) -> datetime:
         """Get current local time in UTC. Override in tests for deterministic behavior."""
-        return datetime.now(UTC)
+        return datetime.now(tz=UTC)
 
     def check_drift(self) -> timedelta:
         """Check current clock drift against NTP servers."""
@@ -145,9 +145,7 @@ class ClockDriftDetector:
 
             unpacked = struct.unpack(ntp_packet_format, data[:48])
             transmit_timestamp = (
-                unpacked[10]
-                + float(unpacked[11])
-                / 2**32  # float: non-financial metric (NTP timestamp)
+                unpacked[10] + unpacked[11] / 2**32  # noqa: G7 – non-financial NTP timestamp division (int / int → float for fromtimestamp)
             )
 
             return datetime.fromtimestamp(transmit_timestamp - ntp_delta, UTC)
@@ -187,7 +185,7 @@ class Clock:
     @staticmethod
     def now() -> Timestamp:
         """Get current UTC timestamp."""
-        return Timestamp(datetime.now(UTC))
+        return Timestamp(datetime.now(tz=UTC))
 
     @staticmethod
     def set_drift_detector(detector: ClockDriftDetector) -> None:

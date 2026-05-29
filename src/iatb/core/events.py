@@ -25,7 +25,7 @@ from iatb.core.types import (
 
 def _utc_now_timestamp() -> Timestamp:
     """Create a strict UTC timestamp for event defaults."""
-    return create_timestamp(datetime.now(UTC))
+    return create_timestamp(datetime.now(tz=UTC))
 
 
 def _enforce_utc_timestamp(timestamp: Timestamp) -> Timestamp:

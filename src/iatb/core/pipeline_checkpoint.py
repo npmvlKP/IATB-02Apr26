@@ -207,7 +207,7 @@ class PipelineCheckpoint:
         if not self._checkpoint_dir.exists():
             return 0
 
-        cutoff = datetime.now(UTC).timestamp() - (max_age_hours * 3600)
+        cutoff = datetime.now(tz=UTC).timestamp() - (max_age_hours * 3600)
         removed = 0
 
         for path in self._checkpoint_dir.glob("pipeline_*.json"):
@@ -247,7 +247,7 @@ def create_checkpoint_from_stages(
     return CheckpointData(
         pipeline_id=pipeline_id,
         version=_CHECKPOINT_VERSION,
-        created_at_utc=datetime.now(UTC),
+        created_at_utc=datetime.now(tz=UTC),
         completed_stages=list(completed_stages),
         failed_stages=list(failed_stages),
         last_successful_stage=last_successful,

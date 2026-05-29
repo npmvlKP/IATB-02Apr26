@@ -559,7 +559,7 @@ class StrategyRunner:
         Returns:
             StrategyScanResult instance.
         """
-        duration = (datetime.now(UTC) - start_time).total_seconds()
+        duration = (datetime.now(tz=UTC) - start_time).total_seconds()
 
         if success:
             _LOGGER.info(
@@ -598,7 +598,7 @@ class StrategyRunner:
             ConfigError: If strategy_id not found.
         """
         strategy, config, guard, state = self._validate_strategy_access(strategy_id)
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(tz=UTC)
 
         try:
             signals, orders, errors = await self._scan_symbols(
@@ -609,7 +609,7 @@ class StrategyRunner:
                 timeframe=timeframe,
             )
 
-            state.last_scan_time = datetime.now(UTC)
+            state.last_scan_time = datetime.now(tz=UTC)
             state.scan_count += 1
 
             return self._create_scan_result(
@@ -754,7 +754,7 @@ class StrategyRunner:
                     orders_submitted=0,
                     scan_duration_seconds=0.0,
                     errors=[str(raw_result)],
-                    timestamp_utc=datetime.now(UTC),
+                    timestamp_utc=datetime.now(tz=UTC),
                 )
             elif isinstance(raw_result, StrategyScanResult):
                 result_dict[strategy_id] = raw_result

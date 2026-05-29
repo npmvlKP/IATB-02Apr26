@@ -115,7 +115,7 @@ def initialize_metrics(app_version: str = "0.1.0") -> None:
         {
             "version": app_version,
             "environment": os.getenv("ENVIRONMENT", "development"),
-            "deployment_time": datetime.now(UTC).isoformat(),
+            "deployment_time": datetime.now(tz=UTC).isoformat(),
         }
     )
 
@@ -173,7 +173,7 @@ def record_trade(
     trade_counter.labels(exchange=exchange, side=side, status=status).inc()
 
     if pnl is not None and ticker is not None:
-        trade_pnl.labels(exchange=exchange, ticker=ticker).set(float(pnl))  # noqa: G7 – API boundary conversion to float for Prometheus
+        trade_pnl.labels(exchange=exchange, ticker=ticker).set(float(pnl))  # noqa: G7 – API boundary: Prometheus Gauge accepts float
 
 
 def update_open_positions(exchange: str, count: int) -> None:
@@ -192,7 +192,7 @@ def update_portfolio_value(value: Decimal) -> None:
     Args:
         value: Current portfolio value.
     """
-    portfolio_value.set(float(value))  # noqa: G7 – API boundary conversion to float for Prometheus
+    portfolio_value.set(float(value))  # noqa: G7 – API boundary: Prometheus Gauge accepts float
 
 
 def update_daily_pnl(pnl: Decimal) -> None:
@@ -201,7 +201,7 @@ def update_daily_pnl(pnl: Decimal) -> None:
     Args:
         pnl: Daily profit/loss amount.
     """
-    daily_pnl.set(float(pnl))  # noqa: G7 – API boundary conversion to float for Prometheus
+    daily_pnl.set(float(pnl))  # noqa: G7 – API boundary: Prometheus Gauge accepts float
 
 
 def record_scan_cycle(
