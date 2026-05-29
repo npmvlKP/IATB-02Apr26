@@ -20,11 +20,8 @@ FINANCIAL_PATHS = [
     "src/iatb/core",
 ]
 
-API_BOUNDARY_FUNCTIONS = frozenset(
-    {
-        "_decimal_to_prometheus_gauge_value",
-    }
-)
+API_BOUNDARY_FUNCTIONS: frozenset[str] = frozenset()
+# No API boundary float exemptions needed; Prometheus accepts Decimal natively
 
 ALLOWED_LINE_PATTERNS = [
     re.compile(r"#\s*noqa:\s*G7"),
@@ -43,7 +40,9 @@ class FloatCallFinder(ast.NodeVisitor):
         self._api_boundary_ranges: list[tuple[int, int]] = []
 
     def _is_in_api_boundary_func(self, lineno: int) -> bool:
-        return any(start <= lineno <= end for start, end in self._api_boundary_ranges)
+        return any(
+            start <= lineno <= end for start, end in self._api_boundary_ranges
+        )
 
     def _is_line_allowed(self, lineno: int) -> bool:
         if 1 <= lineno <= len(self._source_lines):
@@ -113,7 +112,9 @@ def main() -> int:
                 for line_num, line in issues:
                     all_issues.append((str(py_file), line_num, line))
     if all_issues:
-        print(f"G7 FAIL: Found {len(all_issues)} float usages in financial paths:")
+        print(
+            f"G7 FAIL: Found {len(all_issues)} float usages in financial paths:"
+        )
         for file_path, line_num, line in all_issues:
             print(f"  {file_path}:{line_num}: {line}")
         return 1

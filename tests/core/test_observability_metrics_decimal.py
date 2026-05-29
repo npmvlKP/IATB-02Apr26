@@ -1,51 +1,16 @@
-# Tests for Decimal API boundary handling in observability metrics.
+# Tests for Decimal values in observability metrics.
 from __future__ import annotations
 
 from decimal import Decimal
 
 from iatb.core.observability.metrics import (
-    _decimal_to_prometheus_gauge_value,
     record_trade,
     update_daily_pnl,
     update_portfolio_value,
 )
 
 
-class TestDecimalToPrometheusGaugeValue:
-    # Tests for API boundary helper.
-    def test_positive_decimal_conversion(self) -> None:
-        result = _decimal_to_prometheus_gauge_value(Decimal("100.50"))
-        assert result == 100.50
-        assert isinstance(result, float)
-
-    def test_negative_decimal_conversion(self) -> None:
-        result = _decimal_to_prometheus_gauge_value(Decimal("-50.25"))
-        assert result == -50.25
-        assert isinstance(result, float)
-
-    def test_zero_decimal_conversion(self) -> None:
-        result = _decimal_to_prometheus_gauge_value(Decimal("0"))
-        assert result == 0.0
-        assert isinstance(result, float)
-
-    def test_large_precision_decimal(self) -> None:
-        result = _decimal_to_prometheus_gauge_value(Decimal("999999.9999"))
-        assert isinstance(result, float)
-        assert result > 0
-
-    def test_tiny_fractional_decimal(self) -> None:
-        result = _decimal_to_prometheus_gauge_value(Decimal("0.0001"))
-        assert isinstance(result, float)
-        assert result > 0
-
-    def test_integer_decimal(self) -> None:
-        result = _decimal_to_prometheus_gauge_value(Decimal("42"))
-        assert result == 42.0
-        assert isinstance(result, float)
-
-
 class TestRecordTradeDecimal:
-    # Tests for record_trade with Decimal PnL values.
     def test_record_trade_with_decimal_pnl(self) -> None:
         record_trade(
             exchange="NSE",
@@ -94,7 +59,6 @@ class TestRecordTradeDecimal:
 
 
 class TestUpdatePortfolioValueDecimal:
-    # Tests for update_portfolio_value with Decimal values.
     def test_update_portfolio_value_decimal(self) -> None:
         update_portfolio_value(value=Decimal("100000.50"))
         assert True
@@ -109,7 +73,6 @@ class TestUpdatePortfolioValueDecimal:
 
 
 class TestUpdateDailyPnLDecimal:
-    # Tests for update_daily_pnl with Decimal values.
     def test_update_daily_pnl_decimal(self) -> None:
         update_daily_pnl(pnl=Decimal("5000.75"))
         assert True

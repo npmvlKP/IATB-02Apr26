@@ -18,18 +18,6 @@ from prometheus_client import (
 )
 from prometheus_fastapi_instrumentator import Instrumentator
 
-
-def _decimal_to_prometheus_gauge_value(value: Decimal) -> float:
-    """Convert Decimal to float for Prometheus Gauge.set() API boundary.
-
-    Prometheus client library Gauge.set() only accepts float/int.
-    This is an API boundary conversion — the input remains Decimal
-    throughout the application; float is only used at the Prometheus
-    API boundary for metric export.
-    """
-    return float(value)  # API boundary: Prometheus Gauge.set() requires float
-
-
 # Business metrics
 trade_counter = Counter(
     "iatb_trades_total",
@@ -185,9 +173,7 @@ def record_trade(
     trade_counter.labels(exchange=exchange, side=side, status=status).inc()
 
     if pnl is not None and ticker is not None:
-        trade_pnl.labels(exchange=exchange, ticker=ticker).set(
-            _decimal_to_prometheus_gauge_value(pnl)
-        )
+        trade_pnl.labels(exchange=exchange, ticker=ticker).set(pnl)
 
 
 def update_open_positions(exchange: str, count: int) -> None:
@@ -206,7 +192,7 @@ def update_portfolio_value(value: Decimal) -> None:
     Args:
         value: Current portfolio value.
     """
-    portfolio_value.set(_decimal_to_prometheus_gauge_value(value))
+    portfolio_value.set(value)
 
 
 def update_daily_pnl(pnl: Decimal) -> None:
@@ -215,7 +201,7 @@ def update_daily_pnl(pnl: Decimal) -> None:
     Args:
         pnl: Daily profit/loss amount.
     """
-    daily_pnl.set(_decimal_to_prometheus_gauge_value(pnl))
+    daily_pnl.set(pnl)
 
 
 def record_scan_cycle(
