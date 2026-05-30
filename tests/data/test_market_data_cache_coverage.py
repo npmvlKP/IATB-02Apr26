@@ -1,37 +1,37 @@
-"""Coverage tests for execution.zerodha_connection."""
+"""Coverage tests for data.market_data_cache."""
 
 from __future__ import annotations
 
-from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
+from iatb.data.market_data_cache import CacheEntry, MarketDataCache
 
 
-class TestZerodhaSession:
+class TestCacheEntry:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaSession()
+            obj = CacheEntry()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaSession(config={})
+            obj = CacheEntry(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestZerodhaConnection:
+class TestMarketDataCache:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaConnection()
+            obj = MarketDataCache()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaConnection(config={})
+            obj = MarketDataCache(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass

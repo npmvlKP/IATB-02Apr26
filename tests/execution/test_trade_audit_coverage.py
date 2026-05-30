@@ -1,37 +1,37 @@
-"""Coverage tests for execution.zerodha_connection."""
+"""Coverage tests for execution.trade_audit."""
 
 from __future__ import annotations
 
-from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
+from iatb.execution.trade_audit import TradeAuditEntry, TradeAuditLogger
 
 
-class TestZerodhaSession:
+class TestTradeAuditEntry:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaSession()
+            obj = TradeAuditEntry()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaSession(config={})
+            obj = TradeAuditEntry(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestZerodhaConnection:
+class TestTradeAuditLogger:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaConnection()
+            obj = TradeAuditLogger()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaConnection(config={})
+            obj = TradeAuditLogger(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass

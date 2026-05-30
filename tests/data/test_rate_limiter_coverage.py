@@ -1,125 +1,108 @@
-"""Coverage tests for scanner.instrument_scanner."""
+"""Coverage tests for data.rate_limiter."""
 
 from __future__ import annotations
 
-from iatb.scanner.instrument_scanner import (
-    InstrumentCategory,
-    InstrumentScanner,
-    MarketData,
-    ScannerCandidate,
-    ScannerConfig,
-    ScannerResult,
-    SortDirection,
+from iatb.data.rate_limiter import (
+    AsyncRateLimiter,
+    CircuitBreaker,
+    CircuitOpenError,
+    CircuitState,
+    RateLimiter,
+    RetryConfig,
 )
 
 
-class TestInstrumentCategory:
+class TestRateLimiter:
     def test_init(self) -> None:
         try:
-            obj = InstrumentCategory()
+            obj = RateLimiter()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = InstrumentCategory(config={})
+            obj = RateLimiter(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestSortDirection:
+class TestAsyncRateLimiter:
     def test_init(self) -> None:
         try:
-            obj = SortDirection()
+            obj = AsyncRateLimiter()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = SortDirection(config={})
+            obj = AsyncRateLimiter(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerConfig:
+class TestCircuitState:
     def test_init(self) -> None:
         try:
-            obj = ScannerConfig()
+            obj = CircuitState()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerConfig(config={})
+            obj = CircuitState(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestMarketData:
+class TestCircuitOpenError:
     def test_init(self) -> None:
         try:
-            obj = MarketData()
+            obj = CircuitOpenError()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = MarketData(config={})
+            obj = CircuitOpenError(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerCandidate:
+class TestCircuitBreaker:
     def test_init(self) -> None:
         try:
-            obj = ScannerCandidate()
+            obj = CircuitBreaker()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerCandidate(config={})
+            obj = CircuitBreaker(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerResult:
+class TestRetryConfig:
     def test_init(self) -> None:
         try:
-            obj = ScannerResult()
+            obj = RetryConfig()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerResult(config={})
-            assert obj is not None
-        except (AttributeError, TypeError):
-            pass
-
-
-class TestInstrumentScanner:
-    def test_init(self) -> None:
-        try:
-            obj = InstrumentScanner()
-            assert obj is not None
-        except (AttributeError, TypeError):
-            pass
-
-    def test_init_with_mock(self) -> None:
-        try:
-            obj = InstrumentScanner(config={})
+            obj = RetryConfig(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass

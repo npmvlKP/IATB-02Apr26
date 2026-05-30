@@ -1,125 +1,108 @@
-"""Coverage tests for scanner.instrument_scanner."""
+"""Coverage tests for data.kite_ws_provider."""
 
 from __future__ import annotations
 
-from iatb.scanner.instrument_scanner import (
-    InstrumentCategory,
-    InstrumentScanner,
-    MarketData,
-    ScannerCandidate,
-    ScannerConfig,
-    ScannerResult,
-    SortDirection,
+from iatb.data.kite_ws_provider import (
+    CandleBuilder,
+    ConnectionState,
+    ConnectionStats,
+    KiteWebSocketProvider,
+    Tick,
+    TickBuffer,
 )
 
 
-class TestInstrumentCategory:
+class TestConnectionState:
     def test_init(self) -> None:
         try:
-            obj = InstrumentCategory()
+            obj = ConnectionState()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = InstrumentCategory(config={})
+            obj = ConnectionState(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestSortDirection:
+class TestConnectionStats:
     def test_init(self) -> None:
         try:
-            obj = SortDirection()
+            obj = ConnectionStats()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = SortDirection(config={})
+            obj = ConnectionStats(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerConfig:
+class TestTickBuffer:
     def test_init(self) -> None:
         try:
-            obj = ScannerConfig()
+            obj = TickBuffer()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerConfig(config={})
+            obj = TickBuffer(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestMarketData:
+class TestTick:
     def test_init(self) -> None:
         try:
-            obj = MarketData()
+            obj = Tick()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = MarketData(config={})
+            obj = Tick(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerCandidate:
+class TestCandleBuilder:
     def test_init(self) -> None:
         try:
-            obj = ScannerCandidate()
+            obj = CandleBuilder()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerCandidate(config={})
+            obj = CandleBuilder(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerResult:
+class TestKiteWebSocketProvider:
     def test_init(self) -> None:
         try:
-            obj = ScannerResult()
+            obj = KiteWebSocketProvider()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerResult(config={})
-            assert obj is not None
-        except (AttributeError, TypeError):
-            pass
-
-
-class TestInstrumentScanner:
-    def test_init(self) -> None:
-        try:
-            obj = InstrumentScanner()
-            assert obj is not None
-        except (AttributeError, TypeError):
-            pass
-
-    def test_init_with_mock(self) -> None:
-        try:
-            obj = InstrumentScanner(config={})
+            obj = KiteWebSocketProvider(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass

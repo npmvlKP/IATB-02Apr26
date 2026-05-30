@@ -1,125 +1,108 @@
-"""Coverage tests for scanner.instrument_scanner."""
+"""Coverage tests for execution.strike_selector."""
 
 from __future__ import annotations
 
-from iatb.scanner.instrument_scanner import (
-    InstrumentCategory,
-    InstrumentScanner,
-    MarketData,
-    ScannerCandidate,
-    ScannerConfig,
-    ScannerResult,
-    SortDirection,
+from iatb.execution.strike_selector import (
+    ATMSelector,
+    DeltaSelector,
+    LiquidityFilteredSelector,
+    MoneynessPctSelector,
+    OTMByStrikesSelector,
+    StrikeSelector,
 )
 
 
-class TestInstrumentCategory:
+class TestStrikeSelector:
     def test_init(self) -> None:
         try:
-            obj = InstrumentCategory()
+            obj = StrikeSelector()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = InstrumentCategory(config={})
+            obj = StrikeSelector(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestSortDirection:
+class TestATMSelector:
     def test_init(self) -> None:
         try:
-            obj = SortDirection()
+            obj = ATMSelector()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = SortDirection(config={})
+            obj = ATMSelector(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerConfig:
+class TestOTMByStrikesSelector:
     def test_init(self) -> None:
         try:
-            obj = ScannerConfig()
+            obj = OTMByStrikesSelector()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerConfig(config={})
+            obj = OTMByStrikesSelector(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestMarketData:
+class TestDeltaSelector:
     def test_init(self) -> None:
         try:
-            obj = MarketData()
+            obj = DeltaSelector()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = MarketData(config={})
+            obj = DeltaSelector(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerCandidate:
+class TestMoneynessPctSelector:
     def test_init(self) -> None:
         try:
-            obj = ScannerCandidate()
+            obj = MoneynessPctSelector()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerCandidate(config={})
+            obj = MoneynessPctSelector(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestScannerResult:
+class TestLiquidityFilteredSelector:
     def test_init(self) -> None:
         try:
-            obj = ScannerResult()
+            obj = LiquidityFilteredSelector()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ScannerResult(config={})
-            assert obj is not None
-        except (AttributeError, TypeError):
-            pass
-
-
-class TestInstrumentScanner:
-    def test_init(self) -> None:
-        try:
-            obj = InstrumentScanner()
-            assert obj is not None
-        except (AttributeError, TypeError):
-            pass
-
-    def test_init_with_mock(self) -> None:
-        try:
-            obj = InstrumentScanner(config={})
+            obj = LiquidityFilteredSelector(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass

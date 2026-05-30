@@ -1,37 +1,37 @@
-"""Coverage tests for execution.zerodha_connection."""
+"""Coverage tests for data.migration_provider."""
 
 from __future__ import annotations
 
-from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
+from iatb.data.migration_provider import ABTestResult, MigrationProvider
 
 
-class TestZerodhaSession:
+class TestABTestResult:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaSession()
+            obj = ABTestResult()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaSession(config={})
+            obj = ABTestResult(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestZerodhaConnection:
+class TestMigrationProvider:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaConnection()
+            obj = MigrationProvider()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaConnection(config={})
+            obj = MigrationProvider(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass

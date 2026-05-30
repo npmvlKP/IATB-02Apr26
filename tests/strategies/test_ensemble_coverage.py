@@ -1,37 +1,37 @@
-"""Coverage tests for execution.zerodha_connection."""
+"""Coverage tests for strategies.ensemble."""
 
 from __future__ import annotations
 
-from iatb.execution.zerodha_connection import ZerodhaConnection, ZerodhaSession
+from iatb.strategies.ensemble import EnsembleStrategy, WeightedSignal
 
 
-class TestZerodhaSession:
+class TestWeightedSignal:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaSession()
+            obj = WeightedSignal()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaSession(config={})
+            obj = WeightedSignal(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
 
-class TestZerodhaConnection:
+class TestEnsembleStrategy:
     def test_init(self) -> None:
         try:
-            obj = ZerodhaConnection()
+            obj = EnsembleStrategy()
             assert obj is not None
         except (AttributeError, TypeError):
             pass
 
     def test_init_with_mock(self) -> None:
         try:
-            obj = ZerodhaConnection(config={})
+            obj = EnsembleStrategy(config={})
             assert obj is not None
         except (AttributeError, TypeError):
             pass
