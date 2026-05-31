@@ -4,6 +4,7 @@ Tests for automated backup and restore module.
 
 import json
 import sqlite3
+import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -471,6 +472,7 @@ class TestBackupManagerListBackups:
         config = _make_config(tmp_path, sqlite_paths=[db_path])
         manager = BackupManager(config)
         manager.create_backup()
+        time.sleep(0.002)  # ensure unique microsecond-based backup_id
         manager.create_backup()
         backups = manager.list_backups()
         assert len(backups) == 2
@@ -487,6 +489,7 @@ class TestBackupManagerListBackups:
         config = _make_config(tmp_path, sqlite_paths=[db_path])
         manager = BackupManager(config)
         manager.create_backup()
+        time.sleep(0.002)  # ensure unique microsecond-based backup_id
         manager.create_backup()
         backups = manager.list_backups()
         assert backups[0]["backup_id"] > backups[1]["backup_id"]
@@ -511,6 +514,7 @@ class TestBackupManagerCleanup:
         manager = BackupManager(config)
         for _ in range(3):
             manager.create_backup()
+            time.sleep(0.002)  # ensure unique microsecond-based backup_id
         assert len(manager.list_backups()) == 2
 
     def test_cleanup_returns_zero_when_under_retention(self, tmp_path: Path) -> None:
@@ -531,6 +535,7 @@ class TestBackupManagerCleanup:
         config = _make_config(tmp_path, sqlite_paths=[db_path], retention=2)
         manager = BackupManager(config)
         manager.create_backup()
+        time.sleep(0.002)  # ensure unique microsecond-based backup_id
         manager.create_backup()
         removed = manager.cleanup_old_backups()
         assert removed == 0
@@ -540,6 +545,7 @@ class TestBackupManagerCleanup:
         config = _make_config(tmp_path, sqlite_paths=[db_path], retention=1)
         manager = BackupManager(config)
         manager.create_backup()
+        time.sleep(0.002)  # ensure unique microsecond-based backup_id
         manager.create_backup()
         assert len(manager.list_backups()) == 1
 
