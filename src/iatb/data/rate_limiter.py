@@ -1,10 +1,4 @@
-"""
-Rate limiter for concurrent API requests with burst capacity.
-
-Implements a token bucket algorithm that allows burst concurrency while
-respecting overall rate limits per second and per minute.
-Also includes retry/backoff strategy with circuit breaker for API resilience.
-"""
+"""Rate limiter for concurrent API requests with burst capacity. Implements a token bucket algorithm that allows burst concurrency while respecting overall rate limits per second and per minute. Also includes retry/backoff strategy with circuit breaker for API resilience."""
 
 import asyncio
 import random
@@ -260,7 +254,7 @@ class CircuitOpenError(ConfigError):
 
 
 class CircuitBreaker:
-    """Circuit breaker pattern for API resilience.
+    """Async circuit breaker pattern for API resilience.
 
     Prevents cascading failures by opening after consecutive failures
     and allowing recovery after a timeout period.
@@ -373,6 +367,136 @@ class CircuitBreaker:
     def failure_count(self) -> int:
         """Get current failure count."""
         return self._failure_count
+
+
+class SyncCircuitBreaker:
+    """Synchronous circuit breaker for non-async contexts (e.g., FailoverProvider).
+
+    Implements a three-state circuit breaker (CLOSED, OPEN, HALF_OPEN) with
+    configurable failure threshold and cooldown period. This is the sync
+    counterpart to the async CircuitBreaker above.
+
+    State transitions:
+    - CLOSED -> OPEN: When failure count reaches threshold
+    - OPEN -> HALF_OPEN: When cooldown period expires
+    - HALF_OPEN -> CLOSED: On successful request
+    - HALF_OPEN -> OPEN: On failed request
+    """
+
+    def __init__(
+        self,
+        *,
+        provider_name: str = "default",
+        cooldown_seconds: float = 60.0,
+        failure_threshold: int = 5,
+    ) -> None:
+        """Initialize synchronous circuit breaker.
+
+        Args:
+            provider_name: Name of the provider this circuit monitors.
+            cooldown_seconds: Cooldown period in seconds after circuit opens.
+            failure_threshold: Number of consecutive failures before opening.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
+        if cooldown_seconds <= 0:
+            msg = "cooldown_seconds must be positive"
+            raise ValueError(msg)
+        if failure_threshold <= 0:
+            msg = "failure_threshold must be positive"
+            raise ValueError(msg)
+
+        self._provider_name = provider_name
+        self._cooldown_seconds = cooldown_seconds
+        self._failure_threshold = failure_threshold
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time: datetime | None = None
+
+    @property
+    def provider_name(self) -> str:
+        """Get provider name."""
+        return self._provider_name
+
+    @property
+    def cooldown_seconds(self) -> float:
+        """Get cooldown seconds."""
+        return self._cooldown_seconds
+
+    @property
+    def state(self) -> CircuitState:
+        """Get current circuit state."""
+        return self._state
+
+    @property
+    def failure_count(self) -> int:
+        """Get current failure count."""
+        return self._failure_count
+
+    @property
+    def last_failure_time(self) -> datetime | None:
+        """Get last failure time."""
+        return self._last_failure_time
+
+    def record_failure(self) -> None:
+        """Record a provider failure and update circuit state.
+
+        Increments failure count and potentially opens circuit if threshold
+        is reached. If in HALF_OPEN state, immediately opens circuit.
+        """
+        self._failure_count += 1
+        self._last_failure_time = datetime.now(UTC)
+
+        if self._state == CircuitState.HALF_OPEN:
+            # Failure in HALF_OPEN means recovery failed, open circuit
+            self._state = CircuitState.OPEN
+        elif self._failure_count >= self._failure_threshold:
+            # Threshold reached, open circuit
+            self._state = CircuitState.OPEN
+
+    def record_success(self) -> None:
+        """Record a provider success and update circuit state.
+
+        Resets failure count. If in HALF_OPEN state, closes circuit
+        indicating successful recovery.
+        """
+        self._failure_count = 0
+
+        if self._state == CircuitState.HALF_OPEN:
+            # Successful recovery, close circuit
+            self._state = CircuitState.CLOSED
+            self._last_failure_time = None
+        elif self._state == CircuitState.OPEN:
+            # Success while OPEN shouldn't normally happen, but reset anyway
+            self._state = CircuitState.CLOSED
+            self._last_failure_time = None
+
+    def is_available(self) -> bool:
+        """Check if provider is available for requests.
+
+        Returns:
+            True if circuit is CLOSED or HALF_OPEN, or if OPEN but cooldown
+            has expired (transitions to HALF_OPEN). False if OPEN and in
+            cooldown period.
+        """
+        if self._state == CircuitState.CLOSED:
+            return True
+
+        if self._state == CircuitState.HALF_OPEN:
+            return True
+
+        # State is OPEN, check if cooldown has expired
+        if self._last_failure_time is None:
+            return True
+
+        elapsed = (datetime.now(UTC) - self._last_failure_time).total_seconds()
+        if elapsed >= self._cooldown_seconds:
+            # Cooldown expired, transition to HALF_OPEN for recovery probe
+            self._state = CircuitState.HALF_OPEN
+            return True
+
+        return False
 
 
 class RetryConfig:

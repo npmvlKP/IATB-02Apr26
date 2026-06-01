@@ -1,5 +1,4 @@
-"""
-Pre-trade order validation with five risk gates + price reconciliation.
+"""Pre-trade order validation with six risk gates + price reconciliation.
 
 MITIGATION OF RISK 1 (Data Inconsistency):
 - Scanner and execution both use KiteProvider as single source of truth
@@ -10,6 +9,11 @@ MITIGATION OF RISK J.1 (SEBI Position Limit Enforcement):
 - Integrated with PositionLimitGuard for exchange-level position limits
 - Pre-check validates against NSE F&O, MCX, and CDS limits
 - Real-time monitoring with 80% threshold alerts
+
+Gate 6 (Market Session):
+- NSE/BSE equity session: 09:15-15:30 IST
+- CNC orders allowed in pre-open (09:00-09:15 IST)
+- MIS orders blocked in last 15 minutes of session
 """
 
 from dataclasses import dataclass
@@ -17,6 +21,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from iatb.core.enums import ProductType
 from iatb.core.exceptions import ConfigError
 from iatb.core.types import Price
 from iatb.data.price_reconciler import (
@@ -63,6 +68,7 @@ def validate_order(
     last_prices: dict[str, Decimal],
     current_positions: dict[str, Decimal],
     total_exposure: Decimal,
+    now_utc: datetime | None = None,
 ) -> OrderRequest:
     """Validate order against all pre-trade gates. Raises on failure."""
     price = _resolve_price(request, last_prices)
@@ -71,6 +77,7 @@ def validate_order(
     _check_price_deviation(request, price, last_prices, config)
     _check_position_limit(request, current_positions, config)
     _check_exposure(request, price, total_exposure, config)
+    _check_market_session(request, now_utc)
     return request
 
 
@@ -83,24 +90,23 @@ def validate_order_with_position_limit_guard(
     position_limit_guard: "PositionLimitGuard",
     exchange: "ExchangeType",
     price: Decimal | None = None,
+    now_utc: datetime | None = None,
 ) -> OrderRequest:
-    """Validate order including SEBI position limits (RISK J.1).
-
-    Standard pre-trade gates plus exchange-specific position limits.
-    Raises ConfigError on any validation failure.
-    """
+    """Validate order including SEBI position limits (RISK J.1)."""
+    resolved_utc = now_utc or datetime.now(UTC)
     order_price = price if price is not None else _resolve_price(request, last_prices)
     _check_quantity(request, config)
     _check_notional(request, order_price, config)
     _check_price_deviation(request, order_price, last_prices, config)
     _check_position_limit(request, current_positions, config)
     _check_exposure(request, order_price, total_exposure, config)
+    _check_market_session(request, resolved_utc)
     position_limit_guard.validate_order(
         exchange=exchange,
         symbol=request.symbol,
         quantity=request.quantity,
         price=order_price,
-        now_utc=datetime.now(UTC),
+        now_utc=resolved_utc,
     )
     return request
 
@@ -170,6 +176,64 @@ def _check_exposure(
         raise ConfigError(msg)
 
 
+def _utc_to_ist_minutes(now_utc: datetime) -> int:
+    """Convert UTC datetime to total minutes since midnight IST."""
+    ist_hour = now_utc.hour + 5
+    ist_minute = now_utc.minute + 30
+    return (ist_hour * 60 + ist_minute) % 1440
+
+
+def _check_mis_last_15_min(
+    request: OrderRequest,
+    ist_total_minutes: int,
+) -> None:
+    """Reject MIS orders in last 15 min of session (15:15-15:30 IST)."""
+    if (
+        hasattr(request, "product_type")
+        and request.product_type == ProductType.MIS
+        and ist_total_minutes >= 915
+    ):
+        msg = (
+            "MIS order rejected: intraday orders not allowed "
+            "in last 15 minutes of session (after 15:15 IST)"
+        )
+        raise ConfigError(msg)
+
+
+def _check_market_session(
+    request: OrderRequest,
+    now_utc: datetime | None,
+) -> None:
+    """Validate order is within allowed market session (Gate 6).
+
+    CNC allowed in pre-open (09:00-09:15 IST). MIS blocked in last 15 min.
+    """
+    resolved_now = now_utc or datetime.now(UTC)
+    if resolved_now.tzinfo is None:
+        msg = "now_utc must be timezone-aware (UTC)"
+        raise ConfigError(msg)
+
+    ist_total_minutes = _utc_to_ist_minutes(resolved_now)
+
+    # Primary session: 09:15 - 15:30 IST (555 - 930 minutes)
+    if ist_total_minutes < 555 or ist_total_minutes >= 930:
+        # Outside regular session - only allow CNC in pre-open
+        if (
+            hasattr(request, "product_type")
+            and request.product_type == ProductType.CNC
+            and 540 <= ist_total_minutes < 555
+        ):
+            return
+        msg = (
+            f"order rejected: outside market session "
+            f"(IST {ist_total_minutes // 60:02d}:{ist_total_minutes % 60:02d}, "
+            f"session 09:15-15:30)"
+        )
+        raise ConfigError(msg)
+
+    _check_mis_last_15_min(request, ist_total_minutes)
+
+
 def _create_price_data_points(
     scanner_price: Decimal,
     execution_price: Decimal,
@@ -211,26 +275,10 @@ def validate_with_price_reconciliation(
     prev_close_price: Decimal | None = None,
     reconciler_config: ReconciliationConfig | None = None,
 ) -> ReconciliationResult:
-    """
-    Validate prices between scanner and execution sources (both from Kite).
+    """Validate prices between scanner and execution sources (both from Kite).
 
-    MITIGATION OF RISK 1: Single-source architecture eliminates 0.1-2% discrepancies.
+    MITIGATION OF RISK 1: Single-source architecture eliminates discrepancies.
     Validates timestamp consistency, symbol mapping, data freshness, and CA detection.
-
-    Args:
-        scanner_price: Price from scanner (Kite, via DataProvider)
-        execution_price: Price from execution (Kite, real-time)
-        scanner_timestamp: Timestamp of scanner price data
-        execution_timestamp: Timestamp of execution price data
-        symbol: Trading symbol
-        prev_close_price: Previous day's close price for CA detection
-        reconciler_config: Configuration for reconciliation (uses defaults if None)
-
-    Returns:
-        ReconciliationResult with pass/fail status and detailed reason
-
-    Raises:
-        ConfigError: If timestamps are not UTC-aware or invalid
     """
     config = reconciler_config or ReconciliationConfig()
     scanner_data, execution_data, prev_close = _create_price_data_points(
@@ -278,22 +326,7 @@ def create_reconciliation_config(
     validate_symbol_mapping: bool = True,
     max_price_jump_pct: Decimal = Decimal("0.20"),
 ) -> ReconciliationConfig:
-    """
-    Create a ReconciliationConfig with specified parameters.
-
-    Helper function to create configuration with production-safe defaults.
-
-    Args:
-        max_price_deviation_pct: Maximum allowed price deviation (default 2%)
-        max_timestamp_drift_seconds: Maximum timestamp drift in seconds (default 60s)
-        strict_eod_alignment: Enable strict EOD timestamp alignment (default True)
-        detect_corporate_actions: Enable corporate action detection (default True)
-        validate_symbol_mapping: Enable symbol mapping validation (default True)
-        max_price_jump_pct: Maximum price jump before CA detection (default 20%)
-
-    Returns:
-        ReconciliationConfig instance
-    """
+    """Create a ReconciliationConfig with production-safe defaults."""
     return ReconciliationConfig(
         max_price_deviation_pct=max_price_deviation_pct,
         max_timestamp_drift_seconds=max_timestamp_drift_seconds,

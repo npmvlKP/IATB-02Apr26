@@ -1,6 +1,4 @@
-"""
-Data layer foundations for market data ingestion.
-"""
+"""Data layer foundations for market data ingestion."""
 
 from iatb.data.base import DataProvider, OHLCVBar, TickerSnapshot
 from iatb.data.ccxt_provider import CCXTProvider
@@ -28,8 +26,10 @@ from iatb.data.price_reconciler import (
 )
 from iatb.data.rate_limiter import (
     CircuitBreaker,
+    CircuitOpenError,
     RateLimiter,
     RetryConfig,
+    SyncCircuitBreaker,
     retry_with_backoff,
 )
 from iatb.data.token_resolver import SymbolTokenResolver
@@ -70,6 +70,8 @@ __all__ = [
     "ReconciliationResult",
     "RateLimiter",
     "CircuitBreaker",
+    "CircuitOpenError",
+    "SyncCircuitBreaker",
     "RetryConfig",
     "retry_with_backoff",
     "MarketDataCache",

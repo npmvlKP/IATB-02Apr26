@@ -1,6 +1,4 @@
-"""
-Tests for core enum definitions.
-"""
+"""Tests for core enum definitions."""
 
 import random
 
@@ -11,6 +9,7 @@ from iatb.core.enums import (
     OrderSide,
     OrderStatus,
     OrderType,
+    ProductType,
 )
 
 # Set deterministic seeds for reproducibility
@@ -80,6 +79,23 @@ class TestOrderType:
         """Test that OrderType is a StrEnum."""
         assert isinstance(OrderType.MARKET, str)
         assert OrderType.MARKET.value == "MARKET"
+
+
+class TestProductType:
+    """Test ProductType enum."""
+
+    def test_product_type_values(self) -> None:
+        """Test all product type enum values."""
+        assert ProductType.CNC == "CNC"
+        assert ProductType.MIS == "MIS"
+        assert ProductType.NRML == "NRML"
+        assert ProductType.BO == "BO"
+        assert ProductType.CO == "CO"
+
+    def test_product_type_is_strenum(self) -> None:
+        """Test that ProductType is a StrEnum."""
+        assert isinstance(ProductType.CNC, str)
+        assert ProductType.CNC.value == "CNC"
 
 
 class TestOrderStatus:

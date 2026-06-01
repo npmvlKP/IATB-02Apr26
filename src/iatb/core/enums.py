@@ -1,5 +1,4 @@
-"""
-Enumeration types for IATB.
+"""Enumeration types for IATB.
 
 Provides strongly-typed enums for exchange, market types,
 order properties, and status.
@@ -42,6 +41,16 @@ class OrderType(str, Enum):
     LIMIT = "LIMIT"
     STOP_LOSS = "STOP_LOSS"
     STOP_LOSS_MARKET = "STOP_LOSS_MARKET"
+
+
+class ProductType(str, Enum):
+    """Zerodha/Kite product types for orders."""
+
+    CNC = "CNC"
+    MIS = "MIS"
+    NRML = "NRML"
+    BO = "BO"
+    CO = "CO"
 
 
 class OrderStatus(str, Enum):

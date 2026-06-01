@@ -1,12 +1,17 @@
-"""
-Execution protocol and shared request/response types.
-"""
+"""Execution protocol and shared request/response types."""
 
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
-from iatb.core.enums import Exchange, MarketType, OrderSide, OrderStatus, OrderType
+from iatb.core.enums import (
+    Exchange,
+    MarketType,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    ProductType,
+)
 from iatb.core.exceptions import ConfigError
 
 
@@ -19,6 +24,7 @@ class OrderRequest:
     order_type: OrderType = OrderType.MARKET
     price: Decimal | None = None
     market_type: MarketType = MarketType.SPOT
+    product_type: ProductType | None = None
     metadata: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
