@@ -374,6 +374,7 @@ class TestValidateOrder:
                 now_utc=datetime(2026, 1, 2, 4, 0, tzinfo=UTC),
             )
 
+    @pytest.mark.enable_market_session
     def test_outside_market_session_rejected(self) -> None:
         """Validate_order should reject orders outside market session."""
         request = _make_request(quantity=Decimal("10"), price=Decimal("100"))

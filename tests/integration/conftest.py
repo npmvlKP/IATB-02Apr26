@@ -1,25 +1,28 @@
-"""
-Integration tests conftest — handle SQLite/DuckDB issues on Windows.
+"""Conftest for integration tests - auto-mock market session checks.
 
-Assigns all integration tests to a single xdist group to prevent
-file handle leaks and DLL initialization race conditions across workers.
+Integration tests run outside market hours, so Gate 6 (market session
+validation) must be bypassed to allow orders to flow through the pipeline.
 """
 
-import sys
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 
-if sys.platform == "win32":
-    try:
-        import duckdb  # noqa: F401
-    except OSError:
-        pass
 
+@pytest.fixture(autouse=True)
+def _skip_market_session_check() -> Any:
+    """Auto-skip Gate 6 market session validation for all integration tests.
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
-    """Assign all integration tests to a single xdist group on Windows."""
-    if sys.platform == "win32":
-        for item in items:
-            item.add_marker(pytest.mark.xdist_group("integration"))
+    Integration tests run 24/7 (including outside IST market hours
+    09:15-15:30). Without this fixture, any test calling
+    OrderManager.place_order would fail with ConfigError:
+    'outside market session'.
+    """
+    with patch(
+        "iatb.execution.pre_trade_validator._check_market_session",
+        lambda *a, **kw: None,
+    ):
+        yield

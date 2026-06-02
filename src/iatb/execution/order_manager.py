@@ -241,6 +241,7 @@ class OrderManager:
                 self._last_prices,
                 self._positions,
                 self._total_exposure,
+                now_utc=datetime.now(UTC),
             )
 
     def _record_pnl(self, request: OrderRequest, result: ExecutionResult) -> None:

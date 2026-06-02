@@ -92,6 +92,7 @@ tmp_path_retention_policy = "none"
 markers = [
     "slow: marks tests as slow",
     "integration: marks integration tests",
+    "enable_market_session: enables real market session validation in test",
 ]
 
 

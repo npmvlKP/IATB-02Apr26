@@ -182,7 +182,7 @@ class RiskPipeline:
             )
 
         try:
-            self._step_3_pre_trade_validation(order)
+            self._step_3_pre_trade_validation(order, now_utc)
         except ConfigError as exc:
             return RiskPipelineResult.create_rejected(
                 order_id=order_id,
@@ -205,7 +205,9 @@ class RiskPipeline:
             return True
         return self.order_throttle.check_and_record(now_utc)
 
-    def _step_3_pre_trade_validation(self, order: OrderRequest) -> bool:
+    def _step_3_pre_trade_validation(
+        self, order: OrderRequest, now_utc: datetime
+    ) -> bool:
         """Step 3: Validate order against 5 pre-trade gates."""
         if self.pre_trade_config is None:
             return True
@@ -216,6 +218,7 @@ class RiskPipeline:
                 self._last_prices,
                 self._positions,
                 self._total_exposure,
+                now_utc=now_utc,
             )
             return True
         except ConfigError:

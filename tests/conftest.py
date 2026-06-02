@@ -51,6 +51,28 @@ def set_deterministic_seeds() -> Generator[None, None, None]:
     return
 
 
+@pytest.fixture(autouse=True)
+def _skip_market_session_check(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    """Auto-skip Gate 6 market session check for all tests.
+
+    Tests marked with @pytest.mark.enable_market_session will NOT have
+    the market session check skipped, allowing them to test the actual
+    rejection logic for orders placed outside market hours.
+    """
+    if request.node.get_closest_marker("enable_market_session"):
+        yield
+        return
+    from unittest.mock import patch as _patch
+
+    with _patch(
+        "iatb.execution.pre_trade_validator._check_market_session",
+        lambda *a, **kw: None,
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Shared Infrastructure Fixtures
 # ---------------------------------------------------------------------------
