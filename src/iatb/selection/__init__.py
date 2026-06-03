@@ -3,8 +3,16 @@ Instrument auto-selection via multi-factor scoring.
 
 Fuses sentiment, market strength, volume profile, and DRL backtest
 conclusions into regime-aware composite scores for ranked selection.
+Integrated auto-selection pipeline produces strike price, lot size,
+and adaptive trailing stop from signal fusion.
 """
 
+from iatb.selection.auto_selector import (
+    AutoSelectionResult,
+    AutoSelector,
+    AutoSelectorConfig,
+    select_strike_by_regime,
+)
 from iatb.selection.composite_score import (
     CompositeResult,
     RegimeWeights,
@@ -48,6 +56,11 @@ from iatb.selection.volume_profile_signal import (
 )
 
 __all__ = [
+    # auto_selector
+    "AutoSelectionResult",
+    "AutoSelector",
+    "AutoSelectorConfig",
+    "select_strike_by_regime",
     # composite_score
     "CompositeResult",
     "RegimeWeights",
