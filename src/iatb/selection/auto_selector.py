@@ -1,12 +1,10 @@
-"""
-auto_selector.py – Integrated Auto-Selection Pipeline
-======================================================
+"""auto_selector.py – Integrated Auto-Selection Pipeline.
 
-Combines sentiment, volume-profile, RAG market strength, and DRL signals
-to automatically select:
-  - Option strike price (CE/PE) via StrikeSelector
-  - Lot size via confidence-weighted position sizing
-  - Adaptive trailing stop offset via TrailingStopStrategy
+Combines sentiment, volume-profile, RAG market strength, and DRL
+signals to automatically select:
+- Option strike price (CE/PE) via StrikeSelector
+- Lot size via confidence-weighted position sizing
+- Adaptive trailing stop offset via TrailingStopStrategy
 
 This module closes the gap between the four signal sources
 (InstrumentScorer) and the execution layer (StrikeSelector,
@@ -51,6 +49,7 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------------ #
 # Default configuration constants
 # ------------------------------------------------------------------ #
+
 _DEFAULT_MIN_LOTS = 1
 _DEFAULT_MAX_LOTS = 10
 _DEFAULT_BASE_TRAIL_FRACTION = Decimal("0.02")
@@ -61,10 +60,11 @@ _DEFAULT_MIN_CONFIDENCE = Decimal("0.30")
 _ZERO: Decimal = Decimal("0")
 _ONE: Decimal = Decimal("1")
 
-
 # ------------------------------------------------------------------ #
 # Data classes
 # ------------------------------------------------------------------ #
+
+
 @dataclass(frozen=True)
 class AutoSelectionResult:
     """Complete auto-selection output for a single instrument."""
@@ -136,13 +136,15 @@ class AutoSelectorConfig:
 # ------------------------------------------------------------------ #
 # Main auto-selector class
 # ------------------------------------------------------------------ #
+
+
 class AutoSelector:
     """Integrated auto-selection pipeline.
 
     Combines the four signal sources (sentiment, volume-profile,
-    RAG market strength, DRL) through InstrumentScorer, then
-    feeds the scored instruments into strike selection, lot sizing,
-    and adaptive trailing stop computation.
+    RAG market strength, DRL) through InstrumentScorer, then feeds
+    the scored instruments into strike selection, lot sizing, and
+    adaptive trailing stop computation.
     """
 
     def __init__(
@@ -186,29 +188,10 @@ class AutoSelector:
         current_atr: Decimal | None = None,
         correlations: dict[tuple[str, str], Decimal] | None = None,
     ) -> list[AutoSelectionResult]:
-        """Full pipeline: score → select → strike → lots → trail.
-
-        Args:
-            instrument_signals: Pre-computed signals per instrument.
-            regime: Current market regime.
-            option_chain: Available option instruments.
-            underlying_price: Current underlying price.
-            side: BUY or SELL.
-            current_atr: Current ATR for trailing stop.
-                Falls back to 2% of underlying price if None.
-            correlations: Pairwise instrument correlations.
-
-        Returns:
-            List of AutoSelectionResult for each selected instrument.
-
-        Raises:
-            ConfigError: If inputs are invalid.
-        """
+        """Full pipeline: score -> select -> strike -> lots -> trail."""
         _validate_auto_select_inputs(instrument_signals, option_chain, underlying_price)
         atr = current_atr or underlying_price * Decimal("0.02")
-
         selection = self.score_and_select(instrument_signals, regime, correlations)
-
         results: list[AutoSelectionResult] = []
         for ranked in selection.selected:
             result = self._build_auto_result(
@@ -222,13 +205,33 @@ class AutoSelector:
             )
             if result is not None:
                 results.append(result)
-
         logger.info(
             "Auto-selected %d instruments from %d candidates",
             len(results),
             selection.total_candidates,
         )
         return results
+
+    def _validate_ranked(
+        self,
+        ranked: object,
+    ) -> tuple[str, Exchange, Decimal, int, dict[str, str], Decimal] | None:
+        """Extract and validate ranked attributes; None if below min."""
+        symbol = getattr(ranked, "symbol", "")
+        exchange = getattr(ranked, "exchange", Exchange.NSE)
+        score = getattr(ranked, "composite_score", Decimal("0"))
+        rank = getattr(ranked, "rank", 1)
+        metadata = getattr(ranked, "metadata", {})
+        confidence = _extract_confidence(metadata)
+        if confidence < self._config.min_confidence:
+            logger.info(
+                "Skipping %s: confidence %s < min %s",
+                symbol,
+                confidence,
+                self._config.min_confidence,
+            )
+            return None
+        return (symbol, exchange, score, rank, metadata, confidence)
 
     def _build_auto_result(
         self,
@@ -240,77 +243,45 @@ class AutoSelector:
         atr: Decimal,
         total_selected: int,
     ) -> AutoSelectionResult | None:
-        """Build an AutoSelectionResult from a ranked instrument."""
-        symbol = getattr(ranked, "symbol", "")
-        exchange = getattr(ranked, "exchange", Exchange.NSE)
-        composite_score = getattr(ranked, "composite_score", Decimal("0"))
-        rank = getattr(ranked, "rank", 1)
-        metadata = getattr(ranked, "metadata", {})
-
-        confidence = _extract_confidence(metadata)
-        if confidence < self._config.min_confidence:
-            logger.info(
-                "Skipping %s: confidence %s below minimum %s",
-                symbol,
-                confidence,
-                self._config.min_confidence,
-            )
+        """Validate, compute components, and assemble result."""
+        validated = self._validate_ranked(ranked)
+        if validated is None:
             return None
-
+        sym, exch, score, rank, meta, conf = validated
         option_type = _determine_option_type(regime, side)
-        filtered_chain = _filter_chain_by_type(option_chain, option_type)
-        if not filtered_chain:
-            logger.warning("No %s options in chain for %s", option_type, symbol)
+        chain = _filter_chain_by_type(option_chain, option_type)
+        if not chain:
+            logger.warning("No %s options in chain for %s", option_type, sym)
             return None
-
-        selected_instrument = self._strike_selector.select(
-            filtered_chain, underlying_price, side
-        )
-
+        sel = self._strike_selector.select(chain, underlying_price, side)
         lots = _compute_lots(
-            base_lots=self._config.base_lots,
-            max_lots=self._config.max_lots,
-            confidence=confidence,
-            rank=rank,
-            total_selected=total_selected,
+            self._config.base_lots,
+            self._config.max_lots,
+            conf,
+            rank,
+            total_selected,
         )
-
-        trail_offset = _compute_adaptive_trail_offset(
-            base_trail_fraction=self._config.base_trail_fraction,
-            min_trail_fraction=self._config.min_trail_fraction,
-            max_trail_fraction=self._config.max_trail_fraction,
-            confidence=confidence,
-            regime=regime,
-            underlying_price=underlying_price,
-            atr=atr,
+        trail = _compute_adaptive_trail_offset(
+            self._config.base_trail_fraction,
+            self._config.min_trail_fraction,
+            self._config.max_trail_fraction,
+            conf,
+            regime,
+            underlying_price,
+            atr,
         )
-
-        trail_strategy_name = type(self._trailing_stop).__name__
-
-        strike_price = selected_instrument.strike or underlying_price
-
-        reasons = _build_reasons(
-            regime=regime,
+        return _assemble_result(
+            symbol=sym,
+            exchange=exch,
             option_type=option_type,
-            confidence=confidence,
-            composite_score=composite_score,
-            trail_offset=trail_offset,
+            strike_price=sel.strike or underlying_price,
             lots=lots,
-            metadata=metadata,
-        )
-
-        return AutoSelectionResult(
-            symbol=symbol,
-            exchange=exchange,
-            option_type=option_type,
-            strike_price=strike_price,
-            lots=lots,
-            trail_offset_points=trail_offset,
-            trail_strategy_name=trail_strategy_name,
-            composite_score=composite_score,
-            confidence=confidence,
+            trail_offset=trail,
+            trail_strategy_name=type(self._trailing_stop).__name__,
+            composite_score=score,
+            confidence=conf,
             regime=regime,
-            reasons=reasons,
+            metadata=meta,
         )
 
     def _build_strike_selector(self, mode: str) -> StrikeSelector:
@@ -331,34 +302,24 @@ class AutoSelector:
         return LiquidityFilteredSelector(ATMSelector())
 
 
+# ------------------------------------------------------------------ #
+# Module-level helper functions
+# ------------------------------------------------------------------ #
+
+
 def select_strike_by_regime(
     regime: MarketRegime,
     option_chain: list[Instrument],
     underlying_price: Decimal,
     side: OrderSide,
 ) -> Instrument:
-    """Select strike price adapting to market regime.
-
-    - BULL: ATM (tightest stop, highest confidence)
-    - BEAR: OTM-2 (more room, defensive)
-    - SIDEWAYS: OTM-1 (moderate room)
-
-    Args:
-        regime: Current market regime.
-        option_chain: Available option instruments.
-        underlying_price: Current underlying price.
-        side: BUY or SELL.
-
-    Returns:
-        Selected Instrument from the option chain.
-    """
+    """Select strike adapting to regime. BULL=ATM, BEAR=OTM-2."""
     if not option_chain:
         msg = "option_chain cannot be empty"
         raise ConfigError(msg)
     if underlying_price <= Decimal("0"):
         msg = "underlying_price must be positive"
         raise ConfigError(msg)
-
     if regime == MarketRegime.BULL:
         selector: StrikeSelector = LiquidityFilteredSelector(ATMSelector())
     elif regime == MarketRegime.BEAR:
@@ -368,9 +329,6 @@ def select_strike_by_regime(
     return selector.select(option_chain, underlying_price, side)
 
 
-# ------------------------------------------------------------------ #
-# Helper functions (module-private)
-# ------------------------------------------------------------------ #
 def _validate_auto_select_inputs(
     instrument_signals: list[InstrumentSignals],
     option_chain: list[Instrument],
@@ -392,12 +350,13 @@ def _determine_option_type(regime: MarketRegime, side: OrderSide) -> str:
     """Determine CE or PE based on regime and order side."""
     if side == OrderSide.BUY:
         return "CE" if regime in (MarketRegime.BULL, MarketRegime.SIDEWAYS) else "PE"
-    # SELL side: PE in bull/sideways (bearish), CE in bear (bullish reversal)
+    # SELL side: PE in bull/sideways, CE in bear (bullish reversal)
     return "PE" if regime in (MarketRegime.BULL, MarketRegime.SIDEWAYS) else "CE"
 
 
 def _filter_chain_by_type(
-    option_chain: list[Instrument], option_type: str
+    option_chain: list[Instrument],
+    option_type: str,
 ) -> list[Instrument]:
     """Filter option chain to only CE or PE instruments."""
     from iatb.data.instrument import InstrumentType
@@ -410,7 +369,12 @@ def _filter_chain_by_type(
 
 def _extract_confidence(metadata: dict[str, str]) -> Decimal:
     """Extract aggregate confidence from selection metadata."""
-    for key in ("contrib_sentiment", "contrib_strength", "contrib_vp", "contrib_drl"):
+    for key in (
+        "contrib_sentiment",
+        "contrib_strength",
+        "contrib_vp",
+        "contrib_drl",
+    ):
         if key not in metadata:
             conf_default: Decimal = Decimal("0.50")
             return conf_default  # default moderate confidence
@@ -449,16 +413,12 @@ def _compute_lots(
     rank: int,
     total_selected: int,
 ) -> int:
-    """Compute lot size based on confidence and rank.
-
-    Higher confidence and better rank → more lots.
-    """
+    """Compute lot size based on confidence and rank."""
     if total_selected <= 0:
         return base_lots
     rank_weight = Decimal(total_selected - rank + 1) / Decimal(total_selected)
     scaled = Decimal(base_lots) * confidence * rank_weight
-    lots = max(base_lots, min(max_lots, int(scaled)))
-    return lots
+    return max(base_lots, min(max_lots, int(scaled)))
 
 
 def _compute_adaptive_trail_offset(
@@ -470,31 +430,21 @@ def _compute_adaptive_trail_offset(
     underlying_price: Decimal,
     atr: Decimal,
 ) -> Decimal:
-    """Compute adaptive trailing stop offset in points.
-
-    Higher confidence → tighter trail (lower fraction).
-    Bear regime → wider trail (higher fraction).
-    """
+    """Compute adaptive trailing stop offset in points."""
     if confidence >= Decimal("0.80"):
         fraction = min_trail_fraction
     elif confidence >= Decimal("0.60"):
         fraction = base_trail_fraction
     else:
         fraction = max_trail_fraction
-
     # Widen in bear regime
     if regime == MarketRegime.BEAR:
         fraction = min(max_trail_fraction, fraction * Decimal("1.5"))
-
     # Narrow in bull regime
     if regime == MarketRegime.BULL:
         fraction = max(min_trail_fraction, fraction * Decimal("0.75"))
-
-    # Use ATR-based offset if available
-    atr_offset = atr * Decimal("2.0")
-    price_offset = underlying_price * fraction
-    # Take the larger of the two for safety
-    return max(atr_offset, price_offset)
+    # Use ATR-based offset if available; take the larger for safety
+    return max(atr * Decimal("2.0"), underlying_price * fraction)
 
 
 def _build_reasons(
@@ -515,7 +465,48 @@ def _build_reasons(
         f"trail_offset={trail_offset:.2f}",
         f"lots={lots}",
     ]
-    for key in ("contrib_sentiment", "contrib_strength", "contrib_vp", "contrib_drl"):
-        val = metadata.get(key, "N/A")
-        reasons.append(f"{key}={val}")
+    for key in (
+        "contrib_sentiment",
+        "contrib_strength",
+        "contrib_vp",
+        "contrib_drl",
+    ):
+        reasons.append(f"{key}={metadata.get(key, 'N/A')}")
     return reasons
+
+
+def _assemble_result(
+    symbol: str,
+    exchange: Exchange,
+    option_type: str,
+    strike_price: Decimal,
+    lots: int,
+    trail_offset: Decimal,
+    trail_strategy_name: str,
+    composite_score: Decimal,
+    confidence: Decimal,
+    regime: MarketRegime,
+    metadata: dict[str, str],
+) -> AutoSelectionResult:
+    """Assemble AutoSelectionResult from computed components."""
+    return AutoSelectionResult(
+        symbol=symbol,
+        exchange=exchange,
+        option_type=option_type,
+        strike_price=strike_price,
+        lots=lots,
+        trail_offset_points=trail_offset,
+        trail_strategy_name=trail_strategy_name,
+        composite_score=composite_score,
+        confidence=confidence,
+        regime=regime,
+        reasons=_build_reasons(
+            regime,
+            option_type,
+            confidence,
+            composite_score,
+            trail_offset,
+            lots,
+            metadata,
+        ),
+    )
