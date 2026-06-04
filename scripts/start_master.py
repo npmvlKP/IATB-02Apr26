@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 """
- iATB Master Startup Script — Orchestrates engine and dashboard startup.
+iATB Master Startup Script — Orchestrates engine and dashboard startup.
 
- This script ensures the Engine API (port 8000) starts BEFORE the dashboard (port 8080),
- preventing the "Loading..." issue when the dashboard attempts to connect.
+This script ensures the Engine API (port 8000) starts BEFORE the dashboard (port 8080),
+preventing the "Loading..." issue when the dashboard attempts to connect.
 
- Startup sequence:
-    1. Start Engine with event bus
-    2. Wait for /health endpoint to return 200 OK
-    3. Start Dashboard on port 8080
-    4. Handle graceful shutdown on Ctrl+C
+Startup sequence:
+1. Start Engine with event bus
+2. Wait for /health endpoint to return 200 OK
+3. Start Dashboard on port 8080
+4. Handle graceful shutdown on Ctrl+C
 
- Run:  poetry run python scripts/start_master.py
+Run: poetry run python scripts/start_master.py
 """
 
 import asyncio
 import logging
 import subprocess
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,7 +40,12 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger("start_master")
 
-async def wait_for_health_endpoint(url: str = "http://localhost:8000/health/live", timeout_seconds: int = 30, poll_interval: float = 0.5) -> bool:
+
+async def wait_for_health_endpoint(
+    url: str = "http://localhost:8000/health/live",
+    timeout_seconds: int = 30,
+    poll_interval: float = 0.5,
+) -> bool:
     """Poll health endpoint until it returns HTTP 200 or timeout.
 
     Returns True on successful 200 response; False otherwise.
@@ -49,7 +54,9 @@ async def wait_for_health_endpoint(url: str = "http://localhost:8000/health/live
     while True:
         try:
             # Use blocking urllib in thread to avoid blocking the event loop
-            response = await asyncio.to_thread(urllib.request.urlopen, url, timeout=timeout_seconds)
+            response = await asyncio.to_thread(
+                urllib.request.urlopen, url, timeout=timeout_seconds
+            )
             # Ensure response is read/closed
             await asyncio.to_thread(response.read)
             if getattr(response, "status", None) == 200:
@@ -74,20 +81,33 @@ async def start_engine() -> "Engine":
     Returns:
         Engine instance.
     """
+    from iatb.core.config import get_config
     from iatb.core.engine import Engine
+    from iatb.core.event_bus import EventBus
+    from iatb.core.sse_broadcaster import SSEBroadcaster
     from iatb.execution.paper_executor import PaperExecutor
     from iatb.risk.kill_switch import KillSwitch
 
     _LOGGER.info("Starting engine components...")
 
+    config = get_config()
+    event_bus = EventBus()
+    sse_broadcaster = SSEBroadcaster()
     executor = PaperExecutor()
     kill_switch = KillSwitch(executor)
-    engine: Engine = Engine(kill_switch=kill_switch)
+    engine: Engine = Engine(
+        event_bus=event_bus,
+        sse_broadcaster=sse_broadcaster,
+        config=config,
+        kill_switch=kill_switch,
+    )
 
     await engine.start()
 
-    _LOGGER.info("  ✓ Engine started (running: %s)", engine.is_running)
-    _LOGGER.info("  ✓ Health endpoints available via FastAPI: /health/live, /health/ready")
+    _LOGGER.info(" ✓ Engine started (running: %s)", engine.is_running)
+    _LOGGER.info(
+        " ✓ Health endpoints available via FastAPI: /health/live, /health/ready"
+    )
 
     return engine
 
@@ -113,10 +133,10 @@ def start_dashboard() -> subprocess.Popen[str] | None:
             stderr=subprocess.STDOUT,
             text=True,
         )
-        _LOGGER.info("  ✓ Dashboard started on port 8080 (PID: %d)", proc.pid)
+        _LOGGER.info(" ✓ Dashboard started on port 8080 (PID: %d)", proc.pid)
         return proc
     except Exception as exc:
-        _LOGGER.error("  ✗ Dashboard start failed: %s", exc)
+        _LOGGER.error(" ✗ Dashboard start failed: %s", exc)
         return None
 
 
@@ -151,10 +171,10 @@ async def main_async() -> int:
         _LOGGER.info("")
         _LOGGER.info("=" * 70)
         _LOGGER.info("✓ All services started successfully!")
-        _LOGGER.info("  - Engine API:   http://localhost:8000/health/live")
-        _LOGGER.info("  - Engine API:   http://localhost:8000/health/ready")
-        _LOGGER.info("  - Dashboard:    http://localhost:8080")
-        _LOGGER.info("  - Press Ctrl+C to stop all services")
+        _LOGGER.info(" - Engine API: http://localhost:8000/health/live")
+        _LOGGER.info(" - Engine API: http://localhost:8000/health/ready")
+        _LOGGER.info(" - Dashboard: http://localhost:8080")
+        _LOGGER.info(" - Press Ctrl+C to stop all services")
         _LOGGER.info("=" * 70)
         _LOGGER.info("")
 
@@ -189,9 +209,9 @@ async def main_async() -> int:
         if engine:
             _LOGGER.info("Stopping engine...")
             await engine.stop()
-            _LOGGER.info("  ✓ Engine stopped")
+            _LOGGER.info(" ✓ Engine stopped")
 
-        _LOGGER.info("Shutdown complete.")
+    _LOGGER.info("Shutdown complete.")
 
     return exit_code
 

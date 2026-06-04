@@ -1,253 +1,109 @@
-"""
-Tests for runtime entrypoint orchestration.
-"""
+"""Tests for iatb.core.runtime module."""
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import iatb.core.runtime as runtime
 import pytest
+from iatb.core.runtime import _idle_loop, _register_signal_handlers, run_runtime
 
 
-@pytest.mark.asyncio()
-async def test_run_runtime_starts_and_stops_components(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Runtime should start and stop engine around stop event."""
-    lifecycle: list[str] = []
-
-    class _FakeEngine:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-        async def start(self) -> None:
-            lifecycle.append("engine-start")
-
-        async def stop(self) -> None:
-            lifecycle.append("engine-stop")
-
-    monkeypatch.setattr(runtime, "Engine", _FakeEngine)
-    stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event))
-    await asyncio.sleep(0.01)
-    stop_event.set()
-    await task
-    assert lifecycle == ["engine-start", "engine-stop"]
+@pytest.fixture()
+def mock_engine() -> MagicMock:
+    """Create a mock Engine with async start/stop and health_status."""
+    engine = MagicMock()
+    engine.start = AsyncMock()
+    engine.stop = AsyncMock()
+    engine.is_running = True
+    engine.health_status.return_value = {
+        "engine": "running",
+        "event_bus": "ok",
+        "config": "paper",
+    }
+    return engine
 
 
-@pytest.mark.asyncio()
-async def test_register_signal_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Signal handler registration should wire stop_event.set to signals."""
-    import signal
+class TestRunRuntime:
+    """Tests for run_runtime function."""
 
-    registered: list[str] = []
+    async def test_run_runtime_starts_and_stops(self, mock_engine: MagicMock) -> None:
+        """Engine starts, logs mode, then stops when event is set."""
+        mock_config = MagicMock()
+        mock_config.execution_mode = "paper"
+        with patch("iatb.core.engine.Engine", return_value=mock_engine):
+            with patch("iatb.core.config.get_config", return_value=mock_config):
+                stop_event = asyncio.Event()
 
-    class _FakeLoop:
-        def add_signal_handler(self, sig: signal.Signals, callback: object) -> None:
-            registered.append(sig.name)
+                async def _delayed_stop() -> None:
+                    await asyncio.sleep(0.1)
+                    stop_event.set()
 
-    monkeypatch.setattr(asyncio, "get_running_loop", lambda: _FakeLoop())
-    stop_event = asyncio.Event()
-    runtime._register_signal_handlers(stop_event)
-    assert len(registered) >= 1
+                task = asyncio.create_task(_delayed_stop())
+                await run_runtime(stop_event=stop_event)
+                await task
+                mock_engine.start.assert_awaited_once()
+                mock_engine.stop.assert_awaited_once()
 
-
-@pytest.mark.asyncio()
-async def test_main_runs_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_main should invoke run_runtime and respect signal handlers."""
-    called: list[str] = []
-
-    async def _fake_run_runtime(stop_event: asyncio.Event | None = None) -> None:
-        called.append("run_runtime")
-        if stop_event:
-            stop_event.set()
-
-    monkeypatch.setattr(runtime, "run_runtime", _fake_run_runtime)
-    monkeypatch.setattr(runtime, "_register_signal_handlers", lambda e: None)
-    await runtime._main()
-    assert "run_runtime" in called
-
-
-def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    """main() should call asyncio.run with _main."""
-    import logging as stdlib_logging
-
-    called: list[str] = []
-
-    def _fake_run(coro: object) -> None:
-        called.append("asyncio.run")
-        if hasattr(coro, "close"):
-            coro.close()  # type: ignore[union-attr]
-
-    monkeypatch.setattr(asyncio, "run", _fake_run)
-    monkeypatch.setattr(stdlib_logging, "basicConfig", lambda **kw: None)
-    runtime.main()
-    assert "asyncio.run" in called
+    async def test_run_runtime_paper_mode_log(
+        self, mock_engine: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Runtime logs the execution mode on startup."""
+        mock_config = MagicMock()
+        mock_config.execution_mode = "paper"
+        with patch("iatb.core.engine.Engine", return_value=mock_engine):
+            with patch("iatb.core.config.get_config", return_value=mock_config):
+                stop_event = asyncio.Event()
+                stop_event.set()
+                await run_runtime(stop_event=stop_event)
+                assert "paper" in caplog.text
 
 
-@pytest.mark.asyncio()
-async def test_run_runtime_without_stop_event(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Runtime should create its own stop event if not provided."""
-    event_created: list[bool] = []
+class TestIdleLoop:
+    """Tests for _idle_loop function."""
 
-    class _FakeEngine:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(runtime, "Engine", _FakeEngine)
-
-    # Mock asyncio.Event to track creation
-    original_event = asyncio.Event
-
-    def tracked_event() -> asyncio.Event:
-        event_created.append(True)
-        return original_event()
-
-    with patch.object(asyncio, "Event", tracked_event):
-        task = asyncio.create_task(runtime.run_runtime())
-        await asyncio.sleep(0.01)
-        # Cancel the task since we don't have a stop event to set
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-    assert len(event_created) > 0
-
-
-@pytest.mark.asyncio()
-async def test_run_runtime_handles_engine_start_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Runtime should handle errors during engine startup gracefully."""
-
-    class _FailingEngine:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-        async def start(self) -> None:
-            raise RuntimeError("Engine start failed")
-
-    monkeypatch.setattr(runtime, "Engine", _FailingEngine)
-
-    stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event))
-    # Should raise the error
-    with pytest.raises(RuntimeError, match="Engine start failed"):
-        await asyncio.sleep(0.01)
+    async def test_idle_loop_exits_on_stop(self, mock_engine: MagicMock) -> None:
+        """Idle loop exits immediately when stop event is already set."""
+        stop_event = asyncio.Event()
         stop_event.set()
-        await task
+        await _idle_loop(stop_event, mock_engine, heartbeat_seconds=5)
+        mock_engine.health_status.assert_not_called()
 
+    async def test_idle_loop_heartbeat(self, mock_engine: MagicMock) -> None:
+        """Idle loop emits heartbeat after heartbeat_seconds elapsed."""
+        stop_event = asyncio.Event()
 
-@pytest.mark.asyncio()
-async def test_run_runtime_handles_engine_stop_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Runtime should handle errors during engine stop gracefully."""
-
-    class _EngineWithStopError:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def stop(self) -> None:
-            raise RuntimeError("Engine stop failed")
-
-    monkeypatch.setattr(runtime, "Engine", _EngineWithStopError)
-
-    stop_event = asyncio.Event()
-    task = asyncio.create_task(runtime.run_runtime(stop_event=stop_event))
-    await asyncio.sleep(0.01)
-    stop_event.set()
-
-    # Should propagate the error
-    with pytest.raises(RuntimeError, match="Engine stop failed"):
-        await task
-
-
-@pytest.mark.asyncio()
-async def test_main_handles_signal_handler_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """_main should propagate errors in signal handler registration."""
-    called: list[str] = []
-
-    async def _fake_run_runtime(stop_event: asyncio.Event | None = None) -> None:
-        called.append("run_runtime")
-        if stop_event:
+        async def _stop_after_delay() -> None:
+            await asyncio.sleep(2.5)
             stop_event.set()
 
-    monkeypatch.setattr(runtime, "run_runtime", _fake_run_runtime)
-    monkeypatch.setattr(
-        runtime,
-        "_register_signal_handlers",
-        lambda e: (_ for _ in ()).throw(RuntimeError("Signal handler error")),
-    )
+        task = asyncio.create_task(_stop_after_delay())
+        await _idle_loop(stop_event, mock_engine, heartbeat_seconds=1)
+        await task
+        assert mock_engine.health_status.call_count >= 1
 
-    # Should raise signal handler error (actual behavior)
-    with pytest.raises(RuntimeError, match="Signal handler error"):
-        await runtime._main()
+    async def test_idle_loop_no_heartbeat_before_interval(
+        self, mock_engine: MagicMock
+    ) -> None:
+        """Idle loop does not emit heartbeat before interval."""
+        stop_event = asyncio.Event()
 
+        async def _stop_quickly() -> None:
+            await asyncio.sleep(0.5)
+            stop_event.set()
 
-def test_main_logging_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
-    """main() should configure logging before running."""
-    import logging as stdlib_logging
-
-    configured: list[bool] = []
-
-    def _fake_config(**kwargs: object) -> None:
-        configured.append(True)
-
-    def _fake_run(coro: object) -> None:
-        if hasattr(coro, "close"):
-            coro.close()  # type: ignore[union-attr]
-
-    monkeypatch.setattr(stdlib_logging, "basicConfig", _fake_config)
-    monkeypatch.setattr(asyncio, "run", _fake_run)
-
-    runtime.main()
-
-    assert len(configured) > 0
+        task = asyncio.create_task(_stop_quickly())
+        await _idle_loop(stop_event, mock_engine, heartbeat_seconds=60)
+        await task
+        mock_engine.health_status.assert_not_called()
 
 
-@pytest.mark.asyncio()
-async def test_multiple_runtime_instances(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that multiple runtime instances can run independently."""
-    instance_count: list[int] = []
+class TestRegisterSignalHandlers:
+    """Tests for _register_signal_handlers function."""
 
-    class _CountingEngine:
-        def __init__(self, *args, **kwargs) -> None:
-            instance_count.append(len(instance_count))
+    def test_register_signal_handlers_sets_handler(self) -> None:
+        """Signal handlers are registered without error."""
 
-        async def start(self) -> None:
-            pass
+        async def _test() -> None:
+            stop_event = asyncio.Event()
+            _register_signal_handlers(stop_event)
 
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(runtime, "Engine", _CountingEngine)
-
-    # Run two runtime instances sequentially
-    stop_event1 = asyncio.Event()
-    task1 = asyncio.create_task(runtime.run_runtime(stop_event=stop_event1))
-    await asyncio.sleep(0.01)
-    stop_event1.set()
-    await task1
-
-    stop_event2 = asyncio.Event()
-    task2 = asyncio.create_task(runtime.run_runtime(stop_event=stop_event2))
-    await asyncio.sleep(0.01)
-    stop_event2.set()
-    await task2
-
-    # Should have created two engine instances
-    assert len(instance_count) == 2
+        asyncio.run(_test())

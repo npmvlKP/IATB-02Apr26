@@ -156,11 +156,20 @@ class TestRuntimeMainIntegration:
         events_set: list[str] = []
 
         class _FakeEvent:
+            def __init__(self) -> None:
+                self._set = False
+
             def set(self) -> None:
                 events_set.append("set")
+                self._set = True
+
+            def is_set(self) -> bool:
+                return self._set
 
             async def wait(self) -> None:
                 events_set.append("waited")
+                # Block until event is set or cancelled
+                await asyncio.sleep(300)
 
         class _FakeEngine:
             def __init__(self, *args, **kwargs) -> None:
