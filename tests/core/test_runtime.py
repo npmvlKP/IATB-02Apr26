@@ -1,6 +1,7 @@
 """Tests for iatb.core.runtime module."""
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,19 +30,21 @@ class TestRunRuntime:
         """Engine starts, logs mode, then stops when event is set."""
         mock_config = MagicMock()
         mock_config.execution_mode = "paper"
-        with patch("iatb.core.engine.Engine", return_value=mock_engine):
+        with patch("iatb.core.runtime.Engine", return_value=mock_engine):
             with patch("iatb.core.config.get_config", return_value=mock_config):
-                stop_event = asyncio.Event()
+                with patch("iatb.core.event_bus.EventBus"):
+                    with patch("iatb.core.sse_broadcaster.SSEBroadcaster"):
+                        stop_event = asyncio.Event()
 
-                async def _delayed_stop() -> None:
-                    await asyncio.sleep(0.1)
-                    stop_event.set()
+                        async def _delayed_stop() -> None:
+                            await asyncio.sleep(0.1)
+                            stop_event.set()
 
-                task = asyncio.create_task(_delayed_stop())
-                await run_runtime(stop_event=stop_event)
-                await task
-                mock_engine.start.assert_awaited_once()
-                mock_engine.stop.assert_awaited_once()
+                        task = asyncio.create_task(_delayed_stop())
+                        await run_runtime(stop_event=stop_event)
+                        await task
+                        mock_engine.start.assert_awaited_once()
+                        mock_engine.stop.assert_awaited_once()
 
     async def test_run_runtime_paper_mode_log(
         self, mock_engine: MagicMock, caplog: pytest.LogCaptureFixture
@@ -49,12 +52,15 @@ class TestRunRuntime:
         """Runtime logs the execution mode on startup."""
         mock_config = MagicMock()
         mock_config.execution_mode = "paper"
-        with patch("iatb.core.engine.Engine", return_value=mock_engine):
+        with patch("iatb.core.runtime.Engine", return_value=mock_engine):
             with patch("iatb.core.config.get_config", return_value=mock_config):
-                stop_event = asyncio.Event()
-                stop_event.set()
-                await run_runtime(stop_event=stop_event)
-                assert "paper" in caplog.text
+                with patch("iatb.core.event_bus.EventBus"):
+                    with patch("iatb.core.sse_broadcaster.SSEBroadcaster"):
+                        with caplog.at_level(logging.INFO):
+                            stop_event = asyncio.Event()
+                            stop_event.set()
+                            await run_runtime(stop_event=stop_event)
+                            assert "paper" in caplog.text
 
 
 class TestIdleLoop:

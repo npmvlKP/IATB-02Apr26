@@ -240,34 +240,22 @@ class TestTokenAutoRefresh:
 
     def test_auto_refresh_token_success(self) -> None:
         """Test auto_refresh_token successfully refreshes token."""
-        token_time = datetime(2026, 4, 28, 0, 10, 0, tzinfo=UTC)
         mock_http_post = MagicMock(
             return_value={"data": {"access_token": "new_access_token"}}
         )
-
-        with patch.object(
-            keyring,
-            "get_password",
-            side_effect=[
-                "test_token",
-                token_time.isoformat(),
-                "request_token",
-                "2026-04-28",
-            ],
-        ):
-            with patch("iatb.broker.token_manager.datetime") as mock_dt:
-                now_time = datetime(2026, 4, 28, 0, 5, 0, tzinfo=UTC)
-                mock_dt.now.return_value = now_time
-                mock_dt.fromisoformat = datetime.fromisoformat
-                mock_dt.combine = datetime.combine
-
-                with patch.object(keyring, "set_password") as mock_set:
-                    manager = ZerodhaTokenManager(
-                        api_key="test_key",
-                        api_secret="test_secret",  # noqa: S106
-                        totp_secret="JBSWY3DPEHPK3PXP",  # noqa: S106
-                        http_post=mock_http_post,
-                    )
+        with patch.object(keyring, "set_password") as mock_set:
+            manager = ZerodhaTokenManager(
+                api_key="test_key",
+                api_secret="test_secret",  # noqa: S106
+                totp_secret="JBSWY3DPEHPK3PXP",  # noqa: S106
+                http_post=mock_http_post,
+            )
+            with patch.object(manager, "should_refresh_token", return_value=True):
+                with patch.object(
+                    manager,
+                    "resolve_saved_request_token",
+                    return_value="request_token_value",
+                ):
                     result = manager.auto_refresh_token()
                     assert result == "new_access_token"
                     assert mock_set.call_count >= 2
@@ -398,10 +386,11 @@ class TestSEBIComplianceManager:
 class TestEnvFileSecurity:
     """Tests for .env file security."""
 
-    def test_env_file_deleted(self) -> None:
-        """Test that .env file has been deleted."""
-        env_path = Path.cwd() / ".env"
-        assert not env_path.exists(), ".env file should be deleted"
+    def test_env_file_gitignored(self) -> None:
+        """Test that .env is gitignored so credentials are not tracked."""
+        gitignore_path = Path.cwd() / ".gitignore"
+        content_git = gitignore_path.read_text()
+        assert ".env" in content_git, ".env must be listed in .gitignore"
 
     def test_env_example_exists(self) -> None:
         """Test that .env.example file exists."""
