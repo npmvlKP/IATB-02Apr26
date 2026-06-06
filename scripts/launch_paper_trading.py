@@ -572,9 +572,28 @@ def step_13_audit_verification() -> bool:
                 " Resetting audit DB for clean paper trading session."
             )
             db_path = Path("data/audit/trades.sqlite")
+            # Close existing connection before deleting
+            try:
+                if hasattr(audit, "close"):
+                    audit.close()
+                elif hasattr(audit, "_conn"):
+                    audit._conn.close()
+            except Exception:
+                pass
             if db_path.exists():
-                db_path.unlink()
-                log.info(" Deleted stale trades.sqlite")
+                import time as _time
+
+                for _attempt in range(5):
+                    try:
+                        db_path.unlink()
+                        log.info(" Deleted stale trades.sqlite")
+                        break
+                    except PermissionError:
+                        _time.sleep(0.5)
+                else:
+                    log.warning(
+                        " Could not delete trades.sqlite after 5 attempts"
+                    )
             audit = TradeAuditLogger(db_path)
             chain_ok = audit.verify_chain()
             log.info(
