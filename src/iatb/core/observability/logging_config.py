@@ -40,11 +40,11 @@ class JsonFormatter(logging.Formatter):
             self._formatter: logging.Formatter = typing.cast(
                 logging.Formatter,
                 jsonlogger.JsonFormatter(
-                fmt,
-                rename_fields={"levelname": "level", "name": "logger"},
-                *args,
-                **kwargs,
-            ),  # type: ignore[no-untyped-call]
+                    fmt,
+                    rename_fields={"levelname": "level", "name": "logger"},
+                    *args,
+                    **kwargs,
+                ),  # type: ignore[no-untyped-call]
             )
         else:
             self._formatter = logging.Formatter(fmt)
