@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Global flag to track if live mode confirmation has been given
 _live_mode_confirmed: bool = False
 
+# Track whether TOML load has been logged (prevents duplicate log spam)
+_toml_load_logged: bool = False
+
 
 class Config(BaseSettings):
     """Application configuration loaded from environment variables."""
@@ -233,21 +236,26 @@ class TomlSettingsSource(PydanticBaseSettingsSource):
         Returns:
             Dictionary of TOML configuration values.
         """
+        global _toml_load_logged
         if not self.toml_path.exists():
-            logger.info(
-                "TOML config file not found, using defaults",
-                extra={"toml_path": str(self.toml_path)},
-            )
+            if not _toml_load_logged:
+                logger.info(
+                    "TOML config file not found, using defaults",
+                    extra={"toml_path": str(self.toml_path)},
+                )
+                _toml_load_logged = True
             return {}
 
         try:
             with self.toml_path.open("rb") as f:
                 toml_data = tomli.load(f)
 
-            logger.info(
-                "Loaded TOML configuration",
-                extra={"toml_path": str(self.toml_path)},
-            )
+            if not _toml_load_logged:
+                logger.info(
+                    "Loaded TOML configuration",
+                    extra={"toml_path": str(self.toml_path)},
+                )
+                _toml_load_logged = True
             return self._flatten_toml_data(toml_data)
         except Exception as e:
             logger.warning(
@@ -312,6 +320,12 @@ def get_config() -> Config:
     if _config_instance is None:
         _config_instance = Config.load()
     return _config_instance
+
+
+def reset_config() -> None:
+    """Reset the global configuration instance (mainly for testing/scripts)."""
+    global _config_instance
+    _config_instance = None
 
 
 def _log_live_trading_warning() -> None:

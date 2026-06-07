@@ -13,6 +13,7 @@ import pytest
 from iatb.core.exceptions import ConfigError
 from iatb.core.preflight import (
     _check_clock_drift,
+    _check_clock_drift_warn,
     _check_executor,
     _check_kill_switch,
     _check_path_exists,
@@ -97,6 +98,66 @@ class TestCheckClockDrift:
         mock_detector_class.return_value = mock_detector
         with pytest.raises(ConfigError, match="clock drift .* exceeds"):
             _check_clock_drift(max_drift_seconds=2)
+
+
+class TestCheckClockDriftWarn:
+    """Tests for _check_clock_drift_warn function (paper mode)."""
+
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_warn_normal_drift(self, mock_detector_class: MagicMock) -> None:
+        """Test clock drift warn with normal drift does not raise."""
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=0.5)
+        mock_detector_class.return_value = mock_detector
+        _check_clock_drift_warn()
+
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_warn_excessive_drift_no_raise(
+        self, mock_detector_class: MagicMock
+    ) -> None:
+        """Test clock drift warn with excessive drift does NOT raise."""
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=149)
+        mock_detector_class.return_value = mock_detector
+        _check_clock_drift_warn()
+
+    @patch("iatb.core.preflight.ClockDriftDetector")
+    def test_warn_ntp_unreachable(self, mock_detector_class: MagicMock) -> None:
+        """Test clock drift warn when NTP servers are unreachable."""
+        mock_detector = MagicMock()
+        mock_detector.check_drift.side_effect = Exception("NTP unreachable")
+        mock_detector_class.return_value = mock_detector
+        _check_clock_drift_warn()
+
+
+class TestRunPreflightChecksPaperMode:
+    """Tests for run_preflight_checks with paper_mode=True."""
+
+    def test_paper_mode_clock_drift_non_blocking(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that clock drift is non-blocking in paper mode."""
+        mock_executor = MagicMock()
+        mock_executor.cancel_all.return_value = 0
+        mock_kill_switch = MagicMock()
+        mock_kill_switch.is_engaged = False
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        audit_db_path = tmp_path / "audit" / "db.sqlite"
+        mock_detector = MagicMock()
+        mock_detector.check_drift.return_value = timedelta(seconds=149)
+        monkeypatch.setattr(
+            "iatb.core.preflight.ClockDriftDetector",
+            lambda: mock_detector,
+        )
+        result = run_preflight_checks(
+            executor=mock_executor,
+            kill_switch=mock_kill_switch,
+            data_dir=data_dir,
+            audit_db_path=audit_db_path,
+            paper_mode=True,
+        )
+        assert result is True
 
 
 class TestCheckExecutor:

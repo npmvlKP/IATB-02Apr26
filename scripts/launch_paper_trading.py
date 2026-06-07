@@ -260,10 +260,7 @@ def step_6_validate_token() -> bool:
 def step_7_load_config() -> bool:
     _section("Step 7: Instantiate Config and Confirm Paper Mode")
     try:
-        import iatb.core.config as cfg_mod
-
-        cfg_mod._config_instance = None  # type: ignore[attr-defined]
-        from iatb.core.config import get_config
+    from iatb.core.config import get_config, reset_config
 
         config = get_config()
         is_paper = config.execution_mode == "paper"
@@ -309,6 +306,7 @@ def step_8_preflight() -> bool:
             ks,
             Path("data"),
             Path("data/audit/trades.sqlite"),
+            paper_mode=True,
         )
         if not result:
             log.warning(

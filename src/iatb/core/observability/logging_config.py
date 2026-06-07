@@ -31,6 +31,8 @@ except ImportError:
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter with UTC timestamps and additional context."""
 
+    _service_name: str = "iatb"
+
     def __init__(self, fmt: str, *args: object, **kwargs: object) -> None:
         """Initialize JSON formatter."""
         if _HAS_JSONLOGGER:
@@ -41,6 +43,19 @@ class JsonFormatter(logging.Formatter):
             )
         else:
             self._formatter = logging.Formatter(fmt)
+        self._resolve_service_name()
+
+    def _resolve_service_name(self) -> None:
+        """Resolve service name once at init time (avoids get_config() per record)."""
+        try:
+            config = get_config()
+            svc = getattr(config, "service", None)
+            if isinstance(svc, dict):
+                JsonFormatter._service_name = svc.get("name", "iatb")
+            else:
+                JsonFormatter._service_name = getattr(svc, "name", "iatb")
+        except Exception:
+            JsonFormatter._service_name = "iatb"
 
     def add_fields(
         self,
@@ -73,6 +88,9 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:  # noqa: C901
         """Format log record with JSON or standard format."""
         record.timestamp = datetime.now(tz=UTC).isoformat()
+        # Map standard LogRecord fields so format string works correctly
+        record.level = record.levelname  # type: ignore[attr-defined]
+
         if _HAS_OTEL:
             span = trace.get_current_span()
             span_context = span.get_span_context()
@@ -81,16 +99,10 @@ class JsonFormatter(logging.Formatter):
         if span_context is not None and span_context.is_valid:
             record.trace_id = format(span_context.trace_id, "032x")
             record.span_id = format(span_context.span_id, "016x")
-        try:
-            config = get_config()
-            svc = getattr(config, "service", None)
-            if isinstance(svc, dict):
-                service_name = svc.get("name", "iatb")
-            else:
-                service_name = getattr(svc, "name", "iatb")
-            record.service_name = service_name
-        except Exception:
-            record.service_name = "iatb"
+
+        # Use cached service name instead of calling get_config() per record
+        record.service_name = JsonFormatter._service_name
+
         if _HAS_JSONLOGGER:
             return self._formatter.format(record)
         else:
@@ -111,7 +123,7 @@ def _create_console_handler() -> logging.StreamHandler[Any]:
     console_handler.setLevel(logging.DEBUG)
 
     formatter = JsonFormatter(
-        "%(timestamp)s %(level)s %(logger)s %(message)s",
+        "%(timestamp)s %(levelname)s %(name)s %(message)s",
         timestamp=True,
     )
     console_handler.setFormatter(formatter)
@@ -155,7 +167,7 @@ def _create_file_handler() -> logging.Handler | None:
 
         # Use JSON formatter
         formatter = JsonFormatter(
-            "%(timestamp)s %(level)s %(logger)s %(message)s",
+            "%(timestamp)s %(levelname)s %(name)s %(message)s",
             timestamp=True,
         )
         file_handler.setFormatter(formatter)
@@ -279,8 +291,8 @@ class LogContext:
     """Context manager for adding structured context to logs.
 
     Example:
-        >>> with LogContext(user_id="123", action="trade"):
-        ...     _LOGGER.info("Executing trade")
+    >>> with LogContext(user_id="123", action="trade"):
+    ...     _LOGGER.info("Executing trade")
     """
 
     def __init__(self, **context: Any) -> None:

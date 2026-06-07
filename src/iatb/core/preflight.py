@@ -1,5 +1,4 @@
-"""
-Pre-flight checks before engine startup.
+"""Pre-flight checks before engine startup.
 
 Validates system state, connectivity, and configuration.
 Fail-closed: engine must not start if any check fails.
@@ -22,10 +21,24 @@ def run_preflight_checks(
     kill_switch: KillSwitch,
     data_dir: Path,
     audit_db_path: Path,
+    *,
+    paper_mode: bool = False,
 ) -> bool:
-    """Run all pre-flight checks. Returns True only if all pass."""
+    """Run all pre-flight checks. Returns True only if all pass.
+
+    Args:
+        executor: Executor instance to check.
+        kill_switch: KillSwitch instance to check.
+        data_dir: Required data directory path.
+        audit_db_path: Path to audit database.
+        paper_mode: If True, clock drift is a warning (not a hard failure).
+
+    """
     all_passed = True
-    all_passed = _run_check("clock_drift", _check_clock_drift, all_passed)
+    clock_check: Callable[[], None] = (
+        _check_clock_drift_warn if paper_mode else _check_clock_drift
+    )
+    all_passed = _run_check("clock_drift", clock_check, all_passed)
     all_passed = _run_check(
         "executor_ready", lambda: _check_executor(executor), all_passed
     )
@@ -61,6 +74,23 @@ def _check_clock_drift(max_drift_seconds: int = 2) -> None:
     if abs(drift.total_seconds()) > max_drift_seconds:
         msg = f"clock drift {drift.total_seconds()}s exceeds {max_drift_seconds}s"
         raise ConfigError(msg)
+
+
+def _check_clock_drift_warn(max_drift_seconds: int = 2) -> None:
+    """Check clock drift but only warn (never raises). For paper mode."""
+    detector = ClockDriftDetector()
+    try:
+        drift = detector.check_drift()
+    except Exception:
+        logger.warning("Clock drift check skipped - NTP servers unreachable")
+        return
+    if abs(drift.total_seconds()) > max_drift_seconds:
+        logger.warning(
+            "Clock drift %.1fs exceeds %ds threshold (non-blocking in paper mode). "
+            "Sync clock: w32tm /resync",
+            drift.total_seconds(),
+            max_drift_seconds,
+        )
 
 
 def _check_executor(executor: Executor) -> None:
