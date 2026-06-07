@@ -39,7 +39,12 @@ class JsonFormatter(logging.Formatter):
             # Use cast to handle untyped JsonFormatter
             self._formatter: logging.Formatter = typing.cast(
                 logging.Formatter,
-                jsonlogger.JsonFormatter(fmt, *args, **kwargs),  # type: ignore[no-untyped-call]
+                jsonlogger.JsonFormatter(
+                fmt,
+                rename_fields={"levelname": "level", "name": "logger"},
+                *args,
+                **kwargs,
+            ),  # type: ignore[no-untyped-call]
             )
         else:
             self._formatter = logging.Formatter(fmt)
@@ -89,7 +94,6 @@ class JsonFormatter(logging.Formatter):
         """Format log record with JSON or standard format."""
         record.timestamp = datetime.now(tz=UTC).isoformat()
         # Map standard LogRecord fields so format string works correctly
-        record.level = record.levelname  # type: ignore[attr-defined]
 
         if _HAS_OTEL:
             span = trace.get_current_span()
